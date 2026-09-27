@@ -1,0 +1,27 @@
+[package]
+name = "pixiu-treasury"
+description = "The music library píxiū owns: layout, tags, ingest and offerings"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+pixiu-db.workspace = true
+
+hex.workspace = true
+image.workspace = true
+jiff.workspace = true
+lofty.workspace = true
+rand.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+zip.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

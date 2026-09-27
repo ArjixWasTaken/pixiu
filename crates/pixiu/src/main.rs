@@ -5,7 +5,7 @@ use std::{
 };
 
 use anyhow::{Context, bail};
-use pixiu_core::Config;
+use pixiu_core::{Config, SecretBox};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, TcpStream},
@@ -40,11 +40,12 @@ async fn serve() -> anyhow::Result<()> {
             .with_context(|| format!("failed to create {}", dir.display()))?;
     }
     let db = pixiu_db::open(&config.paths.database_file()).await?;
+    let secrets = SecretBox::load_or_create(&config.paths.secret_key_file())?;
     let assets = AssetBundle::load().context(
         "the WebUI asset bundle is missing; build it with `topcoat asset bundle -p pixiu`",
     )?;
 
-    let app = pixiu::app(db, &config, assets);
+    let app = pixiu::app(db, &config, secrets, assets);
     let listener = TcpListener::bind((config.server.host, config.server.port))
         .await
         .with_context(|| {

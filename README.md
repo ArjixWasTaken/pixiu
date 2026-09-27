@@ -10,10 +10,24 @@ with music. It is an [OpenSubsonic](https://opensubsonic.netlify.app/) server
 that also hunts: it downloads music from streaming platforms (YouTube Music
 first) into a library it owns, and serves that hoard to any Subsonic client.
 
-> **Status: early development.** The skeleton is in place: WebUI with first-run
-> setup and login, database migrations, and the Subsonic API envelope (`ping`,
-> `getLicense`, `getOpenSubsonicExtensions`). The library, the Subsonic browsing
-> and streaming endpoints, and the YouTube Music hunter are next.
+> **Status: early development.** píxiū is a working OpenSubsonic server for
+> music you upload. The YouTube Music hunter is next.
+
+## What works
+
+- **Offerings.** Upload audio files or zip archives in the WebUI. píxiū reads
+  their tags, you review, and accepted files are filed into the treasure as
+  `Album Artist/Year - Album/Disc-Track Title.ext`, with the cover saved next to
+  them. Nothing is ever deleted behind your back.
+- **OpenSubsonic API** at `/rest`: browsing (artists, albums, songs, folders,
+  genres), album lists, random songs, search (`search2`/`search3`, including
+  empty queries for clients that sync the whole library), streaming and
+  downloads with seeking (HTTP ranges), resized cover art, play counts
+  (`scrobble`), and play queues that follow you across devices. Tested with
+  Feishin and Airsonic Refix.
+- **Authentication**: your píxiū password (plain or token authentication), or
+  OpenSubsonic API keys created in Settings. Browser-based clients may call the
+  API from other origins (CORS).
 
 ## Running
 
@@ -25,7 +39,8 @@ docker compose up -d --build
 ```
 
 Open <http://localhost:4533> and claim the hoard: the first visitor creates the
-admin account.
+admin account. Then point your Subsonic client at `http://<host>:4533` with the
+same username and password.
 
 ### From source
 
@@ -52,7 +67,7 @@ nesting (`PIXIU_SERVER__PORT=4533`). See [`pixiu.example.toml`](pixiu.example.to
 | `server.host` | `127.0.0.1` | The Docker image uses `0.0.0.0`. |
 | `server.port` | `4533` | |
 | `server.cookie_security` | `auto` | Mark the session cookie `Secure` over HTTPS. |
-| `paths.data_dir` | `data` | Database and internal state. |
+| `paths.data_dir` | `data` | Database, the secret key, caches and staged uploads. |
 | `paths.treasure_dir` | `treasure` | The music library, owned by píxiū. |
 
 ## Development
@@ -65,9 +80,10 @@ cargo clippy --workspace --all-targets
 | Crate | |
 |---|---|
 | `pixiu` | The binary: configuration, wiring, serving. |
-| `pixiu-core` | Configuration and shared types. |
+| `pixiu-core` | Configuration, secrets at rest and password hashing. |
 | `pixiu-db` | [Toasty](https://github.com/tokio-rs/toasty) models and migrations (SQLite). |
 | `pixiu-subsonic` | The OpenSubsonic REST API (axum, mounted at `/rest`). |
+| `pixiu-treasury` | The library on disk: tags, layout, ingest, covers and offerings. |
 | `pixiu-web` | The WebUI, built with [Topcoat](https://github.com/tokio-rs/topcoat). |
 
 ### Changing the database schema

@@ -9,18 +9,24 @@ publish = false
 [dependencies]
 pixiu-core.workspace = true
 pixiu-db.workspace = true
+pixiu-treasury.workspace = true
 
 axum.workspace = true
 bytes.workspace = true
 form_urlencoded.workspace = true
+hex.workspace = true
+jiff.workspace = true
+md-5.workspace = true
 quick-xml.workspace = true
 serde_json = { workspace = true, features = ["preserve_order"] }
+tokio.workspace = true
+tower.workspace = true
+tower-http.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
 insta.workspace = true
-tokio.workspace = true
-tower.workspace = true
+tempfile.workspace = true
 
 [lints]
 workspace = true

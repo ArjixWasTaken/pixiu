@@ -17,7 +17,7 @@ use topcoat::{
 };
 
 use crate::{
-    auth::{LOGIN_PATH, SETUP_PATH, db, hash_password, is_claimed, start_session},
+    auth::{LOGIN_PATH, SETUP_PATH, db, hash_password, is_claimed, secrets, start_session},
     ui::{BUTTON_PRIMARY, alert, card, field},
 };
 
@@ -90,6 +90,8 @@ async fn claim(cx: &Cx, Form(form): Form<SetupForm>) -> Result<SeeOther> {
     if let Some(problem) = Problem::check(&username, &form.password, &form.confirm) {
         return Ok(see_other(format!("{SETUP_PATH}?error={}", problem.code())));
     }
+    // Sealed for Subsonic token authentication, which needs the password.
+    let subsonic_secret = secrets(cx).seal_str(&form.password);
     let password_hash = hash_password(form.password).await?;
 
     // The check and the insert share a transaction so two racing claims
@@ -102,6 +104,7 @@ async fn claim(cx: &Cx, Form(form): Form<SetupForm>) -> Result<SeeOther> {
     let user = toasty::create!(User {
         username,
         password_hash,
+        subsonic_secret: Some(subsonic_secret),
         created_at: now(),
     })
     .exec(&mut tx)

@@ -92,6 +92,24 @@ impl PathsConfig {
     pub fn database_file(&self) -> PathBuf {
         self.data_dir.join("pixiu.db")
     }
+
+    /// The instance key sealing secrets at rest.
+    #[must_use]
+    pub fn secret_key_file(&self) -> PathBuf {
+        self.data_dir.join("secret.key")
+    }
+
+    /// Uploaded offerings waiting for review.
+    #[must_use]
+    pub fn offerings_dir(&self) -> PathBuf {
+        self.data_dir.join("offerings")
+    }
+
+    /// Derived files that can be regenerated (resized covers, ...).
+    #[must_use]
+    pub fn cache_dir(&self) -> PathBuf {
+        self.data_dir.join("cache")
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

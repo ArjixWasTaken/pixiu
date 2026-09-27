@@ -34,6 +34,12 @@ pub(crate) const BUTTON_PRIMARY: StaticClass = class!(
      hover:bg-gold-soft active:translate-y-px disabled:opacity-50",
 );
 
+pub(crate) const BUTTON_DANGER: StaticClass = class!(
+    "inline-flex h-9 items-center justify-center gap-2 rounded-lg border \
+     border-destructive/40 px-4 text-sm font-medium text-destructive transition \
+     hover:bg-destructive/10 active:translate-y-px",
+);
+
 pub(crate) const BUTTON_GHOST: StaticClass = class!(
     "inline-flex h-9 w-full items-center gap-2 rounded-lg px-3 text-sm \
      text-muted-foreground transition hover:bg-foreground/5 hover:text-foreground",
@@ -76,6 +82,19 @@ pub(crate) async fn field(label: &str, #[default] mut attrs: Attributes) -> Resu
     })
 }
 
+/// A short success message.
+#[component]
+pub(crate) async fn notice(#[default] child: Child<'_>) -> Result<impl View> {
+    Ok(view! {
+        <p
+            role="status"
+            class="rounded-lg border border-gold/40 bg-gold/10 px-3 py-2 text-sm text-gold-soft"
+        >
+            (child)
+        </p>
+    })
+}
+
 /// An inline error message.
 #[component]
 pub(crate) async fn alert(#[default] child: Child<'_>) -> Result<impl View> {
@@ -88,4 +107,45 @@ pub(crate) async fn alert(#[default] child: Child<'_>) -> Result<impl View> {
             (child)
         </p>
     })
+}
+
+/// A human-readable size: `1.4 GB`.
+pub(crate) fn format_bytes(bytes: u64) -> String {
+    const UNITS: [&str; 5] = ["B", "KB", "MB", "GB", "TB"];
+    #[allow(clippy::cast_precision_loss)]
+    let mut value = bytes as f64;
+    let mut unit = 0;
+    while value >= 1000.0 && unit < UNITS.len() - 1 {
+        value /= 1000.0;
+        unit += 1;
+    }
+    if unit == 0 {
+        format!("{bytes} B")
+    } else {
+        format!("{value:.1} {}", UNITS[unit])
+    }
+}
+
+/// A duration as `m:ss`, or `h:mm:ss` past an hour.
+pub(crate) fn format_duration(duration_ms: u64) -> String {
+    let seconds = duration_ms / 1000;
+    let (hours, minutes, seconds) = (seconds / 3600, seconds / 60 % 60, seconds % 60);
+    if hours > 0 {
+        format!("{hours}:{minutes:02}:{seconds:02}")
+    } else {
+        format!("{minutes}:{seconds:02}")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn formats_sizes_and_durations() {
+        assert_eq!(format_bytes(512), "512 B");
+        assert_eq!(format_bytes(1_450_000_000), "1.4 GB");
+        assert_eq!(format_duration(61_000), "1:01");
+        assert_eq!(format_duration(3_723_000), "1:02:03");
+    }
 }

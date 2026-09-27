@@ -11,6 +11,7 @@ rust-version = "1.98"
 pixiu-core = { path = "crates/pixiu-core" }
 pixiu-db = { path = "crates/pixiu-db" }
 pixiu-subsonic = { path = "crates/pixiu-subsonic" }
+pixiu-treasury = { path = "crates/pixiu-treasury" }
 pixiu-web = { path = "crates/pixiu-web" }
 
 # Pinned exactly: both are early-stage and ship breaking changes in minor releases.
@@ -22,25 +23,34 @@ toasty-cli = "=0.11.0"
 anyhow = "1"
 argon2 = "0.6"
 axum = { version = "0.8.9", default-features = false, features = ["tokio", "http1", "http2", "query", "form", "json"] }
+base64 = "0.23"
 bytes = "1"
+chacha20poly1305 = "0.11"
 figment = { version = "0.10.19", features = ["toml", "env"] }
 form_urlencoded = "1"
 futures-util = "0.3"
 hex = "0.4"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp", "gif", "bmp"] }
 jiff = "0.2"
+lofty = "0.25"
+md-5 = "0.11"
+mime_guess = "2"
 quick-xml = "0.42"
 rand = "0.10"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+sha2 = "0.11"
 thiserror = "2"
 tokio = { version = "1.51", features = ["rt-multi-thread", "macros", "signal", "net", "fs", "sync", "time", "io-util"] }
 tower = "0.5.3"
+tower-http = { version = "0.7", features = ["fs", "cors", "compression-gzip", "compression-br"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+zip = { version = "8.6", default-features = false, features = ["deflate"] }
 
 # Test-only
 insta = "1"
-reqwest = { version = "0.13", default-features = false, features = ["rustls", "cookies", "form", "json"] }
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "cookies", "form", "json", "multipart"] }
 tempfile = "3"
 tokio-tungstenite = "0.30"
 

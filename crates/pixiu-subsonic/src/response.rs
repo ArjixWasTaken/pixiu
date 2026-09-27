@@ -100,6 +100,8 @@ enum Child {
     List(&'static str, Vec<Element>),
     /// A list of scalars: repeated `<versions>1</versions>` / `"versions": [1]`.
     Values(&'static str, Vec<Value>),
+    /// A scalar child: `<notes>text</notes>` / `"notes": "text"`.
+    Field(&'static str, Value),
 }
 
 /// A node of a response body.
@@ -166,6 +168,23 @@ impl Element {
         self
     }
 
+    /// Adds a scalar rendered as a child element in XML and a plain field in
+    /// JSON, like `musicBrainzId` in `artistInfo`.
+    #[must_use]
+    pub fn field(mut self, name: &'static str, value: impl Into<Value>) -> Self {
+        self.children.push(Child::Field(name, value.into()));
+        self
+    }
+
+    /// Adds the field only when `value` is present.
+    #[must_use]
+    pub fn field_opt<V: Into<Value>>(self, name: &'static str, value: Option<V>) -> Self {
+        match value {
+            Some(value) => self.field(name, value),
+            None => self,
+        }
+    }
+
     #[must_use]
     pub fn text(mut self, text: impl Into<String>) -> Self {
         self.text = Some(text.into());
@@ -230,6 +249,12 @@ fn write_xml_contents(
                         .expect(INFALLIBLE);
                 }
             }
+            Child::Field(name, value) => {
+                writer
+                    .create_element(*name)
+                    .write_text_content(BytesText::new(&value.to_xml()))
+                    .expect(INFALLIBLE);
+            }
         }
     }
     if let Some(text) = text {
@@ -259,6 +284,9 @@ fn children_to_json(map: &mut Map<String, Json>, children: &[Child]) {
                     (*name).to_owned(),
                     Json::Array(values.iter().map(Value::to_json).collect()),
                 );
+            }
+            Child::Field(name, value) => {
+                map.insert((*name).to_owned(), value.to_json());
             }
         }
     }
@@ -502,6 +530,18 @@ mod tests {
 
         insta::assert_snapshot!(response.to_json(), @r#"{"subsonic-response":{"status":"ok","version":"1.16.1","type":"pixiu","serverVersion":"0.1.0","openSubsonic":true,"lyrics":{"artist":"A & B","value":"la <la>"}}}"#);
         insta::assert_snapshot!(response.to_xml(), @r#"<?xml version="1.0" encoding="UTF-8"?><subsonic-response xmlns="http://subsonic.org/restapi" status="ok" version="1.16.1" type="pixiu" serverVersion="0.1.0" openSubsonic="true"><lyrics artist="A &amp; B">la &lt;la&gt;</lyrics></subsonic-response>"#);
+    }
+
+    #[test]
+    fn fields_are_child_elements_in_xml_and_scalars_in_json() {
+        let response = SubsonicResponse::ok(
+            Format::Json,
+            Element::new("artistInfo2")
+                .field("musicBrainzId", "mbid-1")
+                .list("similarArtist", Vec::new()),
+        );
+        insta::assert_snapshot!(response.to_json(), @r#"{"subsonic-response":{"status":"ok","version":"1.16.1","type":"pixiu","serverVersion":"0.1.0","openSubsonic":true,"artistInfo2":{"musicBrainzId":"mbid-1","similarArtist":[]}}}"#);
+        insta::assert_snapshot!(response.to_xml(), @r#"<?xml version="1.0" encoding="UTF-8"?><subsonic-response xmlns="http://subsonic.org/restapi" status="ok" version="1.16.1" type="pixiu" serverVersion="0.1.0" openSubsonic="true"><artistInfo2><musicBrainzId>mbid-1</musicBrainzId></artistInfo2></subsonic-response>"#);
     }
 
     #[test]

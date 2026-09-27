@@ -1,7 +1,8 @@
 //! The route tree root (`/`). Routes derive from modules:
 //!
 //! - `_gate` (group): `/login`, `/setup`, pages for signed-out visitors
-//! - `_hoard` (group): `/` and everything behind the login
+//! - `_hoard` (group): `/`, `/offerings`, `/settings`, `/covers/..`: everything
+//!   behind the login
 //! - `logout`: `POST /logout`
 
 mod _gate;
@@ -10,13 +11,14 @@ mod logout;
 
 use std::time::Duration;
 
-use pixiu_core::CookieSecurity;
+use pixiu_core::{CookieSecurity, SecretBox};
 use pixiu_db::Db;
+use pixiu_treasury::{Offerings, Treasury};
 use topcoat::{
     Result,
     asset::{AssetBundle, RouterBuilderAssetExt},
     cookie::RouterBuilderCookieExt,
-    router::{RouterBuilder, RouterBuilderDiscoverExt, Slot, layout, module_router},
+    router::{BodyLimit, RouterBuilder, RouterBuilderDiscoverExt, Slot, layout, module_router},
     runtime::RouterBuilderRuntimeExt,
     session::{RouterBuilderSessionExt, SessionConfig},
     tailwind,
@@ -36,6 +38,9 @@ pub struct WebDeps {
     pub db: Db,
     pub assets: AssetBundle,
     pub cookie_security: CookieSecurity,
+    pub secrets: SecretBox,
+    pub treasury: Treasury,
+    pub offerings: Offerings,
 }
 
 /// Builds the WebUI router. Callers may register more routes (the Subsonic
@@ -50,6 +55,13 @@ pub fn router_builder(deps: WebDeps) -> RouterBuilder {
         .discover()
         .assets(deps.assets)
         .app_context(deps.db)
+        .app_context(deps.secrets)
+        .app_context(deps.treasury)
+        .app_context(deps.offerings)
+        // Uploads stream to disk, and whole albums are large. The handler
+        // checks the session before reading any of the body. (Layers match
+        // route groups, hence `(_hoard)`.)
+        .layer(BodyLimit::disable().at("/(_hoard)/offerings/upload"))
         .cookies()
         .sessions(sessions)
         // Must come after the layers above so reruns pass through them.

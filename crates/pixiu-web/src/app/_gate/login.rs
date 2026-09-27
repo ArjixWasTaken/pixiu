@@ -14,7 +14,10 @@ use topcoat::{
 };
 
 use crate::{
-    auth::{LOGIN_PATH, SETUP_PATH, current_user, db, is_claimed, start_session, verify_password},
+    auth::{
+        LOGIN_PATH, SETUP_PATH, current_user, db, is_claimed, remember_password, start_session,
+        verify_password,
+    },
     ui::{BUTTON_PRIMARY, alert, card, field},
 };
 
@@ -74,10 +77,13 @@ async fn login(cx: &Cx, Form(form): Form<LoginForm>) -> Result<SeeOther> {
         .await?;
     let hash = user.as_ref().map(|user| user.password_hash.clone());
     // Always verify, even for unknown users; see `verify_password`.
-    let verified = verify_password(form.password, hash).await?;
+    let verified = verify_password(form.password.clone(), hash).await?;
 
     match user {
-        Some(user) if verified => {
+        Some(mut user) if verified => {
+            if user.subsonic_secret.is_none() {
+                remember_password(cx, &mut user, &form.password).await?;
+            }
             start_session(cx, &user).await?;
             Ok(see_other("/"))
         }

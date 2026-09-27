@@ -9,10 +9,11 @@ publish = false
 [dependencies]
 pixiu-core.workspace = true
 pixiu-db.workspace = true
+pixiu-treasury.workspace = true
 
-argon2.workspace = true
 hex.workspace = true
 jiff.workspace = true
+rand.workspace = true
 serde.workspace = true
 tokio.workspace = true
 topcoat.workspace = true

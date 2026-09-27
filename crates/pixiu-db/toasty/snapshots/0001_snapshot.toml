@@ -1,0 +1,783 @@
+version = 1
+
+[schema]
+
+[[schema.tables]]
+id = 0
+name = "annotations"
+primary_key = { columns = [{ table = 0, index = 0 }], index = { table = 0, index = 0 } }
+
+[[schema.tables.columns]]
+id = { table = 0, index = 0 }
+name = "id"
+ty = "U64"
+storage_ty = { UnsignedInteger = 4 }
+auto_increment = true
+
+[[schema.tables.columns]]
+id = { table = 0, index = 1 }
+name = "item"
+ty = "String"
+storage_ty = "Text"
+
+[[schema.tables.columns]]
+id = { table = 0, index = 2 }
+name = "play_count"
+ty = "U64"
+storage_ty = { UnsignedInteger = 8 }
+
+[[schema.tables.columns]]
+id = { table = 0, index = 3 }
+name = "last_played"
+ty = "String"
+storage_ty = "Text"
+nullable = true
+
+[[schema.tables.columns]]
+id = { table = 0, index = 4 }
+name = "starred_at"
+ty = "String"
+storage_ty = "Text"
+nullable = true
+
+[[schema.tables.columns]]
+id = { table = 0, index = 5 }
+name = "rating"
+ty = "U8"
+storage_ty = { UnsignedInteger = 1 }
+nullable = true
+
+[[schema.tables.indices]]
+id = { table = 0, index = 0 }
+name = "index_annotations_by_id"
+on = 0
+columns = [{ column = { table = 0, index = 0 }, op = "Eq", scope = "Partition" }]
+unique = true
+primary_key = true
+
+[[schema.tables.indices]]
+id = { table = 0, index = 1 }
+name = "index_annotations_by_item"
+on = 0
+columns = [{ column = { table = 0, index = 1 }, op = "Eq", scope = "Partition" }]
+unique = true
+
+[[schema.tables]]
+id = 1
+name = "web_sessions"
+primary_key = { columns = [{ table = 1, index = 0 }], index = { table = 1, index = 0 } }
+
+[[schema.tables.columns]]
+id = { table = 1, index = 0 }
+name = "id"
+ty = "U64"
+storage_ty = { UnsignedInteger = 4 }
+auto_increment = true
+
+[[schema.tables.columns]]
+id = { table = 1, index = 1 }
+name = "token_hash"
+ty = "String"
+storage_ty = "Text"
+
+[[schema.tables.columns]]
+id = { table = 1, index = 2 }
+name = "user_id"
+ty = "U64"
+storage_ty = { UnsignedInteger = 8 }
+
+[[schema.tables.columns]]
+id = { table = 1, index = 3 }
+name = "created_at"
+ty = "String"
+storage_ty = "Text"
+
+[[schema.tables.columns]]
+id = { table = 1, index = 4 }
+name = "expires_at"
+ty = "String"
+storage_ty = "Text"
+
+[[schema.tables.indices]]
+id = { table = 1, index = 0 }
+name = "index_web_sessions_by_id"
+on = 1
+columns = [{ column = { table = 1, index = 0 }, op = "Eq", scope = "Partition" }]
+unique = true
+primary_key = true
+
+[[schema.tables.indices]]
+id = { table = 1, index = 1 }
+name = "index_web_sessions_by_token_hash"
+on = 1
+columns = [{ column = { table = 1, index = 1 }, op = "Eq", scope = "Partition" }]
+unique = true
+
+[[schema.tables.indices]]
+id = { table = 1, index = 2 }
+name = "index_web_sessions_by_user_id"
+on = 1
+columns = [{ column = { table = 1, index = 2 }, op = "Eq", scope = "Partition" }]
+
+[[schema.tables]]
+id = 2
+name = "users"
+primary_key = { columns = [{ table = 2, index = 0 }], index = { table = 2, index = 0 } }
+
+[[schema.tables.columns]]
+id = { table = 2, index = 0 }
+name = "id"
+ty = "U64"
+storage_ty = { UnsignedInteger = 4 }
+auto_increment = true
+
+[[schema.tables.columns]]
+id = { table = 2, index = 1 }
+name = "username"
+ty = "String"
+storage_ty = "Text"
+
+[[schema.tables.columns]]
+id = { table = 2, index = 2 }
+name = "password_hash"
+ty = "String"
+storage_ty = "Text"
+
+[[schema.tables.columns]]
+id = { table = 2, index = 3 }
+name = "subsonic_secret"
+ty = "String"
+storage_ty = "Text"
+nullable = true
+
+[[schema.tables.columns]]
+id = { table = 2, index = 4 }
+name = "created_at"
+ty = "String"
+storage_ty = "Text"
+
+[[schema.tables.indices]]
+id = { table = 2, index = 0 }
+name = "index_users_by_id"
+on = 2
+columns = [{ column = { table = 2, index = 0 }, op = "Eq", scope = "Partition" }]
+unique = true
+primary_key = true
+
+[[schema.tables.indices]]
+id = { table = 2, index = 1 }
+name = "index_users_by_username"
+on = 2
+columns = [{ column = { table = 2, index = 1 }, op = "Eq", scope = "Partition" }]
+unique = true
+
+[[schema.tables]]
+id = 3
+name = "api_keys"
+primary_key = { columns = [{ table = 3, index = 0 }], index = { table = 3, index = 0 } }
+
+[[schema.tables.columns]]
+id = { table = 3, index = 0 }
+name = "id"
+ty = "U64"
+storage_ty = { UnsignedInteger = 4 }
+auto_increment = true
+
+[[schema.tables.columns]]
+id = { table = 3, index = 1 }
+name = "user_id"
+ty = "U64"
+storage_ty = { UnsignedInteger = 8 }
+
+[[schema.tables.columns]]
+id = { table = 3, index = 2 }
+name = "name"
+ty = "String"
+storage_ty = "Text"
+
+[[schema.tables.columns]]
+id = { table = 3, index = 3 }
+name = "key_hash"
+ty = "String"
+storage_ty = "Text"
+
+[[schema.tables.columns]]
+id = { table = 3, index = 4 }
+name = "created_at"
+ty = "String"
+storage_ty = "Text"
+
+[[schema.tables.columns]]
+id = { table = 3, index = 5 }
+name = "last_used_at"
+ty = "String"
+storage_ty = "Text"
+nullable = true
+
+[[schema.tables.indices]]
+id = { table = 3, index = 0 }
+name = "index_api_keys_by_id"
+on = 3
+columns = [{ column = { table = 3, index = 0 }, op = "Eq", scope = "Partition" }]
+unique = true
+primary_key = true
+
+[[schema.tables.indices]]
+id = { table = 3, index = 1 }
+name = "index_api_keys_by_user_id"
+on = 3
+columns = [{ column = { table = 3, index = 1 }, op = "Eq", scope = "Partition" }]
+
+[[schema.tables.indices]]
+id = { table = 3, index = 2 }
+name = "index_api_keys_by_key_hash"
+on = 3
+columns = [{ column = { table = 3, index = 3 }, op = "Eq", scope = "Partition" }]
+unique = true
+
+[[schema.tables]]
+id = 4
+name = "play_queues"
+primary_key = { columns = [{ table = 4, index = 0 }], index = { table = 4, index = 0 } }
+
+[[schema.tables.columns]]
+id = { table = 4, index = 0 }
+name = "id"
+ty = "U64"
+storage_ty = { UnsignedInteger = 4 }
+auto_increment = true
+
+[[schema.tables.columns]]
+id = { table = 4, index = 1 }
+name = "user_id"
+ty = "U64"
+storage_ty = { UnsignedInteger = 8 }
+
+[[schema.tables.columns]]
+id = { table = 4, index = 2 }
+name = "entries"
+ty = { List = "U64" }
+storage_ty = { List = { UnsignedInteger = 8 } }
+
+[[schema.tables.columns]]
+id = { table = 4, index = 3 }
+name = "current"
+ty = "U64"
+storage_ty = { UnsignedInteger = 8 }
+nullable = true
+
+[[schema.tables.columns]]
+id = { table = 4, index = 4 }
+name = "position_ms"
+ty = "U64"
+storage_ty = { UnsignedInteger = 8 }
+
+[[schema.tables.columns]]
+id = { table = 4, index = 5 }
+name = "changed_by"
+ty = "String"
+storage_ty = "Text"
+
+[[schema.tables.columns]]
+id = { table = 4, index = 6 }
+name = "changed_at"
+ty = "String"
+storage_ty = "Text"
+
+[[schema.tables.indices]]
+id = { table = 4, index = 0 }
+name = "index_play_queues_by_id"
+on = 4
+columns = [{ column = { table = 4, index = 0 }, op = "Eq", scope = "Partition" }]
+unique = true
+primary_key = true
+
+[[schema.tables.indices]]
+id = { table = 4, index = 1 }
+name = "index_play_queues_by_user_id"
+on = 4
+columns = [{ column = { table = 4, index = 1 }, op = "Eq", scope = "Partition" }]
+unique = true
+
+[[schema.tables]]
+id = 5
+name = "offerings"
+primary_key = { columns = [{ table = 5, index = 0 }], index = { table = 5, index = 0 } }
+
+[[schema.tables.columns]]
+id = { table = 5, index = 0 }
+name = "id"
+ty = "U64"
+storage_ty = { UnsignedInteger = 4 }
+auto_increment = true
+
+[[schema.tables.columns]]
+id = { table = 5, index = 1 }
+name = "batch"
+ty = "String"
+storage_ty = "Text"
+
+[[schema.tables.columns]]
+id = { table = 5, index = 2 }
+name = "file_name"
+ty = "String"
+storage_ty = "Text"
+
+[[schema.tables.columns]]
+id = { table = 5, index = 3 }
+name = "staged_path"
+ty = "String"
+storage_ty = "Text"
+
+[[schema.tables.columns]]
+id = { table = 5, index = 4 }
+name = "size"
+ty = "U64"
+storage_ty = { UnsignedInteger = 8 }
+
+[[schema.tables.columns]]
+id = { table = 5, index = 5 }
+name = "status"
+ty = "String"
+storage_ty = { Enum = { name = "offering_status", variants = [{ name = "pending" }, { name = "unreadable" }] } }
+
+[[schema.tables.columns]]
+id = { table = 5, index = 6 }
+name = "error"
+ty = "String"
+storage_ty = "Text"
+nullable = true
+
+[[schema.tables.columns]]
+id = { table = 5, index = 7 }
+name = "title"
+ty = "String"
+storage_ty = "Text"
+
+[[schema.tables.columns]]
+id = { table = 5, index = 8 }
+name = "artist"
+ty = "String"
+storage_ty = "Text"
+
+[[schema.tables.columns]]
+id = { table = 5, index = 9 }
+name = "album"
+ty = "String"
+storage_ty = "Text"
+
+[[schema.tables.columns]]
+id = { table = 5, index = 10 }
+name = "album_artist"
+ty = "String"
+storage_ty = "Text"
+nullable = true
+
+[[schema.tables.columns]]
+id = { table = 5, index = 11 }
+name = "track_number"
+ty = "U32"
+storage_ty = { UnsignedInteger = 4 }
+nullable = true
+
+[[schema.tables.columns]]
+id = { table = 5, index = 12 }
+name = "disc_number"
+ty = "U32"
+storage_ty = { UnsignedInteger = 4 }
+nullable = true
+
+[[schema.tables.columns]]
+id = { table = 5, index = 13 }
+name = "year"
+ty = "I32"
+storage_ty = { Integer = 4 }
+nullable = true
+
+[[schema.tables.columns]]
+id = { table = 5, index = 14 }
+name = "genre"
+ty = "String"
+storage_ty = "Text"
+nullable = true
+
+[[schema.tables.columns]]
+id = { table = 5, index = 15 }
+name = "duration_ms"
+ty = "U64"
+storage_ty = { UnsignedInteger = 8 }
+
+[[schema.tables.columns]]
+id = { table = 5, index = 16 }
+name = "created_at"
+ty = "String"
+storage_ty = "Text"
+
+[[schema.tables.indices]]
+id = { table = 5, index = 0 }
+name = "index_offerings_by_id"
+on = 5
+columns = [{ column = { table = 5, index = 0 }, op = "Eq", scope = "Partition" }]
+unique = true
+primary_key = true
+
+[[schema.tables.indices]]
+id = { table = 5, index = 1 }
+name = "index_offerings_by_batch"
+on = 5
+columns = [{ column = { table = 5, index = 1 }, op = "Eq", scope = "Partition" }]
+
+[[schema.tables]]
+id = 6
+name = "track_claims"
+primary_key = { columns = [{ table = 6, index = 0 }], index = { table = 6, index = 0 } }
+
+[[schema.tables.columns]]
+id = { table = 6, index = 0 }
+name = "id"
+ty = "U64"
+storage_ty = { UnsignedInteger = 4 }
+auto_increment = true
+
+[[schema.tables.columns]]
+id = { table = 6, index = 1 }
+name = "track_id"
+ty = "U64"
+storage_ty = { UnsignedInteger = 8 }
+
+[[schema.tables.columns]]
+id = { table = 6, index = 2 }
+name = "kind"
+ty = "String"
+storage_ty = { Enum = { name = "claim_kind", variants = [{ name = "offering" }, { name = "manual_grab" }, { name = "watch_playlist" }, { name = "watch_artist" }, { name = "local_playlist" }, { name = "starred" }] } }
+
+[[schema.tables.columns]]
+id = { table = 6, index = 3 }
+name = "reference"
+ty = "String"
+storage_ty = "Text"
+nullable = true
+
+[[schema.tables.columns]]
+id = { table = 6, index = 4 }
+name = "created_at"
+ty = "String"
+storage_ty = "Text"
+
+[[schema.tables.indices]]
+id = { table = 6, index = 0 }
+name = "index_track_claims_by_id"
+on = 6
+columns = [{ column = { table = 6, index = 0 }, op = "Eq", scope = "Partition" }]
+unique = true
+primary_key = true
+
+[[schema.tables.indices]]
+id = { table = 6, index = 1 }
+name = "index_track_claims_by_track_id"
+on = 6
+columns = [{ column = { table = 6, index = 1 }, op = "Eq", scope = "Partition" }]
+
+[[schema.tables]]
+id = 7
+name = "tracks"
+primary_key = { columns = [{ table = 7, index = 0 }], index = { table = 7, index = 0 } }
+
+[[schema.tables.columns]]
+id = { table = 7, index = 0 }
+name = "id"
+ty = "U64"
+storage_ty = { UnsignedInteger = 4 }
+auto_increment = true
+
+[[schema.tables.columns]]
+id = { table = 7, index = 1 }
+name = "album_id"
+ty = "U64"
+storage_ty = { UnsignedInteger = 8 }
+
+[[schema.tables.columns]]
+id = { table = 7, index = 2 }
+name = "artist_id"
+ty = "U64"
+storage_ty = { UnsignedInteger = 8 }
+
+[[schema.tables.columns]]
+id = { table = 7, index = 3 }
+name = "title"
+ty = "String"
+storage_ty = "Text"
+
+[[schema.tables.columns]]
+id = { table = 7, index = 4 }
+name = "artist_credit"
+ty = "String"
+storage_ty = "Text"
+
+[[schema.tables.columns]]
+id = { table = 7, index = 5 }
+name = "track_number"
+ty = "U32"
+storage_ty = { UnsignedInteger = 4 }
+nullable = true
+
+[[schema.tables.columns]]
+id = { table = 7, index = 6 }
+name = "disc_number"
+ty = "U32"
+storage_ty = { UnsignedInteger = 4 }
+nullable = true
+
+[[schema.tables.columns]]
+id = { table = 7, index = 7 }
+name = "year"
+ty = "I32"
+storage_ty = { Integer = 4 }
+nullable = true
+
+[[schema.tables.columns]]
+id = { table = 7, index = 8 }
+name = "genre"
+ty = "String"
+storage_ty = "Text"
+nullable = true
+
+[[schema.tables.columns]]
+id = { table = 7, index = 9 }
+name = "duration_ms"
+ty = "U64"
+storage_ty = { UnsignedInteger = 8 }
+
+[[schema.tables.columns]]
+id = { table = 7, index = 10 }
+name = "bitrate"
+ty = "U32"
+storage_ty = { UnsignedInteger = 4 }
+nullable = true
+
+[[schema.tables.columns]]
+id = { table = 7, index = 11 }
+name = "sample_rate"
+ty = "U32"
+storage_ty = { UnsignedInteger = 4 }
+nullable = true
+
+[[schema.tables.columns]]
+id = { table = 7, index = 12 }
+name = "channels"
+ty = "U8"
+storage_ty = { UnsignedInteger = 1 }
+nullable = true
+
+[[schema.tables.columns]]
+id = { table = 7, index = 13 }
+name = "bit_depth"
+ty = "U8"
+storage_ty = { UnsignedInteger = 1 }
+nullable = true
+
+[[schema.tables.columns]]
+id = { table = 7, index = 14 }
+name = "path"
+ty = "String"
+storage_ty = "Text"
+
+[[schema.tables.columns]]
+id = { table = 7, index = 15 }
+name = "size"
+ty = "U64"
+storage_ty = { UnsignedInteger = 8 }
+
+[[schema.tables.columns]]
+id = { table = 7, index = 16 }
+name = "suffix"
+ty = "String"
+storage_ty = "Text"
+
+[[schema.tables.columns]]
+id = { table = 7, index = 17 }
+name = "content_type"
+ty = "String"
+storage_ty = "Text"
+
+[[schema.tables.columns]]
+id = { table = 7, index = 18 }
+name = "mbid"
+ty = "String"
+storage_ty = "Text"
+nullable = true
+
+[[schema.tables.columns]]
+id = { table = 7, index = 19 }
+name = "isrc"
+ty = "String"
+storage_ty = "Text"
+nullable = true
+
+[[schema.tables.columns]]
+id = { table = 7, index = 20 }
+name = "origin"
+ty = "String"
+storage_ty = { Enum = { name = "track_origin", variants = [{ name = "offering" }, { name = "download" }] } }
+
+[[schema.tables.columns]]
+id = { table = 7, index = 21 }
+name = "added_at"
+ty = "String"
+storage_ty = "Text"
+
+[[schema.tables.indices]]
+id = { table = 7, index = 0 }
+name = "index_tracks_by_id"
+on = 7
+columns = [{ column = { table = 7, index = 0 }, op = "Eq", scope = "Partition" }]
+unique = true
+primary_key = true
+
+[[schema.tables.indices]]
+id = { table = 7, index = 1 }
+name = "index_tracks_by_album_id"
+on = 7
+columns = [{ column = { table = 7, index = 1 }, op = "Eq", scope = "Partition" }]
+
+[[schema.tables.indices]]
+id = { table = 7, index = 2 }
+name = "index_tracks_by_artist_id"
+on = 7
+columns = [{ column = { table = 7, index = 2 }, op = "Eq", scope = "Partition" }]
+
+[[schema.tables.indices]]
+id = { table = 7, index = 3 }
+name = "index_tracks_by_path"
+on = 7
+columns = [{ column = { table = 7, index = 14 }, op = "Eq", scope = "Partition" }]
+unique = true
+
+[[schema.tables]]
+id = 8
+name = "albums"
+primary_key = { columns = [{ table = 8, index = 0 }], index = { table = 8, index = 0 } }
+
+[[schema.tables.columns]]
+id = { table = 8, index = 0 }
+name = "id"
+ty = "U64"
+storage_ty = { UnsignedInteger = 4 }
+auto_increment = true
+
+[[schema.tables.columns]]
+id = { table = 8, index = 1 }
+name = "title"
+ty = "String"
+storage_ty = "Text"
+
+[[schema.tables.columns]]
+id = { table = 8, index = 2 }
+name = "title_key"
+ty = "String"
+storage_ty = "Text"
+
+[[schema.tables.columns]]
+id = { table = 8, index = 3 }
+name = "artist_id"
+ty = "U64"
+storage_ty = { UnsignedInteger = 8 }
+
+[[schema.tables.columns]]
+id = { table = 8, index = 4 }
+name = "year"
+ty = "I32"
+storage_ty = { Integer = 4 }
+nullable = true
+
+[[schema.tables.columns]]
+id = { table = 8, index = 5 }
+name = "genre"
+ty = "String"
+storage_ty = "Text"
+nullable = true
+
+[[schema.tables.columns]]
+id = { table = 8, index = 6 }
+name = "mbid"
+ty = "String"
+storage_ty = "Text"
+nullable = true
+
+[[schema.tables.columns]]
+id = { table = 8, index = 7 }
+name = "cover"
+ty = "String"
+storage_ty = "Text"
+nullable = true
+
+[[schema.tables.columns]]
+id = { table = 8, index = 8 }
+name = "created_at"
+ty = "String"
+storage_ty = "Text"
+
+[[schema.tables.indices]]
+id = { table = 8, index = 0 }
+name = "index_albums_by_id"
+on = 8
+columns = [{ column = { table = 8, index = 0 }, op = "Eq", scope = "Partition" }]
+unique = true
+primary_key = true
+
+[[schema.tables.indices]]
+id = { table = 8, index = 1 }
+name = "index_albums_by_artist_id"
+on = 8
+columns = [{ column = { table = 8, index = 3 }, op = "Eq", scope = "Partition" }]
+
+[[schema.tables]]
+id = 9
+name = "artists"
+primary_key = { columns = [{ table = 9, index = 0 }], index = { table = 9, index = 0 } }
+
+[[schema.tables.columns]]
+id = { table = 9, index = 0 }
+name = "id"
+ty = "U64"
+storage_ty = { UnsignedInteger = 4 }
+auto_increment = true
+
+[[schema.tables.columns]]
+id = { table = 9, index = 1 }
+name = "name"
+ty = "String"
+storage_ty = "Text"
+
+[[schema.tables.columns]]
+id = { table = 9, index = 2 }
+name = "name_key"
+ty = "String"
+storage_ty = "Text"
+
+[[schema.tables.columns]]
+id = { table = 9, index = 3 }
+name = "mbid"
+ty = "String"
+storage_ty = "Text"
+nullable = true
+
+[[schema.tables.columns]]
+id = { table = 9, index = 4 }
+name = "created_at"
+ty = "String"
+storage_ty = "Text"
+
+[[schema.tables.indices]]
+id = { table = 9, index = 0 }
+name = "index_artists_by_id"
+on = 9
+columns = [{ column = { table = 9, index = 0 }, op = "Eq", scope = "Partition" }]
+unique = true
+primary_key = true
+
+[[schema.tables.indices]]
+id = { table = 9, index = 1 }
+name = "index_artists_by_name_key"
+on = 9
+columns = [{ column = { table = 9, index = 2 }, op = "Eq", scope = "Partition" }]

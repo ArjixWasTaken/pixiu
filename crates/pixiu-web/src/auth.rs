@@ -1,13 +1,9 @@
 //! Authentication, modeled as request functions (Topcoat's "functions, not
 //! middlewares"): every handler that needs the admin calls [`require_user`].
 
-use std::sync::LazyLock;
-
-use argon2::{
-    Argon2,
-    password_hash::{PasswordHasher, PasswordVerifier},
-};
+use pixiu_core::SecretBox;
 use pixiu_db::{Db, User, WebSession, now, toasty};
+use pixiu_treasury::{Offerings, Treasury};
 use topcoat::{
     Result,
     context::{Cx, app_context, memoize},
@@ -22,6 +18,18 @@ pub(crate) const SETUP_PATH: &str = "/setup";
 /// The database handle. Cloning is cheap; it shares the pool.
 pub(crate) fn db(cx: &Cx) -> Db {
     app_context::<Db>(cx).clone()
+}
+
+pub(crate) fn secrets(cx: &Cx) -> &SecretBox {
+    app_context(cx)
+}
+
+pub(crate) fn treasury(cx: &Cx) -> &Treasury {
+    app_context(cx)
+}
+
+pub(crate) fn offerings(cx: &Cx) -> &Offerings {
+    app_context(cx)
 }
 
 /// The logged-in admin, if the request carries a live session.
@@ -82,37 +90,28 @@ pub(crate) async fn end_session(cx: &Cx) -> Result<()> {
     Ok(())
 }
 
-/// Hashes a password with argon2id. Runs off the async runtime: hashing is
+/// Hashes a password with argon2id, off the async runtime: hashing is
 /// deliberately slow.
 pub(crate) async fn hash_password(password: String) -> Result<String> {
-    let hash = tokio::task::spawn_blocking(move || {
-        Argon2::default()
-            .hash_password(password.as_bytes())
-            .map(|hash| hash.to_string())
-    })
-    .await??;
-    Ok(hash)
+    Ok(tokio::task::spawn_blocking(move || pixiu_core::password::hash(&password)).await?)
 }
 
-/// Checks `password` against a stored PHC hash. Pass `None` for unknown
-/// users so a miss costs as much time as a wrong password.
+/// Checks `password` against a stored hash; see
+/// [`pixiu_core::password::verify`].
 pub(crate) async fn verify_password(password: String, hash: Option<String>) -> Result<bool> {
-    // Verified against when the user is unknown, so both paths do the same
-    // argon2 work and response times do not reveal valid usernames.
-    static DUMMY_HASH: LazyLock<String> = LazyLock::new(|| {
-        Argon2::default()
-            .hash_password(b"not the password")
-            .expect("hashing with default parameters succeeds")
-            .to_string()
-    });
-
-    let known = hash.is_some();
-    let matches = tokio::task::spawn_blocking(move || {
-        let hash = hash.as_deref().unwrap_or(&DUMMY_HASH);
-        Argon2::default()
-            .verify_password(password.as_bytes(), hash)
-            .is_ok()
+    Ok(tokio::task::spawn_blocking(move || {
+        pixiu_core::password::verify(&password, hash.as_deref())
     })
+    .await?)
+}
+
+/// Keeps the password, sealed, for Subsonic token authentication.
+pub(crate) async fn remember_password(cx: &Cx, user: &mut User, password: &str) -> Result<()> {
+    let sealed = secrets(cx).seal_str(password);
+    toasty::update!(user {
+        subsonic_secret: Some(sealed)
+    })
+    .exec(&mut db(cx))
     .await?;
-    Ok(known && matches)
+    Ok(())
 }

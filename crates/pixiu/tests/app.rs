@@ -7,7 +7,8 @@ use std::{
 };
 
 use futures_util::{SinkExt, StreamExt};
-use pixiu_core::Config;
+use md5::Digest;
+use pixiu_core::{Config, SecretBox};
 use reqwest::{StatusCode, header};
 use tokio::{net::TcpListener, sync::oneshot};
 use topcoat::{
@@ -59,9 +60,12 @@ struct TestServer {
 impl TestServer {
     async fn start() -> Self {
         let data = tempfile::tempdir().unwrap();
+        let mut config = Config::default();
+        config.paths.data_dir = data.path().join("data");
+        config.paths.treasure_dir = data.path().join("treasure");
         let db = pixiu_db::open(&data.path().join("pixiu.db")).await.unwrap();
         let assets = AssetBundle::load_dir(&*ASSETS).unwrap();
-        let app = pixiu::app(db, &Config::default(), assets);
+        let app = pixiu::app(db, &config, SecretBox::ephemeral(), assets);
 
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -133,20 +137,34 @@ fn set_cookies(response: &reqwest::Response) -> Vec<String> {
         .collect()
 }
 
+async fn subsonic(server: &TestServer, method: &str, query: &str) -> serde_json::Value {
+    let response = server
+        .get(&format!("/rest/{method}?f=json&v=1.16.1&c=test&{query}"))
+        .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let body: serde_json::Value = response.json().await.unwrap();
+    body["subsonic-response"].clone()
+}
+
 #[tokio::test]
 async fn subsonic_api_is_mounted_under_rest() {
     let server = TestServer::start().await;
+    server.claim().await;
 
-    let response = server.get("/rest/ping.view?f=json").await;
-    assert_eq!(response.status(), StatusCode::OK);
-    let body: serde_json::Value = response.json().await.unwrap();
-    assert_eq!(body["subsonic-response"]["status"], "ok");
-    assert_eq!(body["subsonic-response"]["openSubsonic"], true);
+    let json = subsonic(&server, "ping.view", "").await;
+    assert_eq!(json["status"], "failed");
+    assert_eq!(json["error"]["code"], 10);
 
-    let body = server.get("/rest/ping").await.text().await.unwrap();
-    assert!(body.contains(r#"status="ok""#), "{body}");
+    let json = subsonic(&server, "ping.view", "u=keeper&p=gold-and-jade").await;
+    assert_eq!(json["status"], "ok");
+    assert_eq!(json["openSubsonic"], true);
 
-    // formPost: parameters in a form-encoded body.
+    // Setup captured the password, so token authentication works at once.
+    let token = hex::encode(md5::Md5::digest("gold-and-jadesalty1"));
+    let json = subsonic(&server, "ping", &format!("u=keeper&t={token}&s=salty1")).await;
+    assert_eq!(json["status"], "ok");
+
+    // formPost: parameters in a form-encoded body. Extensions are public.
     let response = server
         .post_form("/rest/getOpenSubsonicExtensions", &[("f", "json")])
         .await;
@@ -155,6 +173,123 @@ async fn subsonic_api_is_mounted_under_rest() {
         body["subsonic-response"]["openSubsonicExtensions"][0]["name"],
         "formPost"
     );
+}
+
+fn fixture(name: &str) -> Vec<u8> {
+    std::fs::read(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../fixtures/audio")
+            .join(name),
+    )
+    .unwrap()
+}
+
+/// The text after `prefix` in `html`, up to the next `"` or `<`.
+fn between<'a>(html: &'a str, prefix: &str, suffix: &str) -> &'a str {
+    let start = html
+        .find(prefix)
+        .unwrap_or_else(|| panic!("`{prefix}` not in page"))
+        + prefix.len();
+    let end = start + html[start..].find(suffix).unwrap();
+    &html[start..end]
+}
+
+#[tokio::test]
+async fn offerings_become_subsonic_music() {
+    let server = TestServer::start().await;
+    server.claim().await;
+
+    // Upload an album through the WebUI.
+    let form = reqwest::multipart::Form::new()
+        .part(
+            "files",
+            reqwest::multipart::Part::bytes(fixture("01-first-light.flac"))
+                .file_name("01-first-light.flac"),
+        )
+        .part(
+            "files",
+            reqwest::multipart::Part::bytes(fixture("02-second-wind.mp3"))
+                .file_name("02-second-wind.mp3"),
+        );
+    let response = server
+        .client
+        .post(server.url("/offerings/upload"))
+        .multipart(form)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(location(&response), "/offerings");
+
+    let review = server.get("/offerings").await.text().await.unwrap();
+    assert!(review.contains("Test Album"), "{review}");
+    assert!(review.contains("Accept 2"), "{review}");
+    let accept_end = review.find("/accept\"").expect("an accept form");
+    let batch = &review
+        [review[..accept_end].rfind("/offerings/").unwrap() + "/offerings/".len()..accept_end];
+
+    let accepted = server
+        .post_form(&format!("/offerings/{batch}/accept"), &[])
+        .await;
+    assert_eq!(location(&accepted), "/offerings?accepted=2");
+    let review = server.get("/offerings").await.text().await.unwrap();
+    assert!(review.contains("Nothing awaits review."));
+
+    // The dashboard shows the album, with its cover.
+    let home = server.get("/").await.text().await.unwrap();
+    assert!(home.contains("Recently hoarded"), "{home}");
+    let cover = between(&home, "src=\"/covers/", "\"");
+    let cover = server.get(&format!("/covers/{cover}")).await;
+    assert_eq!(cover.status(), StatusCode::OK);
+    assert_eq!(cover.headers()[header::CONTENT_TYPE], "image/png");
+
+    // An API key from the settings page opens the Subsonic API.
+    let settings = server
+        .post_form("/settings/api-keys", &[("name", "tests")])
+        .await
+        .text()
+        .await
+        .unwrap();
+    let key = format!("pixiu_{}", between(&settings, "pixiu_", "<"));
+    assert_eq!(key.len(), "pixiu_".len() + 48);
+
+    let auth = format!("apiKey={key}");
+    let json = subsonic(&server, "getArtists", &auth).await;
+    assert_eq!(
+        json["artists"]["index"][0]["artist"][0]["name"],
+        "Test Artist"
+    );
+
+    let json = subsonic(&server, "getAlbumList2", &format!("{auth}&type=newest")).await;
+    let album_id = json["albumList2"]["album"][0]["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let json = subsonic(&server, "getAlbum", &format!("{auth}&id={album_id}")).await;
+    let song_id = json["album"]["song"][0]["id"].as_str().unwrap().to_owned();
+
+    // Seeking works through the whole stack.
+    let partial = server
+        .client
+        .get(server.url(&format!("/rest/stream?{auth}&id={song_id}")))
+        .header(header::RANGE, "bytes=0-9")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(partial.status(), StatusCode::PARTIAL_CONTENT);
+    assert_eq!(partial.headers()[header::CONTENT_TYPE], "audio/flac");
+    assert_eq!(
+        &partial.bytes().await.unwrap()[..],
+        &fixture("01-first-light.flac")[..10]
+    );
+
+    // Revoking the key closes the door.
+    let settings = server.get("/settings").await.text().await.unwrap();
+    let revoke = between(&settings, "action=\"/settings/api-keys/", "/revoke");
+    server
+        .post_form(&format!("/settings/api-keys/{revoke}/revoke"), &[])
+        .await;
+    let json = subsonic(&server, "ping", &auth).await;
+    assert_eq!(json["error"]["code"], 44);
 }
 
 #[tokio::test]
@@ -286,4 +421,76 @@ async fn websocket_upgrades_reach_topcoat_routes() {
         .unwrap();
     let echoed = socket.next().await.unwrap().unwrap();
     assert_eq!(echoed.to_text().unwrap(), "hoard");
+}
+
+#[tokio::test]
+async fn only_the_api_accepts_cross_origin_posts() {
+    let server = TestServer::start().await;
+    server.claim().await;
+
+    let cross_site = |path: &str| {
+        server
+            .client
+            .post(server.url(path))
+            .header(header::ORIGIN, "https://elsewhere.example")
+            .header("sec-fetch-site", "cross-site")
+            .form(&[("f", "json"), ("u", "keeper"), ("p", "gold-and-jade")])
+    };
+
+    let api = cross_site("/rest/ping.view").send().await.unwrap();
+    assert_eq!(api.status(), StatusCode::OK);
+    assert_eq!(api.headers()[header::ACCESS_CONTROL_ALLOW_ORIGIN], "*");
+    let body: serde_json::Value = api.json().await.unwrap();
+    assert_eq!(body["subsonic-response"]["status"], "ok");
+
+    let webui = cross_site("/logout").send().await.unwrap();
+    assert_eq!(webui.status(), StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn audio_is_never_compressed_but_pages_are() {
+    let server = TestServer::start().await;
+    server.claim().await;
+
+    let form = reqwest::multipart::Form::new().part(
+        "files",
+        reqwest::multipart::Part::bytes(fixture("01-first-light.flac"))
+            .file_name("01-first-light.flac"),
+    );
+    server
+        .client
+        .post(server.url("/offerings/upload"))
+        .multipart(form)
+        .send()
+        .await
+        .unwrap();
+    let review = server.get("/offerings").await.text().await.unwrap();
+    let accept_end = review.find("/accept\"").unwrap();
+    let batch = &review
+        [review[..accept_end].rfind("/offerings/").unwrap() + "/offerings/".len()..accept_end];
+    server
+        .post_form(&format!("/offerings/{batch}/accept"), &[])
+        .await;
+
+    let stream = server
+        .client
+        .get(server.url("/rest/stream?u=keeper&p=gold-and-jade&id=tr-1"))
+        .header(header::ACCEPT_ENCODING, "gzip, br")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(stream.status(), StatusCode::OK);
+    assert!(stream.headers().get(header::CONTENT_ENCODING).is_none());
+    assert_eq!(stream.headers()[header::ACCEPT_RANGES], "bytes");
+    let length = fixture("01-first-light.flac").len().to_string();
+    assert_eq!(stream.headers()[header::CONTENT_LENGTH], length.as_str());
+
+    let page = server
+        .client
+        .get(server.url("/offerings"))
+        .header(header::ACCEPT_ENCODING, "gzip")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(page.headers()[header::CONTENT_ENCODING], "gzip");
 }

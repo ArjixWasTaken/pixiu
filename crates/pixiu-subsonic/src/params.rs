@@ -51,6 +51,23 @@ impl Params {
             .ok_or_else(|| ApiError::missing_parameter(name))
     }
 
+    /// Parses the value of `name`, or returns `default` when it is absent.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the value does not parse.
+    pub fn number<T: std::str::FromStr>(&self, name: &str, default: T) -> Result<T, ApiError> {
+        match self.get(name) {
+            None | Some("") => Ok(default),
+            Some(value) => value.parse().map_err(|_| {
+                ApiError::new(
+                    crate::response::ErrorCode::Generic,
+                    format!("`{name}` must be a number, got `{value}`"),
+                )
+            }),
+        }
+    }
+
     /// The response format requested with `f`. Unknown formats fall back to
     /// XML, the Subsonic default.
     #[must_use]
