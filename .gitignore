@@ -1,0 +1,6 @@
+/target/
+/data/
+/treasure/
+*.db
+*.db-*
+.env

@@ -1,0 +1,20 @@
+# Copy to `pixiu.toml` (in the working directory, or point PIXIU_CONFIG at it).
+# Every key can also be set from the environment: PIXIU_SERVER__PORT=4533.
+
+[server]
+# Loopback by default; use "0.0.0.0" to accept connections from the network.
+host = "127.0.0.1"
+port = 4533
+# "auto": mark the session cookie Secure when the request came over HTTPS
+# (directly or via X-Forwarded-Proto). "always" / "never" force it.
+cookie_security = "auto"
+
+[paths]
+# Database, secrets and caches.
+data_dir = "data"
+# The music library. píxiū owns this directory; don't edit it by hand.
+treasure_dir = "treasure"
+
+[log]
+# A tracing filter; RUST_LOG overrides it.
+filter = "info"

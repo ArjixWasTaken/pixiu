@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # rustup reads rust-toolchain.toml and installs the pinned toolchain.
+      - run: rustup show active-toolchain || rustup toolchain install
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Format
+        run: cargo fmt --all --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+      # The end-to-end tests bundle the WebUI assets themselves (fonts are
+      # downloaded on the first run), so no Topcoat CLI is needed here.
+      - name: Test
+        run: cargo test --workspace --all-features

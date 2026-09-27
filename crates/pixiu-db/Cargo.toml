@@ -1,0 +1,33 @@
+[package]
+name = "pixiu-db"
+description = "Toasty models and migrations for píxiū"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[features]
+# Builds `pixiu-migrate`, the project-local migration CLI. Only needed when
+# changing models: `cargo run -p pixiu-db --features cli -- migration generate`.
+cli = ["dep:toasty-cli", "dep:anyhow"]
+
+[dependencies]
+jiff.workspace = true
+thiserror.workspace = true
+toasty.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+anyhow = { workspace = true, optional = true }
+toasty-cli = { workspace = true, optional = true }
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[[bin]]
+name = "pixiu-migrate"
+path = "src/bin/pixiu-migrate.rs"
+required-features = ["cli"]
+
+[lints]
+workspace = true

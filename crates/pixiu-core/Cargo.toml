@@ -1,0 +1,18 @@
+[package]
+name = "pixiu-core"
+description = "Configuration and shared types for píxiū"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+figment.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+figment = { workspace = true, features = ["test"] }
+
+[lints]
+workspace = true

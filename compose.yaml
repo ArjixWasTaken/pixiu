@@ -1,0 +1,12 @@
+services:
+  pixiu:
+    build: .
+    image: pixiu:latest
+    ports:
+      - "4533:4533"
+    volumes:
+      # Both directories must be writable by uid 1000 (the image's `pixiu`
+      # user), or set `user:` to the owner of your directories.
+      - ./data:/data
+      - ./treasure:/treasure
+    restart: unless-stopped

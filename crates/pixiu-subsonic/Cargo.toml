@@ -1,0 +1,26 @@
+[package]
+name = "pixiu-subsonic"
+description = "The OpenSubsonic REST API of píxiū"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+pixiu-core.workspace = true
+pixiu-db.workspace = true
+
+axum.workspace = true
+bytes.workspace = true
+form_urlencoded.workspace = true
+quick-xml.workspace = true
+serde_json = { workspace = true, features = ["preserve_order"] }
+tracing.workspace = true
+
+[dev-dependencies]
+insta.workspace = true
+tokio.workspace = true
+tower.workspace = true
+
+[lints]
+workspace = true
