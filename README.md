@@ -4,18 +4,20 @@
   <p><em>Gathers music from afar and never lets it go.</em></p>
 </div>
 
+> [!WARNING]
+> **Don't use this.** píxiū is vibe-coded: most of it was written by an AI,
+> with little human review, and it is not in a state its author would call
+> good. Expect bugs, security holes, lost or mangled music, and breaking
+> changes between commits. It is public so the code can be read, not because
+> it is ready to be run, and no support is offered.
+
 The píxiū (貔貅) is a mythical beast, part dragon and part lion with feathered
 wings, that devours treasure and never gives any back. This píxiū does the same
 with music. It is an [OpenSubsonic](https://opensubsonic.netlify.app/) server
 that also hunts: it downloads music from streaming platforms (YouTube Music
 first) into a library it owns, and serves that hoard to any Subsonic client.
 
-> **Status: early development.** píxiū serves the music you upload, hunts
-> music on YouTube Music, keeps up with the playlists and artists you watch,
-> tags it all with MusicBrainz and lyrics, and streams it in the format each
-> client wants.
-
-## What works
+## What it does
 
 - **Hunting.** Search YouTube Music in the WebUI and grab songs or whole
   albums. Downloads run in the background (the Jobs page shows their progress
