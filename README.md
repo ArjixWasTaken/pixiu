@@ -92,8 +92,9 @@ mkdir -p data treasure   # must be writable by uid 1000
 docker compose up -d --build
 ```
 
-The image includes everything hunting needs: Chromium for the login browser,
-the FFmpeg libraries, and `yt-dlp` with Deno. The compose file runs it
+The image is built on Alpine Linux (musl) and includes everything hunting
+needs: Chromium for the login browser, the FFmpeg libraries, and `yt-dlp`
+with Deno. The compose file runs it
 hardened: a read-only root filesystem (only the volumes and two scratch
 `tmpfs` mounts are writable), no Linux capabilities, and no way to gain
 privileges.
@@ -141,7 +142,7 @@ nesting (`PIXIU_SERVER__PORT=4533`). See [`pixiu.example.toml`](pixiu.example.to
 | `stream.format` | `mp3` | What transcodes use when a client asks for a lower bitrate but names no format, and the file's own format cannot be made (FLAC, say): `mp3`, `opus` or `aac`. |
 | `stream.max_transcodes` | `4` | Transcodes running at once; more wait their turn. |
 | `enrich.contact` | unset | An email address or URL of yours, which MusicBrainz and Wikimedia ask for. It goes in the `User-Agent` of píxiū's lookups (MusicBrainz, the Cover Art Archive, LRCLIB and Wikipedia) and nowhere else. |
-| `hunt.botguard` | unset | [`rustypipe-botguard`](https://codeberg.org/ThetaDev/rustypipe-botguard), which answers YouTube's proof-of-origin challenges so more YouTube clients can be used for downloads. The Docker image ships it at `/usr/local/bin/rustypipe-botguard`. |
+| `hunt.botguard` | unset | [`rustypipe-botguard`](https://codeberg.org/ThetaDev/rustypipe-botguard), which answers YouTube's proof-of-origin challenges so more YouTube clients can be used for direct downloads. Not in the Docker image, since it is only built for glibc; downloads go through `yt-dlp` meanwhile. |
 
 ## Development
 

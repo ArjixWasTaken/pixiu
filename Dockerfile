@@ -1,18 +1,41 @@
-# Works with both BuildKit and the legacy builder: dependencies are cached in
-# image layers with cargo-chef rather than with BuildKit cache mounts.
+# Alpine (musl) throughout. Works with both BuildKit and the legacy builder:
+# dependencies are cached in image layers with cargo-chef rather than with
+# BuildKit cache mounts.
 
 # ---- tools -------------------------------------------------------------------
-FROM rust:1.98.1-trixie AS chef
+FROM rust:1.98.1-alpine3.24 AS chef
 # FFmpeg's headers and libclang, for the bindings píxiū remuxes and
-# transcodes audio with.
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-        clang libclang-dev pkg-config libavcodec-dev libavformat-dev libavutil-dev \
-        libswresample-dev \
-    && rm -rf /var/lib/apt/lists/*
+# transcodes audio with; a C toolchain for SQLite, QuickJS and the TLS
+# crates.
+RUN apk add --no-cache \
+        clang-dev cmake curl ffmpeg-dev linux-headers make musl-dev perl pkgconf
+# Link musl dynamically (Rust links it statically by default), so the binary
+# can use Alpine's FFmpeg libraries and build scripts can load libclang. The
+# Topcoat CLI builds without CARGO_HOME and RUSTFLAGS in its environment:
+# ~/.cargo points at the real cargo home, so its build shares cargo-chef's
+# registry and this setting.
+RUN rm -rf "$HOME/.cargo" && ln -s "$CARGO_HOME" "$HOME/.cargo" \
+    && printf '[target.%s-unknown-linux-musl]\nrustflags = ["-C", "target-feature=-crt-static"]\n' \
+        "$(uname -m)" > "$CARGO_HOME/config.toml"
 # cargo-chef caches dependency builds; the Topcoat CLI bundles the WebUI
 # assets (stylesheet, fonts, images).
 RUN cargo install cargo-chef@0.1.78 topcoat-cli@0.9.0 --locked
+# The Tailwind CLI Topcoat would download needs glibc; its musl build,
+# pinned by checksum, compiles the stylesheet instead (see pixiu-web's
+# build.rs). The version is the one topcoat-tailwind pins.
+RUN set -eux; \
+    case "$(apk --print-arch)" in \
+        x86_64) name=tailwindcss-linux-x64-musl; \
+            sha=ae828e9e989ecbddb2bef856af8b0308ba162583b4922b3a065b5e26f86b0691 ;; \
+        aarch64) name=tailwindcss-linux-arm64-musl; \
+            sha=24a0dd39cbbced9d94f6313a747cc29ab2523a6a7b69204f2151e0af6aad6eef ;; \
+        *) echo "no Tailwind build for $(apk --print-arch)" >&2; exit 1 ;; \
+    esac; \
+    curl -fsSL -o /usr/local/bin/tailwindcss \
+        "https://github.com/tailwindlabs/tailwindcss/releases/download/v4.3.2/${name}"; \
+    echo "${sha}  /usr/local/bin/tailwindcss" | sha256sum -c -; \
+    chmod 0755 /usr/local/bin/tailwindcss
+ENV PIXIU_TAILWIND=/usr/local/bin/tailwindcss
 WORKDIR /src
 
 # ---- dependency recipe -------------------------------------------------------
@@ -31,53 +54,45 @@ COPY . .
 RUN topcoat asset bundle --release --package pixiu
 
 # ---- helpers -----------------------------------------------------------------
-# yt-dlp (the download fallback) and rustypipe-botguard (optional; see
-# pixiu.example.toml), pinned by checksum. Bump versions and hashes together.
-FROM debian:trixie-slim AS helpers
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl xz-utils \
-    && rm -rf /var/lib/apt/lists/*
+# yt-dlp, the download fallback, as its standalone musl build, pinned by
+# checksum. Bump the version and hashes together.
+FROM alpine:3.24 AS helpers
+RUN apk add --no-cache curl
 RUN set -eux; \
-    case "$(dpkg --print-architecture)" in \
-        amd64) arch=x86_64; ytdlp=yt-dlp_linux; \
-            ytdlp_sha=58162f9bfdc27458ea47bfcb311cf47028f17d8154a8bf7d689861d46399230a; \
-            botguard_sha=4f2ec561e8f9fadece7deadc6ce0624fbdedd852222c3eb194c22153b1323129 ;; \
-        arm64) arch=aarch64; ytdlp=yt-dlp_linux_aarch64; \
-            ytdlp_sha=b16e4dab368a816cd05d477d698a605a6ae87ccee1c8ffd38fa21d7254141fcc; \
-            botguard_sha=4d038857374a69aea9be8ded981d93a776dc88d4e254f5c6d292746099abf69a ;; \
-        *) echo "no helper binaries for $(dpkg --print-architecture)" >&2; exit 1 ;; \
+    case "$(apk --print-arch)" in \
+        x86_64) ytdlp=yt-dlp_musllinux; \
+            sha=f3dec9cfeaf304cec98290fe41c6ad465d4b747d302473559643e7af24929722 ;; \
+        aarch64) ytdlp=yt-dlp_musllinux_aarch64; \
+            sha=17b164c4d258be92bb1ad146cb7c336b783aedb380814aabbcb7d52937f77e57 ;; \
+        *) echo "no yt-dlp build for $(apk --print-arch)" >&2; exit 1 ;; \
     esac; \
     curl -fsSL -o /usr/local/bin/yt-dlp \
         "https://github.com/yt-dlp/yt-dlp/releases/download/2026.08.19/${ytdlp}"; \
-    echo "${ytdlp_sha}  /usr/local/bin/yt-dlp" | sha256sum -c -; \
-    curl -fsSL -o /tmp/botguard.tar.xz \
-        "https://codeberg.org/ThetaDev/rustypipe-botguard/releases/download/v0.1.2/rustypipe-botguard-v0.1.2-${arch}-unknown-linux-gnu.tar.xz"; \
-    echo "${botguard_sha}  /tmp/botguard.tar.xz" | sha256sum -c -; \
-    tar -xJf /tmp/botguard.tar.xz -C /usr/local/bin rustypipe-botguard; \
-    chmod 0755 /usr/local/bin/yt-dlp /usr/local/bin/rustypipe-botguard
-
-# yt-dlp needs a JavaScript runtime to answer YouTube's challenges.
-FROM denoland/deno:bin-2.9.7 AS deno
+    echo "${sha}  /usr/local/bin/yt-dlp" | sha256sum -c -; \
+    chmod 0755 /usr/local/bin/yt-dlp
 
 # ---- runtime -----------------------------------------------------------------
-FROM debian:trixie-slim
+FROM alpine:3.24
 
-# Chromium runs the login browser; the FFmpeg libraries remux downloads
-# and transcode streams. Mesa's GPU drivers (and the LLVM they compile
-# shaders with, ~190 MB) come along with Chromium but are only used on real
-# GPUs; headless Chromium draws with its own SwiftShader, so they go.
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-        ca-certificates chromium fonts-liberation tini \
-        libavcodec61 libavformat61 libavutil59 libswresample5 \
-    && dpkg --purge --force-depends libgl1-mesa-dri mesa-libgallium libllvm19 libz3-4 \
-    && rm -rf /var/lib/apt/lists/* \
-    && useradd --uid 1000 --user-group --create-home --shell /usr/sbin/nologin pixiu \
+# Chromium runs the login browser; the FFmpeg libraries remux downloads and
+# transcode streams; Deno is the JavaScript runtime yt-dlp answers YouTube's
+# challenges with.
+#
+# Mesa's GPU drivers (and the LLVM they compile shaders with, ~230 MB) come
+# along with Chromium but are only loaded for real GPUs; headless Chromium
+# draws in software, so they go, and so does the file-type database that
+# came with Chromium's desktop integration.
+RUN apk add --no-cache \
+        ca-certificates chromium deno font-liberation tini \
+        ffmpeg-libavcodec ffmpeg-libavformat ffmpeg-libavutil ffmpeg-libswresample \
+    && rm -rf /usr/lib/libLLVM* /usr/lib/llvm[0-9]* /usr/lib/libgallium-* \
+        /usr/lib/dri /usr/lib/gbm /usr/bin/spirv-* /usr/lib/libSPIRV-Tools* \
+        /usr/share/misc/magic.mgc \
+    && adduser -D -u 1000 -h /home/pixiu -s /sbin/nologin pixiu \
     && mkdir -p /data /treasure \
     && chown pixiu:pixiu /data /treasure
 
-COPY --from=helpers /usr/local/bin/yt-dlp /usr/local/bin/rustypipe-botguard /usr/local/bin/
-COPY --from=deno /deno /usr/local/bin/deno
+COPY --from=helpers /usr/local/bin/yt-dlp /usr/local/bin/
 # The binary looks for its asset bundle next to itself.
 COPY --from=build /src/target/release/pixiu /opt/pixiu/pixiu
 COPY --from=build /src/target/release/assets /opt/pixiu/assets
@@ -87,7 +102,7 @@ ENV PIXIU_SERVER__HOST=0.0.0.0 \
     PIXIU_SERVER__PORT=4533 \
     PIXIU_PATHS__DATA_DIR=/data \
     PIXIU_PATHS__TREASURE_DIR=/treasure \
-    PIXIU_BROWSER__EXECUTABLE=/usr/bin/chromium \
+    PIXIU_BROWSER__EXECUTABLE=/usr/lib/chromium/chromium \
     PIXIU_BROWSER__NO_SANDBOX=true
 
 USER pixiu
@@ -100,4 +115,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=10s \
     CMD ["/opt/pixiu/pixiu", "healthcheck"]
 
 # tini reaps the processes Chromium leaves behind when it closes.
-ENTRYPOINT ["/usr/bin/tini", "--", "/opt/pixiu/pixiu"]
+ENTRYPOINT ["/sbin/tini", "--", "/opt/pixiu/pixiu"]

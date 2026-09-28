@@ -24,7 +24,8 @@ no_sandbox = false
 [hunt]
 # rustypipe-botguard answers YouTube's proof-of-origin challenges, which lets
 # píxiū fetch streams from more YouTube clients. Off when unset; yt-dlp
-# fetches what the other clients cannot. The Docker image ships it at:
+# fetches what the other clients cannot (today that is everything). The
+# Docker image does not include it: it is only built for glibc.
 # botguard = "/usr/local/bin/rustypipe-botguard"
 
 [enrich]
