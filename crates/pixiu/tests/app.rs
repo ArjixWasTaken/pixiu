@@ -9,6 +9,7 @@ use std::{
 use futures_util::{SinkExt, StreamExt};
 use md5::Digest;
 use pixiu_core::{Config, SecretBox};
+use pixiu_db::{Db, SessionState, SourceSession, now, toasty};
 use reqwest::{StatusCode, header};
 use tokio::{net::TcpListener, sync::oneshot};
 use topcoat::{
@@ -59,13 +60,23 @@ struct TestServer {
 
 impl TestServer {
     async fn start() -> Self {
+        Self::start_with(async |_| {}).await
+    }
+
+    /// Starts a server on a database `prepare` has seeded. The background
+    /// workers stay off, so queued jobs stay queued.
+    async fn start_with(prepare: impl AsyncFnOnce(&mut Db)) -> Self {
         let data = tempfile::tempdir().unwrap();
         let mut config = Config::default();
         config.paths.data_dir = data.path().join("data");
         config.paths.treasure_dir = data.path().join("treasure");
-        let db = pixiu_db::open(&data.path().join("pixiu.db")).await.unwrap();
+        let mut db = pixiu_db::open(&data.path().join("pixiu.db")).await.unwrap();
+        prepare(&mut db).await;
         let assets = AssetBundle::load_dir(&*ASSETS).unwrap();
-        let app = pixiu::app(db, &config, SecretBox::ephemeral(), assets);
+        let services = pixiu::Services::new(db, &config, SecretBox::ephemeral())
+            .await
+            .unwrap();
+        let app = pixiu::app(&services, &config, assets);
 
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -355,6 +366,136 @@ async fn first_run_setup_then_login_and_logout() {
 }
 
 #[tokio::test]
+async fn hunting_queues_jobs() {
+    let server = TestServer::start().await;
+    for path in ["/hunt", "/jobs"] {
+        assert_eq!(location(&server.get(path).await), "/login", "{path}");
+    }
+    server.claim().await;
+
+    assert!(
+        server
+            .get("/hunt")
+            .await
+            .text()
+            .await
+            .unwrap()
+            .contains("Search YouTube Music")
+    );
+    assert!(
+        server
+            .get("/jobs")
+            .await
+            .text()
+            .await
+            .unwrap()
+            .contains("No jobs yet")
+    );
+
+    let hostile = server
+        .post_form(
+            "/hunt/grab-track",
+            &[("video_id", "../../etc/passwd"), ("title", "nope")],
+        )
+        .await;
+    assert_eq!(hostile.status(), StatusCode::BAD_REQUEST);
+
+    let grab = server
+        .post_form(
+            "/hunt/grab-track",
+            &[
+                ("video_id", "NPdgPZ0u3zQ"),
+                ("title", "Kevin MacLeod — Monkeys Spinning Monkeys"),
+                ("q", "monkeys spinning"),
+            ],
+        )
+        .await;
+    assert_eq!(location(&grab), "/hunt?q=monkeys+spinning&queued=1");
+    let album = server
+        .post_form(
+            "/hunt/grab-album",
+            &[("browse_id", "MPREb_jwN9EIjDfPS"), ("title", "Some Album")],
+        )
+        .await;
+    assert_eq!(location(&album), "/hunt?queued=1");
+
+    let jobs = server.get("/jobs").await.text().await.unwrap();
+    assert!(
+        jobs.contains("Kevin MacLeod — Monkeys Spinning Monkeys"),
+        "{jobs}"
+    );
+    assert!(jobs.contains("Some Album"));
+    assert_eq!(jobs.matches(">Queued").count(), 2, "{jobs}");
+
+    // Clearing keeps unfinished jobs.
+    assert_eq!(
+        location(&server.post_form("/jobs/clear", &[]).await),
+        "/jobs"
+    );
+    let jobs = server.get("/jobs").await.text().await.unwrap();
+    assert!(jobs.contains("Some Album"));
+}
+
+#[tokio::test]
+async fn sources_report_the_youtube_music_session() {
+    let server = TestServer::start().await;
+    assert_eq!(location(&server.get("/settings/sources").await), "/login");
+    server.claim().await;
+
+    let sources = server.get("/settings/sources").await.text().await.unwrap();
+    assert!(sources.contains("Not connected"), "{sources}");
+    assert!(sources.contains(r#"action="/settings/sources/connect""#));
+    assert!(!sources.contains("session expired"));
+
+    // The login screen only exists while a login browser is open.
+    assert_eq!(
+        location(&server.get("/settings/sources/login").await),
+        "/settings/sources"
+    );
+    let status: serde_json::Value = server
+        .get("/settings/sources/login/status")
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(
+        status,
+        serde_json::json!({ "open": false, "logged_in": false })
+    );
+}
+
+#[tokio::test]
+async fn an_expired_session_is_announced_on_every_page() {
+    let server = TestServer::start_with(async |db| {
+        toasty::create!(SourceSession {
+            source: pixiu_jobs::warden::SOURCE,
+            cookies: "sealed",
+            state: SessionState::Expired,
+            connected_at: now(),
+            expired_at: Some(now()),
+            last_error: Some("signed out everywhere".to_owned()),
+        })
+        .exec(db)
+        .await
+        .unwrap();
+    })
+    .await;
+    server.claim().await;
+
+    for path in ["/", "/hunt", "/jobs", "/offerings", "/settings"] {
+        let page = server.get(path).await.text().await.unwrap();
+        assert!(
+            page.contains("YouTube Music session expired"),
+            "no banner on {path}"
+        );
+    }
+    let sources = server.get("/settings/sources").await.text().await.unwrap();
+    assert!(sources.contains("Expired: log in again"));
+    assert!(sources.contains("signed out everywhere"));
+    assert!(sources.contains("Log in again"));
+}
+
+#[tokio::test]
 async fn session_cookie_hardening_follows_transport() {
     let server = TestServer::start().await;
     server.claim().await;
@@ -421,6 +562,49 @@ async fn websocket_upgrades_reach_topcoat_routes() {
         .unwrap();
     let echoed = socket.next().await.unwrap().unwrap();
     assert_eq!(echoed.to_text().unwrap(), "hoard");
+}
+
+/// The login screen drives a Google login, so other sites must not be able
+/// to open it with the admin's cookies.
+#[tokio::test]
+async fn the_login_screen_socket_refuses_other_origins() {
+    use tokio_tungstenite::tungstenite::{self, client::IntoClientRequest};
+
+    let server = TestServer::start().await;
+    server.claim().await;
+    let login = server
+        .post_form(
+            "/login",
+            &[("username", "keeper"), ("password", "gold-and-jade")],
+        )
+        .await;
+    let session = set_cookies(&login)[0].split(';').next().unwrap().to_owned();
+    let request = |origin: &str| {
+        let mut request = format!("ws://{}/settings/sources/login/ws", server.addr)
+            .into_client_request()
+            .unwrap();
+        let headers = request.headers_mut();
+        headers.insert(header::COOKIE, session.parse().unwrap());
+        headers.insert(header::ORIGIN, origin.parse().unwrap());
+        request
+    };
+
+    match tokio_tungstenite::connect_async(request("https://elsewhere.example")).await {
+        Err(tungstenite::Error::Http(response)) => {
+            assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        }
+        other => panic!("expected a refusal, got {other:?}"),
+    }
+
+    // The WebUI itself gets through; with no login browser open, the
+    // server just closes the socket.
+    let (mut socket, _) = tokio_tungstenite::connect_async(request(&server.url("")))
+        .await
+        .unwrap();
+    assert!(matches!(
+        socket.next().await,
+        None | Some(Ok(tungstenite::Message::Close(_)))
+    ));
 }
 
 #[tokio::test]

@@ -19,6 +19,38 @@ const UNKNOWN_ARTIST: &str = "Unknown Artist";
 const UNKNOWN_ALBUM: &str = "Unknown Album";
 const UNTITLED: &str = "Untitled";
 
+/// Where a track comes from.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Provenance {
+    pub origin: TrackOrigin,
+    /// The YouTube Music video id, for downloads from there.
+    pub ytm_video_id: Option<String>,
+    /// The YouTube Music album browse id, for downloads from there.
+    pub ytm_browse_id: Option<String>,
+}
+
+impl Provenance {
+    /// A file the admin uploaded.
+    #[must_use]
+    pub fn offering() -> Self {
+        Self {
+            origin: TrackOrigin::Offering,
+            ytm_video_id: None,
+            ytm_browse_id: None,
+        }
+    }
+
+    /// A download from YouTube Music.
+    #[must_use]
+    pub fn youtube_music(video_id: impl Into<String>, browse_id: Option<String>) -> Self {
+        Self {
+            origin: TrackOrigin::Download,
+            ytm_video_id: Some(video_id.into()),
+            ytm_browse_id: browse_id,
+        }
+    }
+}
+
 /// Why a track is kept; recorded as a [`TrackClaim`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Claim {
@@ -104,14 +136,28 @@ impl Treasury {
         source: &Path,
         info: &AudioInfo,
         fallback_cover: Option<&Cover>,
-        origin: TrackOrigin,
+        provenance: Provenance,
         claim: Claim,
     ) -> Result<Track, IngestError> {
         let _guard = self.lock.lock().await;
         let mut db = self.db.clone();
 
+        if let Some(video_id) = &provenance.ytm_video_id
+            && let Some(existing) = Track::filter_by_ytm_video_id(video_id)
+                .first()
+                .exec(&mut db)
+                .await?
+        {
+            return Err(IngestError::Duplicate {
+                track_id: existing.id,
+            });
+        }
+
         let credit = info.artist.as_deref().unwrap_or(UNKNOWN_ARTIST);
-        let primary = primary_artist(credit);
+        let primary = info
+            .artists
+            .first()
+            .map_or_else(|| primary_artist(credit), String::as_str);
         let album_artist_name = info.album_artist.as_deref().unwrap_or(primary);
         let title = info.title.as_deref().unwrap_or(UNTITLED);
 
@@ -121,7 +167,13 @@ impl Treasury {
         } else {
             find_or_create_artist(&mut db, primary).await?.id
         };
-        let album = find_or_create_album(&mut db, &album_artist, info).await?;
+        let album = find_or_create_album(
+            &mut db,
+            &album_artist,
+            info,
+            provenance.ytm_browse_id.as_deref(),
+        )
+        .await?;
 
         let title_key = name_key(title);
         if let Some(duplicate) = Track::filter_by_album_id(album.id)
@@ -163,7 +215,7 @@ impl Treasury {
                 &destination,
                 info,
                 fallback_cover,
-                origin,
+                provenance,
                 claim,
             )
             .await;
@@ -189,7 +241,7 @@ impl Treasury {
         destination: &Path,
         info: &AudioInfo,
         fallback_cover: Option<&Cover>,
-        origin: TrackOrigin,
+        provenance: Provenance,
         claim: Claim,
     ) -> Result<Track, IngestError> {
         let size = tokio::fs::metadata(destination).await?.len();
@@ -225,7 +277,8 @@ impl Treasury {
             content_type: &info.content_type,
             mbid: info.mbid.clone(),
             isrc: info.isrc.clone(),
-            origin,
+            ytm_video_id: provenance.ytm_video_id,
+            origin: provenance.origin,
             added_at: now(),
         })
         .exec(&mut tx)
@@ -283,11 +336,23 @@ async fn find_or_create_artist(db: &mut Db, name: &str) -> Result<Artist, toasty
     .await
 }
 
+/// The album a track belongs to: by platform id when known (names can
+/// differ between releases), then by artist and title.
 async fn find_or_create_album(
     db: &mut Db,
     album_artist: &Artist,
     info: &AudioInfo,
+    ytm_browse_id: Option<&str>,
 ) -> Result<Album, toasty::Error> {
+    if let Some(browse_id) = ytm_browse_id
+        && let Some(album) = Album::filter_by_ytm_browse_id(browse_id)
+            .first()
+            .exec(db)
+            .await?
+    {
+        return Ok(album);
+    }
+
     let title = info.album.as_deref().unwrap_or(UNKNOWN_ALBUM);
     let key = name_key(title);
     let existing = Album::filter_by_artist_id(album_artist.id)
@@ -295,7 +360,16 @@ async fn find_or_create_album(
         .await?
         .into_iter()
         .find(|album| album.title_key == key);
-    if let Some(album) = existing {
+    if let Some(mut album) = existing {
+        if album.ytm_browse_id.is_none()
+            && let Some(browse_id) = ytm_browse_id
+        {
+            toasty::update!(album {
+                ytm_browse_id: Some(browse_id.to_owned())
+            })
+            .exec(db)
+            .await?;
+        }
         return Ok(album);
     }
     toasty::create!(Album {
@@ -305,6 +379,7 @@ async fn find_or_create_album(
         year: info.year,
         genre: info.genre.clone(),
         mbid: info.album_mbid.clone(),
+        ytm_browse_id: ytm_browse_id.map(str::to_owned),
         created_at: now(),
     })
     .exec(db)

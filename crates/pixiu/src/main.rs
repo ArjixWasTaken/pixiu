@@ -45,7 +45,9 @@ async fn serve() -> anyhow::Result<()> {
         "the WebUI asset bundle is missing; build it with `topcoat asset bundle -p pixiu`",
     )?;
 
-    let app = pixiu::app(db, &config, secrets, assets);
+    let services = pixiu::Services::new(db, &config, secrets).await?;
+    services.start();
+    let app = pixiu::app(&services, &config, assets);
     let listener = TcpListener::bind((config.server.host, config.server.port))
         .await
         .with_context(|| {
@@ -64,8 +66,16 @@ async fn serve() -> anyhow::Result<()> {
 }
 
 fn init_tracing(default_filter: &str) {
-    let filter =
-        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(default_filter));
+    let spec = std::env::var("RUST_LOG")
+        .ok()
+        .filter(|spec| !spec.trim().is_empty())
+        .unwrap_or_else(|| default_filter.to_owned());
+    let mut filter = EnvFilter::try_new(&spec).unwrap_or_else(|_| EnvFilter::new("info"));
+    // chromiumoxide warns about every browser message newer than its
+    // protocol definitions: noise, unless asked for by name.
+    if !spec.contains("chromiumoxide") {
+        filter = filter.add_directive("chromiumoxide=error".parse().expect("a valid directive"));
+    }
     tracing_subscriber::fmt().with_env_filter(filter).init();
 }
 
@@ -93,10 +103,38 @@ async fn healthcheck() -> anyhow::Result<()> {
         .await
         .context("timed out")??;
 
-    let head = String::from_utf8_lossy(&response);
-    if head.starts_with("HTTP/1.1 200") && head.contains(r#"status="ok""#) {
+    if answers_like_subsonic(&String::from_utf8_lossy(&response)) {
         Ok(())
     } else {
         bail!("unexpected response from {addr}");
+    }
+}
+
+/// Whether an HTTP response is the Subsonic API answering. Any answer will
+/// do: `ping` wants credentials, which the healthcheck does not have.
+fn answers_like_subsonic(response: &str) -> bool {
+    response.starts_with("HTTP/1.1 200") && response.contains("<subsonic-response ")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::answers_like_subsonic;
+
+    #[test]
+    fn any_api_answer_is_healthy() {
+        let answer =
+            |body: &str| format!("HTTP/1.1 200 OK\r\ncontent-type: text/xml\r\n\r\n{body}");
+        assert!(answers_like_subsonic(&answer(
+            r#"<subsonic-response xmlns="http://subsonic.org/restapi" status="failed"><error code="10"/></subsonic-response>"#
+        )));
+        assert!(answers_like_subsonic(&answer(
+            r#"<subsonic-response xmlns="http://subsonic.org/restapi" status="ok"/>"#
+        )));
+        assert!(!answers_like_subsonic(&answer(
+            "<html>502 Bad Gateway</html>"
+        )));
+        assert!(!answers_like_subsonic(
+            "HTTP/1.1 503 Service Unavailable\r\n\r\n"
+        ));
     }
 }

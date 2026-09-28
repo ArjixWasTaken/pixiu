@@ -1,0 +1,28 @@
+[package]
+name = "pixiu-jobs"
+description = "Background work for píxiū: the job queue and the session warden"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+pixiu-browser.workspace = true
+pixiu-core.workspace = true
+pixiu-db.workspace = true
+pixiu-hunt.workspace = true
+pixiu-treasury.workspace = true
+
+jiff.workspace = true
+rand.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

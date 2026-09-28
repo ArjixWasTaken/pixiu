@@ -29,7 +29,28 @@ const DEFAULT_CONFIG_FILE: &str = "pixiu.toml";
 pub struct Config {
     pub server: ServerConfig,
     pub paths: PathsConfig,
+    pub browser: BrowserConfig,
+    pub hunt: HuntConfig,
     pub log: LogConfig,
+}
+
+/// The Chromium that platform logins run in.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct BrowserConfig {
+    /// The Chromium binary; found in `PATH` when unset.
+    pub executable: Option<PathBuf>,
+    /// Disables Chromium's sandbox, which containers usually cannot
+    /// provide. The Docker image sets this.
+    pub no_sandbox: bool,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct HuntConfig {
+    /// `rustypipe-botguard`, which answers YouTube's proof-of-origin
+    /// challenges. Not used when unset.
+    pub botguard: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -109,6 +130,24 @@ impl PathsConfig {
     #[must_use]
     pub fn cache_dir(&self) -> PathBuf {
         self.data_dir.join("cache")
+    }
+
+    /// The login browser's profile, which keeps platform logins.
+    #[must_use]
+    pub fn browser_profile_dir(&self) -> PathBuf {
+        self.data_dir.join("browser-profile")
+    }
+
+    /// The YouTube Music client's sealed cache and error reports.
+    #[must_use]
+    pub fn youtube_music_dir(&self) -> PathBuf {
+        self.data_dir.join("youtube-music")
+    }
+
+    /// Downloads in progress.
+    #[must_use]
+    pub fn staging_dir(&self) -> PathBuf {
+        self.data_dir.join("staging")
     }
 }
 

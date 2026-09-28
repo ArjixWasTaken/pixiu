@@ -1,0 +1,25 @@
+[package]
+name = "pixiu-browser"
+description = "A real Chromium, driven from the píxiū WebUI, for platform logins"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+base64.workspace = true
+bytes.workspace = true
+chromiumoxide = { version = "0.9.1", default-features = false, features = ["bytes"] }
+futures-util.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+axum.workspace = true
+tempfile.workspace = true
+
+[lints]
+workspace = true

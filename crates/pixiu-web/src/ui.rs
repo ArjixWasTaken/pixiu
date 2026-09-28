@@ -1,5 +1,6 @@
 //! Small shared components, fonts and brand assets.
 
+use pixiu_db::SessionState;
 use topcoat::{
     Result,
     asset::{Asset, asset},
@@ -32,6 +33,12 @@ pub(crate) const BUTTON_PRIMARY: StaticClass = class!(
     "inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-gold px-5 \
      text-sm font-semibold text-gold-foreground shadow-sm shadow-gold/10 transition \
      hover:bg-gold-soft active:translate-y-px disabled:opacity-50",
+);
+
+pub(crate) const BUTTON_SECONDARY: StaticClass = class!(
+    "inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-border \
+     bg-foreground/5 px-4 text-sm font-medium text-foreground transition \
+     hover:bg-foreground/10 active:translate-y-px",
 );
 
 pub(crate) const BUTTON_DANGER: StaticClass = class!(
@@ -107,6 +114,17 @@ pub(crate) async fn alert(#[default] child: Child<'_>) -> Result<impl View> {
             (child)
         </p>
     })
+}
+
+/// A YouTube Music session's state for display: a label and the color of
+/// its status dot.
+pub(crate) fn session_status(state: Option<SessionState>) -> (&'static str, &'static str) {
+    match state {
+        None => ("Not connected", "bg-muted-foreground"),
+        Some(SessionState::Valid) => ("Connected", "bg-emerald-400"),
+        Some(SessionState::Degraded) => ("Having trouble", "bg-gold"),
+        Some(SessionState::Expired) => ("Expired: log in again", "bg-destructive"),
+    }
 }
 
 /// A human-readable size: `1.4 GB`.

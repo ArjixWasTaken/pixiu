@@ -1,6 +1,8 @@
 //! Everything behind the login: the app shell and the Hoard dashboard (`/`).
 
 mod covers;
+mod hunt;
+mod jobs;
 mod offerings;
 mod settings;
 
@@ -17,19 +19,34 @@ use topcoat::{
         Slot, layout, page,
         request::{headers, uri},
     },
-    view::{View, class, view},
+    runtime::{connected, shard},
+    view::{View, class, emit, live, view},
 };
 
 use crate::{
-    auth::{db, require_user},
-    ui::{BUTTON_GHOST, BUTTON_PRIMARY, LOGO, LOGO_SMALL, card, format_bytes},
+    auth::{db, require_user, warden},
+    ui::{
+        BUTTON_GHOST, BUTTON_PRIMARY, BUTTON_SECONDARY, LOGO, LOGO_SMALL, card, format_bytes,
+        session_status,
+    },
 };
 
 const NAV: &[(&str, &str)] = &[
     ("/", "Hoard"),
+    ("/hunt", "Hunt"),
+    ("/jobs", "Jobs"),
     ("/offerings", "Offerings"),
     ("/settings", "Settings"),
 ];
+
+/// Whether the nav entry for `path` covers the page at `current`.
+fn is_active(path: &str, current: &str) -> bool {
+    current == path
+        || (path != "/"
+            && current
+                .strip_prefix(path)
+                .is_some_and(|rest| rest.starts_with('/')))
+}
 
 #[layout]
 async fn shell(cx: &Cx, slot: Slot<'_>) -> Result<impl View> {
@@ -52,7 +69,7 @@ async fn shell(cx: &Cx, slot: Slot<'_>) -> Result<impl View> {
                 <nav class="flex flex-1 flex-col gap-1 text-sm">
                     for (path, label) in NAV {
                         <a
-                            let active = *path == current;
+                            let active = is_active(path, current);
                             href=(*path)
                             aria-current=(active.then_some("page"))
                             class=(class!(
@@ -84,8 +101,44 @@ async fn shell(cx: &Cx, slot: Slot<'_>) -> Result<impl View> {
                     </form>
                 </div>
             </aside>
-            <main class="min-w-0 flex-1 px-10 py-10">(slot)</main>
+            <main class="min-w-0 flex-1 px-10 py-10">
+                session_banner()
+                (slot)
+            </main>
         </div>
+    })
+}
+
+/// A banner on every page while the YouTube Music login is expired. It
+/// appears and disappears live as the session warden changes its mind.
+#[shard]
+async fn session_banner(cx: &Cx) -> Result<impl View> {
+    require_user(cx).await?;
+    Ok(live! {
+        let mut health = warden(cx).subscribe();
+        loop {
+            let expired = health.borrow_and_update().is_expired();
+            let token = emit! {
+                if expired {
+                    <a
+                        href="/settings/sources"
+                        role="alert"
+                        class="mx-auto mb-8 flex max-w-5xl items-center justify-between gap-4 \
+                               rounded-xl border border-destructive/50 bg-destructive/10 px-4 \
+                               py-3 text-sm text-destructive transition hover:bg-destructive/15"
+                    >
+                        <span>
+                            <strong class="font-semibold">"YouTube Music session expired. "</strong>
+                            "Public music can still be hunted; your account's music cannot."
+                        </span>
+                        <span class="shrink-0 font-medium underline">"Log in again"</span>
+                    </a>
+                }
+            }?;
+            if !connected(cx) || health.changed().await.is_err() {
+                break Ok(token);
+            }
+        }
     })
 }
 
@@ -149,6 +202,7 @@ async fn page(cx: &Cx) -> Result<impl View> {
     };
     // Clients append `/rest/...` themselves, so they want the bare origin.
     let server = server_url(cx);
+    let (session, session_color) = session_status(warden(cx).health().state);
 
     Ok(view! {
         <div class="mx-auto flex max-w-5xl flex-col gap-8">
@@ -178,10 +232,13 @@ async fn page(cx: &Cx) -> Result<impl View> {
                     <div class="flex flex-col items-center gap-3 py-10 text-center">
                         <h3 class="text-xl">"Nothing hoarded yet"</h3>
                         <p class="max-w-md text-sm text-muted-foreground">
-                            "Offer music to píxiū and it will be kept here, ready for "
-                            "your Subsonic clients."
+                            "Hunt music on YouTube Music or offer your own files, and "
+                            "píxiū will keep it here, ready for your Subsonic clients."
                         </p>
-                        <a href="/offerings" class=(BUTTON_PRIMARY)>"Make an offering"</a>
+                        <div class="flex items-center gap-2">
+                            <a href="/hunt" class=(BUTTON_PRIMARY)>"Hunt"</a>
+                            <a href="/offerings" class=(BUTTON_SECONDARY)>"Make an offering"</a>
+                        </div>
                     </div>
                 )
             } else {
@@ -221,6 +278,22 @@ async fn page(cx: &Cx) -> Result<impl View> {
                     </ul>
                 </section>
             }
+
+            card(
+                <div class="flex items-center justify-between gap-4">
+                    <div class="flex flex-col gap-1">
+                        <h3 class="text-lg">"YouTube Music"</h3>
+                        <p class="flex items-center gap-2 text-sm text-muted-foreground">
+                            <span class=(class!("size-2.5 rounded-full", session_color))></span>
+                            (session)
+                        </p>
+                    </div>
+                    <div class="flex gap-2">
+                        <a href="/hunt" class=(BUTTON_SECONDARY)>"Hunt"</a>
+                        <a href="/settings/sources" class=(BUTTON_SECONDARY)>"Manage"</a>
+                    </div>
+                </div>
+            )
 
             card(
                 <div class="flex flex-col gap-3">

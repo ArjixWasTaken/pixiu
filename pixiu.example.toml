@@ -15,6 +15,18 @@ data_dir = "data"
 # The music library. píxiū owns this directory; don't edit it by hand.
 treasure_dir = "treasure"
 
+[browser]
+# Chromium, for logging in to YouTube Music; found in PATH when unset.
+# executable = "/usr/bin/chromium"
+# Needed in most containers (the Docker image sets it).
+no_sandbox = false
+
+[hunt]
+# rustypipe-botguard answers YouTube's proof-of-origin challenges, which lets
+# píxiū fetch streams from more YouTube clients. Off when unset; yt-dlp
+# fetches what the other clients cannot. The Docker image ships it at:
+# botguard = "/usr/local/bin/rustypipe-botguard"
+
 [log]
 # A tracing filter; RUST_LOG overrides it.
 filter = "info"

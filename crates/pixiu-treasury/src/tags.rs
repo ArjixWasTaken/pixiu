@@ -15,6 +15,9 @@ pub struct AudioInfo {
     pub title: Option<String>,
     /// The artist credit, e.g. "Artist A feat. Artist B".
     pub artist: Option<String>,
+    /// The track's artists, primary first, when the source lists them
+    /// separately (streaming platforms do; file tags rarely).
+    pub artists: Vec<String>,
     pub album: Option<String>,
     pub album_artist: Option<String>,
     pub track_number: Option<u32>,

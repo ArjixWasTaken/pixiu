@@ -1,8 +1,13 @@
 //! Authentication, modeled as request functions (Topcoat's "functions, not
 //! middlewares"): every handler that needs the admin calls [`require_user`].
 
+use std::sync::Arc;
+
+use pixiu_browser::LoginDesk;
 use pixiu_core::SecretBox;
 use pixiu_db::{Db, User, WebSession, now, toasty};
+use pixiu_hunt::Hunter;
+use pixiu_jobs::{Jobs, Warden};
 use pixiu_treasury::{Offerings, Treasury};
 use topcoat::{
     Result,
@@ -29,6 +34,22 @@ pub(crate) fn treasury(cx: &Cx) -> &Treasury {
 }
 
 pub(crate) fn offerings(cx: &Cx) -> &Offerings {
+    app_context(cx)
+}
+
+pub(crate) fn hunter(cx: &Cx) -> &Hunter {
+    app_context::<Arc<Hunter>>(cx)
+}
+
+pub(crate) fn warden(cx: &Cx) -> &Arc<Warden> {
+    app_context(cx)
+}
+
+pub(crate) fn jobs(cx: &Cx) -> &Arc<Jobs> {
+    app_context(cx)
+}
+
+pub(crate) fn login_desk(cx: &Cx) -> &Arc<LoginDesk> {
     app_context(cx)
 }
 

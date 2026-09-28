@@ -8,8 +8,12 @@ edition = "2024"
 rust-version = "1.98"
 
 [workspace.dependencies]
+pixiu-browser = { path = "crates/pixiu-browser" }
 pixiu-core = { path = "crates/pixiu-core" }
 pixiu-db = { path = "crates/pixiu-db" }
+pixiu-hunt = { path = "crates/pixiu-hunt" }
+pixiu-jobs = { path = "crates/pixiu-jobs" }
+pixiu-media = { path = "crates/pixiu-media" }
 pixiu-subsonic = { path = "crates/pixiu-subsonic" }
 pixiu-treasury = { path = "crates/pixiu-treasury" }
 pixiu-web = { path = "crates/pixiu-web" }
@@ -26,6 +30,7 @@ axum = { version = "0.8.9", default-features = false, features = ["tokio", "http
 base64 = "0.23"
 bytes = "1"
 chacha20poly1305 = "0.11"
+ffmpeg-next = { version = "9", default-features = false, features = ["format", "codec"] }
 figment = { version = "0.10.19", features = ["toml", "env"] }
 form_urlencoded = "1"
 futures-util = "0.3"

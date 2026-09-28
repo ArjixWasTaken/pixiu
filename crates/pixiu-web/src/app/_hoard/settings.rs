@@ -1,19 +1,20 @@
 //! `/settings`: how to connect Subsonic clients, and API keys.
 
 mod api_keys;
+mod sources;
 
 use pixiu_db::ApiKey;
 use topcoat::{
     Result,
     context::Cx,
     router::page,
-    view::{View, attributes, component, view},
+    view::{View, attributes, class, component, view},
 };
 
 use crate::{
     app::_hoard::server_url,
-    auth::{db, require_user},
-    ui::{BUTTON_DANGER, BUTTON_PRIMARY, card, field, notice},
+    auth::{db, require_user, warden},
+    ui::{BUTTON_DANGER, BUTTON_PRIMARY, BUTTON_SECONDARY, card, field, notice, session_status},
 };
 
 pub(super) const SETTINGS_PATH: &str = "/settings";
@@ -35,6 +36,7 @@ pub(super) async fn settings(
     keys.sort_by_key(|key| key.created_at);
     let token_ready = user.subsonic_secret.is_some();
     let server = server_url(cx);
+    let (session, session_color) = session_status(warden(cx).health().state);
 
     Ok(view! {
         <div class="mx-auto flex max-w-3xl flex-col gap-8">
@@ -65,6 +67,20 @@ pub(super) async fn settings(
                         "Clients that support OpenSubsonic API keys can use a key "
                         "instead of the password."
                     </p>
+                </div>
+            )
+
+            card(
+                <div class="flex items-center justify-between gap-4">
+                    <div class="flex flex-col gap-1">
+                        <h3 class="text-lg">"Sources"</h3>
+                        <p class="flex items-center gap-2 text-sm text-muted-foreground">
+                            "YouTube Music"
+                            <span class=(class!("size-2.5 rounded-full", session_color))></span>
+                            (session)
+                        </p>
+                    </div>
+                    <a href="/settings/sources" class=(BUTTON_SECONDARY)>"Manage"</a>
                 </div>
             )
 

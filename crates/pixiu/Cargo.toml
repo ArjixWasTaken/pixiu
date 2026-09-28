@@ -8,8 +8,11 @@ publish = false
 default-run = "pixiu"
 
 [dependencies]
+pixiu-browser.workspace = true
 pixiu-core.workspace = true
 pixiu-db.workspace = true
+pixiu-hunt.workspace = true
+pixiu-jobs.workspace = true
 pixiu-subsonic.workspace = true
 pixiu-treasury.workspace = true
 pixiu-web.workspace = true

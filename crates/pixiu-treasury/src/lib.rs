@@ -11,7 +11,7 @@ pub mod layout;
 pub mod offerings;
 pub mod tags;
 
-pub use ingest::{Claim, IngestError, Treasury};
+pub use ingest::{Claim, IngestError, Provenance, Treasury};
 pub use offerings::{OfferingError, Offerings};
 pub use tags::{AudioInfo, Cover, TagError};
 

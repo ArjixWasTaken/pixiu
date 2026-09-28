@@ -1,0 +1,33 @@
+[package]
+name = "pixiu-hunt"
+description = "Hunting music on streaming platforms for píxiū"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+pixiu-core.workspace = true
+pixiu-db.workspace = true
+pixiu-media.workspace = true
+pixiu-treasury.workspace = true
+
+bytes.workspace = true
+futures-util.workspace = true
+lofty.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["process"] }
+tracing.workspace = true
+
+# rustypipe uses reqwest 0.12; downloads share it. rustls avoids OpenSSL.
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-webpki-roots", "stream"] }
+# GPL-3.0: linking it makes distributed píxiū binaries GPL-3.0-compatible.
+rustypipe = { version = "0.11.4", default-features = false, features = ["userdata", "rustls-tls-webpki-roots"] }
+
+[dev-dependencies]
+tempfile.workspace = true
+tokio = { workspace = true, features = ["test-util"] }
+
+[lints]
+workspace = true

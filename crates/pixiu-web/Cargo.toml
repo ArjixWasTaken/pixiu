@@ -7,14 +7,19 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
+pixiu-browser.workspace = true
 pixiu-core.workspace = true
 pixiu-db.workspace = true
+pixiu-hunt.workspace = true
+pixiu-jobs.workspace = true
 pixiu-treasury.workspace = true
 
+form_urlencoded.workspace = true
 hex.workspace = true
 jiff.workspace = true
 rand.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 tokio.workspace = true
 topcoat.workspace = true
 tracing.workspace = true

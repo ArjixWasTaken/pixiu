@@ -9,10 +9,10 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use pixiu_db::{Db, Offering, OfferingStatus, Track, TrackOrigin, now, toasty};
+use pixiu_db::{Db, Offering, OfferingStatus, Track, now, toasty};
 
 use crate::{
-    Claim, IngestError, Treasury, layout,
+    Claim, IngestError, Provenance, Treasury, layout,
     tags::{self, AudioInfo, Cover, TagError},
 };
 
@@ -260,7 +260,7 @@ impl Offerings {
                 &path,
                 &info,
                 cover.as_ref(),
-                TrackOrigin::Offering,
+                Provenance::offering(),
                 Claim::offering(),
             )
             .await?;

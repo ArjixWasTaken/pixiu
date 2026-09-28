@@ -137,6 +137,10 @@ pub struct Album {
 
     pub mbid: Option<String>,
 
+    /// The album's YouTube Music browse id, when it was hunted there.
+    #[index]
+    pub ytm_browse_id: Option<String>,
+
     /// The cover image, relative to the treasure directory.
     pub cover: Option<String>,
 
@@ -213,6 +217,10 @@ pub struct Track {
     pub mbid: Option<String>,
 
     pub isrc: Option<String>,
+
+    /// The YouTube Music video id the track was downloaded from.
+    #[index]
+    pub ytm_video_id: Option<String>,
 
     pub origin: TrackOrigin,
 
@@ -351,4 +359,112 @@ pub struct Annotation {
 
     /// 1 to 5 stars.
     pub rating: Option<u8>,
+}
+
+/// Health of a platform session, as the session warden last saw it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, toasty::Embed)]
+pub enum SessionState {
+    /// The cookies work.
+    Valid,
+    /// The last check failed for a transient reason (network, server).
+    Degraded,
+    /// The platform no longer accepts the cookies; the admin must log in
+    /// again.
+    Expired,
+}
+
+/// The admin's logged-in session with a streaming platform.
+#[derive(Debug, toasty::Model)]
+pub struct SourceSession {
+    #[key]
+    #[auto]
+    pub id: u64,
+
+    /// The platform, e.g. `youtube_music`.
+    #[unique]
+    pub source: String,
+
+    /// The session cookies as a `Cookie` header, sealed with the instance
+    /// key.
+    pub cookies: String,
+
+    pub state: SessionState,
+
+    pub connected_at: Timestamp,
+
+    pub last_verified: Option<Timestamp>,
+
+    pub last_refreshed: Option<Timestamp>,
+
+    pub expired_at: Option<Timestamp>,
+
+    pub last_error: Option<String>,
+}
+
+/// A notable change in a platform session, for the admin's history.
+#[derive(Debug, toasty::Model)]
+pub struct SessionEvent {
+    #[key]
+    #[auto]
+    pub id: u64,
+
+    #[index]
+    pub source: String,
+
+    pub message: String,
+
+    pub created_at: Timestamp,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, toasty::Embed)]
+pub enum JobKind {
+    /// Download one track.
+    DownloadTrack,
+    /// Queue every track of an album.
+    GrabAlbum,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, toasty::Embed)]
+pub enum JobState {
+    Queued,
+    Running,
+    Done,
+    Failed,
+    /// Waiting for something outside píxiū, like a platform login.
+    Paused,
+}
+
+/// Background work that survives restarts.
+#[derive(Debug, toasty::Model)]
+pub struct Job {
+    #[key]
+    #[auto]
+    pub id: u64,
+
+    pub kind: JobKind,
+
+    /// Kind-specific parameters, as JSON.
+    pub payload: String,
+
+    /// What the job is about, for people: "Artist — Title".
+    pub title: String,
+
+    #[index]
+    pub state: JobState,
+
+    /// Percent complete.
+    pub progress: u8,
+
+    pub attempts: u32,
+
+    pub error: Option<String>,
+
+    /// The track a finished download produced.
+    pub track_id: Option<u64>,
+
+    pub created_at: Timestamp,
+
+    pub started_at: Option<Timestamp>,
+
+    pub finished_at: Option<Timestamp>,
 }

@@ -9,9 +9,9 @@ use axum::{
 };
 use md5::{Digest, Md5};
 use pixiu_core::SecretBox;
-use pixiu_db::{ApiKey, Db, TrackOrigin, User, now, toasty};
+use pixiu_db::{ApiKey, Db, User, now, toasty};
 use pixiu_subsonic::SubsonicState;
-use pixiu_treasury::{Claim, Treasury, tags};
+use pixiu_treasury::{Claim, Provenance, Treasury, tags};
 use serde_json::Value;
 use tower::ServiceExt;
 
@@ -103,7 +103,7 @@ impl Api {
                     &staged,
                     &info,
                     None,
-                    TrackOrigin::Offering,
+                    Provenance::offering(),
                     Claim::offering(),
                 )
                 .await

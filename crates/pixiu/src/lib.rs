@@ -1,7 +1,16 @@
 //! Assembles the píxiū application from its parts.
 
+use std::sync::Arc;
+
+use anyhow::Context;
+use pixiu_browser::{BrowserOptions, LoginDesk};
 use pixiu_core::{Config, SecretBox};
 use pixiu_db::Db;
+use pixiu_hunt::{Hunter, YtMusic};
+use pixiu_jobs::{
+    Jobs, Warden,
+    adapters::{BrowserRefresher, HuntExecutor, YtMusicPlatform},
+};
 use pixiu_subsonic::SubsonicState;
 use pixiu_treasury::{Offerings, Treasury};
 use pixiu_web::WebDeps;
@@ -17,28 +26,102 @@ use tower_http::compression::{
     predicate::{DefaultPredicate, NotForContentType, Predicate},
 };
 
+/// píxiū's long-lived parts, shared by the WebUI, the Subsonic API and the
+/// background workers.
+#[derive(Clone)]
+pub struct Services {
+    pub db: Db,
+    pub secrets: SecretBox,
+    pub treasury: Treasury,
+    pub offerings: Offerings,
+    pub hunter: Arc<Hunter>,
+    pub warden: Arc<Warden>,
+    pub jobs: Arc<Jobs>,
+    pub login_desk: Arc<LoginDesk>,
+}
+
+impl Services {
+    /// Builds the services. Nothing runs in the background until
+    /// [`start`](Self::start).
+    ///
+    /// # Errors
+    ///
+    /// Fails when a data directory cannot be created or the stored
+    /// YouTube Music session cannot be read.
+    pub async fn new(db: Db, config: &Config, secrets: SecretBox) -> anyhow::Result<Self> {
+        let paths = &config.paths;
+        let treasury = Treasury::new(db.clone(), &paths.treasure_dir, paths.cache_dir());
+        let offerings = Offerings::new(paths.offerings_dir(), treasury.clone());
+        let ytmusic = YtMusic::new(
+            &paths.youtube_music_dir(),
+            secrets.clone(),
+            config.hunt.botguard.clone(),
+        )
+        .context("failed to set up the YouTube Music client")?;
+        let hunter = Arc::new(
+            Hunter::new(ytmusic, treasury.clone(), paths.staging_dir())
+                .context("failed to set up the hunter")?,
+        );
+        let login_desk = LoginDesk::new(BrowserOptions {
+            executable: config.browser.executable.clone(),
+            profile_dir: paths.browser_profile_dir(),
+            no_sandbox: config.browser.no_sandbox,
+        });
+        let warden = Warden::new(
+            db.clone(),
+            secrets.clone(),
+            Box::new(YtMusicPlatform(Arc::clone(&hunter))),
+            Box::new(BrowserRefresher(Arc::clone(&login_desk))),
+        )
+        .await
+        .context("failed to load the YouTube Music session")?;
+        let jobs = Jobs::new(
+            db.clone(),
+            Box::new(HuntExecutor {
+                hunter: Arc::clone(&hunter),
+                warden: Arc::clone(&warden),
+            }),
+        );
+        Ok(Self {
+            db,
+            secrets,
+            treasury,
+            offerings,
+            hunter,
+            warden,
+            jobs,
+            login_desk,
+        })
+    }
+
+    /// Starts the background workers: the session warden and the job
+    /// queue, which resumes unfinished jobs.
+    pub fn start(&self) {
+        self.warden.start();
+        self.jobs.start();
+    }
+}
+
 /// Builds the HTTP application: the WebUI with the Subsonic API mounted at
 /// `/rest`.
-pub fn app(db: Db, config: &Config, secrets: SecretBox, assets: AssetBundle) -> Router {
-    let treasury = Treasury::new(
-        db.clone(),
-        &config.paths.treasure_dir,
-        config.paths.cache_dir(),
-    );
-    let offerings = Offerings::new(config.paths.offerings_dir(), treasury.clone());
+pub fn app(services: &Services, config: &Config, assets: AssetBundle) -> Router {
     let subsonic = pixiu_subsonic::router(SubsonicState {
-        db: db.clone(),
-        treasury: treasury.clone(),
-        secrets: secrets.clone(),
+        db: services.db.clone(),
+        treasury: services.treasury.clone(),
+        secrets: services.secrets.clone(),
     });
 
     pixiu_web::router_builder(WebDeps {
-        db,
+        db: services.db.clone(),
         assets,
         cookie_security: config.server.cookie_security,
-        secrets,
-        treasury,
-        offerings,
+        secrets: services.secrets.clone(),
+        treasury: services.treasury.clone(),
+        offerings: services.offerings.clone(),
+        hunter: Arc::clone(&services.hunter),
+        warden: Arc::clone(&services.warden),
+        jobs: Arc::clone(&services.jobs),
+        login_desk: Arc::clone(&services.login_desk),
     })
     .route(TowerRoute::any("/rest/{*rest}", subsonic))
     // Web-based Subsonic clients post to the API from other origins. The

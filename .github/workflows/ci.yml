@@ -14,6 +14,14 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # FFmpeg's headers and libclang, for the bindings píxiū remuxes audio
+      # with.
+      - name: System libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            clang libclang-dev pkg-config libavcodec-dev libavformat-dev libavutil-dev
+
       # rustup reads rust-toolchain.toml and installs the pinned toolchain.
       - run: rustup show active-toolchain || rustup toolchain install
 
@@ -27,5 +35,6 @@ jobs:
 
       # The end-to-end tests bundle the WebUI assets themselves (fonts are
       # downloaded on the first run), so no Topcoat CLI is needed here.
+      # Tests that need Chromium or YouTube are `#[ignore]`d.
       - name: Test
         run: cargo test --workspace --all-features

@@ -11,8 +11,13 @@ mod logout;
 
 use std::time::Duration;
 
+use std::sync::Arc;
+
+use pixiu_browser::LoginDesk;
 use pixiu_core::{CookieSecurity, SecretBox};
 use pixiu_db::Db;
+use pixiu_hunt::Hunter;
+use pixiu_jobs::{Jobs, Warden};
 use pixiu_treasury::{Offerings, Treasury};
 use topcoat::{
     Result,
@@ -41,6 +46,10 @@ pub struct WebDeps {
     pub secrets: SecretBox,
     pub treasury: Treasury,
     pub offerings: Offerings,
+    pub hunter: Arc<Hunter>,
+    pub warden: Arc<Warden>,
+    pub jobs: Arc<Jobs>,
+    pub login_desk: Arc<LoginDesk>,
 }
 
 /// Builds the WebUI router. Callers may register more routes (the Subsonic
@@ -58,6 +67,10 @@ pub fn router_builder(deps: WebDeps) -> RouterBuilder {
         .app_context(deps.secrets)
         .app_context(deps.treasury)
         .app_context(deps.offerings)
+        .app_context(deps.hunter)
+        .app_context(deps.warden)
+        .app_context(deps.jobs)
+        .app_context(deps.login_desk)
         // Uploads stream to disk, and whole albums are large. The handler
         // checks the session before reading any of the body. (Layers match
         // route groups, hence `(_hoard)`.)

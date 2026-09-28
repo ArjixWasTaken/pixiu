@@ -3,8 +3,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use pixiu_db::{Album, Artist, ClaimKind, Db, OfferingStatus, Track, TrackClaim, TrackOrigin};
-use pixiu_treasury::{Claim, IngestError, OfferingError, Offerings, Treasury, tags};
+use pixiu_db::{Album, Artist, ClaimKind, Db, OfferingStatus, Track, TrackClaim};
+use pixiu_treasury::{Claim, IngestError, OfferingError, Offerings, Provenance, Treasury, tags};
 use tokio::io::AsyncWriteExt;
 
 fn fixture(name: &str) -> PathBuf {
@@ -100,7 +100,7 @@ async fn ingest_files_tracks_under_the_layout() {
                 &staged,
                 &info,
                 None,
-                TrackOrigin::Download,
+                Provenance::offering(),
                 Claim::offering(),
             )
             .await
@@ -155,7 +155,7 @@ async fn ingest_files_tracks_under_the_layout() {
             &staged,
             &info,
             None,
-            TrackOrigin::Download,
+            Provenance::offering(),
             Claim::offering(),
         )
         .await
@@ -305,4 +305,47 @@ async fn discarding_a_batch_removes_everything() {
     assert!(offerings.pending().await.unwrap().is_empty());
     assert!(!hoard.dir.path().join("offerings").join(&batch).exists());
     assert!(offerings.discard_batch("../etc").await.is_err());
+}
+
+#[tokio::test]
+async fn downloads_dedupe_by_platform_ids() {
+    let hoard = Hoard::new().await;
+    let youtube = |video: &str| Provenance::youtube_music(video, Some("MPREb_album".to_owned()));
+
+    let staged = hoard.stage("02-second-wind.mp3");
+    let mut info = tags::read(&staged).unwrap();
+    info.artists = vec!["Test Artist".to_owned(), "Guest".to_owned()];
+    let first = hoard
+        .treasury
+        .ingest(&staged, &info, None, youtube("video-1"), Claim::offering())
+        .await
+        .unwrap();
+    assert_eq!(first.ytm_video_id.as_deref(), Some("video-1"));
+
+    // The same video again is a duplicate, whatever its tags say.
+    let staged = hoard.stage("02-second-wind.mp3");
+    let mut info = tags::read(&staged).unwrap();
+    info.title = Some("Renamed".to_owned());
+    let error = hoard
+        .treasury
+        .ingest(&staged, &info, None, youtube("video-1"), Claim::offering())
+        .await
+        .unwrap_err();
+    assert!(matches!(error, IngestError::Duplicate { track_id } if track_id == first.id));
+
+    // Another track of the same platform album joins it, even when its
+    // album name differs.
+    let staged = hoard.stage("01-first-light.flac");
+    let mut info = tags::read(&staged).unwrap();
+    info.album = Some("Test Album (Deluxe)".to_owned());
+    let second = hoard
+        .treasury
+        .ingest(&staged, &info, None, youtube("video-2"), Claim::offering())
+        .await
+        .unwrap();
+    assert_eq!(second.album_id, first.album_id);
+
+    let mut db = hoard.db.clone();
+    let album = Album::get_by_id(&mut db, &first.album_id).await.unwrap();
+    assert_eq!(album.ytm_browse_id.as_deref(), Some("MPREb_album"));
 }

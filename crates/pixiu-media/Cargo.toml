@@ -1,0 +1,18 @@
+[package]
+name = "pixiu-media"
+description = "Audio remuxing for píxiū, with FFmpeg as a library"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+ffmpeg-next.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+lofty.workspace = true
+tempfile.workspace = true
+
+[lints]
+workspace = true
