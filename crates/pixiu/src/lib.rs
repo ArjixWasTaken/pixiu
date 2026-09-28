@@ -114,6 +114,12 @@ impl Services {
         self.jobs.start();
         watch::schedule(self.db.clone(), Arc::clone(&self.jobs));
         watch::resume_on_login(&self.warden, Arc::clone(&self.jobs));
+        let (mut db, jobs) = (self.db.clone(), Arc::clone(&self.jobs));
+        tokio::spawn(async move {
+            if let Err(error) = pixiu_jobs::enrich::repair_album_artists(&mut db, &jobs).await {
+                tracing::error!(%error, "cannot repair album artists");
+            }
+        });
     }
 }
 

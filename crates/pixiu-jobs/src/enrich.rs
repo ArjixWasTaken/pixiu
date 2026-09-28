@@ -8,7 +8,7 @@
 use std::time::Duration;
 
 use jiff::SignedDuration;
-use pixiu_db::{Album, Artist, Db, Enrichment, Lyrics, LyricsSource, Track, now, toasty};
+use pixiu_db::{Album, Artist, Db, Enrichment, Lyrics, LyricsSource, Setting, Track, now, toasty};
 use pixiu_enrich::{
     Candidate, EnrichError, LocalAlbum, LocalTrack, LyricsQuery, Pairing, Release, Sources,
     looks_synced,
@@ -16,7 +16,10 @@ use pixiu_enrich::{
 };
 use pixiu_treasury::{AlbumEdit, ArtistRef, Cover, TrackEdit, Treasury, covers, tags};
 
-use crate::warden::BoxFuture;
+use crate::{
+    queue::{Jobs, NewJob},
+    warden::BoxFuture,
+};
 
 /// How many search results are looked at closely.
 const LOOK_CLOSER: usize = 3;
@@ -215,22 +218,10 @@ async fn identify(
     }
 }
 
-/// The artist a credit stands for: its only artist, or the credit as a
-/// name when several share it.
-fn credited(credit: &pixiu_enrich::Credit) -> ArtistRef {
-    match credit.artists.as_slice() {
-        [(id, name)] => ArtistRef {
-            name: name.clone(),
-            mbid: Some(id.clone()),
-        },
-        _ => ArtistRef {
-            name: credit.name.clone(),
-            mbid: None,
-        },
-    }
-}
-
-/// The track's own artist: the first credited.
+/// The artist a credit stands for: the first credited. A credit shared by
+/// several ("A & B") is not an artist of its own: made one, it would split
+/// A's albums across as many artists as A has collaborations. The full
+/// credit stays on the tracks.
 fn primary(credit: &pixiu_enrich::Credit) -> ArtistRef {
     credit.artists.first().map_or_else(
         || ArtistRef {
@@ -289,7 +280,7 @@ async fn apply(
         .edit_album(&AlbumEdit {
             album_id,
             title: release.title.clone(),
-            artist: credited(&release.artist),
+            artist: primary(&release.artist),
             year: release.year().or(album.year),
             mbid: Some(release.id.clone()),
             rg_mbid: release.release_group_id.clone(),
@@ -481,4 +472,64 @@ async fn lyrics_for(
         return (LyricsSource::YouTubeMusic, None, Some(body));
     }
     (LyricsSource::Missing, None, None)
+}
+
+/// The setting that records [`repair_album_artists`] ran.
+const REPAIRED_ALBUM_ARTISTS: &str = "repair.album-artists";
+
+/// Once per hoard: looks up again, from the release they were matched to,
+/// the albums an earlier píxiū filed under a shared credit ("A & B") as if
+/// it were an artist. Those album artists are the ones MusicBrainz-matched
+/// albums have without a MusicBrainz id. The lookups move each album to its
+/// first credited artist (tags and files included); the credit's artist
+/// goes once it has no albums left. Returns how many albums were queued.
+///
+/// # Errors
+///
+/// Fails on database errors.
+pub async fn repair_album_artists(db: &mut Db, jobs: &Jobs) -> Result<usize, toasty::Error> {
+    if Setting::filter_by_key(REPAIRED_ALBUM_ARTISTS)
+        .first()
+        .exec(&mut *db)
+        .await?
+        .is_some()
+    {
+        return Ok(0);
+    }
+    let unnamed: std::collections::HashSet<u64> = Artist::all()
+        .exec(&mut *db)
+        .await?
+        .into_iter()
+        .filter(|artist| artist.mbid.is_none())
+        .map(|artist| artist.id)
+        .collect();
+    let mut queued = 0;
+    for album in Album::all().exec(&mut *db).await? {
+        let Some(release) = album.mbid.clone() else {
+            continue;
+        };
+        if album.enrichment == Some(Enrichment::Matched) && unnamed.contains(&album.artist_id) {
+            jobs.enqueue(NewJob::enrich(
+                album.id,
+                &format!("Look up {}", album.title),
+                Some(release),
+                false,
+            ))
+            .await?;
+            queued += 1;
+        }
+    }
+    toasty::create!(Setting {
+        key: REPAIRED_ALBUM_ARTISTS,
+        value: now().to_string(),
+    })
+    .exec(&mut *db)
+    .await?;
+    if queued > 0 {
+        tracing::info!(
+            albums = queued,
+            "re-filing albums credited to several artists"
+        );
+    }
+    Ok(queued)
 }

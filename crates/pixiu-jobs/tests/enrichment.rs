@@ -7,12 +7,18 @@ use std::{
     sync::Mutex,
 };
 
-use pixiu_db::{Album, Artist, Db, Enrichment, Lyrics, LyricsSource, Track, toasty};
+use pixiu_db::{
+    Album, Artist, Db, Enrichment, Job, JobKind, Lyrics, LyricsSource, Track, now, toasty,
+};
 use pixiu_enrich::{
     ArtistInfo, BoxFuture, Candidate, Credit, EnrichError, FoundLyrics, LocalAlbum, LyricsQuery,
     Release, ReleaseTrack, Sources,
 };
-use pixiu_jobs::enrich::{self, NoPlatformLyrics, PlatformLyrics, Request};
+use pixiu_jobs::{
+    Executor, Jobs, Outcome,
+    enrich::{self, NoPlatformLyrics, PlatformLyrics, Request},
+    queue::EnrichJob,
+};
 use pixiu_treasury::{Claim, Provenance, Treasury, tags};
 
 fn fixture(name: &str) -> PathBuf {
@@ -461,4 +467,148 @@ async fn instrumentals_are_known_as_such() {
         .await
         .unwrap();
     assert_eq!(first_source(&mut hoard.db).await, LyricsSource::Lrclib);
+}
+
+/// A release credited to two artists, as "Test Artist & Guest".
+fn shared_release(durations: &[u64]) -> Release {
+    let mut release = release(
+        "rel-duo",
+        "Test Album",
+        &[("First Light", durations[0]), ("Second Wind", durations[1])],
+    );
+    release.artist = credit(
+        "Test Artist & Guest",
+        &[("art-test", "Test Artist"), ("art-guest", "Guest")],
+    );
+    release
+}
+
+#[tokio::test]
+async fn shared_credits_file_albums_under_the_first_artist() {
+    let mut hoard = hoard().await;
+    let durations: Vec<u64> = tracks(&mut hoard.db, hoard.album_id)
+        .await
+        .iter()
+        .map(|track| track.duration_ms)
+        .collect();
+    let sources = FakeSources {
+        releases: HashMap::from([("rel-duo".to_owned(), shared_release(&durations))]),
+        ..FakeSources::default()
+    };
+    let request = Request {
+        album_id: hoard.album_id,
+        release: Some("rel-duo".to_owned()),
+        fresh: false,
+    };
+    enrich::enrich(&hoard.treasury, &sources, &NoPlatformLyrics, &request)
+        .await
+        .unwrap();
+
+    let album = Album::get_by_id(&mut hoard.db, &hoard.album_id)
+        .await
+        .unwrap();
+    let artist = Artist::get_by_id(&mut hoard.db, &album.artist_id)
+        .await
+        .unwrap();
+    assert_eq!(artist.name, "Test Artist");
+    assert_eq!(artist.mbid.as_deref(), Some("art-test"));
+    let names: Vec<String> = Artist::all()
+        .exec(&mut hoard.db)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|artist| artist.name)
+        .collect();
+    assert!(!names.iter().any(|name| name.contains('&')), "{names:?}");
+}
+
+/// Never runs anything: the tests look at what gets queued.
+struct Idle;
+
+impl Executor for Idle {
+    fn run<'a>(
+        &'a self,
+        _job: &'a Job,
+        _progress: &'a (dyn Fn(u8) + Send + Sync),
+    ) -> pixiu_jobs::warden::BoxFuture<'a, Outcome> {
+        Box::pin(async { Outcome::Failed("idle".to_owned()) })
+    }
+}
+
+#[tokio::test]
+async fn albums_under_a_shared_credit_are_repaired_once() {
+    let mut hoard = hoard().await;
+    let durations: Vec<u64> = tracks(&mut hoard.db, hoard.album_id)
+        .await
+        .iter()
+        .map(|track| track.duration_ms)
+        .collect();
+    // What an earlier píxiū made of a match: the credit as an artist.
+    let credit_artist = toasty::create!(Artist {
+        name: "Test Artist & Guest",
+        name_key: "test artist & guest",
+        created_at: now(),
+    })
+    .exec(&mut hoard.db)
+    .await
+    .unwrap();
+    let mut album = Album::get_by_id(&mut hoard.db, &hoard.album_id)
+        .await
+        .unwrap();
+    toasty::update!(album {
+        artist_id: credit_artist.id,
+        mbid: Some("rel-duo".to_owned()),
+        enrichment: Some(Enrichment::Matched),
+    })
+    .exec(&mut hoard.db)
+    .await
+    .unwrap();
+
+    let jobs = Jobs::new(hoard.db.clone(), Box::new(Idle));
+    let queued = enrich::repair_album_artists(&mut hoard.db, &jobs)
+        .await
+        .unwrap();
+    assert_eq!(queued, 1);
+    let job = jobs.unfinished().await.unwrap().remove(0);
+    assert_eq!(job.kind, JobKind::Enrich);
+    let payload: EnrichJob = serde_json::from_str(&job.payload).unwrap();
+    assert_eq!(payload.release.as_deref(), Some("rel-duo"));
+    // It runs once per hoard.
+    assert_eq!(
+        enrich::repair_album_artists(&mut hoard.db, &jobs)
+            .await
+            .unwrap(),
+        0
+    );
+
+    // Running that lookup moves the album; the credit's artist goes.
+    let sources = FakeSources {
+        releases: HashMap::from([("rel-duo".to_owned(), shared_release(&durations))]),
+        ..FakeSources::default()
+    };
+    let request = Request {
+        album_id: payload.album_id,
+        release: payload.release,
+        fresh: payload.fresh,
+    };
+    enrich::enrich(&hoard.treasury, &sources, &NoPlatformLyrics, &request)
+        .await
+        .unwrap();
+    let album = Album::get_by_id(&mut hoard.db, &hoard.album_id)
+        .await
+        .unwrap();
+    let artist = Artist::get_by_id(&mut hoard.db, &album.artist_id)
+        .await
+        .unwrap();
+    assert_eq!(artist.name, "Test Artist");
+    assert!(
+        Artist::filter_by_id(credit_artist.id)
+            .first()
+            .exec(&mut hoard.db)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    let path = &tracks(&mut hoard.db, hoard.album_id).await[0].path;
+    assert!(path.starts_with("Test Artist/"), "{path}");
 }
