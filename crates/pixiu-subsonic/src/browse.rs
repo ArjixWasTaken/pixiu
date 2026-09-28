@@ -62,6 +62,7 @@ pub(crate) async fn artists(state: &SubsonicState, id3: bool) -> Result<Payload,
     let albums = Album::all().exec(&mut db).await?;
     let summaries = catalog::summarize_artists(&albums);
     let artists = catalog::artists_by_id(&mut db, summaries.keys().copied()).await?;
+    let annotations = annotations::for_artists(&mut db, artists.keys().copied()).await?;
 
     let mut indexes: BTreeMap<String, Vec<&Artist>> = BTreeMap::new();
     for artist in artists.values() {
@@ -76,12 +77,17 @@ pub(crate) async fn artists(state: &SubsonicState, id3: bool) -> Result<Payload,
             "artist",
             members.into_iter().map(|artist| {
                 let summary = &summaries[&artist.id];
+                let annotation = annotations.get(&artist.id);
                 if id3 {
-                    catalog::artist_id3("artist", artist, summary.albums, summary.has_cover)
+                    catalog::artist_id3(
+                        "artist",
+                        artist,
+                        summary.albums,
+                        summary.has_cover,
+                        annotation,
+                    )
                 } else {
-                    Element::new("artist")
-                        .attr("id", ids::artist(artist.id))
-                        .attr("name", artist.name.as_str())
+                    catalog::artist_folder("artist", artist, annotation)
                 }
             }),
         )
@@ -151,22 +157,29 @@ pub(crate) async fn artist(state: &SubsonicState, params: &Params) -> Result<Pay
         annotations::for_albums(&mut state.db.clone(), albums.iter().map(|album| album.id)).await?;
 
     let has_cover = albums.iter().any(|album| album.cover.is_some());
-    Ok(
-        catalog::artist_id3("artist", &artist, albums.len() as u64, has_cover)
-            .list(
-                "album",
-                albums.iter().map(|album| {
-                    catalog::album_id3(
-                        "album",
-                        album,
-                        Some(&artist),
-                        stats.get(&album.id).copied().unwrap_or_default(),
-                        plays.get(&album.id),
-                    )
-                }),
-            )
-            .into(),
+    let annotation = annotations::for_artists(&mut state.db.clone(), [artist.id])
+        .await?
+        .remove(&artist.id);
+    Ok(catalog::artist_id3(
+        "artist",
+        &artist,
+        albums.len() as u64,
+        has_cover,
+        annotation.as_ref(),
     )
+    .list(
+        "album",
+        albums.iter().map(|album| {
+            catalog::album_id3(
+                "album",
+                album,
+                Some(&artist),
+                stats.get(&album.id).copied().unwrap_or_default(),
+                plays.get(&album.id),
+            )
+        }),
+    )
+    .into())
 }
 
 /// `getAlbum`: an album with its songs.

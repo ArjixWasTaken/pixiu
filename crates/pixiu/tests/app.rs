@@ -333,6 +333,63 @@ async fn albums_are_browsed_looked_up_and_edited() {
 }
 
 #[tokio::test]
+async fn the_file_layout_is_set_in_settings() {
+    let server = TestServer::start().await;
+    server.claim().await;
+    offer_test_album(&server).await;
+
+    let settings = server.get("/settings").await.text().await.unwrap();
+    assert!(
+        settings.contains("Kevin MacLeod/2023 - The August Album/01-04 Vibing Over Venus.opus"),
+        "{settings}"
+    );
+    assert!(!settings.contains("not where the layout wants them"));
+
+    // A mistake is explained, and the draft kept for fixing.
+    let refused = server
+        .post_form("/settings/layout", &[("template", "{genre}/{name}")])
+        .await
+        .text()
+        .await
+        .unwrap();
+    assert!(refused.contains("unknown field `{name}`"), "{refused}");
+    assert!(refused.contains("value=\"{genre}/{name}\""), "{refused}");
+
+    let saved = server
+        .post_form(
+            "/settings/layout",
+            &[("template", "{genre}/{album} ({year})/{track:02}. {title}")],
+        )
+        .await
+        .text()
+        .await
+        .unwrap();
+    assert!(saved.contains("Saved."), "{saved}");
+    assert!(saved.contains("Ambient/The August Album (2023)/04. Vibing Over Venus.opus"));
+    assert!(saved.contains("2 tracks are not where the layout wants them."));
+    assert!(saved.contains("Back to the default"));
+
+    // Moving them is a job, queued once.
+    for _ in 0..2 {
+        let moved = server.post_form("/settings/refile", &[]).await;
+        assert_eq!(location(&moved), "/jobs");
+    }
+    let jobs = server.get("/jobs").await.text().await.unwrap();
+    assert_eq!(jobs.matches("Move files to the new layout").count(), 1);
+    let settings = server.get("/settings").await.text().await.unwrap();
+    assert!(settings.contains("Moving files to the layout"));
+
+    let reset = server
+        .post_form("/settings/layout", &[("template", ""), ("reset", "1")])
+        .await
+        .text()
+        .await
+        .unwrap();
+    assert!(reset.contains("01-04 Vibing Over Venus.opus"), "{reset}");
+    assert!(!reset.contains("Back to the default"));
+}
+
+#[tokio::test]
 async fn offerings_become_subsonic_music() {
     let server = TestServer::start().await;
     server.claim().await;

@@ -1,10 +1,16 @@
-//! Audio container work, using FFmpeg as a library.
+//! Audio work, using FFmpeg as a library.
 //!
 //! YouTube Music serves Opus audio in WebM. píxiū stores it as Ogg Opus
 //! (`.opus`), which every player and tagger understands, by copying the
 //! audio packets into a new container: no re-encoding, no quality loss.
+//! For clients that want another format or a lower bitrate, [`transcode`]
+//! streams a re-encoded copy.
+
+mod transcode;
 
 use std::{path::Path, sync::Once};
+
+pub use transcode::{Codec, Target, transcode};
 
 use ffmpeg_next::{self as ffmpeg, codec, encoder, format, media};
 
@@ -12,11 +18,13 @@ use ffmpeg_next::{self as ffmpeg, codec, encoder, format, media};
 pub enum MediaError {
     #[error("the input has no audio stream")]
     NoAudio,
+    #[error("FFmpeg was built without the {0} encoder")]
+    NoEncoder(&'static str),
     #[error("FFmpeg: {0}")]
     Ffmpeg(#[from] ffmpeg::Error),
 }
 
-fn init() {
+pub(crate) fn init() {
     static INIT: Once = Once::new();
     INIT.call_once(|| {
         ffmpeg::init().expect("FFmpeg initializes");

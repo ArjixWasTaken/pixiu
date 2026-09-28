@@ -7,6 +7,9 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  # Full debug info makes `target/` outgrow the runner's disk; line tables
+  # still give backtraces their file and line numbers.
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
 
 jobs:
   check:
@@ -14,13 +17,21 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      # FFmpeg's headers and libclang, for the bindings píxiū remuxes audio
-      # with.
+      # The runner image ships SDKs píxiū never uses; the build needs the room.
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /usr/local/.ghcup /opt/hostedtoolcache/CodeQL
+          df -h /
+
+      # FFmpeg's headers and libclang, for the bindings píxiū remuxes and
+      # transcodes audio with.
       - name: System libraries
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            clang libclang-dev pkg-config libavcodec-dev libavformat-dev libavutil-dev
+            clang libclang-dev pkg-config libavcodec-dev libavformat-dev libavutil-dev \
+            libswresample-dev
 
       # rustup reads rust-toolchain.toml and installs the pinned toolchain.
       - run: rustup show active-toolchain || rustup toolchain install

@@ -11,10 +11,12 @@ mod edit;
 mod ingest;
 pub mod layout;
 pub mod offerings;
+mod refile;
 pub mod tags;
 
 pub use edit::{AlbumEdit, ArtistRef, TrackEdit};
 pub use ingest::{Claim, IngestError, Provenance, Treasury};
+pub use layout::{Template, TemplateError};
 pub use offerings::{BatchOutcome, OfferingError, Offerings};
 pub use tags::{AudioInfo, Cover, TagChanges, TagError};
 

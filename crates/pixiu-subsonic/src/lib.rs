@@ -8,15 +8,18 @@ mod annotations;
 mod auth;
 mod browse;
 mod catalog;
+mod discovery;
 pub mod ids;
 mod lists;
 mod lyrics;
 mod media;
 mod params;
+mod playing;
 mod playlists;
 mod queue;
 pub mod response;
 mod search;
+mod stars;
 mod system;
 
 use axum::{
@@ -27,12 +30,17 @@ use axum::{
     response::{IntoResponse, Response},
     routing::get,
 };
+use std::sync::Arc;
+
 use pixiu_core::SecretBox;
 use pixiu_db::{Db, toasty};
 use pixiu_treasury::Treasury;
+use tokio::sync::Semaphore;
 use tower_http::cors::{Any, CorsLayer};
 
 pub use params::Params;
+pub use pixiu_media::Codec;
+pub use playing::NowPlaying;
 pub use response::{ApiError, Element, ErrorCode, Format, Payload, SubsonicResponse};
 
 /// Shared state for API handlers.
@@ -42,6 +50,27 @@ pub struct SubsonicState {
     pub treasury: Treasury,
     /// Opens the sealed password token authentication needs.
     pub secrets: SecretBox,
+    /// What transcodes use when the client names no format píxiū can make
+    /// and the file's own cannot be made either.
+    pub transcode_format: Codec,
+    /// Permits for transcodes, which run one thread each.
+    pub transcodes: Arc<Semaphore>,
+    pub now_playing: NowPlaying,
+}
+
+impl SubsonicState {
+    /// State with the defaults: MP3 transcodes, four at a time.
+    #[must_use]
+    pub fn new(db: Db, treasury: Treasury, secrets: SecretBox) -> Self {
+        Self {
+            db,
+            treasury,
+            secrets,
+            transcode_format: Codec::Mp3,
+            transcodes: Arc::new(Semaphore::new(4)),
+            now_playing: NowPlaying::default(),
+        }
+    }
 }
 
 /// Builds the API router. Paths are absolute (`/rest/...`), so mount it
@@ -151,6 +180,8 @@ async fn dispatch(
         "ping" => Payload::default().into(),
         "getLicense" => system::license().into(),
         "getUser" => system::user(&user, params)?.into(),
+        "getUsers" => system::users(&user).into(),
+        "tokenInfo" => system::token_info(&user).into(),
         "getScanStatus" | "startScan" => system::scan_status(state).await?.into(),
         "getMusicFolders" => browse::music_folders().into(),
         "getIndexes" => browse::artists(state, false).await?.into(),
@@ -169,8 +200,8 @@ async fn dispatch(
         "getSongsByGenre" => lists::songs_by_genre(state, params).await?.into(),
         "search2" => search::search(state, params, false).await?.into(),
         "search3" => search::search(state, params, true).await?.into(),
-        "stream" => Reply::Raw(media::stream(state, params, method, headers, false).await?),
-        "download" => Reply::Raw(media::stream(state, params, method, headers, true).await?),
+        "stream" => Reply::Raw(media::stream(state, &user, params, method, headers, false).await?),
+        "download" => Reply::Raw(media::stream(state, &user, params, method, headers, true).await?),
         "getCoverArt" => Reply::Raw(media::cover_art(state, params, method, headers).await?),
         "getPlayQueue" => queue::get(state, &user).await?.into(),
         "getLyrics" => lyrics::by_name(state, params).await?.into(),
@@ -180,7 +211,16 @@ async fn dispatch(
         "createPlaylist" => playlists::create(state, &user, params).await?.into(),
         "updatePlaylist" => playlists::update(state, params).await?.into(),
         "deletePlaylist" => playlists::delete(state, params).await?.into(),
-        "scrobble" => annotations::scrobble(state, params).await?.into(),
+        "scrobble" => annotations::scrobble(state, &user, params).await?.into(),
+        "getNowPlaying" => playing::now_playing(state).await?.into(),
+        "star" => stars::star(state, params).await?.into(),
+        "unstar" => stars::unstar(state, params).await?.into(),
+        "setRating" => stars::set_rating(state, params).await?.into(),
+        "getStarred" => stars::starred(state, false).await?.into(),
+        "getStarred2" => stars::starred(state, true).await?.into(),
+        "getTopSongs" => discovery::top_songs(state, params).await?.into(),
+        "getSimilarSongs" => discovery::similar_songs(state, params, false).await?.into(),
+        "getSimilarSongs2" => discovery::similar_songs(state, params, true).await?.into(),
         "savePlayQueue" => queue::save(state, &user, params).await?.into(),
         other => system::empty(other).ok_or(Failure::UnknownMethod)?.into(),
     })

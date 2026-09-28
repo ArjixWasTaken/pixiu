@@ -10,3 +10,14 @@ services:
       - ./data:/data
       - ./treasure:/treasure
     restart: unless-stopped
+    # Hardening: only the volumes and some scratch space are writable, and
+    # nothing in the container can gain privileges.
+    read_only: true
+    tmpfs:
+      # yt-dlp unpacks itself here, so it must allow running programs.
+      - /tmp:exec,mode=1777
+      # Caches of fonts, yt-dlp and Deno.
+      - /home/pixiu:uid=1000,gid=1000,mode=0700
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true

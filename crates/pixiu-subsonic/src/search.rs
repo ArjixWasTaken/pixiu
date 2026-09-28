@@ -7,7 +7,6 @@
 use crate::{
     Failure, Params, SubsonicState, annotations,
     catalog::{self, Bind},
-    ids,
     lists::Sql,
     response::{Element, Payload},
 };
@@ -112,8 +111,10 @@ pub(crate) async fn search(
     let album_artists =
         catalog::artists_by_id(&mut db, albums.iter().map(|album| album.artist_id)).await?;
     let songs = catalog::songs(&mut db, "song", &tracks).await?;
+    let artist_annotations = annotations::for_artists(&mut db, artist_ids.iter().copied()).await?;
 
     let artist_elements = artists.iter().map(|artist| {
+        let annotation = artist_annotations.get(&artist.id);
         if id3 {
             let summary = summaries.get(&artist.id);
             catalog::artist_id3(
@@ -121,11 +122,10 @@ pub(crate) async fn search(
                 artist,
                 summary.map_or(0, |summary| summary.albums),
                 summary.is_some_and(|summary| summary.has_cover),
+                annotation,
             )
         } else {
-            Element::new("artist")
-                .attr("id", ids::artist(artist.id))
-                .attr("name", artist.name.as_str())
+            catalog::artist_folder("artist", artist, annotation)
         }
     });
     let plays = annotations::for_albums(&mut db, album_ids.iter().copied()).await?;

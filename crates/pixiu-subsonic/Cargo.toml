@@ -10,6 +10,7 @@ publish = false
 pixiu-core.workspace = true
 pixiu-db.workspace = true
 pixiu-enrich.workspace = true
+pixiu-media.workspace = true
 pixiu-treasury.workspace = true
 
 axum.workspace = true
@@ -21,6 +22,7 @@ md-5.workspace = true
 quick-xml.workspace = true
 serde_json = { workspace = true, features = ["preserve_order"] }
 tokio.workspace = true
+tokio-util.workspace = true
 tower.workspace = true
 tower-http.workspace = true
 tracing.workspace = true

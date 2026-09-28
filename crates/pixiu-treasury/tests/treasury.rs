@@ -164,6 +164,90 @@ async fn ingest_files_tracks_under_the_layout() {
     assert!(staged.exists());
 }
 
+#[tokio::test]
+async fn a_new_layout_moves_the_hoard() {
+    let hoard = Hoard::new().await;
+    let mut db = hoard.db.clone();
+    let offer = |name: &'static str| {
+        let staged = hoard.stage(name);
+        let treasury = hoard.treasury.clone();
+        async move {
+            let info = tags::read(&staged).unwrap();
+            treasury
+                .ingest(
+                    &staged,
+                    &info,
+                    None,
+                    Provenance::offering(),
+                    Claim::offering(),
+                )
+                .await
+                .unwrap()
+        }
+    };
+    offer("01-first-light.flac").await;
+
+    let template =
+        pixiu_treasury::Template::parse("{genre}/{album} ({year})/{track:03}. {title}").unwrap();
+    assert_eq!(hoard.treasury.misplaced().await.unwrap(), 0);
+    hoard.treasury.set_layout(template.clone()).await.unwrap();
+    assert_eq!(hoard.treasury.misplaced().await.unwrap(), 1);
+    // New tracks follow the new layout; the old one stays until refiled.
+    offer("02-second-wind.mp3").await;
+    let paths = |tracks: Vec<Track>| {
+        let mut paths: Vec<String> = tracks.into_iter().map(|track| track.path).collect();
+        paths.sort();
+        paths
+    };
+    assert_eq!(
+        paths(Track::all().exec(&mut db).await.unwrap()),
+        [
+            "Ambient/Test Album (2024)/002. Second Wind.mp3",
+            "Test Artist/2024 - Test Album/01-01 First Light.flac",
+        ]
+    );
+
+    let seen = std::sync::Mutex::new(Vec::new());
+    let albums = hoard
+        .treasury
+        .refile_all(|done, of| seen.lock().unwrap().push((done, of)))
+        .await
+        .unwrap();
+    assert_eq!(albums, 1);
+    assert_eq!(*seen.lock().unwrap(), [(1, 1)]);
+    assert_eq!(hoard.treasury.misplaced().await.unwrap(), 0);
+    let tracks = Track::all().exec(&mut db).await.unwrap();
+    assert!(
+        tracks
+            .iter()
+            .all(|track| hoard.treasury.resolve(&track.path).is_file())
+    );
+    assert_eq!(
+        paths(tracks),
+        [
+            "Ambient/Test Album (2024)/001. First Light.flac",
+            "Ambient/Test Album (2024)/002. Second Wind.mp3",
+        ]
+    );
+    let album = Album::all().exec(&mut db).await.unwrap().remove(0);
+    assert_eq!(
+        album.cover.as_deref(),
+        Some("Ambient/Test Album (2024)/cover.png")
+    );
+    // The old directories went away with their files.
+    assert!(!hoard.treasury.resolve("Test Artist").exists());
+
+    // The setting outlives the process.
+    let reopened = Treasury::new(
+        hoard.db.clone(),
+        hoard.treasury.root(),
+        hoard.treasury.cache_dir(),
+    );
+    assert_ne!(reopened.layout(), template);
+    reopened.load_layout().await.unwrap();
+    assert_eq!(reopened.layout(), template);
+}
+
 fn zip_of(files: &[(&str, &[u8])]) -> Vec<u8> {
     let mut buffer = std::io::Cursor::new(Vec::new());
     let mut zip = zip::ZipWriter::new(&mut buffer);

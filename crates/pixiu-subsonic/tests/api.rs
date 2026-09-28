@@ -113,11 +113,7 @@ impl Api {
                 .unwrap();
         }
 
-        let router = pixiu_subsonic::router(SubsonicState {
-            db: db.clone(),
-            treasury,
-            secrets,
-        });
+        let router = pixiu_subsonic::router(SubsonicState::new(db.clone(), treasury, secrets));
         Self {
             _dir: dir,
             db,
@@ -209,7 +205,12 @@ async fn authentication_methods() {
     let json = api.get("/rest/getOpenSubsonicExtensions?f=json").await.ok();
     assert_eq!(
         names(&json["openSubsonicExtensions"], "name"),
-        ["formPost", "apiKeyAuthentication", "songLyrics"]
+        [
+            "formPost",
+            "apiKeyAuthentication",
+            "songLyrics",
+            "transcodeOffset"
+        ]
     );
 }
 
@@ -437,6 +438,144 @@ async fn streaming_supports_ranges() {
     assert_eq!(api.call("stream", "id=tr-999").await.error_code(), 70);
 }
 
+/// The song ids of the library by file extension.
+async fn songs_by_suffix(api: &Api) -> std::collections::HashMap<String, String> {
+    let json = api.call("search3", "query=").await.ok();
+    json["searchResult3"]["song"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|song| {
+            (
+                song["suffix"].as_str().unwrap().to_owned(),
+                song["id"].as_str().unwrap().to_owned(),
+            )
+        })
+        .collect()
+}
+
+/// How long `body` plays, read back as a file with extension `suffix`.
+fn playing_time(body: &[u8], suffix: &str) -> u64 {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join(format!("stream.{suffix}"));
+    std::fs::write(&path, body).unwrap();
+    tags::read(&path).unwrap().duration_ms
+}
+
+#[tokio::test]
+async fn streams_are_transcoded_on_request() {
+    let api = Api::new().await;
+    let songs = songs_by_suffix(&api).await;
+    let (flac, opus) = (&songs["flac"], &songs["opus"]);
+    let original = std::fs::read(fixture("01-first-light.flac")).unwrap();
+
+    // Another format: one second of FLAC as MP3.
+    let mp3 = api.call("stream", &format!("id={flac}&format=mp3")).await;
+    assert_eq!(mp3.status, StatusCode::OK);
+    assert_eq!(mp3.headers[header::CONTENT_TYPE], "audio/mpeg");
+    assert_eq!(mp3.headers[header::ACCEPT_RANGES], "none");
+    let millis = playing_time(&mp3.body, "mp3");
+    assert!((900..=1200).contains(&millis), "{millis} ms");
+
+    // FLAC cannot be made smaller, so a bitrate cap takes the fallback.
+    let json = api.call("getSong", &format!("id={flac}")).await.ok();
+    let bitrate = json["song"]["bitRate"].as_u64().unwrap();
+    let capped = api
+        .call("stream", &format!("id={flac}&maxBitRate={}", bitrate - 1))
+        .await;
+    assert_eq!(capped.headers[header::CONTENT_TYPE], "audio/mpeg");
+    // A cap above the file's bitrate, `format=raw`, and downloads: the file.
+    for (method, query) in [
+        ("stream", "maxBitRate=100000"),
+        ("stream", "format=raw&maxBitRate=64"),
+        ("download", "format=mp3"),
+    ] {
+        let reply = api.call(method, &format!("id={flac}&{query}")).await;
+        assert_eq!(reply.body, original, "{method}?{query}");
+    }
+
+    // Starting later: the last half of a second of Opus.
+    let later = api
+        .call("stream", &format!("id={opus}&timeOffset=0.5"))
+        .await;
+    assert_eq!(later.headers[header::CONTENT_TYPE], "audio/ogg");
+    let millis = playing_time(&later.body, "opus");
+    assert!((400..=600).contains(&millis), "{millis} ms");
+
+    // HEAD answers without transcoding.
+    let head = api
+        .request(
+            Request::builder()
+                .method(Method::HEAD)
+                .uri(format!("/rest/stream?{AUTH}&id={flac}&format=opus"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+    assert_eq!(head.status, StatusCode::OK);
+    assert_eq!(head.headers[header::CONTENT_TYPE], "audio/ogg");
+    assert!(head.body.is_empty());
+}
+
+#[tokio::test]
+async fn now_playing_follows_clients() {
+    let api = Api::new().await;
+    let songs = songs_by_suffix(&api).await;
+    let as_client = |client: &str, method: &str, query: String| {
+        format!("/rest/{method}?u=keeper&p={PASSWORD}&v=1.16.1&f=json&c={client}&{query}")
+    };
+
+    // The web player only streams; the phone says what it plays, then
+    // fetches its next song early.
+    api.get(&as_client("web", "stream", format!("id={}", songs["mp3"])))
+        .await;
+    api.get(&as_client(
+        "phone",
+        "scrobble",
+        format!("id={}&submission=false", songs["flac"]),
+    ))
+    .await
+    .ok();
+    api.get(&as_client(
+        "phone",
+        "stream",
+        format!("id={}", songs["opus"]),
+    ))
+    .await;
+
+    let json = api.call("getNowPlaying", "").await.ok();
+    let mut entries: Vec<(String, String, String)> = json["nowPlaying"]["entry"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|entry| {
+            assert_eq!(entry["username"], "keeper");
+            assert_eq!(entry["minutesAgo"], 0);
+            (
+                entry["playerName"].as_str().unwrap().to_owned(),
+                entry["id"].as_str().unwrap().to_owned(),
+                entry["title"].as_str().unwrap().to_owned(),
+            )
+        })
+        .collect();
+    entries.sort();
+    assert_eq!(
+        entries,
+        [
+            (
+                "phone".to_owned(),
+                songs["flac"].clone(),
+                "First Light".to_owned()
+            ),
+            (
+                "web".to_owned(),
+                songs["mp3"].clone(),
+                "Second Wind".to_owned()
+            ),
+        ]
+    );
+}
+
 #[tokio::test]
 async fn cover_art_is_served_and_resized() {
     let api = Api::new().await;
@@ -525,10 +664,6 @@ async fn browsers_may_call_the_api_cross_origin() {
 async fn features_to_come_answer_with_empty_lists() {
     let api = Api::new().await;
 
-    let json = api.call("getStarred2", "").await.ok();
-    assert_eq!(json["starred2"]["song"], serde_json::json!([]));
-    assert_eq!(json["starred2"]["album"], serde_json::json!([]));
-
     let album = api.album_id("Test Album").await;
     let json = api.call("getAlbumInfo2", &format!("id={album}")).await.ok();
     assert!(json["albumInfo"].is_object());
@@ -542,14 +677,168 @@ async fn features_to_come_answer_with_empty_lists() {
         .await
         .ok();
     assert_eq!(json["artistInfo2"]["similarArtist"], serde_json::json!([]));
-    let json = api.call("getTopSongs", "artist=Test%20Artist").await.ok();
-    assert_eq!(json["topSongs"]["song"], serde_json::json!([]));
+    let json = api.call("getPodcasts", "").await.ok();
+    assert_eq!(json["podcasts"]["channel"], serde_json::json!([]));
 
     // Writes are not faked.
     assert_eq!(
-        api.call("star", "id=tr-1").await.status,
+        api.call("createBookmark", "id=tr-1&position=1000")
+            .await
+            .status,
         StatusCode::NOT_FOUND
     );
+}
+
+#[tokio::test]
+async fn stars_and_ratings_are_kept() {
+    let mut api = Api::new().await;
+    let songs = songs_by_suffix(&api).await;
+    let (flac, mp3) = (&songs["flac"], &songs["mp3"]);
+    let album = api.album_id("Test Album").await;
+    let json = api.call("getSong", &format!("id={flac}")).await.ok();
+    let artist = json["song"]["artistId"].as_str().unwrap().to_owned();
+    let track_id = |id: &str| id.trim_start_matches("tr-").parse::<u64>().unwrap();
+
+    // Nothing starred yet.
+    let json = api.call("getStarred2", "").await.ok();
+    assert_eq!(json["starred2"]["song"], serde_json::json!([]));
+
+    api.call(
+        "star",
+        &format!("id={flac}&albumId={album}&artistId={artist}"),
+    )
+    .await
+    .ok();
+    api.call("setRating", &format!("id={mp3}&rating=4"))
+        .await
+        .ok();
+    api.call("setRating", &format!("id={album}&rating=5"))
+        .await
+        .ok();
+
+    let json = api.call("getStarred2", "").await.ok();
+    let starred = &json["starred2"];
+    assert_eq!(names(&starred["song"], "title"), ["First Light"]);
+    assert_eq!(names(&starred["album"], "name"), ["Test Album"]);
+    assert_eq!(names(&starred["artist"], "name"), ["Test Artist"]);
+    assert!(starred["song"][0]["starred"].is_string());
+    let json = api.call("getStarred", "").await.ok();
+    assert_eq!(names(&json["starred"]["album"], "title"), ["Test Album"]);
+
+    // Stars and ratings show wherever the items do.
+    let json = api.call("getAlbum", &format!("id={album}")).await.ok();
+    assert!(json["album"]["starred"].is_string());
+    assert_eq!(json["album"]["userRating"], 5);
+    let songs_json = &json["album"]["song"];
+    let second = songs_json
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|song| song["id"] == mp3.as_str())
+        .unwrap();
+    assert_eq!(second["userRating"], 4);
+    assert!(second.get("starred").is_none());
+    let json = api.call("getArtist", &format!("id={artist}")).await.ok();
+    assert!(json["artist"]["starred"].is_string());
+    for kind in ["starred", "highest"] {
+        let json = api
+            .call("getAlbumList2", &format!("type={kind}"))
+            .await
+            .ok();
+        assert_eq!(
+            names(&json["albumList2"]["album"], "name"),
+            ["Test Album"],
+            "{kind}"
+        );
+    }
+
+    // Starred songs and albums keep their tracks from becoming orphans.
+    assert_eq!(
+        claimed(&mut api.db, ClaimKind::Starred).await,
+        [track_id(flac), track_id(flac), track_id(mp3)]
+    );
+    api.call("unstar", &format!("id={flac}")).await.ok();
+    assert_eq!(
+        claimed(&mut api.db, ClaimKind::Starred).await,
+        [track_id(flac), track_id(mp3)]
+    );
+    api.call("unstar", &format!("albumId={album}&artistId={artist}"))
+        .await
+        .ok();
+    assert!(claimed(&mut api.db, ClaimKind::Starred).await.is_empty());
+    let json = api.call("getStarred2", "").await.ok();
+    assert_eq!(json["starred2"]["album"], serde_json::json!([]));
+
+    // A rating of 0 clears it; nonsense is refused.
+    api.call("setRating", &format!("id={mp3}&rating=0"))
+        .await
+        .ok();
+    let json = api.call("getSong", &format!("id={mp3}")).await.ok();
+    assert!(json["song"].get("userRating").is_none());
+    assert_eq!(
+        api.call("setRating", &format!("id={mp3}&rating=9"))
+            .await
+            .error_code(),
+        0
+    );
+    assert_eq!(api.call("star", "id=tr-999").await.error_code(), 70);
+    assert_eq!(api.call("star", "").await.error_code(), 10);
+}
+
+#[tokio::test]
+async fn top_and_similar_songs_come_from_the_hoard() {
+    let api = Api::new().await;
+    let songs = songs_by_suffix(&api).await;
+    let json = api
+        .call("getSong", &format!("id={}", songs["mp3"]))
+        .await
+        .ok();
+    let artist = json["song"]["artistId"].as_str().unwrap().to_owned();
+
+    // Played most: first.
+    for _ in 0..2 {
+        api.call("scrobble", &format!("id={}", songs["mp3"]))
+            .await
+            .ok();
+    }
+    let json = api.call("getTopSongs", "artist=test%20ARTIST").await.ok();
+    assert_eq!(
+        names(&json["topSongs"]["song"], "title"),
+        ["Second Wind", "First Light"]
+    );
+    let json = api.call("getTopSongs", "artist=Nobody").await.ok();
+    assert_eq!(json["topSongs"]["song"], serde_json::json!([]));
+
+    let json = api
+        .call("getSimilarSongs2", &format!("id={artist}"))
+        .await
+        .ok();
+    let mut titles = names(&json["similarSongs2"]["song"], "title");
+    titles.sort();
+    assert_eq!(titles, ["First Light", "Second Wind"]);
+    // Like a song: the others by its artist.
+    let json = api
+        .call("getSimilarSongs", &format!("id={}", songs["mp3"]))
+        .await
+        .ok();
+    assert_eq!(
+        names(&json["similarSongs"]["song"], "title"),
+        ["First Light"]
+    );
+}
+
+#[tokio::test]
+async fn the_one_user_is_listed() {
+    let api = Api::new().await;
+    let json = api.call("getUsers", "").await.ok();
+    assert_eq!(names(&json["users"]["user"], "username"), ["keeper"]);
+    let json = api
+        .get(&format!(
+            "/rest/tokenInfo?apiKey={API_KEY}&v=1.16.1&c=test&f=json"
+        ))
+        .await
+        .ok();
+    assert_eq!(json["tokenInfo"]["username"], "keeper");
 }
 
 #[tokio::test]

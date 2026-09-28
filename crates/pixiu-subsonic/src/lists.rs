@@ -98,8 +98,16 @@ pub(crate) async fn album_list(
              WHERE annotations.last_played IS NOT NULL \
              ORDER BY annotations.last_played DESC",
         ),
-        // Ratings and favourites arrive later.
-        "highest" | "starred" => sql.push(" WHERE 0"),
+        "highest" => sql.push(
+            " JOIN annotations ON annotations.item = 'al-' || albums.id \
+             WHERE annotations.rating > 0 \
+             ORDER BY annotations.rating DESC, albums.title_key",
+        ),
+        "starred" => sql.push(
+            " JOIN annotations ON annotations.item = 'al-' || albums.id \
+             WHERE annotations.starred_at IS NOT NULL \
+             ORDER BY annotations.starred_at DESC",
+        ),
         other => {
             return Err(ApiError::new(
                 ErrorCode::Generic,

@@ -35,6 +35,15 @@ no_sandbox = false
 # only.
 # contact = "you@example.com"
 
+[stream]
+# Clients may ask for another format (`format=mp3`, `opus`, `aac`), a lower
+# bitrate (`maxBitRate`) or a later start (`timeOffset`); píxiū transcodes
+# for them. When a client only asks for a lower bitrate and the file's own
+# format cannot be made (FLAC, say), this one is used: mp3, opus or aac.
+format = "mp3"
+# Transcodes running at once, at most; more wait their turn.
+max_transcodes = 4
+
 [log]
 # A tracing filter; RUST_LOG overrides it.
 filter = "info"

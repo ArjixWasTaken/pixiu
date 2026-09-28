@@ -25,6 +25,17 @@ impl Id {
     }
 }
 
+impl std::fmt::Display for Id {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match *self {
+            Self::Artist(id) => write!(f, "ar-{id}"),
+            Self::Album(id) => write!(f, "al-{id}"),
+            Self::Track(id) => write!(f, "tr-{id}"),
+            Self::Playlist(id) => write!(f, "pl-{id}"),
+        }
+    }
+}
+
 #[must_use]
 pub fn artist(id: u64) -> String {
     format!("ar-{id}")
@@ -55,6 +66,7 @@ mod tests {
         assert_eq!(Id::parse(&album(8)), Some(Id::Album(8)));
         assert_eq!(Id::parse(&track(9)), Some(Id::Track(9)));
         assert_eq!(Id::parse(&playlist(10)), Some(Id::Playlist(10)));
+        assert_eq!(Id::Album(8).to_string(), album(8));
         assert_eq!(Id::parse("xx-1"), None);
         assert_eq!(Id::parse("tr-"), None);
         assert_eq!(Id::parse("42"), None);

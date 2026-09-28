@@ -105,6 +105,7 @@ impl Executor for HuntExecutor {
                 JobKind::GrabAlbum => self.expand_album(job).await,
                 JobKind::SyncWatch => self.sync_watch(job).await,
                 JobKind::Enrich => self.enrich(job).await,
+                JobKind::Refile => self.refile(progress).await,
             }
         })
     }
@@ -238,6 +239,21 @@ impl HuntExecutor {
                 Outcome::Done { track_id: None }
             }
             Err(error) => Outcome::Failed(error),
+        }
+    }
+
+    async fn refile(&self, progress: &(dyn Fn(u8) + Send + Sync)) -> Outcome {
+        let moved = self
+            .hunter
+            .treasury()
+            .refile_all(|done, of| {
+                let percent = (done * 100).checked_div(of).unwrap_or(100);
+                progress(u8::try_from(percent).unwrap_or(100));
+            })
+            .await;
+        match moved {
+            Ok(_) => Outcome::Done { track_id: None },
+            Err(error) => Outcome::Failed(error.to_string()),
         }
     }
 

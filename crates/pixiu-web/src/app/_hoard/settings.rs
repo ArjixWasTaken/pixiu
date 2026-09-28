@@ -1,14 +1,18 @@
-//! `/settings`: how to connect Subsonic clients, and API keys.
+//! `/settings`: how to connect Subsonic clients, API keys, and where files
+//! are filed.
 
 mod api_keys;
 mod sources;
 
-use pixiu_db::{Album, ApiKey};
+use pixiu_db::{Album, ApiKey, JobKind};
 use pixiu_jobs::NewJob;
+use pixiu_treasury::{Template, layout::TrackLocation};
+use serde::Deserialize;
 use topcoat::{
     Result,
     context::Cx,
     router::{
+        content::Form,
         error::{SeeOther, see_other},
         page, route,
     },
@@ -17,8 +21,23 @@ use topcoat::{
 
 use crate::{
     app::_hoard::server_url,
-    auth::{db, jobs, require_user, warden},
-    ui::{BUTTON_DANGER, BUTTON_PRIMARY, BUTTON_SECONDARY, card, field, notice, session_status},
+    auth::{db, jobs, require_user, treasury, warden},
+    ui::{
+        BUTTON_DANGER, BUTTON_PRIMARY, BUTTON_SECONDARY, alert, card, field, notice, session_status,
+    },
+};
+
+/// The track the layout preview files.
+const EXAMPLE: TrackLocation<'static> = TrackLocation {
+    album_artist: "Kevin MacLeod",
+    artist: "Kevin MacLeod",
+    album: "The August Album",
+    year: Some(2023),
+    genre: Some("Ambient"),
+    disc: Some(1),
+    track: Some(4),
+    title: "Vibing Over Venus",
+    suffix: "opus",
 };
 
 pub(super) const SETTINGS_PATH: &str = "/settings";
@@ -28,12 +47,16 @@ async fn page() -> Result<impl View> {
     Ok(view! { settings() })
 }
 
-/// The settings page, optionally showing a just-created API key.
+/// The settings page, optionally showing a just-created API key, or the
+/// outcome of changing the file layout.
 #[component]
 pub(super) async fn settings(
     cx: &Cx,
     #[default] created_name: Option<&str>,
     #[default] created_key: Option<&str>,
+    #[default] layout_draft: Option<&str>,
+    #[default] layout_error: Option<&str>,
+    #[default] layout_saved: bool,
 ) -> Result<impl View> {
     let user = require_user(cx).await?;
     let mut keys = ApiKey::filter_by_user_id(user.id).exec(&mut db(cx)).await?;
@@ -47,6 +70,13 @@ pub(super) async fn settings(
         .iter()
         .filter(|album| album.enrichment.is_none())
         .count();
+    let layout = treasury(cx).layout();
+    let misplaced = treasury(cx).misplaced().await?;
+    let refiling = jobs(cx)
+        .unfinished()
+        .await?
+        .iter()
+        .any(|job| job.kind == JobKind::Refile);
 
     Ok(view! {
         <div class="mx-auto flex max-w-3xl flex-col gap-8">
@@ -111,6 +141,81 @@ pub(super) async fn settings(
                     if unlooked > 0 {
                         <form method="post" action="/settings/lookup" class="shrink-0">
                             <button type="submit" class=(BUTTON_SECONDARY)>"Look them up"</button>
+                        </form>
+                    }
+                </div>
+            )
+
+            card(
+                <div id="layout" class="flex flex-col gap-4">
+                    <div class="flex flex-col gap-1">
+                        <h3 class="text-lg">"File layout"</h3>
+                        <p class="text-sm text-muted-foreground">
+                            "Where tracks are filed in the treasure. "
+                            <code>"{field}"</code>
+                            " inserts album_artist, artist, album, year, genre, disc, track "
+                            "or title ("
+                            <code>"{track:02}"</code>
+                            " pads numbers); a part in "
+                            <code>"[brackets]"</code>
+                            " is left out when a value in it is missing; "
+                            <code>"/"</code>
+                            " makes a folder; "
+                            <code>"\\["</code>
+                            " is a plain bracket. The file extension is added."
+                        </p>
+                    </div>
+                    if layout_saved {
+                        notice("Saved. New tracks follow the new layout.")
+                    }
+                    if let Some(error) = layout_error {
+                        alert((error))
+                    }
+                    <form method="post" action="/settings/layout" class="flex flex-col gap-3">
+                        field(
+                            label: "Template",
+                            attrs: attributes! {
+                                name="template"
+                                value=(layout_draft.unwrap_or(layout.as_str()))
+                                required=""
+                                spellcheck="false"
+                                autocomplete="off"
+                            },
+                        )
+                        <p class="text-xs text-muted-foreground">
+                            "Files tracks like "
+                            <code class="text-gold-soft">
+                                (layout.track_path(EXAMPLE).display().to_string())
+                            </code>
+                        </p>
+                        <div class="flex flex-wrap gap-3">
+                            <button type="submit" class=(BUTTON_PRIMARY)>"Save"</button>
+                            if layout.as_str() != Template::DEFAULT {
+                                <button type="submit" name="reset" value="1" class=(BUTTON_SECONDARY)>
+                                    "Back to the default"
+                                </button>
+                            }
+                        </div>
+                    </form>
+                    if refiling {
+                        <p class="text-sm text-muted-foreground">
+                            "Moving files to the layout… see " <a href="/jobs" class="underline">"Jobs"</a> "."
+                        </p>
+                    } else if misplaced > 0 {
+                        <form
+                            method="post"
+                            action="/settings/refile"
+                            class="flex items-center justify-between gap-4"
+                        >
+                            <p class="text-sm text-muted-foreground">
+                                (misplaced)
+                                if misplaced == 1 {
+                                    " track is not where the layout wants it."
+                                } else {
+                                    " tracks are not where the layout wants them."
+                                }
+                            </p>
+                            <button type="submit" class=(class!(BUTTON_SECONDARY, "shrink-0"))>"Move them"</button>
                         </form>
                     }
                 </div>
@@ -192,6 +297,54 @@ async fn lookup(cx: &Cx) -> Result<SeeOther> {
         jobs(cx)
             .enqueue(NewJob::enrich(album.id, &title, None, false))
             .await?;
+    }
+    Ok(see_other("/jobs"))
+}
+
+#[derive(Deserialize)]
+struct LayoutForm {
+    template: String,
+    reset: Option<String>,
+}
+
+/// Changes the file layout. New tracks follow it at once; the others move
+/// when the admin asks (`./refile`).
+#[page(POST "./layout")]
+async fn save_layout(cx: &Cx, Form(form): Form<LayoutForm>) -> Result<impl View> {
+    require_user(cx).await?;
+    let parsed = if form.reset.is_some() {
+        Ok(Template::default())
+    } else {
+        Template::parse(&form.template)
+    };
+    let error = match parsed {
+        Ok(template) => {
+            tracing::info!(%template, "file layout changed");
+            treasury(cx).set_layout(template).await?;
+            None
+        }
+        Err(error) => Some(error.to_string()),
+    };
+    Ok(view! {
+        settings(
+            layout_draft: error.is_some().then_some(form.template.as_str()),
+            layout_error: error.as_deref(),
+            layout_saved: error.is_none(),
+        )
+    })
+}
+
+/// Queues moving every file to the layout, unless that is under way.
+#[route(POST "./refile")]
+async fn refile(cx: &Cx) -> Result<SeeOther> {
+    require_user(cx).await?;
+    let running = jobs(cx)
+        .unfinished()
+        .await?
+        .iter()
+        .any(|job| job.kind == JobKind::Refile);
+    if !running {
+        jobs(cx).enqueue(NewJob::refile()).await?;
     }
     Ok(see_other("/jobs"))
 }

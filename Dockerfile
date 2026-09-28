@@ -3,10 +3,12 @@
 
 # ---- tools -------------------------------------------------------------------
 FROM rust:1.98.1-trixie AS chef
-# FFmpeg's headers and libclang, for the bindings píxiū remuxes audio with.
+# FFmpeg's headers and libclang, for the bindings píxiū remuxes and
+# transcodes audio with.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         clang libclang-dev pkg-config libavcodec-dev libavformat-dev libavutil-dev \
+        libswresample-dev \
     && rm -rf /var/lib/apt/lists/*
 # cargo-chef caches dependency builds; the Topcoat CLI bundles the WebUI
 # assets (stylesheet, fonts, images).
@@ -60,11 +62,15 @@ FROM denoland/deno:bin-2.9.7 AS deno
 # ---- runtime -----------------------------------------------------------------
 FROM debian:trixie-slim
 
-# Chromium runs the login browser; the FFmpeg libraries remux downloads.
+# Chromium runs the login browser; the FFmpeg libraries remux downloads
+# and transcode streams. Mesa's GPU drivers (and the LLVM they compile
+# shaders with, ~190 MB) come along with Chromium but are only used on real
+# GPUs; headless Chromium draws with its own SwiftShader, so they go.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ca-certificates chromium fonts-liberation tini \
-        libavcodec61 libavformat61 libavutil59 \
+        libavcodec61 libavformat61 libavutil59 libswresample5 \
+    && dpkg --purge --force-depends libgl1-mesa-dri mesa-libgallium libllvm19 libz3-4 \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --uid 1000 --user-group --create-home --shell /usr/sbin/nologin pixiu \
     && mkdir -p /data /treasure \

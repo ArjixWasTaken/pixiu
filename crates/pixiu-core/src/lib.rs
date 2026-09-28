@@ -4,7 +4,7 @@ pub mod config;
 pub mod password;
 pub mod secrets;
 
-pub use config::{Config, ConfigError, CookieSecurity};
+pub use config::{Config, ConfigError, CookieSecurity, StreamConfig, TranscodeFormat};
 pub use secrets::{SecretBox, SecretError};
 
 /// The version reported to Subsonic clients and shown in the WebUI.

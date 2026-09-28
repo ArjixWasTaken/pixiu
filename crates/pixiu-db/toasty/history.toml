@@ -24,3 +24,8 @@ snapshot_name = "0003_snapshot.toml"
 id = 813291425709272481
 name = "0004_enrichment.sql"
 snapshot_name = "0004_snapshot.toml"
+
+[[migrations]]
+id = 6809520588650213513
+name = "0005_settings.sql"
+snapshot_name = "0005_snapshot.toml"

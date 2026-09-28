@@ -9,8 +9,9 @@ use crate::{
     claims::remove_file,
     covers,
     ingest::{IngestError, Treasury, find_or_create_artist, move_file, path_string},
-    layout::{self, TrackLocation},
+    layout::TrackLocation,
     name_key,
+    refile::is_at,
     tags::{self, Cover, TagChanges},
 };
 
@@ -138,7 +139,7 @@ impl Treasury {
         }
         tx.commit().await?;
 
-        self.retag_and_refile(&mut db, album.id).await?;
+        self.refile_album(&mut db, album.id, true).await?;
         for artist_id in std::iter::once(old_artist).chain(old_track_artists) {
             self.forget_artist_if_empty(&mut db, artist_id).await?;
         }
@@ -146,9 +147,14 @@ impl Treasury {
         Ok(())
     }
 
-    /// Writes every track's tags from the database, and moves the files
-    /// (and the cover) where the layout wants them.
-    async fn retag_and_refile(&self, db: &mut Db, album_id: u64) -> Result<(), IngestError> {
+    /// Moves an album's files (and its cover) where the layout wants them,
+    /// after writing every track's tags from the database if `retag`.
+    pub(crate) async fn refile_album(
+        &self,
+        db: &mut Db,
+        album_id: u64,
+        retag: bool,
+    ) -> Result<(), IngestError> {
         let album = Album::get_by_id(&mut *db, &album_id).await?;
         let album_artist = Artist::get_by_id(&mut *db, &album.artist_id).await?;
         let tracks = Track::filter_by_album_id(album_id).exec(&mut *db).await?;
@@ -172,21 +178,23 @@ impl Treasury {
                 album_artist_mbid: album_artist.mbid.as_deref(),
                 isrc: track.isrc.as_deref(),
             };
-            if let Err(error) = write_tags(&file, &changes).await {
+            if retag && let Err(error) = write_tags(&file, &changes).await {
                 tracing::warn!(%error, path = %track.path, "cannot write tags");
             }
 
-            let wanted = layout::track_path(TrackLocation {
+            let wanted = self.layout().track_path(TrackLocation {
                 album_artist: &album_artist.name,
+                artist: &track.artist_credit,
                 album: &album.title,
                 year: album.year,
+                genre: track.genre.as_deref(),
                 disc: track.disc_number,
                 track: track.track_number,
                 title: &track.title,
                 suffix: &track.suffix,
             });
             new_dir = wanted.parent().map(Path::to_path_buf);
-            if Path::new(&track.path) == wanted {
+            if is_at(Path::new(&track.path), &wanted) {
                 continue;
             }
             let destination = self.free_path(wanted).await;

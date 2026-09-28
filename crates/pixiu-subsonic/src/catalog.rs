@@ -10,7 +10,7 @@ use pixiu_db::{
     toasty::{self, stmt::Value},
 };
 
-use crate::{annotations::with_plays, ids, response::Element};
+use crate::{annotations::annotate, ids, response::Element};
 
 /// A bound value for raw SQL.
 pub(crate) enum Bind {
@@ -197,7 +197,7 @@ pub(crate) async fn songs(
         .map(|track| {
             let album = albums.get(&track.album_id);
             let album_artist = album.and_then(|album| artists.get(&album.artist_id));
-            with_plays(
+            annotate(
                 song(
                     name,
                     track,
@@ -313,7 +313,7 @@ pub(crate) fn album_id3(
             "artists",
             artist.map(|artist| artist_ref("artists", artist)),
         );
-    with_plays(element, plays)
+    annotate(element, plays)
 }
 
 /// An album as a folder (the `Child` type with `isDir`), for the
@@ -344,7 +344,7 @@ pub(crate) fn album_child(
         .attr("albumId", ids::album(album.id))
         .attr("artistId", ids::artist(album.artist_id))
         .attr("mediaType", "album");
-    with_plays(element, plays)
+    annotate(element, plays)
 }
 
 /// An artist in the ID3 model (`ArtistID3`).
@@ -353,8 +353,9 @@ pub(crate) fn artist_id3(
     artist: &Artist,
     album_count: u64,
     has_cover: bool,
+    annotation: Option<&Annotation>,
 ) -> Element {
-    Element::new(name)
+    let element = Element::new(name)
         .attr("id", ids::artist(artist.id))
         .attr("name", artist.name.as_str())
         .attr_opt(
@@ -364,7 +365,20 @@ pub(crate) fn artist_id3(
         .attr("albumCount", album_count)
         .attr_opt("musicBrainzId", artist.mbid.as_deref())
         .attr("sortName", artist.name.as_str())
-        .attr("mediaType", "artist")
+        .attr("mediaType", "artist");
+    annotate(element, annotation)
+}
+
+/// An artist in the folder model (`Artist`).
+pub(crate) fn artist_folder(
+    name: &'static str,
+    artist: &Artist,
+    annotation: Option<&Annotation>,
+) -> Element {
+    let element = Element::new(name)
+        .attr("id", ids::artist(artist.id))
+        .attr("name", artist.name.as_str());
+    annotate(element, annotation)
 }
 
 /// Album counts and cover availability per album artist.

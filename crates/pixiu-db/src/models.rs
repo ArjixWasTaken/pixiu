@@ -463,6 +463,8 @@ pub enum JobKind {
     /// Look an album up on MusicBrainz, fetch its cover, lyrics and artist
     /// information.
     Enrich,
+    /// Move every file where the file layout wants it.
+    Refile,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, toasty::Embed)]
@@ -645,4 +647,17 @@ pub struct Lyrics {
     pub plain: Option<String>,
 
     pub fetched_at: Timestamp,
+}
+
+/// A setting made in the WebUI, by name.
+#[derive(Debug, toasty::Model)]
+pub struct Setting {
+    #[key]
+    #[auto]
+    pub id: u64,
+
+    #[unique]
+    pub key: String,
+
+    pub value: String,
 }

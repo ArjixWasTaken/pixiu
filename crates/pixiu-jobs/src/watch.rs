@@ -389,7 +389,7 @@ async fn pending(db: &mut Db) -> Result<Pending, toasty::Error> {
                     pending.albums.insert(payload.browse_id);
                 }
             }
-            JobKind::SyncWatch | JobKind::Enrich => {}
+            JobKind::SyncWatch | JobKind::Enrich | JobKind::Refile => {}
         }
     }
     Ok(pending)

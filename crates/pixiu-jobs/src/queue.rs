@@ -107,7 +107,7 @@ pub fn wanted(job: &Job) -> Option<Wanted> {
         JobKind::GrabAlbum => serde_json::from_str::<AlbumJob>(&job.payload)
             .ok()
             .map(|payload| payload.wanted),
-        JobKind::SyncWatch | JobKind::Enrich => None,
+        JobKind::SyncWatch | JobKind::Enrich | JobKind::Refile => None,
     }
 }
 
@@ -205,6 +205,16 @@ impl NewJob {
             fresh,
         };
         Self::new(JobKind::Enrich, &payload, title)
+    }
+
+    /// Moving every file to the current layout.
+    #[must_use]
+    pub fn refile() -> Self {
+        Self::new(
+            JobKind::Refile,
+            &serde_json::Map::new(),
+            "Move files to the new layout",
+        )
     }
 }
 

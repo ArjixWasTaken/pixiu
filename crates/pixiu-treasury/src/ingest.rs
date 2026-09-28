@@ -3,14 +3,14 @@
 use std::{
     io,
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{Arc, RwLock},
 };
 
 use pixiu_db::{Album, Artist, ClaimKind, Db, Track, TrackClaim, TrackOrigin, now, toasty};
 use tokio::sync::Mutex;
 
 use crate::{
-    layout::{self, TrackLocation},
+    layout::{self, Template, TrackLocation},
     name_key,
     tags::{AudioInfo, Cover},
 };
@@ -91,6 +91,8 @@ pub struct Treasury {
     /// create the same artist or album twice, race for a file name, or
     /// delete an album another is filing into.
     pub(crate) lock: Arc<Mutex<()>>,
+    /// Where tracks are filed.
+    pub(crate) layout: Arc<RwLock<Template>>,
 }
 
 impl Treasury {
@@ -101,6 +103,7 @@ impl Treasury {
             root: root.into(),
             cache_dir: cache_dir.into(),
             lock: Arc::default(),
+            layout: Arc::default(),
         }
     }
 
@@ -195,10 +198,12 @@ impl Treasury {
         }
 
         let relative = self
-            .free_path(layout::track_path(TrackLocation {
+            .free_path(self.layout().track_path(TrackLocation {
                 album_artist: &album_artist.name,
+                artist: credit,
                 album: &album.title,
                 year: album.year,
+                genre: info.genre.as_deref(),
                 disc: info.disc_number,
                 track: info.track_number,
                 title,

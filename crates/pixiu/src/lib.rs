@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use pixiu_browser::{BrowserOptions, LoginDesk};
-use pixiu_core::{Config, SecretBox};
+use pixiu_core::{Config, SecretBox, TranscodeFormat};
 use pixiu_db::Db;
 use pixiu_hunt::{Hunter, YtMusic};
 use pixiu_jobs::{
@@ -12,9 +12,10 @@ use pixiu_jobs::{
     adapters::{BrowserRefresher, HuntExecutor, YtMusicPlatform},
     watch,
 };
-use pixiu_subsonic::SubsonicState;
+use pixiu_subsonic::{Codec, SubsonicState};
 use pixiu_treasury::{Offerings, Treasury};
 use pixiu_web::WebDeps;
+use tokio::sync::Semaphore;
 use topcoat::{
     asset::AssetBundle,
     router::{
@@ -52,6 +53,10 @@ impl Services {
     pub async fn new(db: Db, config: &Config, secrets: SecretBox) -> anyhow::Result<Self> {
         let paths = &config.paths;
         let treasury = Treasury::new(db.clone(), &paths.treasure_dir, paths.cache_dir());
+        treasury
+            .load_layout()
+            .await
+            .context("failed to read the file layout")?;
         let offerings = Offerings::new(paths.offerings_dir(), treasury.clone());
         let ytmusic = YtMusic::new(
             &paths.youtube_music_dir(),
@@ -113,9 +118,17 @@ impl Services {
 /// `/rest`.
 pub fn app(services: &Services, config: &Config, assets: AssetBundle) -> Router {
     let subsonic = pixiu_subsonic::router(SubsonicState {
-        db: services.db.clone(),
-        treasury: services.treasury.clone(),
-        secrets: services.secrets.clone(),
+        transcode_format: match config.stream.format {
+            TranscodeFormat::Mp3 => Codec::Mp3,
+            TranscodeFormat::Opus => Codec::Opus,
+            TranscodeFormat::Aac => Codec::Aac,
+        },
+        transcodes: Arc::new(Semaphore::new(config.stream.max_transcodes.max(1))),
+        ..SubsonicState::new(
+            services.db.clone(),
+            services.treasury.clone(),
+            services.secrets.clone(),
+        )
     });
 
     pixiu_web::router_builder(WebDeps {

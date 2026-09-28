@@ -14,6 +14,7 @@ const EXTENSIONS: &[(&str, &[u32])] = &[
     ("formPost", &[1]),
     ("apiKeyAuthentication", &[1]),
     ("songLyrics", &[1]),
+    ("transcodeOffset", &[1]),
 ];
 
 pub(crate) fn extensions() -> Payload {
@@ -56,7 +57,25 @@ pub(crate) fn user(user: &User, params: &Params) -> Result<Payload, Failure> {
     if username != user.username {
         return Err(ApiError::new(ErrorCode::NotAuthorized, "no such user").into());
     }
-    Ok(Element::new("user")
+    Ok(user_element(user).into())
+}
+
+/// `getUsers`: píxiū has one.
+pub(crate) fn users(user: &User) -> Payload {
+    Element::new("users")
+        .list("user", [user_element(user)])
+        .into()
+}
+
+/// `tokenInfo` (OpenSubsonic API keys): whose key it is.
+pub(crate) fn token_info(user: &User) -> Payload {
+    Element::new("tokenInfo")
+        .attr("username", user.username.as_str())
+        .into()
+}
+
+fn user_element(user: &User) -> Element {
+    Element::new("user")
         .attr("username", user.username.as_str())
         .attr("scrobblingEnabled", false)
         .attr("adminRole", true)
@@ -72,31 +91,19 @@ pub(crate) fn user(user: &User, params: &Params) -> Result<Payload, Failure> {
         .attr("shareRole", false)
         .attr("videoConversionRole", false)
         .values("folder", [MUSIC_FOLDER_ID])
-        .into())
 }
 
-/// Read endpoints of features píxiū does not have yet (stars, podcasts, top
-/// and similar songs, ...). Their lists are truthfully empty, and answering keeps
+/// Read endpoints of features píxiū does not have (podcasts, radio,
+/// bookmarks, shares). Their lists are truthfully empty, and answering keeps
 /// clients that load them on startup from showing errors.
 pub(crate) fn empty(method: &str) -> Option<Payload> {
     let (root, list) = match method {
-        "getStarred" => ("starred", "song"),
-        "getStarred2" => ("starred2", "song"),
-        "getNowPlaying" => ("nowPlaying", "entry"),
         "getInternetRadioStations" => ("internetRadioStations", "internetRadioStation"),
         "getPodcasts" => ("podcasts", "channel"),
         "getNewestPodcasts" => ("newestPodcasts", "episode"),
         "getBookmarks" => ("bookmarks", "bookmark"),
         "getShares" => ("shares", "share"),
-        // Popularity and similarity need data píxiū does not collect yet.
-        "getTopSongs" => ("topSongs", "song"),
-        "getSimilarSongs" => ("similarSongs", "song"),
-        "getSimilarSongs2" => ("similarSongs2", "song"),
         _ => return None,
     };
-    let mut element = Element::new(root).list(list, Vec::new());
-    if root.starts_with("starred") {
-        element = element.list("artist", Vec::new()).list("album", Vec::new());
-    }
-    Some(element.into())
+    Some(Element::new(root).list(list, Vec::new()).into())
 }

@@ -1,8 +1,9 @@
-//! Listening data: `scrobble`, and play counts on songs and albums.
+//! Listening data: plays (`scrobble`), stars and ratings, shown on songs,
+//! albums and artists.
 
 use std::collections::HashMap;
 
-use pixiu_db::{Annotation, Db, Track, now, toasty};
+use pixiu_db::{Annotation, Db, Track, User, now, toasty};
 
 use crate::{
     Failure, Params, SubsonicState,
@@ -57,17 +58,41 @@ pub(crate) async fn for_albums(
         .collect())
 }
 
-/// Adds `playCount` and `played` to a song or album element.
-pub(crate) fn with_plays(element: Element, annotation: Option<&Annotation>) -> Element {
-    match annotation {
-        Some(annotation) if annotation.play_count > 0 => {
-            element.attr("playCount", annotation.play_count).attr_opt(
-                "played",
-                annotation.last_played.map(|played| played.to_string()),
-            )
-        }
-        _ => element,
-    }
+/// Annotations of artists, by artist id.
+pub(crate) async fn for_artists(
+    db: &mut Db,
+    artist_ids: impl IntoIterator<Item = u64>,
+) -> Result<HashMap<u64, Annotation>, toasty::Error> {
+    let annotations = by_item(db, artist_ids.into_iter().map(ids::artist).collect()).await?;
+    Ok(annotations
+        .into_values()
+        .filter_map(|annotation| match Id::parse(&annotation.item) {
+            Some(Id::Artist(id)) => Some((id, annotation)),
+            _ => None,
+        })
+        .collect())
+}
+
+/// Adds the plays (`playCount`, `played`), star (`starred`) and rating
+/// (`userRating`) of a song, album or artist to its element.
+pub(crate) fn annotate(element: Element, annotation: Option<&Annotation>) -> Element {
+    let Some(annotation) = annotation else {
+        return element;
+    };
+    let element = if annotation.play_count > 0 {
+        element.attr("playCount", annotation.play_count).attr_opt(
+            "played",
+            annotation.last_played.map(|played| played.to_string()),
+        )
+    } else {
+        element
+    };
+    element
+        .attr_opt(
+            "starred",
+            annotation.starred_at.map(|starred| starred.to_string()),
+        )
+        .attr_opt("userRating", annotation.rating)
 }
 
 async fn record_play(db: &mut Db, item: String, at: jiff::Timestamp) -> Result<(), toasty::Error> {
@@ -94,9 +119,13 @@ async fn record_play(db: &mut Db, item: String, at: jiff::Timestamp) -> Result<(
     Ok(())
 }
 
-/// `scrobble`: counts plays of songs and their albums. "Now playing"
-/// notifications (`submission=false`) are accepted but not tracked yet.
-pub(crate) async fn scrobble(state: &SubsonicState, params: &Params) -> Result<Payload, Failure> {
+/// `scrobble`: counts plays of songs and their albums. With
+/// `submission=false` the client says what it is playing now instead.
+pub(crate) async fn scrobble(
+    state: &SubsonicState,
+    user: &User,
+    params: &Params,
+) -> Result<Payload, Failure> {
     let submission = params
         .get("submission")
         .is_none_or(|value| value != "false");
@@ -114,7 +143,16 @@ pub(crate) async fn scrobble(state: &SubsonicState, params: &Params) -> Result<P
     if track_ids.is_empty() {
         return Err(ApiError::missing_parameter("id").into());
     }
+    let mut db = state.db.clone();
     if !submission {
+        let playing = track_ids.last().copied().unwrap_or_default();
+        let Some(track) = Track::filter_by_id(playing).first().exec(&mut db).await? else {
+            return Err(crate::browse::not_found("song"));
+        };
+        let player = params.get("c").unwrap_or("unknown");
+        state
+            .now_playing
+            .announced(&user.username, player, (&track).into());
         return Ok(Payload::default());
     }
 
@@ -122,7 +160,6 @@ pub(crate) async fn scrobble(state: &SubsonicState, params: &Params) -> Result<P
         .get_all("time")
         .map(|time| time.parse().ok())
         .collect();
-    let mut db = state.db.clone();
     for (index, id) in track_ids.into_iter().enumerate() {
         let Some(track) = Track::filter_by_id(id).first().exec(&mut db).await? else {
             return Err(crate::browse::not_found("song"));

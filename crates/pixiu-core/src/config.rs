@@ -32,6 +32,7 @@ pub struct Config {
     pub browser: BrowserConfig,
     pub hunt: HuntConfig,
     pub enrich: EnrichConfig,
+    pub stream: StreamConfig,
     pub log: LogConfig,
 }
 
@@ -62,6 +63,36 @@ pub struct EnrichConfig {
     /// address or a URL), sent in the User-Agent as MusicBrainz and
     /// Wikimedia ask.
     pub contact: Option<String>,
+}
+
+/// Streaming to Subsonic clients.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct StreamConfig {
+    /// What to transcode to when a client wants a lower bitrate but names
+    /// no format, and the file's own format cannot be made.
+    pub format: TranscodeFormat,
+    /// Transcodes running at once, at most; more wait their turn.
+    pub max_transcodes: usize,
+}
+
+impl Default for StreamConfig {
+    fn default() -> Self {
+        Self {
+            format: TranscodeFormat::Mp3,
+            max_transcodes: 4,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TranscodeFormat {
+    /// Plays everywhere.
+    Mp3,
+    /// The best quality for its size, but not every player takes it.
+    Opus,
+    Aac,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -238,6 +269,17 @@ mod tests {
     }
 
     #[test]
+    fn the_example_file_is_valid() {
+        let example = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../pixiu.example.toml");
+        Jail::expect_with(|_| {
+            let config = Config::load_from(&example).unwrap();
+            assert_eq!(config.stream, StreamConfig::default());
+            assert_eq!(config.log.filter, "info");
+            Ok(())
+        });
+    }
+
+    #[test]
     fn env_overrides_file() {
         Jail::expect_with(|jail| {
             jail.create_file(
@@ -249,6 +291,9 @@ mod tests {
 
                 [paths]
                 treasure_dir = "/music"
+
+                [stream]
+                format = "opus"
                 "#,
             )?;
             jail.set_env("PIXIU_SERVER__PORT", "9100");
@@ -260,6 +305,8 @@ mod tests {
             assert_eq!(config.server.cookie_security, CookieSecurity::Never);
             assert_eq!(config.paths.treasure_dir, PathBuf::from("/music"));
             assert_eq!(config.paths.data_dir, PathBuf::from("data"));
+            assert_eq!(config.stream.format, TranscodeFormat::Opus);
+            assert_eq!(config.stream.max_transcodes, 4);
             Ok(())
         });
     }

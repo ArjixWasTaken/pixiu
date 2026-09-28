@@ -12,8 +12,8 @@ first) into a library it owns, and serves that hoard to any Subsonic client.
 
 > **Status: early development.** píxiū serves the music you upload, hunts
 > music on YouTube Music, keeps up with the playlists and artists you watch,
-> and tags it all with MusicBrainz and lyrics. Transcoding and ratings are
-> next.
+> tags it all with MusicBrainz and lyrics, and streams it in the format each
+> client wants.
 
 ## What works
 
@@ -56,17 +56,29 @@ first) into a library it owns, and serves that hoard to any Subsonic client.
   twice a day. If Google ends the session (a password change, "sign out
   everywhere"), every page says so until you log in again.
 - **Offerings.** Upload audio files or zip archives in the WebUI. píxiū reads
-  their tags, you review, and accepted files are filed into the treasure as
-  `Album Artist/Year - Album/Disc-Track Title.ext`, with the cover saved next to
-  them. Nothing is ever deleted behind your back.
+  their tags, you review, and accepted files are filed into the treasure,
+  with the cover saved next to them. Nothing is ever deleted behind your
+  back.
+- **Your file layout.** Tracks are filed as
+  `Album Artist/Year - Album/Disc-Track Title.ext` unless you set a template
+  of your own in Settings, e.g. `{genre}/{album_artist}/[{year} - ]{album}/{track:02} {title}`
+  (a part in brackets is left out when a value in it is missing). Existing
+  files move to a new layout when you ask.
+- **Streaming.** Files are served as they are, with seeking (HTTP ranges),
+  unless a client asks for another format (MP3, Opus or AAC), a lower
+  bitrate, or a later start: then píxiū transcodes on the fly with FFmpeg's
+  libraries, and clients seek with `timeOffset` (OpenSubsonic's
+  `transcodeOffset`).
 - **OpenSubsonic API** at `/rest`: browsing (artists, albums, songs, folders,
   genres), album lists, random songs, search (`search2`/`search3`, including
-  empty queries for clients that sync the whole library), streaming and
-  downloads with seeking (HTTP ranges), resized cover art, play counts
-  (`scrobble`), play queues that follow you across devices, playlists
-  (your own, plus the mirrors of watched playlists), lyrics (time-synced
-  through OpenSubsonic's `getLyricsBySongId`), and artist biographies and
-  pictures. Tested with Feishin and Airsonic Refix.
+  empty queries for clients that sync the whole library), downloads, resized
+  cover art, play counts (`scrobble`), what is playing now, stars and
+  ratings, play queues that follow you across devices, playlists (your own,
+  plus the mirrors of watched playlists), lyrics (time-synced through
+  `getLyricsBySongId`), artist biographies and pictures, and top and
+  similar songs worked out from your own library. Starring a song or an
+  album also keeps it from ever becoming an orphan. Tested with Feishin and
+  Airsonic Refix.
 - **Authentication**: your píxiū password (plain or token authentication), or
   OpenSubsonic API keys created in Settings. Browser-based clients may call the
   API from other origins (CORS).
@@ -81,7 +93,10 @@ docker compose up -d --build
 ```
 
 The image includes everything hunting needs: Chromium for the login browser,
-the FFmpeg libraries, and `yt-dlp` with Deno.
+the FFmpeg libraries, and `yt-dlp` with Deno. The compose file runs it
+hardened: a read-only root filesystem (only the volumes and two scratch
+`tmpfs` mounts are writable), no Linux capabilities, and no way to gain
+privileges.
 
 Open <http://localhost:4533> and claim the hoard: the first visitor creates the
 admin account. Then point your Subsonic client at `http://<host>:4533` with the
@@ -94,7 +109,7 @@ Requirements:
 - [rustup](https://rustup.rs/); the toolchain is pinned in `rust-toolchain.toml`.
 - FFmpeg's development libraries (any version from 3.0 to 9.0), `clang` and
   `pkg-config`. On Debian: `apt install libavcodec-dev libavformat-dev
-  libavutil-dev libclang-dev pkg-config`.
+  libavutil-dev libswresample-dev libclang-dev pkg-config`.
 - For hunting: Chromium (to log in to YouTube Music), and `yt-dlp` with
   [Deno](https://deno.com/) for the download fallback.
 - The Topcoat CLI, which bundles the WebUI's assets:
@@ -123,6 +138,8 @@ nesting (`PIXIU_SERVER__PORT=4533`). See [`pixiu.example.toml`](pixiu.example.to
 | `paths.treasure_dir` | `treasure` | The music library, owned by píxiū. |
 | `browser.executable` | from `PATH` | Chromium, for the login browser. |
 | `browser.no_sandbox` | `false` | Needed in most containers; the Docker image sets it. |
+| `stream.format` | `mp3` | What transcodes use when a client asks for a lower bitrate but names no format, and the file's own format cannot be made (FLAC, say): `mp3`, `opus` or `aac`. |
+| `stream.max_transcodes` | `4` | Transcodes running at once; more wait their turn. |
 | `enrich.contact` | unset | An email address or URL of yours, which MusicBrainz and Wikimedia ask for. It goes in the `User-Agent` of píxiū's lookups (MusicBrainz, the Cover Art Archive, LRCLIB and Wikipedia) and nowhere else. |
 | `hunt.botguard` | unset | [`rustypipe-botguard`](https://codeberg.org/ThetaDev/rustypipe-botguard), which answers YouTube's proof-of-origin challenges so more YouTube clients can be used for downloads. The Docker image ships it at `/usr/local/bin/rustypipe-botguard`. |
 
@@ -143,7 +160,7 @@ cargo clippy --workspace --all-targets
 | `pixiu-enrich` | MusicBrainz lookups and matching, the Cover Art Archive, LRCLIB and Wikipedia. |
 | `pixiu-hunt` | YouTube Music ([rustypipe](https://codeberg.org/ThetaDev/rustypipe)), downloads and tagging. |
 | `pixiu-jobs` | The job queue and the session warden. |
-| `pixiu-media` | Remuxing with FFmpeg's libraries. |
+| `pixiu-media` | Remuxing and transcoding with FFmpeg's libraries. |
 | `pixiu-subsonic` | The OpenSubsonic REST API (axum, mounted at `/rest`). |
 | `pixiu-treasury` | The library on disk: tags, layout, ingest, covers and offerings. |
 | `pixiu-web` | The WebUI, built with [Topcoat](https://github.com/tokio-rs/topcoat). |
