@@ -1,6 +1,5 @@
 <div align="center">
-  <img src="crates/pixiu-web/assets/emblem-512.webp" alt="píxiū emblem" width="200">
-  <h1>píxiū</h1>
+  <img src="crates/pixiu-web/assets/logo.png" alt="píxiū" width="320">
   <p><em>Gathers music from afar and never lets it go.</em></p>
 </div>
 
