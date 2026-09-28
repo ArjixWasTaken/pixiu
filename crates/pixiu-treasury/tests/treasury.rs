@@ -349,3 +349,122 @@ async fn downloads_dedupe_by_platform_ids() {
     let album = Album::get_by_id(&mut db, &first.album_id).await.unwrap();
     assert_eq!(album.ytm_browse_id.as_deref(), Some("MPREb_album"));
 }
+
+#[tokio::test]
+async fn orphans_are_kept_until_the_admin_deletes_them() {
+    let hoard = Hoard::new().await;
+    let mut db = hoard.db.clone();
+    let mut ids = Vec::new();
+    for name in ["01-first-light.flac", "02-second-wind.mp3"] {
+        let staged = hoard.stage(name);
+        let info = tags::read(&staged).unwrap();
+        let track = hoard
+            .treasury
+            .ingest(
+                &staged,
+                &info,
+                None,
+                Provenance::offering(),
+                Claim::offering(),
+            )
+            .await
+            .unwrap();
+        ids.push(track.id);
+    }
+    let (first, second) = (ids[0], ids[1]);
+    let first_path = hoard
+        .treasury
+        .resolve(&Track::get_by_id(&mut db, &first).await.unwrap().path);
+
+    // Claims are not doubled.
+    let watch = Claim {
+        kind: ClaimKind::WatchPlaylist,
+        reference: Some("7".into()),
+    };
+    hoard.treasury.claim(first, &watch).await.unwrap();
+    hoard.treasury.claim(first, &watch).await.unwrap();
+    assert_eq!(
+        TrackClaim::filter_by_track_id(first)
+            .exec(&mut db)
+            .await
+            .unwrap()
+            .len(),
+        2
+    );
+
+    // Letting go of every claim on the first track makes it an orphan.
+    for claim in TrackClaim::filter_by_track_id(first)
+        .exec(&mut db)
+        .await
+        .unwrap()
+    {
+        if claim.kind == ClaimKind::Offering {
+            claim.delete().exec(&mut db).await.unwrap();
+        }
+    }
+    let released = hoard
+        .treasury
+        .release(ClaimKind::WatchPlaylist, "7", |_| false)
+        .await
+        .unwrap();
+    assert_eq!(released, [first]);
+    let orphans: Vec<u64> = hoard
+        .treasury
+        .orphans()
+        .await
+        .unwrap()
+        .iter()
+        .map(|t| t.id)
+        .collect();
+    assert_eq!(orphans, [first]);
+
+    // Claimed tracks are never deleted, whatever is asked.
+    assert_eq!(
+        hoard
+            .treasury
+            .delete_orphans(&[first, second])
+            .await
+            .unwrap(),
+        1
+    );
+    assert!(!first_path.exists());
+    assert!(
+        Track::filter_by_id(first)
+            .first()
+            .exec(&mut db)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        Track::filter_by_id(second)
+            .first()
+            .exec(&mut db)
+            .await
+            .unwrap()
+            .is_some()
+    );
+    // The album still has a track, so it stays, cover and all.
+    let album = &Album::all().exec(&mut db).await.unwrap()[0];
+    let cover = hoard.treasury.resolve(album.cover.as_deref().unwrap());
+    assert!(cover.is_file());
+
+    // The last track takes its album, cover, artist and directories along.
+    for claim in TrackClaim::filter_by_track_id(second)
+        .exec(&mut db)
+        .await
+        .unwrap()
+    {
+        claim.delete().exec(&mut db).await.unwrap();
+    }
+    assert_eq!(hoard.treasury.delete_orphans(&[second]).await.unwrap(), 1);
+    assert!(Album::all().exec(&mut db).await.unwrap().is_empty());
+    assert!(Artist::all().exec(&mut db).await.unwrap().is_empty());
+    assert!(!cover.exists());
+    let treasure = hoard.dir.path().join("treasure");
+    assert!(
+        !treasure.join("Test Artist").exists(),
+        "empty directories remain"
+    );
+    assert!(hoard.treasury.orphans().await.unwrap().is_empty());
+}

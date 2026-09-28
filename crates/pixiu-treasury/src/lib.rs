@@ -5,6 +5,7 @@
 //! predictable [`layout`] and records it with a claim explaining why it is
 //! kept.
 
+mod claims;
 pub mod covers;
 mod ingest;
 pub mod layout;

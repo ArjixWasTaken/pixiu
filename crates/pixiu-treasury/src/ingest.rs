@@ -82,12 +82,13 @@ pub enum IngestError {
 /// The music library on disk and in the database.
 #[derive(Clone)]
 pub struct Treasury {
-    db: Db,
-    root: PathBuf,
-    cache_dir: PathBuf,
-    /// Ingests are serialized so concurrent ones cannot create the same
-    /// artist or album twice, or race for a file name.
-    lock: Arc<Mutex<()>>,
+    pub(crate) db: Db,
+    pub(crate) root: PathBuf,
+    pub(crate) cache_dir: PathBuf,
+    /// Changes to the library are serialized, so concurrent ones cannot
+    /// create the same artist or album twice, race for a file name, or
+    /// delete an album another is filing into.
+    pub(crate) lock: Arc<Mutex<()>>,
 }
 
 impl Treasury {

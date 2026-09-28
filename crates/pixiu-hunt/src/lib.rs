@@ -2,6 +2,7 @@
 //! hoard.
 
 mod download;
+pub mod link;
 pub mod model;
 mod tagging;
 pub mod ytmusic;
@@ -17,10 +18,10 @@ use pixiu_db::{Track, toasty};
 use pixiu_treasury::{Claim, Cover, IngestError, Provenance, Treasury, tags};
 
 pub use model::{
-    AlbumKind, AlbumRef, RemoteAlbum, RemoteArtist, RemoteTrack, SearchResults, SessionCheck,
-    image_url_at,
+    AlbumKind, AlbumRef, Discography, RemoteAlbum, RemoteArtist, RemotePlaylist, RemoteTrack,
+    SearchResults, SessionCheck, image_url_at,
 };
-pub use ytmusic::{AudioSource, YtMusic};
+pub use ytmusic::{AudioSource, LIKED_MUSIC, YtMusic};
 
 #[derive(Debug, thiserror::Error)]
 pub enum HuntError {
@@ -46,6 +47,18 @@ pub enum HuntError {
     Db(#[from] toasty::Error),
     #[error("background task failed: {0}")]
     Join(#[from] tokio::task::JoinError),
+}
+
+/// How often yt-dlp is tried again when YouTube refuses it.
+const YT_DLP_RETRIES: u32 = 2;
+
+impl HuntError {
+    /// Whether the platform wants a login for this, e.g. for liked music or
+    /// a private playlist.
+    #[must_use]
+    pub fn needs_login(&self) -> bool {
+        matches!(self, Self::YouTube(rustypipe::error::Error::Auth(_)))
+    }
 }
 
 impl From<reqwest::Error> for HuntError {
@@ -277,6 +290,29 @@ impl Hunter {
     }
 
     /// Downloads the audio into staging, falling back to `yt-dlp`.
+    /// Runs yt-dlp, again after a pause when YouTube refuses or fails it:
+    /// that often passes, e.g. once other downloads are done.
+    async fn yt_dlp(&self, request: &DownloadRequest) -> Result<PathBuf, HuntError> {
+        let video_id = request.video_id.as_str();
+        let mut attempt = 0;
+        loop {
+            let result =
+                download::yt_dlp(video_id, &self.staging, request.cookies.as_deref()).await;
+            match result {
+                Err(HuntError::YtDlp(reason))
+                    if attempt < YT_DLP_RETRIES
+                        && (reason.contains("HTTP Error 403")
+                            || reason.contains("HTTP Error 5")) =>
+                {
+                    attempt += 1;
+                    tracing::info!(video_id, %reason, attempt, "yt-dlp was refused; trying again");
+                    tokio::time::sleep(Duration::from_secs(5 * u64::from(attempt))).await;
+                }
+                result => return result,
+            }
+        }
+    }
+
     async fn fetch_audio(
         &self,
         request: &DownloadRequest,
@@ -304,8 +340,7 @@ impl Hunter {
             Ok(path) => Ok(path),
             Err(error) => {
                 tracing::warn!(%error, video_id, "direct download failed; trying yt-dlp");
-                let path =
-                    download::yt_dlp(video_id, &self.staging, request.cookies.as_deref()).await?;
+                let path = self.yt_dlp(request).await?;
                 progress(80);
                 Ok(path)
             }

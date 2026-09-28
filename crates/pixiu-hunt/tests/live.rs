@@ -77,3 +77,41 @@ async fn downloads_a_track_into_the_treasure() {
         pixiu_hunt::HuntError::AlreadyHoarded { .. }
     ));
 }
+
+#[tokio::test]
+#[ignore = "needs network access to YouTube Music"]
+async fn reads_playlists_and_discographies() {
+    let dir = tempfile::tempdir().unwrap();
+    let ytm = YtMusic::new(dir.path(), SecretBox::ephemeral(), botguard()).unwrap();
+
+    // An album's playlist: The August Album (Kevin MacLeod, CC BY).
+    let artist = ytm.search("Kevin MacLeod").await.unwrap().artists.remove(0);
+    let discography = ytm.discography(&artist.id).await.unwrap();
+    println!("{} releases", discography.albums.len());
+    assert_eq!(discography.name, "Kevin MacLeod");
+    assert!(discography.albums.len() > 10);
+    assert!(
+        discography
+            .albums
+            .iter()
+            .any(|album| album.kind == pixiu_hunt::AlbumKind::Single)
+    );
+
+    let album = discography
+        .albums
+        .iter()
+        .find(|album| album.title == "The August Album")
+        .expect("The August Album");
+    let listed = ytm.album(&album.id).await.unwrap();
+    assert_eq!(listed.tracks.len(), 4);
+
+    // Watching this public playlist needs no login; liked music does.
+    let playlist = ytm
+        .playlist("OLAK5uy_kJpzyLJxwhFJ8eZrw8XkMNoMl8BGr0tPs")
+        .await
+        .unwrap();
+    println!("{playlist:#?}");
+    assert_eq!(playlist.tracks.len(), 1);
+    let liked = ytm.playlist(pixiu_hunt::LIKED_MUSIC).await.unwrap_err();
+    assert!(liked.needs_login(), "{liked}");
+}

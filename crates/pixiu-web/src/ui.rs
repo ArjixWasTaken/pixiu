@@ -1,6 +1,7 @@
 //! Small shared components, fonts and brand assets.
 
-use pixiu_db::SessionState;
+use jiff::Timestamp;
+use pixiu_db::{SessionState, now};
 use topcoat::{
     Result,
     asset::{Asset, asset},
@@ -127,6 +128,30 @@ pub(crate) fn session_status(state: Option<SessionState>) -> (&'static str, &'st
     }
 }
 
+/// A moment relative to now: "5 minutes ago", "in 2 hours".
+pub(crate) fn relative(moment: Timestamp) -> String {
+    let seconds = moment.duration_since(now()).as_secs();
+    let (past, seconds) = (seconds < 0, seconds.unsigned_abs());
+    let amount = |count: u64, unit: &str| {
+        if count == 1 {
+            format!("1 {unit}")
+        } else {
+            format!("{count} {unit}s")
+        }
+    };
+    let text = match seconds {
+        0..60 => return if past { "just now" } else { "in a moment" }.to_owned(),
+        60..3600 => amount(seconds / 60, "minute"),
+        3600..86_400 => amount(seconds / 3600, "hour"),
+        _ => amount(seconds / 86_400, "day"),
+    };
+    if past {
+        format!("{text} ago")
+    } else {
+        format!("in {text}")
+    }
+}
+
 /// A human-readable size: `1.4 GB`.
 pub(crate) fn format_bytes(bytes: u64) -> String {
     const UNITS: [&str; 5] = ["B", "KB", "MB", "GB", "TB"];
@@ -165,5 +190,18 @@ mod tests {
         assert_eq!(format_bytes(1_450_000_000), "1.4 GB");
         assert_eq!(format_duration(61_000), "1:01");
         assert_eq!(format_duration(3_723_000), "1:02:03");
+    }
+
+    #[test]
+    fn moments_read_relative_to_now() {
+        let at = |seconds: i64| {
+            now()
+                .checked_add(jiff::SignedDuration::from_secs(seconds))
+                .unwrap()
+        };
+        assert_eq!(relative(at(-5)), "just now");
+        assert_eq!(relative(at(-61)), "1 minute ago");
+        assert_eq!(relative(at(-7_300)), "2 hours ago");
+        assert_eq!(relative(at(3 * 86_400 + 30)), "in 3 days");
     }
 }

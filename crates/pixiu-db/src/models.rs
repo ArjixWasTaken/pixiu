@@ -422,6 +422,8 @@ pub enum JobKind {
     DownloadTrack,
     /// Queue every track of an album.
     GrabAlbum,
+    /// Bring a watch up to date with the platform.
+    SyncWatch,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, toasty::Embed)]
@@ -467,4 +469,98 @@ pub struct Job {
     pub started_at: Option<Timestamp>,
 
     pub finished_at: Option<Timestamp>,
+}
+
+/// What a watch follows on YouTube Music.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, toasty::Embed)]
+pub enum WatchKind {
+    /// A playlist, mirrored as a Subsonic playlist.
+    Playlist,
+    /// The account's liked music (the `LM` playlist), mirrored like a
+    /// playlist. Needs a login.
+    LikedMusic,
+    /// An artist, whose releases are grabbed as they appear.
+    Artist,
+}
+
+/// Something on YouTube Music that píxiū keeps up with. Tracks it brings
+/// in are claimed by it; when they leave it, they are kept, and become
+/// orphans unless something else claims them.
+#[derive(Debug, toasty::Model)]
+pub struct Watch {
+    #[key]
+    #[auto]
+    pub id: u64,
+
+    pub kind: WatchKind,
+
+    /// The playlist or channel id; `LM` for liked music.
+    #[unique]
+    pub remote_id: String,
+
+    /// The name on the platform, filled in by the first sync.
+    pub name: String,
+
+    /// Artists: grab singles and EPs too, not only albums.
+    pub include_singles: bool,
+
+    /// Artists: skip the releases that were out when the watch was added.
+    pub only_new: bool,
+
+    /// Artists: releases already handled, by browse id.
+    pub seen: Vec<String>,
+
+    pub interval_secs: u64,
+
+    pub created_at: Timestamp,
+
+    pub last_synced_at: Option<Timestamp>,
+
+    pub next_sync_at: Timestamp,
+
+    pub last_error: Option<String>,
+}
+
+/// A playlist: made by the admin in a Subsonic client, or mirroring a
+/// watched playlist (read-only to clients).
+#[derive(Debug, toasty::Model)]
+pub struct Playlist {
+    #[key]
+    #[auto]
+    pub id: u64,
+
+    pub name: String,
+
+    pub comment: Option<String>,
+
+    pub public: bool,
+
+    /// The watch this playlist mirrors.
+    #[unique]
+    pub watch_id: Option<u64>,
+
+    pub created_at: Timestamp,
+
+    pub changed_at: Timestamp,
+}
+
+/// A place in a playlist.
+#[derive(Debug, toasty::Model)]
+pub struct PlaylistEntry {
+    #[key]
+    #[auto]
+    pub id: u64,
+
+    #[index]
+    pub playlist_id: u64,
+
+    /// Zero-based.
+    pub position: u32,
+
+    /// The track, in playlists made in píxiū.
+    #[index]
+    pub track_id: Option<u64>,
+
+    /// The YouTube Music video, in mirrors. It shows once it is downloaded.
+    pub ytm_video_id: Option<String>,
 }

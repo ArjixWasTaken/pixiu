@@ -10,6 +10,7 @@ use pixiu_hunt::{Hunter, YtMusic};
 use pixiu_jobs::{
     Jobs, Warden,
     adapters::{BrowserRefresher, HuntExecutor, YtMusicPlatform},
+    watch,
 };
 use pixiu_subsonic::SubsonicState;
 use pixiu_treasury::{Offerings, Treasury};
@@ -94,11 +95,14 @@ impl Services {
         })
     }
 
-    /// Starts the background workers: the session warden and the job
-    /// queue, which resumes unfinished jobs.
+    /// Starts the background workers: the session warden, the job queue
+    /// (which resumes unfinished jobs), the watch scheduler, and resuming
+    /// paused jobs whenever the login works again.
     pub fn start(&self) {
         self.warden.start();
         self.jobs.start();
+        watch::schedule(self.db.clone(), Arc::clone(&self.jobs));
+        watch::resume_on_login(&self.warden, Arc::clone(&self.jobs));
     }
 }
 

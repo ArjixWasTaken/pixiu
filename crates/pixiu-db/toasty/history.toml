@@ -14,3 +14,8 @@ snapshot_name = "0001_snapshot.toml"
 id = 2375946953026126538
 name = "0002_hunting.sql"
 snapshot_name = "0002_snapshot.toml"
+
+[[migrations]]
+id = 3463937302698094513
+name = "0003_watches.sql"
+snapshot_name = "0003_snapshot.toml"

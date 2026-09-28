@@ -140,14 +140,16 @@ async fn jobs_run_expand_fail_and_retry() {
 async fn interrupted_jobs_run_again_after_a_restart() {
     let dir = tempfile::tempdir().unwrap();
     let mut db = pixiu_db::open(&dir.path().join("pixiu.db")).await.unwrap();
-    // A job that was running when píxiū stopped.
+    // A job that was running when píxiū stopped, saved before payloads
+    // said who wanted them.
+    let payload = r#"{"video_id":"ok","reference":null}"#;
+    assert_eq!(
+        serde_json::from_str::<TrackJob>(payload).unwrap().wanted,
+        pixiu_jobs::Wanted::Grab
+    );
     toasty::create!(Job {
         kind: JobKind::DownloadTrack,
-        payload: serde_json::to_string(&TrackJob {
-            video_id: "ok".into(),
-            reference: None,
-        })
-        .unwrap(),
+        payload,
         title: "Interrupted",
         state: JobState::Running,
         progress: 40_u8,

@@ -17,10 +17,13 @@ use rustypipe::{
 use crate::{
     HuntError,
     model::{
-        AlbumKind, AlbumRef, RemoteAlbum, RemoteArtist, RemoteTrack, SearchResults, SessionCheck,
-        best_image_url,
+        AlbumKind, AlbumRef, Discography, RemoteAlbum, RemoteArtist, RemotePlaylist, RemoteTrack,
+        SearchResults, SessionCheck, best_image_url,
     },
 };
+
+/// The playlist id of an account's liked music.
+pub const LIKED_MUSIC: &str = "LM";
 
 /// Where a track's audio can be downloaded from.
 #[derive(Debug, Clone)]
@@ -170,6 +173,43 @@ impl YtMusic {
     /// reached.
     pub async fn album(&self, browse_id: &str) -> Result<RemoteAlbum, HuntError> {
         Ok(album(self.rp.query().music_album(browse_id).await?))
+    }
+
+    /// A playlist with all its tracks; [`LIKED_MUSIC`] is the account's
+    /// liked music.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the playlist does not exist, needs a login (see
+    /// [`HuntError::needs_login`]), or YouTube Music cannot be reached.
+    pub async fn playlist(&self, id: &str) -> Result<RemotePlaylist, HuntError> {
+        let query = self.rp.query();
+        let mut playlist = if id == LIKED_MUSIC {
+            query.music_liked_tracks().await?
+        } else {
+            query.music_playlist(id).await?
+        };
+        playlist.tracks.extend_all(&query).await?;
+        Ok(RemotePlaylist {
+            id: playlist.id,
+            name: playlist.name,
+            tracks: playlist.tracks.items.into_iter().map(track).collect(),
+        })
+    }
+
+    /// An artist's releases: albums, EPs and singles.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the artist does not exist or YouTube Music cannot be
+    /// reached.
+    pub async fn discography(&self, channel_id: &str) -> Result<Discography, HuntError> {
+        let artist = self.rp.query().music_artist(channel_id, true).await?;
+        Ok(Discography {
+            id: artist.id,
+            name: artist.name,
+            albums: artist.albums.into_iter().map(album_item).collect(),
+        })
     }
 
     /// A track's metadata.

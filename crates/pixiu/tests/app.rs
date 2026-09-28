@@ -9,7 +9,10 @@ use std::{
 use futures_util::{SinkExt, StreamExt};
 use md5::Digest;
 use pixiu_core::{Config, SecretBox};
-use pixiu_db::{Db, SessionState, SourceSession, now, toasty};
+use pixiu_db::{
+    Album, Artist, ClaimKind, Db, SessionState, SourceSession, Track, TrackClaim, TrackOrigin, now,
+    toasty,
+};
 use reqwest::{StatusCode, header};
 use tokio::{net::TcpListener, sync::oneshot};
 use topcoat::{
@@ -434,6 +437,172 @@ async fn hunting_queues_jobs() {
     );
     let jobs = server.get("/jobs").await.text().await.unwrap();
     assert!(jobs.contains("Some Album"));
+}
+
+#[tokio::test]
+async fn watches_are_added_synced_and_removed() {
+    let server = TestServer::start().await;
+    assert_eq!(location(&server.get("/watches").await), "/login");
+    server.claim().await;
+    let page = || async { server.get("/watches").await.text().await.unwrap() };
+    assert!(page().await.contains("Nothing watched yet"));
+
+    let add = async |target: &str| {
+        server
+            .post_form("/watches/add", &[("target", target), ("only_new", "on")])
+            .await
+    };
+    let added = add("https://music.youtube.com/playlist?list=PLpixiuTest").await;
+    assert_eq!(location(&added), "/watches?added=1");
+    let watches = page().await;
+    assert!(watches.contains("PLpixiuTest"), "{watches}");
+    assert!(watches.contains("Not synced yet"));
+    // Its first sync waits in the queue (the workers are off in tests).
+    let jobs = server.get("/jobs").await.text().await.unwrap();
+    assert!(jobs.contains("Sync PLpixiuTest"), "{jobs}");
+
+    for (target, complaint) in [
+        (
+            "https://music.youtube.com/playlist?list=PLpixiuTest",
+            "already watches",
+        ),
+        (
+            "https://music.youtube.com/browse/MPREb_jwN9EIjDfPS",
+            "Hunt page",
+        ),
+        ("https://example.com/nope", "does not look like"),
+    ] {
+        let refused = add(target).await;
+        assert!(
+            location(&refused).starts_with("/watches?error="),
+            "{target}"
+        );
+        let message = server.get(location(&refused)).await.text().await.unwrap();
+        assert!(message.contains(complaint), "{target}: {message}");
+    }
+
+    // Liked music waits for a login.
+    assert_eq!(
+        location(&server.post_form("/watches/liked", &[]).await),
+        "/watches?added=1"
+    );
+    let watches = page().await;
+    assert!(watches.contains("Liked music"));
+    assert!(watches.contains("Waiting for a YouTube Music login"));
+    assert!(!watches.contains("Watch liked music"));
+
+    // Syncing again does not queue a second sync.
+    let id: String = watches
+        .split("action=\"/watches/")
+        .skip(1)
+        .map(|rest| {
+            rest.chars()
+                .take_while(char::is_ascii_digit)
+                .collect::<String>()
+        })
+        .find(|id| !id.is_empty())
+        .expect("a watch's form");
+    let synced = server.post_form(&format!("/watches/{id}/sync"), &[]).await;
+    assert_eq!(location(&synced), "/jobs");
+    let jobs = server.get("/jobs").await.text().await.unwrap();
+    assert_eq!(jobs.matches("Sync PLpixiuTest").count(), 1);
+
+    let removed = server
+        .post_form(&format!("/watches/{id}/remove"), &[])
+        .await;
+    assert_eq!(location(&removed), "/watches?removed=1");
+    assert!(!page().await.contains("PLpixiuTest"));
+    let jobs = server.get("/jobs").await.text().await.unwrap();
+    assert!(!jobs.contains("Sync PLpixiuTest"), "its sync is forgotten");
+}
+
+#[tokio::test]
+async fn orphans_are_listed_kept_and_deleted() {
+    let server = TestServer::start_with(async |db| {
+        let artist = toasty::create!(Artist {
+            name: "Somebody",
+            name_key: "somebody",
+            created_at: now(),
+        })
+        .exec(db)
+        .await
+        .unwrap();
+        let album = toasty::create!(Album {
+            title: "Leftovers",
+            title_key: "leftovers",
+            artist_id: artist.id,
+            created_at: now(),
+        })
+        .exec(db)
+        .await
+        .unwrap();
+        for title in ["Stray One", "Stray Two", "Wanted"] {
+            let track = toasty::create!(Track {
+                album_id: album.id,
+                artist_id: artist.id,
+                title,
+                artist_credit: "Somebody",
+                duration_ms: 1_000_u64,
+                path: format!("Somebody/Leftovers/{title}.opus"),
+                size: 1_u64,
+                suffix: "opus",
+                content_type: "audio/ogg",
+                origin: TrackOrigin::Download,
+                added_at: now(),
+            })
+            .exec(db)
+            .await
+            .unwrap();
+            if title == "Wanted" {
+                toasty::create!(TrackClaim {
+                    track_id: track.id,
+                    kind: ClaimKind::ManualGrab,
+                    created_at: now(),
+                })
+                .exec(db)
+                .await
+                .unwrap();
+            }
+        }
+    })
+    .await;
+    server.claim().await;
+
+    let page = server.get("/orphans").await.text().await.unwrap();
+    assert!(page.contains("Stray One") && page.contains("Stray Two"));
+    assert!(!page.contains(">Wanted<"), "claimed tracks are not orphans");
+    // The nav counts them.
+    let home = server.get("/").await.text().await.unwrap();
+    assert!(home.contains(">2</span>"), "{home}");
+    let id_of = |page: &str, title: &str| {
+        let row = page.find(&format!("Select {title}")).unwrap();
+        let value = page[row..].find("value=\"").unwrap() + row + "value=\"".len();
+        page[value..]
+            .chars()
+            .take_while(char::is_ascii_digit)
+            .collect::<String>()
+    };
+    let (one, two) = (id_of(&page, "Stray One"), id_of(&page, "Stray Two"));
+
+    // Keeping one gives it a claim.
+    let kept = server
+        .post_form("/orphans/keep", &[("track", one.as_str())])
+        .await;
+    assert_eq!(location(&kept), "/orphans?kept=1");
+    let page = server.get("/orphans").await.text().await.unwrap();
+    assert!(!page.contains("Stray One"));
+
+    // Deleting asks for orphans only: the kept track is refused.
+    let deleted = server
+        .post_form(
+            "/orphans/delete",
+            &[("track", two.as_str()), ("track", one.as_str())],
+        )
+        .await;
+    assert_eq!(location(&deleted), "/orphans?deleted=1");
+    let page = server.get(location(&deleted)).await.text().await.unwrap();
+    assert!(page.contains("No orphans"), "{page}");
+    assert!(page.contains("Deleted 1 track."));
 }
 
 #[tokio::test]

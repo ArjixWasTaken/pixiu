@@ -3,6 +3,7 @@
 pub mod adapters;
 pub mod queue;
 pub mod warden;
+pub mod watch;
 
-pub use queue::{Executor, JobUpdate, Jobs, NewJob, Outcome};
+pub use queue::{Executor, JobUpdate, Jobs, NewJob, Outcome, Wanted};
 pub use warden::{Health, Warden};

@@ -10,8 +10,9 @@ with music. It is an [OpenSubsonic](https://opensubsonic.netlify.app/) server
 that also hunts: it downloads music from streaming platforms (YouTube Music
 first) into a library it owns, and serves that hoard to any Subsonic client.
 
-> **Status: early development.** píxiū serves the music you upload and hunts
-> music on YouTube Music. Watching playlists, liked music and artists is next.
+> **Status: early development.** píxiū serves the music you upload, hunts
+> music on YouTube Music, and keeps up with the playlists and artists you
+> watch. MusicBrainz tagging and lyrics are next.
 
 ## What works
 
@@ -20,6 +21,17 @@ first) into a library it owns, and serves that hoard to any Subsonic client.
   live): the Opus audio stream is remuxed losslessly into `.opus`, tagged, and
   filed into the treasure with its cover. When YouTube refuses a direct
   download, píxiū falls back to `yt-dlp`.
+- **Watches.** Paste a YouTube Music playlist or artist link, or watch your
+  liked music. Watched playlists are mirrored as (read-only) Subsonic
+  playlists and their songs are downloaded as they appear; artists bring in
+  their new releases (optionally singles and EPs, or their whole
+  discography). Syncing is one-way and runs on a schedule, or on demand.
+  Liked music needs a login; while the session is expired its syncs wait,
+  and resume by themselves once you log in again.
+- **Orphans.** Every track records why it is kept (an offering, a grab, a
+  watch, a playlist). When a song leaves a watched playlist, or you stop
+  watching something, its files stay; tracks nothing keeps any more are
+  listed as orphans, for you to delete (one by one or all at once) or keep.
 - **YouTube Music login.** Log in through a real browser that runs on the
   server and appears in the WebUI, so two-factor prompts work as usual. In
   browsers with the experimental
@@ -38,8 +50,9 @@ first) into a library it owns, and serves that hoard to any Subsonic client.
   genres), album lists, random songs, search (`search2`/`search3`, including
   empty queries for clients that sync the whole library), streaming and
   downloads with seeking (HTTP ranges), resized cover art, play counts
-  (`scrobble`), and play queues that follow you across devices. Tested with
-  Feishin and Airsonic Refix.
+  (`scrobble`), play queues that follow you across devices, and playlists
+  (your own, plus the mirrors of watched playlists). Tested with Feishin and
+  Airsonic Refix.
 - **Authentication**: your píxiū password (plain or token authentication), or
   OpenSubsonic API keys created in Settings. Browser-based clients may call the
   API from other origins (CORS).

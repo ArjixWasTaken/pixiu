@@ -4,7 +4,9 @@ mod covers;
 mod hunt;
 mod jobs;
 mod offerings;
+mod orphans;
 mod settings;
+mod watches;
 
 use std::collections::HashMap;
 
@@ -24,7 +26,7 @@ use topcoat::{
 };
 
 use crate::{
-    auth::{db, require_user, warden},
+    auth::{db, require_user, treasury, warden},
     ui::{
         BUTTON_GHOST, BUTTON_PRIMARY, BUTTON_SECONDARY, LOGO, LOGO_SMALL, card, format_bytes,
         session_status,
@@ -34,8 +36,10 @@ use crate::{
 const NAV: &[(&str, &str)] = &[
     ("/", "Hoard"),
     ("/hunt", "Hunt"),
+    ("/watches", "Watches"),
     ("/jobs", "Jobs"),
     ("/offerings", "Offerings"),
+    ("/orphans", "Orphans"),
     ("/settings", "Settings"),
 ];
 
@@ -53,6 +57,13 @@ async fn shell(cx: &Cx, slot: Slot<'_>) -> Result<impl View> {
     let user = require_user(cx).await?;
     let current = uri(cx).path();
     let pending = Offering::all().exec(&mut db(cx)).await?.len();
+    let orphans = treasury(cx).orphan_count().await?;
+    // Counts worth a badge, by nav entry.
+    let badge = move |path: &str| match path {
+        "/offerings" => pending,
+        "/orphans" => orphans,
+        _ => 0,
+    };
 
     Ok(view! {
         <div class="flex min-h-screen">
@@ -80,12 +91,12 @@ async fn shell(cx: &Cx, slot: Slot<'_>) -> Result<impl View> {
                             ))
                         >
                             (*label)
-                            if *path == "/offerings" && pending > 0 {
+                            if badge(path) > 0 {
                                 <span
                                     class="rounded-full bg-gold px-2 text-xs font-semibold \
                                            text-gold-foreground"
                                 >
-                                    (pending)
+                                    (badge(path))
                                 </span>
                             }
                         </a>

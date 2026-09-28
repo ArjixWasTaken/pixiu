@@ -71,14 +71,13 @@ pub(crate) fn user(user: &User, params: &Params) -> Result<Payload, Failure> {
         .into())
 }
 
-/// Read endpoints of features píxiū does not have yet (playlists, stars,
-/// podcasts, top and similar songs, ...). Their lists are truthfully empty, and answering keeps
+/// Read endpoints of features píxiū does not have yet (stars, podcasts, top
+/// and similar songs, ...). Their lists are truthfully empty, and answering keeps
 /// clients that load them on startup from showing errors.
 pub(crate) fn empty(method: &str) -> Option<Payload> {
     let (root, list) = match method {
         "getStarred" => ("starred", "song"),
         "getStarred2" => ("starred2", "song"),
-        "getPlaylists" => ("playlists", "playlist"),
         "getNowPlaying" => ("nowPlaying", "entry"),
         "getInternetRadioStations" => ("internetRadioStations", "internetRadioStation"),
         "getPodcasts" => ("podcasts", "channel"),

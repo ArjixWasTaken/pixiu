@@ -12,6 +12,7 @@ pub mod ids;
 mod lists;
 mod media;
 mod params;
+mod playlists;
 mod queue;
 pub mod response;
 mod search;
@@ -171,6 +172,11 @@ async fn dispatch(
         "download" => Reply::Raw(media::stream(state, params, method, headers, true).await?),
         "getCoverArt" => Reply::Raw(media::cover_art(state, params, method, headers).await?),
         "getPlayQueue" => queue::get(state, &user).await?.into(),
+        "getPlaylists" => playlists::list(state, &user).await?.into(),
+        "getPlaylist" => playlists::get(state, &user, params).await?.into(),
+        "createPlaylist" => playlists::create(state, &user, params).await?.into(),
+        "updatePlaylist" => playlists::update(state, params).await?.into(),
+        "deletePlaylist" => playlists::delete(state, params).await?.into(),
         "scrobble" => annotations::scrobble(state, params).await?.into(),
         "savePlayQueue" => queue::save(state, &user, params).await?.into(),
         other => system::empty(other).ok_or(Failure::UnknownMethod)?.into(),

@@ -64,6 +64,22 @@ pub struct RemoteArtist {
     pub image_url: Option<String>,
 }
 
+/// A playlist on a platform, with all its tracks in order.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemotePlaylist {
+    pub id: String,
+    pub name: String,
+    pub tracks: Vec<RemoteTrack>,
+}
+
+/// An artist and their releases, newest first.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Discography {
+    pub id: String,
+    pub name: String,
+    pub albums: Vec<RemoteAlbum>,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SearchResults {
     pub tracks: Vec<RemoteTrack>,

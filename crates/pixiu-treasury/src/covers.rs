@@ -23,7 +23,7 @@ pub async fn sized(original: &Path, cache_dir: &Path, size: Option<u32>) -> io::
     let Some(size) = size.filter(|size| (1..MAX_SIZE).contains(size)) else {
         return Ok(original.to_owned());
     };
-    let key = hex::encode(&Sha256::digest(original.as_os_str().as_encoded_bytes())[..8]);
+    let key = cache_key(original);
     let cached = cache_dir.join("covers").join(format!("{key}-{size}.jpg"));
 
     if is_fresh(&cached, original).await {
@@ -32,6 +32,30 @@ pub async fn sized(original: &Path, cache_dir: &Path, size: Option<u32>) -> io::
 
     let original = original.to_owned();
     tokio::task::spawn_blocking(move || resize(&original, &cached, size)).await?
+}
+
+/// Removes the resized copies of `original` from the cache.
+///
+/// # Errors
+///
+/// Fails when the cache cannot be read or a copy cannot be removed.
+pub async fn forget(original: &Path, cache_dir: &Path) -> io::Result<()> {
+    let prefix = format!("{}-", cache_key(original));
+    let mut entries = match tokio::fs::read_dir(cache_dir.join("covers")).await {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(error),
+    };
+    while let Some(entry) = entries.next_entry().await? {
+        if entry.file_name().to_string_lossy().starts_with(&prefix) {
+            tokio::fs::remove_file(entry.path()).await?;
+        }
+    }
+    Ok(())
+}
+
+fn cache_key(original: &Path) -> String {
+    hex::encode(&Sha256::digest(original.as_os_str().as_encoded_bytes())[..8])
 }
 
 async fn is_fresh(cached: &Path, original: &Path) -> bool {

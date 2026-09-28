@@ -9,7 +9,9 @@ use axum::{
 };
 use md5::{Digest, Md5};
 use pixiu_core::SecretBox;
-use pixiu_db::{ApiKey, Db, User, now, toasty};
+use pixiu_db::{
+    ApiKey, ClaimKind, Db, Playlist, PlaylistEntry, Track, TrackClaim, User, now, toasty,
+};
 use pixiu_subsonic::SubsonicState;
 use pixiu_treasury::{Claim, Provenance, Treasury, tags};
 use serde_json::Value;
@@ -522,8 +524,6 @@ async fn browsers_may_call_the_api_cross_origin() {
 async fn features_to_come_answer_with_empty_lists() {
     let api = Api::new().await;
 
-    let json = api.call("getPlaylists", "").await.ok();
-    assert_eq!(json["playlists"]["playlist"], serde_json::json!([]));
     let json = api.call("getStarred2", "").await.ok();
     assert_eq!(json["starred2"]["song"], serde_json::json!([]));
     assert_eq!(json["starred2"]["album"], serde_json::json!([]));
@@ -616,4 +616,168 @@ async fn scrobbles_count_plays() {
 
     assert_eq!(api.call("scrobble", "").await.error_code(), 10);
     assert_eq!(api.call("scrobble", "id=al-1").await.error_code(), 70);
+}
+
+/// Tracks that hold a claim of `kind`.
+async fn claimed(db: &mut Db, kind: ClaimKind) -> Vec<u64> {
+    let mut ids: Vec<u64> = TrackClaim::all()
+        .exec(db)
+        .await
+        .unwrap()
+        .into_iter()
+        .filter(|claim| claim.kind == kind)
+        .map(|claim| claim.track_id)
+        .collect();
+    ids.sort_unstable();
+    ids
+}
+
+#[tokio::test]
+async fn playlists_are_made_changed_and_mirrored() {
+    let api = Api::new().await;
+    let mut db = api.db.clone();
+    let json = api.call("getPlaylists", "").await.ok();
+    assert_eq!(json["playlists"]["playlist"], serde_json::json!([]));
+
+    let album = api.album_id("Test Album").await;
+    let json = api.call("getAlbum", &format!("id={album}")).await.ok();
+    let songs = names(&json["album"]["song"], "id");
+    let (first, second) = (&songs[0], &songs[1]);
+
+    // Made in a client, it keeps its songs in order and claims them.
+    let json = api
+        .call(
+            "createPlaylist",
+            &format!("name=Evening&songId={second}&songId={first}"),
+        )
+        .await
+        .ok();
+    let made = &json["playlist"];
+    assert_eq!(made["name"], "Evening");
+    assert_eq!(made["owner"], "keeper");
+    assert_eq!(made["readonly"], false);
+    assert_eq!(names(&made["entry"], "id"), [second.clone(), first.clone()]);
+    let id = made["id"].as_str().unwrap().to_owned();
+    assert!(id.starts_with("pl-"));
+    assert_eq!(claimed(&mut db, ClaimKind::LocalPlaylist).await.len(), 2);
+
+    let json = api.call("getPlaylists", "").await.ok();
+    let listed = &json["playlists"]["playlist"][0];
+    assert_eq!(listed["songCount"], 2);
+    assert!(listed["duration"].as_u64().unwrap() >= 2);
+    assert!(listed.get("entry").is_none());
+    let cover = api
+        .call(
+            "getCoverArt",
+            &format!("id={}", listed["coverArt"].as_str().unwrap()),
+        )
+        .await;
+    assert_eq!(cover.status, StatusCode::OK);
+    assert_eq!(
+        api.call("getCoverArt", &format!("id={id}")).await.status,
+        StatusCode::OK
+    );
+
+    // Changed: renamed, one song out, another in.
+    let untagged = api.call("search3", "query=Untitled").await.ok();
+    let third = untagged["searchResult3"]["song"][0]["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    api.call(
+        "updatePlaylist",
+        &format!("playlistId={id}&name=Night&songIndexToRemove=0&songIdToAdd={third}"),
+    )
+    .await
+    .ok();
+    let json = api.call("getPlaylist", &format!("id={id}")).await.ok();
+    assert_eq!(json["playlist"]["name"], "Night");
+    assert_eq!(
+        names(&json["playlist"]["entry"], "id"),
+        [first.clone(), third.clone()]
+    );
+    assert_eq!(claimed(&mut db, ClaimKind::LocalPlaylist).await.len(), 2);
+
+    // `createPlaylist` with an id replaces the songs.
+    let json = api
+        .call(
+            "createPlaylist",
+            &format!("playlistId={id}&songId={second}&songId={second}"),
+        )
+        .await
+        .ok();
+    assert_eq!(
+        names(&json["playlist"]["entry"], "id"),
+        [second.clone(), second.clone()]
+    );
+    assert_eq!(claimed(&mut db, ClaimKind::LocalPlaylist).await.len(), 1);
+    assert_eq!(
+        api.call("createPlaylist", "name=Bad&songId=tr-999")
+            .await
+            .error_code(),
+        70
+    );
+
+    // Deleting it lets go of its songs.
+    api.call("deletePlaylist", &format!("id={id}")).await.ok();
+    assert_eq!(
+        api.call("getPlaylist", &format!("id={id}"))
+            .await
+            .error_code(),
+        70
+    );
+    assert!(claimed(&mut db, ClaimKind::LocalPlaylist).await.is_empty());
+
+    // A mirror of a watched playlist lists what is downloaded, read-only.
+    let mut track = Track::all().exec(&mut db).await.unwrap().remove(0);
+    let track_id = track.id;
+    toasty::update!(track {
+        ytm_video_id: Some("vid-here".to_owned())
+    })
+    .exec(&mut db)
+    .await
+    .unwrap();
+    let mirror = toasty::create!(Playlist {
+        name: "Liked music",
+        public: false,
+        watch_id: Some(1_u64),
+        created_at: now(),
+        changed_at: now(),
+    })
+    .exec(&mut db)
+    .await
+    .unwrap();
+    for (position, video) in ["vid-coming", "vid-here"].into_iter().enumerate() {
+        toasty::create!(PlaylistEntry {
+            playlist_id: mirror.id,
+            position: position as u32,
+            ytm_video_id: Some(video.to_owned()),
+        })
+        .exec(&mut db)
+        .await
+        .unwrap();
+    }
+    let mirror_id = format!("pl-{}", mirror.id);
+    let json = api
+        .call("getPlaylist", &format!("id={mirror_id}"))
+        .await
+        .ok();
+    assert_eq!(json["playlist"]["readonly"], true);
+    assert_eq!(
+        names(&json["playlist"]["entry"], "id"),
+        [format!("tr-{track_id}")]
+    );
+    for (method, query) in [
+        (
+            "updatePlaylist",
+            format!("playlistId={mirror_id}&name=Mine"),
+        ),
+        ("deletePlaylist", format!("id={mirror_id}")),
+        (
+            "createPlaylist",
+            format!("playlistId={mirror_id}&songId={first}"),
+        ),
+    ] {
+        assert_eq!(api.call(method, &query).await.error_code(), 50, "{method}");
+    }
 }

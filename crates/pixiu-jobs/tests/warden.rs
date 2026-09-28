@@ -233,3 +233,60 @@ async fn scheduled_refreshes_that_fail_only_degrade() {
     assert_eq!(health.state, Some(SessionState::Degraded));
     assert_eq!(warden.cookies().await.as_deref(), Some("SID=1"));
 }
+
+/// Pauses a job the first time it runs, then finishes it.
+#[derive(Default)]
+struct PausesOnce(Mutex<bool>);
+
+impl pixiu_jobs::Executor for PausesOnce {
+    fn run<'a>(
+        &'a self,
+        _job: &'a pixiu_db::Job,
+        _progress: &'a (dyn Fn(u8) + Send + Sync),
+    ) -> BoxFuture<'a, pixiu_jobs::Outcome> {
+        Box::pin(async move {
+            let mut paused = self.0.lock().unwrap();
+            if *paused {
+                pixiu_jobs::Outcome::Done { track_id: None }
+            } else {
+                *paused = true;
+                pixiu_jobs::Outcome::Paused("waiting for a login".to_owned())
+            }
+        })
+    }
+}
+
+#[tokio::test]
+async fn logging_in_resumes_paused_jobs() {
+    use pixiu_db::JobState;
+    use pixiu_jobs::{Jobs, NewJob, watch};
+
+    let setup = Setup::new().await;
+    let warden = setup.warden().await;
+    let jobs = Jobs::new(setup.db.clone(), Box::new(PausesOnce::default()));
+    jobs.start();
+    watch::resume_on_login(&warden, Arc::clone(&jobs));
+
+    let job = jobs
+        .enqueue(NewJob::sync(1, "Sync liked music"))
+        .await
+        .unwrap();
+    let reaches = async |state: JobState| {
+        for _ in 0..200 {
+            let recent = jobs.recent(10).await.unwrap();
+            if recent
+                .iter()
+                .any(|found| found.id == job.id && found.state == state)
+            {
+                return;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+        }
+        panic!("the job never reached {state:?}");
+    };
+    reaches(JobState::Paused).await;
+
+    setup.script.apply_answers([SessionCheck::Valid]);
+    warden.connect("SID=abc".to_owned()).await.unwrap();
+    reaches(JobState::Done).await;
+}

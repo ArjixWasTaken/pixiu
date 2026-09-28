@@ -83,3 +83,55 @@ async fn migrations_match_models() {
          `cargo run -p pixiu-db --features cli -- migration generate --name <change>`"
     );
 }
+
+/// Rebuilding a table (SQLite's way to change a CHECK constraint) drops its
+/// indexes, and Toasty's generator does not always recreate them. Every
+/// index the migrations create, and do not drop on purpose, must exist.
+#[tokio::test]
+async fn migrations_keep_their_indexes() {
+    let migrations = Path::new(env!("CARGO_MANIFEST_DIR")).join("toasty/migrations");
+    let mut files: Vec<_> = std::fs::read_dir(&migrations)
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .filter(|path| path.extension().is_some_and(|extension| extension == "sql"))
+        .collect();
+    files.sort();
+    let mut expected = std::collections::BTreeSet::new();
+    for file in files {
+        for line in std::fs::read_to_string(file).unwrap().lines() {
+            let name = |statement: &str| {
+                line.split('"')
+                    .nth(1)
+                    .filter(|_| line.starts_with(statement))
+            };
+            if let Some(index) = name("CREATE INDEX").or_else(|| name("CREATE UNIQUE INDEX")) {
+                expected.insert(index.to_owned());
+            } else if let Some(index) = name("DROP INDEX") {
+                expected.remove(index);
+            }
+        }
+    }
+    assert!(expected.contains("index_jobs_by_state"), "{expected:?}");
+
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = pixiu_db::open(&dir.path().join("pixiu.db")).await.unwrap();
+    let rows = toasty::sql::query("SELECT name FROM sqlite_master WHERE type = 'index'")
+        .exec(&mut db)
+        .await
+        .unwrap();
+    let present: std::collections::BTreeSet<String> = rows
+        .into_iter()
+        .filter_map(|row| match row {
+            toasty::stmt::Value::Record(record) => match &record[0] {
+                toasty::stmt::Value::String(name) => Some(name.clone()),
+                _ => None,
+            },
+            _ => None,
+        })
+        .collect();
+    let missing: Vec<_> = expected.difference(&present).collect();
+    assert!(
+        missing.is_empty(),
+        "indexes lost by migrations: {missing:?}"
+    );
+}

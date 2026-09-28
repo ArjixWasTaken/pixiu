@@ -7,7 +7,8 @@ use std::{
     time::Duration,
 };
 
-use pixiu_db::{Db, Job, JobKind, JobState, now, toasty};
+use pixiu_db::{ClaimKind, Db, Job, JobKind, JobState, now, toasty};
+use pixiu_treasury::Claim;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{Notify, Semaphore, broadcast};
 
@@ -16,18 +17,105 @@ use crate::warden::BoxFuture;
 /// How many jobs run at once.
 pub const CONCURRENCY: usize = 3;
 
+/// Who wants a download, which becomes the track's claim.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "by", rename_all = "snake_case")]
+pub enum Wanted {
+    /// The admin grabbed it.
+    #[default]
+    Grab,
+    /// A watched playlist holds it.
+    Playlist { watch_id: u64 },
+    /// A watched artist released it.
+    Artist { watch_id: u64 },
+}
+
+impl Wanted {
+    /// The claim the track gets; `reference` is kept for grabs.
+    #[must_use]
+    pub fn claim(self, reference: Option<String>) -> Claim {
+        match self {
+            Self::Grab => Claim {
+                kind: ClaimKind::ManualGrab,
+                reference,
+            },
+            Self::Playlist { watch_id } => Claim {
+                kind: ClaimKind::WatchPlaylist,
+                reference: Some(watch_id.to_string()),
+            },
+            Self::Artist { watch_id } => Claim {
+                kind: ClaimKind::WatchArtist,
+                reference: Some(watch_id.to_string()),
+            },
+        }
+    }
+
+    /// The watch that wants it, if one does.
+    #[must_use]
+    pub fn watch_id(self) -> Option<u64> {
+        match self {
+            Self::Grab => None,
+            Self::Playlist { watch_id } | Self::Artist { watch_id } => Some(watch_id),
+        }
+    }
+}
+
 /// A track to download.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TrackJob {
     pub video_id: String,
     /// What the download was requested for, e.g. an album's id.
     pub reference: Option<String>,
+    #[serde(default)]
+    pub wanted: Wanted,
 }
 
 /// An album whose tracks to queue.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AlbumJob {
     pub browse_id: String,
+    #[serde(default)]
+    pub wanted: Wanted,
+}
+
+/// A watch to bring up to date.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SyncJob {
+    pub watch_id: u64,
+}
+
+/// What a job wants, from its payload: `None` for jobs that want nothing
+/// (syncs) or cannot be read.
+#[must_use]
+pub fn wanted(job: &Job) -> Option<Wanted> {
+    match job.kind {
+        JobKind::DownloadTrack => serde_json::from_str::<TrackJob>(&job.payload)
+            .ok()
+            .map(|payload| payload.wanted),
+        JobKind::GrabAlbum => serde_json::from_str::<AlbumJob>(&job.payload)
+            .ok()
+            .map(|payload| payload.wanted),
+        JobKind::SyncWatch => None,
+    }
+}
+
+/// Jobs that have not finished: queued, running, paused or failed.
+///
+/// # Errors
+///
+/// Fails on database errors.
+pub async fn unfinished(db: &mut Db) -> Result<Vec<Job>, toasty::Error> {
+    let mut jobs = Vec::new();
+    for state in [
+        JobState::Queued,
+        JobState::Running,
+        JobState::Paused,
+        JobState::Failed,
+    ] {
+        jobs.extend(Job::filter_by_state(state).exec(db).await?);
+    }
+    jobs.sort_by_key(|job| job.id);
+    Ok(jobs)
 }
 
 /// A job to create.
@@ -39,29 +127,53 @@ pub struct NewJob {
 }
 
 impl NewJob {
-    #[must_use]
-    pub fn track(video_id: &str, title: &str, reference: Option<String>) -> Self {
+    fn new(kind: JobKind, payload: &impl Serialize, title: &str) -> Self {
         Self {
-            kind: JobKind::DownloadTrack,
-            payload: serde_json::to_string(&TrackJob {
-                video_id: video_id.to_owned(),
-                reference,
-            })
-            .expect("job payloads serialize"),
+            kind,
+            payload: serde_json::to_string(payload).expect("job payloads serialize"),
             title: title.to_owned(),
         }
     }
 
+    /// The admin grabs a track.
+    #[must_use]
+    pub fn track(video_id: &str, title: &str, reference: Option<String>) -> Self {
+        Self::wanted_track(video_id, title, reference, Wanted::Grab)
+    }
+
+    #[must_use]
+    pub fn wanted_track(
+        video_id: &str,
+        title: &str,
+        reference: Option<String>,
+        wanted: Wanted,
+    ) -> Self {
+        let payload = TrackJob {
+            video_id: video_id.to_owned(),
+            reference,
+            wanted,
+        };
+        Self::new(JobKind::DownloadTrack, &payload, title)
+    }
+
+    /// The admin grabs an album.
     #[must_use]
     pub fn album(browse_id: &str, title: &str) -> Self {
-        Self {
-            kind: JobKind::GrabAlbum,
-            payload: serde_json::to_string(&AlbumJob {
-                browse_id: browse_id.to_owned(),
-            })
-            .expect("job payloads serialize"),
-            title: title.to_owned(),
-        }
+        Self::wanted_album(browse_id, title, Wanted::Grab)
+    }
+
+    #[must_use]
+    pub fn wanted_album(browse_id: &str, title: &str, wanted: Wanted) -> Self {
+        let payload = AlbumJob {
+            browse_id: browse_id.to_owned(),
+            wanted,
+        };
+        Self::new(JobKind::GrabAlbum, &payload, title)
+    }
+
+    #[must_use]
+    pub fn sync(watch_id: u64, title: &str) -> Self {
+        Self::new(JobKind::SyncWatch, &SyncJob { watch_id }, title)
     }
 }
 
@@ -78,6 +190,9 @@ pub enum Outcome {
     Failed(String),
     /// Done, and these jobs follow from it.
     Expand(Vec<NewJob>),
+    /// Cannot run until something outside píxiū changes, like a platform
+    /// login; see [`Jobs::resume_paused`].
+    Paused(String),
 }
 
 impl PartialEq for NewJob {
@@ -204,6 +319,57 @@ impl Jobs {
         Ok(())
     }
 
+    /// Queues paused jobs again, e.g. once a platform login works again.
+    ///
+    /// # Errors
+    ///
+    /// Fails on database errors.
+    pub async fn resume_paused(&self) -> Result<usize, toasty::Error> {
+        let mut db = self.db.clone();
+        let paused = Job::filter_by_state(JobState::Paused).exec(&mut db).await?;
+        let count = paused.len();
+        for mut job in paused {
+            let id = job.id;
+            toasty::update!(job {
+                state: JobState::Queued,
+                error: Option::<String>::None,
+            })
+            .exec(&mut db)
+            .await?;
+            self.notify(id, JobState::Queued, 0);
+        }
+        if count > 0 {
+            self.wake.notify_one();
+        }
+        Ok(count)
+    }
+
+    /// See [`unfinished`].
+    ///
+    /// # Errors
+    ///
+    /// Fails on database errors.
+    pub async fn unfinished(&self) -> Result<Vec<Job>, toasty::Error> {
+        unfinished(&mut self.db.clone()).await
+    }
+
+    /// Forgets the jobs `unwanted` picks among those not running, e.g. the
+    /// work of a watch being removed.
+    ///
+    /// # Errors
+    ///
+    /// Fails on database errors.
+    pub async fn forget(&self, unwanted: impl Fn(&Job) -> bool) -> Result<(), toasty::Error> {
+        let mut db = self.db.clone();
+        for job in self.unfinished().await? {
+            if job.state != JobState::Running && unwanted(&job) {
+                job.delete().exec(&mut db).await?;
+            }
+        }
+        let _ = self.updates.send(JobUpdate::Cleared);
+        Ok(())
+    }
+
     /// Forgets finished jobs.
     ///
     /// # Errors
@@ -326,15 +492,20 @@ impl Jobs {
                 tracing::warn!(id, title = %job.title, %error, "job failed");
                 (JobState::Failed, None, Some(error.clone()))
             }
+            Outcome::Paused(reason) => {
+                tracing::info!(id, title = %job.title, %reason, "job paused");
+                (JobState::Paused, None, Some(reason.clone()))
+            }
         };
         let progress = if state == JobState::Done { 100 } else { 0 };
+        let finished_at = (state != JobState::Paused).then(now);
         let mut db = self.db.clone();
         let result = toasty::update!(job {
             state,
             progress,
             track_id,
             error,
-            finished_at: Some(now()),
+            finished_at,
         })
         .exec(&mut db)
         .await;

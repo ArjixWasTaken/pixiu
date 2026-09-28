@@ -140,6 +140,7 @@ pub(crate) async fn cover_art(
             albums.sort_by_key(|album| std::cmp::Reverse(album.year));
             albums.into_iter().find(|album| album.cover.is_some())
         }
+        Some(Id::Playlist(id)) => crate::playlists::cover_album(&mut db, id).await?,
         None => None,
     };
     let Some(cover) = album.and_then(|album| album.cover) else {
