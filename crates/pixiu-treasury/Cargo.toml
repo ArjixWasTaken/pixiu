@@ -4,6 +4,7 @@ description = "The music library píxiū owns: layout, tags, ingest and offering
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+license.workspace = true
 publish = false
 
 [dependencies]

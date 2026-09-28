@@ -4,6 +4,7 @@ description = "Background work for píxiū: the job queue and the session warden
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+license.workspace = true
 publish = false
 
 [dependencies]

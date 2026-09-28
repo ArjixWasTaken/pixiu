@@ -4,6 +4,7 @@ description = "The píxiū WebUI, built with Topcoat"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+license.workspace = true
 publish = false
 
 [dependencies]

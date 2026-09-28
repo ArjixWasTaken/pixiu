@@ -178,8 +178,3 @@ cargo run -p pixiu-db --features cli -- migration generate --name describe_chang
 
 The server applies pending migrations on startup. A test fails if the models
 drift from the latest migration.
-
-## License
-
-Not chosen yet. Note that píxiū depends on rustypipe, which is licensed under
-the GPL-3.0; that constrains how builds of píxiū can be distributed.
