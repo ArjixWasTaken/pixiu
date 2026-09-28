@@ -1,21 +1,35 @@
 //! `/playlists`: playlists made in Subsonic apps, and the mirrors of watched
-//! ones.
+//! ones. A song can be excluded from a mirror: its watch then lets go of it
+//! and never fetches it again.
 
 use std::collections::HashMap;
 
-use pixiu_db::{Album, Playlist, PlaylistEntry, Track, Watch};
+use pixiu_db::{Album, Playlist, PlaylistEntry, Track, Watch, WatchExclusion};
+use pixiu_jobs::watch;
 use topcoat::{
     Result,
     context::Cx,
-    router::page,
+    icon::icon,
+    router::{page, query_params},
     view::{View, class, view},
 };
 
 use crate::{
     app::_hoard::count,
     auth::{db, require_user},
-    ui::{TRUNCATE, cover, empty_state, format_duration, page_header, pill},
+    ui::{
+        ICON_BUTTON, TRUNCATE, cover, empty_state, format_duration, icons, page_header, pill,
+        snackbar,
+    },
 };
+
+#[query_params(error = bad_request)]
+struct PlaylistsQuery {
+    /// The watch a song was just excluded from.
+    excluded: Option<u64>,
+    /// The watch a song was just taken back into.
+    included: Option<u64>,
+}
 
 /// A song in a playlist: in the hoard, or (in a mirror) not yet.
 enum Song {
@@ -35,6 +49,8 @@ struct Shown {
     /// The watch it mirrors, by name.
     mirrors: Option<String>,
     songs: Vec<Song>,
+    /// Songs excluded from the watch it mirrors.
+    excluded: Vec<WatchExclusion>,
 }
 
 impl Shown {
@@ -146,12 +162,17 @@ async fn playlists(cx: &Cx) -> Result<Vec<Shown>> {
                 }
             })
             .collect();
+        let excluded = match playlist.watch_id {
+            Some(watch_id) => watch::exclusions(&mut db, watch_id).await?,
+            None => Vec::new(),
+        };
         shown.push(Shown {
             mirrors: playlist
                 .watch_id
                 .map(|id| watches.get(&id).cloned().unwrap_or_default()),
             playlist,
             songs,
+            excluded,
         });
     }
     Ok(shown)
@@ -160,10 +181,19 @@ async fn playlists(cx: &Cx) -> Result<Vec<Shown>> {
 #[page]
 async fn page(cx: &Cx) -> Result<impl View> {
     require_user(cx).await?;
+    let query = query_params::<PlaylistsQuery>(cx)?;
     let playlists = playlists(cx).await?;
+    // The playlist just changed stays open.
+    let touched = query.excluded.or(query.included);
 
     Ok(view! {
         <div class="flex flex-col gap-6">
+            if query.excluded.is_some() {
+                snackbar(message: "Excluded. The watch lets go of it and won’t fetch it again.")
+            }
+            if query.included.is_some() {
+                snackbar(message: "Included again. A sync is on its way.", action: ("Jobs", "/jobs"))
+            }
             page_header(
                 eyebrow: "Playlists",
                 title: "Yours and your watches’",
@@ -185,7 +215,15 @@ async fn page(cx: &Cx) -> Result<impl View> {
                         Some(_) => "mirrors a watch".to_owned(),
                         None => "made in a Subsonic app".to_owned(),
                     };
-                    <details class="group overflow-hidden rounded-[20px] bg-card">
+                    let watch_id = playlist.watch_id;
+                    let back = |flag: &str| {
+                        format!("/playlists?{flag}={}#playlist-{}", watch_id.unwrap_or_default(), playlist.id)
+                    };
+                    <details
+                        id=(format!("playlist-{}", playlist.id))
+                        open=(watch_id.is_some() && watch_id == touched)
+                        class="group overflow-hidden rounded-[20px] bg-card"
+                    >
                         <summary
                             class="flex cursor-pointer list-none items-center gap-4 px-[18px] py-3.5 \
                                    hover:bg-hover"
@@ -229,8 +267,13 @@ async fn page(cx: &Cx) -> Result<impl View> {
                                                     (&track.artist_credit)
                                                 </span>
                                             </span>
-                                            <span class="text-[13px] text-muted-foreground tabular-nums">
-                                                (format_duration(track.duration_ms))
+                                            <span class="flex items-center gap-1">
+                                                <span class="text-[13px] text-muted-foreground tabular-nums">
+                                                    (format_duration(track.duration_ms))
+                                                </span>
+                                                if let (Some(watch_id), Some(video)) = (watch_id, &track.ytm_video_id) {
+                                                    exclude_button(watch_id: watch_id, video: video.as_str(), back: back("excluded"))
+                                                }
                                             </span>
                                         },
                                         Song::Coming { video_id, title, artist } => {
@@ -251,8 +294,43 @@ async fn page(cx: &Cx) -> Result<impl View> {
                                                     "not in the hoard yet"
                                                 </span>
                                             </span>
-                                            <span></span>
+                                            if let Some(watch_id) = watch_id {
+                                                exclude_button(watch_id: watch_id, video: video_id.as_str(), back: back("excluded"))
+                                            } else {
+                                                <span></span>
+                                            }
                                         },
+                                    }
+                                </div>
+                            }
+                            if let (Some(watch_id), false) = (watch_id, shown.excluded.is_empty()) {
+                                <div class="mt-1 border-t border-border px-[18px] pt-3 pb-2">
+                                    <p class="m-0 mb-1 text-[13px] font-medium text-muted-foreground">
+                                        "Excluded (" (shown.excluded.len()) ")"
+                                    </p>
+                                    for exclusion in &shown.excluded {
+                                        <div class="flex min-h-[44px] items-center gap-3">
+                                            <span class="flex min-w-0 flex-1 flex-col">
+                                                <span class=(class!(TRUNCATE, "text-sm text-foreground-soft"))>
+                                                    (exclusion.title.as_deref().unwrap_or(&exclusion.ytm_video_id))
+                                                </span>
+                                                if let Some(artist) = &exclusion.artist {
+                                                    <span class=(class!(TRUNCATE, "text-xs text-muted-foreground"))>(artist)</span>
+                                                }
+                                            </span>
+                                            <form method="post" action=(format!("/watches/{watch_id}/include"))>
+                                                <input type="hidden" name="video" value=(&exclusion.ytm_video_id)>
+                                                <input type="hidden" name="back" value=(back("included"))>
+                                                <button
+                                                    type="submit"
+                                                    aria-label="Include again"
+                                                    title="Include again"
+                                                    class=(ICON_BUTTON)
+                                                >
+                                                    icon(data: icons::PLAYLIST_ADD, size: 20)
+                                                </button>
+                                            </form>
+                                        </div>
                                     }
                                 </div>
                             }
@@ -261,5 +339,24 @@ async fn page(cx: &Cx) -> Result<impl View> {
                 }
             </div>
         </div>
+    })
+}
+
+/// Excludes a song from its watched playlist.
+#[topcoat::view::component]
+async fn exclude_button(watch_id: u64, video: &str, back: String) -> Result<impl View> {
+    Ok(view! {
+        <form method="post" action=(format!("/watches/{watch_id}/exclude"))>
+            <input type="hidden" name="video" value=(video)>
+            <input type="hidden" name="back" value=(back)>
+            <button
+                type="submit"
+                aria-label="Exclude from this playlist"
+                title="Exclude from this playlist"
+                class=(ICON_BUTTON)
+            >
+                icon(data: icons::PLAYLIST_REMOVE, size: 20)
+            </button>
+        </form>
     })
 }

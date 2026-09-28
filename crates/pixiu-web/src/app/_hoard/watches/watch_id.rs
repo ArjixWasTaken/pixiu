@@ -2,10 +2,12 @@
 
 use pixiu_db::Watch;
 use pixiu_jobs::watch;
+use serde::Deserialize;
 use topcoat::{
     Result,
     context::Cx,
     router::{
+        content::Form,
         error::{SeeOther, see_other},
         path_param, route,
     },
@@ -32,4 +34,40 @@ async fn remove(cx: &Cx) -> Result<SeeOther> {
     require_user(cx).await?;
     watch::remove(treasury(cx), jobs(cx), *path_param::<WatchId>(cx)?).await?;
     Ok(see_other(format!("{WATCHES_PATH}?removed=1")))
+}
+
+/// A song of a watched playlist, and the page to go back to.
+#[derive(Deserialize)]
+struct SongForm {
+    video: String,
+    back: Option<String>,
+}
+
+impl SongForm {
+    /// Where to go afterwards: a path on this site, else the playlists.
+    fn back(&self) -> SeeOther {
+        match self.back.as_deref() {
+            Some(back) if back.starts_with('/') && !back.starts_with("//") => see_other(back),
+            _ => see_other("/playlists"),
+        }
+    }
+}
+
+/// Excludes a song from the watched playlist: it leaves the mirror, the
+/// watch no longer keeps or fetches it.
+#[route(POST "./exclude")]
+async fn exclude(cx: &Cx, Form(form): Form<SongForm>) -> Result<SeeOther> {
+    require_user(cx).await?;
+    let id = *path_param::<WatchId>(cx)?;
+    watch::exclude(treasury(cx), jobs(cx), id, &form.video).await?;
+    Ok(form.back())
+}
+
+/// Takes an exclusion back.
+#[route(POST "./include")]
+async fn include(cx: &Cx, Form(form): Form<SongForm>) -> Result<SeeOther> {
+    require_user(cx).await?;
+    let id = *path_param::<WatchId>(cx)?;
+    watch::include(treasury(cx), jobs(cx), id, &form.video).await?;
+    Ok(form.back())
 }

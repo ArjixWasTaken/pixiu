@@ -10,8 +10,8 @@ use futures_util::{SinkExt, StreamExt};
 use md5::Digest;
 use pixiu_core::{Config, SecretBox};
 use pixiu_db::{
-    Album, Artist, ClaimKind, Db, SessionState, SourceSession, Track, TrackClaim, TrackOrigin, now,
-    toasty,
+    Album, Artist, ClaimKind, Db, Playlist, PlaylistEntry, SessionState, SourceSession, Track,
+    TrackClaim, TrackOrigin, Watch, WatchKind, now, toasty,
 };
 use reqwest::{StatusCode, header};
 use tokio::{net::TcpListener, sync::oneshot};
@@ -720,6 +720,154 @@ async fn watches_are_added_synced_and_removed() {
     assert!(!page().await.contains("PLpixiuTest"));
     let jobs = server.get("/jobs").await.text().await.unwrap();
     assert!(!jobs.contains("Sync PLpixiuTest"), "its sync is forgotten");
+}
+
+#[tokio::test]
+async fn songs_are_excluded_from_watched_playlists() {
+    // (watch, playlist, album, track) ids.
+    let ids = std::sync::Arc::new(std::sync::Mutex::new((0, 0, 0, 0)));
+    let seeded = std::sync::Arc::clone(&ids);
+    let server = TestServer::start_with(async move |db| {
+        let artist = toasty::create!(Artist {
+            name: "Somebody",
+            name_key: "somebody",
+            created_at: now(),
+        })
+        .exec(db)
+        .await
+        .unwrap();
+        let album = toasty::create!(Album {
+            title: "Road Songs",
+            title_key: "road songs",
+            artist_id: artist.id,
+            created_at: now(),
+        })
+        .exec(db)
+        .await
+        .unwrap();
+        let track = toasty::create!(Track {
+            album_id: album.id,
+            artist_id: artist.id,
+            title: "Unwanted Song",
+            artist_credit: "Somebody",
+            duration_ms: 1_000_u64,
+            path: "Somebody/Road Songs/Unwanted Song.opus",
+            size: 1_u64,
+            suffix: "opus",
+            content_type: "audio/ogg",
+            ytm_video_id: Some("vidA".to_owned()),
+            origin: TrackOrigin::Download,
+            added_at: now(),
+        })
+        .exec(db)
+        .await
+        .unwrap();
+        let watch = toasty::create!(Watch {
+            kind: WatchKind::Playlist,
+            remote_id: "PLroad",
+            name: "Road trip",
+            include_singles: false,
+            only_new: false,
+            seen: Vec::<String>::new(),
+            interval_secs: 3600_u64,
+            created_at: now(),
+            next_sync_at: now(),
+        })
+        .exec(db)
+        .await
+        .unwrap();
+        toasty::create!(TrackClaim {
+            track_id: track.id,
+            kind: ClaimKind::WatchPlaylist,
+            reference: Some(watch.id.to_string()),
+            created_at: now(),
+        })
+        .exec(db)
+        .await
+        .unwrap();
+        let playlist = toasty::create!(Playlist {
+            name: "Road trip",
+            public: false,
+            watch_id: Some(watch.id),
+            created_at: now(),
+            changed_at: now(),
+        })
+        .exec(db)
+        .await
+        .unwrap();
+        for (position, (video, title)) in [("vidA", "Unwanted Song"), ("vidB", "Coming Song")]
+            .into_iter()
+            .enumerate()
+        {
+            toasty::create!(PlaylistEntry {
+                playlist_id: playlist.id,
+                position: u32::try_from(position).unwrap(),
+                ytm_video_id: Some(video.to_owned()),
+                title: Some(title.to_owned()),
+                artist: Some("Somebody".to_owned()),
+            })
+            .exec(db)
+            .await
+            .unwrap();
+        }
+        *seeded.lock().unwrap() = (watch.id, playlist.id, album.id, track.id);
+    })
+    .await;
+    server.claim().await;
+    let (watch, playlist, album, track) = *ids.lock().unwrap();
+
+    // Both the playlist and the track sheet offer to exclude it.
+    let page = server.get("/playlists").await.text().await.unwrap();
+    assert_eq!(
+        page.matches(&format!("action=\"/watches/{watch}/exclude\""))
+            .count(),
+        2,
+        "{page}"
+    );
+    let sheet = server
+        .get(&format!("/albums/{album}?track={track}"))
+        .await
+        .text()
+        .await
+        .unwrap();
+    assert!(sheet.contains("Exclude from this playlist"), "{sheet}");
+
+    let back = format!("/playlists?excluded={watch}#playlist-{playlist}");
+    let excluded = server
+        .post_form(
+            &format!("/watches/{watch}/exclude"),
+            &[("video", "vidA"), ("back", back.as_str())],
+        )
+        .await;
+    assert_eq!(location(&excluded), back);
+    let page = server
+        .get(&format!("/playlists?excluded={watch}"))
+        .await
+        .text()
+        .await
+        .unwrap();
+    assert!(page.contains("Excluded (1)"), "{page}");
+    assert!(page.contains("The watch lets go of it"));
+    // Gone from the mirror, now an orphan that says why.
+    assert!(page.contains("1 song"), "{page}");
+    let orphans = server.get("/orphans").await.text().await.unwrap();
+    assert!(
+        orphans.contains("excluded from the watched playlist “Road trip”"),
+        "{orphans}"
+    );
+
+    // Other sites cannot be the way back.
+    let elsewhere = server
+        .post_form(
+            &format!("/watches/{watch}/include"),
+            &[("video", "vidA"), ("back", "//evil.example")],
+        )
+        .await;
+    assert_eq!(location(&elsewhere), "/playlists");
+    let page = server.get("/playlists").await.text().await.unwrap();
+    assert!(!page.contains("Excluded ("), "{page}");
+    let jobs = server.get("/jobs").await.text().await.unwrap();
+    assert!(jobs.contains("Sync Road trip"), "{jobs}");
 }
 
 #[tokio::test]

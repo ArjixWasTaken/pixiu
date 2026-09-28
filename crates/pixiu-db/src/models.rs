@@ -323,6 +323,8 @@ pub enum ReleaseReason {
     PlaylistEdited,
     /// A Subsonic app unstarred it.
     Unstarred,
+    /// The admin excluded it from a watched playlist.
+    Excluded,
 }
 
 /// A claim that was released, kept so an orphan can say why nothing keeps it
@@ -753,4 +755,26 @@ pub struct Setting {
     pub key: String,
 
     pub value: String,
+}
+
+/// A song the admin excluded from a watched playlist: the watch neither
+/// keeps, lists nor downloads it.
+#[derive(Debug, toasty::Model)]
+pub struct WatchExclusion {
+    #[key]
+    #[auto]
+    pub id: u64,
+
+    #[index]
+    pub watch_id: u64,
+
+    /// The YouTube Music video.
+    pub ytm_video_id: String,
+
+    /// The song as the playlist named it, to list it after it is excluded.
+    pub title: Option<String>,
+
+    pub artist: Option<String>,
+
+    pub excluded_at: Timestamp,
 }

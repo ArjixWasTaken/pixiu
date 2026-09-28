@@ -3,7 +3,9 @@
 //!
 //! Syncing is one-way. What a watch brings in is claimed by it. When a
 //! track leaves a watched playlist, the mirror follows and the claim goes;
-//! the file stays, an orphan unless something else claims it.
+//! the file stays, an orphan unless something else claims it. The admin may
+//! also exclude a song from a watched playlist: the watch then neither
+//! keeps, lists nor downloads it, as if it had left.
 
 use std::{
     collections::{HashMap, HashSet},
@@ -14,13 +16,13 @@ use std::{
 use jiff::{SignedDuration, Timestamp};
 use pixiu_db::{
     ClaimKind, Db, Job, JobKind, JobState, Playlist, PlaylistEntry, ReleaseReason, SessionState,
-    Track, TrackClaim, Watch, WatchKind, now, toasty,
+    Track, TrackClaim, Watch, WatchExclusion, WatchKind, now, toasty,
 };
 use pixiu_hunt::{AlbumKind, Discography, LIKED_MUSIC, RemotePlaylist, RemoteTrack};
 use pixiu_treasury::{Release, Treasury};
 
 use crate::{
-    queue::{self, Jobs, NewJob, SyncJob, Wanted, pending},
+    queue::{self, Jobs, NewJob, SyncJob, TrackJob, Wanted, pending},
     warden::{BoxFuture, Warden},
 };
 
@@ -157,20 +159,41 @@ async fn sync_playlist(
         .await
         .map_err(failed)?;
 
-    // The mirror follows the playlist, order included.
-    let order: Vec<String> = playlist
+    // Excluded songs count as gone from the playlist.
+    let excluded = excluded_videos(&mut db, watch.id).await.map_err(failed)?;
+    let tracks: Vec<RemoteTrack> = playlist
         .tracks
-        .iter()
-        .map(|track| track.id.clone())
+        .into_iter()
+        .filter(|track| !excluded.contains(&track.id))
         .collect();
+
+    // The mirror follows the playlist, order included.
+    let order: Vec<String> = tracks.iter().map(|track| track.id.clone()).collect();
     let mirror = mirror(&mut db, watch.id, &name).await.map_err(failed)?;
-    set_entries(&mut db, mirror, &playlist.tracks)
+    set_entries(&mut db, mirror, &tracks)
         .await
         .map_err(failed)?;
 
-    // Tracks that left lose this watch's claim ...
-    let listed: HashSet<&str> = order.iter().map(String::as_str).collect();
+    // Tracks that were excluded or left lose this watch's claim ...
     let reference = watch.id.to_string();
+    treasury
+        .release(
+            ClaimKind::WatchPlaylist,
+            &reference,
+            Release {
+                reason: ReleaseReason::Excluded,
+                source_name: Some(&name),
+            },
+            |track| {
+                !track
+                    .ytm_video_id
+                    .as_ref()
+                    .is_some_and(|id| excluded.contains(id))
+            },
+        )
+        .await
+        .map_err(failed)?;
+    let listed: HashSet<&str> = order.iter().map(String::as_str).collect();
     treasury
         .release(
             ClaimKind::WatchPlaylist,
@@ -207,8 +230,7 @@ async fn sync_playlist(
     // ... and the rest is downloaded, unless it already is being.
     let pending = pending(&mut db).await.map_err(failed)?;
     let mut queued = HashSet::new();
-    let jobs = playlist
-        .tracks
+    let jobs = tracks
         .iter()
         .filter(|track| {
             !hoarded.contains_key(&track.id)
@@ -545,9 +567,178 @@ pub async fn remove(treasury: &Treasury, jobs: &Jobs, watch_id: u64) -> Result<(
     for kind in [ClaimKind::WatchPlaylist, ClaimKind::WatchArtist] {
         treasury.release(kind, &reference, why, |_| false).await?;
     }
+    WatchExclusion::filter_by_watch_id(watch_id)
+        .delete()
+        .exec(&mut db)
+        .await?;
     if let Some(watch) = watch {
         tracing::info!(watch = watch.id, remote_id = %watch.remote_id, "watch removed");
         watch.delete().exec(&mut db).await?;
+    }
+    Ok(())
+}
+
+/// The video ids excluded from a watch.
+async fn excluded_videos(db: &mut Db, watch_id: u64) -> Result<HashSet<String>, toasty::Error> {
+    Ok(WatchExclusion::filter_by_watch_id(watch_id)
+        .exec(db)
+        .await?
+        .into_iter()
+        .map(|exclusion| exclusion.ytm_video_id)
+        .collect())
+}
+
+/// Whether the admin excluded a video from a watch.
+///
+/// # Errors
+///
+/// Fails on database errors.
+pub async fn is_excluded(
+    db: &mut Db,
+    watch_id: u64,
+    video_id: &str,
+) -> Result<bool, toasty::Error> {
+    Ok(excluded_videos(db, watch_id).await?.contains(video_id))
+}
+
+/// The songs excluded from a watch, the latest first.
+///
+/// # Errors
+///
+/// Fails on database errors.
+pub async fn exclusions(db: &mut Db, watch_id: u64) -> Result<Vec<WatchExclusion>, toasty::Error> {
+    let mut exclusions = WatchExclusion::filter_by_watch_id(watch_id)
+        .exec(db)
+        .await?;
+    exclusions.sort_by_key(|exclusion| std::cmp::Reverse((exclusion.excluded_at, exclusion.id)));
+    Ok(exclusions)
+}
+
+/// Excludes a song from a watched playlist: it leaves the mirror, the watch
+/// lets go of it (an orphan, unless something else keeps it), a queued
+/// download of it is forgotten, and later syncs skip it. Returns `false`
+/// when there is no such playlist watch.
+///
+/// # Errors
+///
+/// Fails on database errors.
+pub async fn exclude(
+    treasury: &Treasury,
+    jobs: &Jobs,
+    watch_id: u64,
+    video_id: &str,
+) -> Result<bool, toasty::Error> {
+    let mut db = treasury.db();
+    let Some(watch) = Watch::filter_by_id(watch_id).first().exec(&mut db).await? else {
+        return Ok(false);
+    };
+    if watch.kind == WatchKind::Artist {
+        return Ok(false);
+    }
+
+    // The mirror entry names the song; else the downloaded track does.
+    let mirror = Playlist::filter_by_watch_id(Some(watch_id))
+        .first()
+        .exec(&mut db)
+        .await?;
+    let mut entries = match &mirror {
+        Some(mirror) => {
+            PlaylistEntry::filter_by_playlist_id(mirror.id)
+                .exec(&mut db)
+                .await?
+        }
+        None => Vec::new(),
+    };
+    entries.sort_by_key(|entry| entry.position);
+    let entry = entries
+        .iter()
+        .position(|entry| entry.ytm_video_id.as_deref() == Some(video_id))
+        .map(|index| entries.remove(index));
+    let track = Track::filter(Track::fields().ytm_video_id().eq(video_id))
+        .first()
+        .exec(&mut db)
+        .await?;
+
+    if !is_excluded(&mut db, watch_id, video_id).await? {
+        let (title, artist) = match (&entry, &track) {
+            (Some(entry), _) if entry.title.is_some() => {
+                (entry.title.clone(), entry.artist.clone())
+            }
+            (_, Some(track)) => (Some(track.title.clone()), Some(track.artist_credit.clone())),
+            _ => (None, None),
+        };
+        toasty::create!(WatchExclusion {
+            watch_id,
+            ytm_video_id: video_id,
+            title,
+            artist,
+            excluded_at: now(),
+        })
+        .exec(&mut db)
+        .await?;
+    }
+
+    if let (Some(entry), Some(mirror)) = (entry, mirror) {
+        let mut tx = db.transaction().await?;
+        entry.delete().exec(&mut tx).await?;
+        for (position, mut entry) in entries.into_iter().enumerate() {
+            let position = u32::try_from(position).unwrap_or(u32::MAX);
+            if entry.position != position {
+                toasty::update!(entry { position }).exec(&mut tx).await?;
+            }
+        }
+        let mut mirror = mirror;
+        toasty::update!(mirror { changed_at: now() })
+            .exec(&mut tx)
+            .await?;
+        tx.commit().await?;
+    }
+
+    treasury
+        .release(
+            ClaimKind::WatchPlaylist,
+            &watch_id.to_string(),
+            Release {
+                reason: ReleaseReason::Excluded,
+                source_name: Some(&watch.name),
+            },
+            |track| track.ytm_video_id.as_deref() != Some(video_id),
+        )
+        .await?;
+    jobs.forget(|job| {
+        queue::wanted(job).and_then(Wanted::watch_id) == Some(watch_id)
+            && job.kind == JobKind::DownloadTrack
+            && serde_json::from_str::<TrackJob>(&job.payload)
+                .is_ok_and(|payload| payload.video_id == video_id)
+    })
+    .await?;
+    tracing::info!(watch = watch_id, video_id, "song excluded from a watch");
+    Ok(true)
+}
+
+/// Takes an exclusion back; the next sync, queued now, lists and claims the
+/// song again (or downloads it).
+///
+/// # Errors
+///
+/// Fails on database errors.
+pub async fn include(
+    treasury: &Treasury,
+    jobs: &Jobs,
+    watch_id: u64,
+    video_id: &str,
+) -> Result<(), toasty::Error> {
+    let mut db = treasury.db();
+    for exclusion in WatchExclusion::filter_by_watch_id(watch_id)
+        .exec(&mut db)
+        .await?
+    {
+        if exclusion.ytm_video_id == video_id {
+            exclusion.delete().exec(&mut db).await?;
+        }
+    }
+    if let Some(watch) = Watch::filter_by_id(watch_id).first().exec(&mut db).await? {
+        queue_sync(jobs, &watch).await?;
     }
     Ok(())
 }

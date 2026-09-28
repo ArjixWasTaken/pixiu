@@ -120,13 +120,38 @@ impl HuntExecutor {
         };
         let claim = payload.wanted.claim(payload.reference);
         let request = DownloadRequest {
-            video_id: payload.video_id,
+            video_id: payload.video_id.clone(),
             claim: claim.clone(),
             cookies: self.warden.cookies().await,
         };
         let treasury = self.hunter.treasury();
+        // Excluded from its playlist while this was queued or running.
+        let excluded = async || match payload.wanted.watch_id() {
+            Some(watch_id) => watch::is_excluded(&mut treasury.db(), watch_id, &payload.video_id)
+                .await
+                .unwrap_or(false),
+            None => false,
+        };
         match self.hunter.download(&request, progress).await {
             Ok(track) => {
+                if let Some(reference) = &claim.reference
+                    && excluded().await
+                {
+                    let released = treasury
+                        .release(
+                            claim.kind,
+                            reference,
+                            Release {
+                                reason: ReleaseReason::Excluded,
+                                source_name: None,
+                            },
+                            |other| other.id != track.id,
+                        )
+                        .await;
+                    if let Err(error) = released {
+                        tracing::warn!(%error, "cannot drop the claim of an excluded song");
+                    }
+                }
                 // A watch removed while this ran does not keep the track.
                 if let (Some(watch_id), Some(reference)) =
                     (payload.wanted.watch_id(), &claim.reference)
@@ -153,6 +178,9 @@ impl HuntExecutor {
                 }
             }
             // Already here: whoever wants it now keeps it too.
+            Err(HuntError::AlreadyHoarded { track_id }) if excluded().await => {
+                Outcome::AlreadyDone { track_id }
+            }
             Err(HuntError::AlreadyHoarded { track_id }) => {
                 match treasury.claim(track_id, &claim).await {
                     Ok(()) => Outcome::AlreadyDone { track_id },

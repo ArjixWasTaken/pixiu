@@ -122,3 +122,15 @@ pub(crate) const STAR_OUTLINE: IconData = IconData::unescaped_unchecked(
     ViewBox::new(0.0, 0.0, 24.0, 24.0),
     r#"<path fill="currentColor" d="m8.85 16.825l3.15-1.9l3.15 1.925l-.825-3.6l2.775-2.4l-3.65-.325l-1.45-3.4l-1.45 3.375l-3.65.325l2.775 2.425zm3.15.45l-4.15 2.5q-.275.175-.575.15t-.525-.2t-.35-.437t-.05-.588l1.1-4.725L3.775 10.8q-.25-.225-.312-.513t.037-.562t.3-.45t.55-.225l4.85-.425l1.875-4.45q.125-.3.388-.45t.537-.15t.537.15t.388.45l1.875 4.45l4.85.425q.35.05.55.225t.3.45t.038.563t-.313.512l-3.675 3.175l1.1 4.725q.075.325-.05.588t-.35.437t-.525.2t-.575-.15zm0-5.025"/>"#,
 );
+
+/// Material Symbols `playlist-remove`.
+pub(crate) const PLAYLIST_REMOVE: IconData = IconData::unescaped_unchecked(
+    ViewBox::new(0.0, 0.0, 24.0, 24.0),
+    r#"<path fill="currentColor" d="M14.4 22L13 20.6l2.6-2.6l-2.6-2.6l1.4-1.4l2.6 2.6l2.6-2.6l1.4 1.4l-2.6 2.6l2.6 2.6l-1.4 1.4l-2.6-2.6zM3 16v-2h7v2zm0-4v-2h11v2zm0-4V6h11v2z"/>"#,
+);
+
+/// Material Symbols `playlist-add`.
+pub(crate) const PLAYLIST_ADD: IconData = IconData::unescaped_unchecked(
+    ViewBox::new(0.0, 0.0, 24.0, 24.0),
+    r#"<path fill="currentColor" d="M3 16v-2h7v2zm0-4v-2h11v2zm0-4V6h11v2zm13 12v-4h-4v-2h4v-4h2v4h4v2h-4v4z"/>"#,
+);

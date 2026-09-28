@@ -425,8 +425,9 @@ struct TrackSheet {
     track: Track,
     lyrics: Option<Lyrics>,
     annotation: Option<Annotation>,
-    /// Why it is kept, for people.
-    kept: Vec<String>,
+    /// Why it is kept, for people, with the watched playlist it could be
+    /// excluded from.
+    kept: Vec<(String, Option<u64>)>,
 }
 
 impl TrackSheet {
@@ -462,7 +463,11 @@ impl TrackSheet {
                     None => None,
                 })
             };
-            kept.push(match claim.kind {
+            let excludable = (claim.kind == ClaimKind::WatchPlaylist
+                && track.ytm_video_id.is_some())
+            .then_some(reference)
+            .flatten();
+            let why = match claim.kind {
                 ClaimKind::Offering => "You offered it".to_owned(),
                 ClaimKind::ManualGrab => "You grabbed or kept it".to_owned(),
                 ClaimKind::Starred => "Starred in an app".to_owned(),
@@ -488,7 +493,8 @@ impl TrackSheet {
                         None => "A playlist".to_owned(),
                     }
                 }
-            });
+            };
+            kept.push((why, excludable));
         }
         kept.dedup();
         Ok(Self {
@@ -644,8 +650,31 @@ async fn track_sheet(sheet: &TrackSheet, album: &Album, close: &str) -> Result<i
                         <a href="/orphans" class="text-[13px]">"Nothing keeps it: it is an orphan."</a>
                     } else {
                         <div class="flex flex-wrap gap-1.5">
-                            for reason in &sheet.kept {
-                                <span class="rounded-lg border border-outline px-3 py-1.5 text-[13px]">(reason)</span>
+                            for (reason, excludable) in &sheet.kept {
+                                <span class="inline-flex items-center gap-1 rounded-lg border border-outline py-0.5 pl-3 pr-0.5 text-[13px]">
+                                    <span class="py-1">(reason)</span>
+                                    if let (Some(watch_id), Some(video)) = (excludable, &track.ytm_video_id) {
+                                        <form method="post" action=(format!("/watches/{watch_id}/exclude"))>
+                                            <input type="hidden" name="video" value=(video)>
+                                            <input
+                                                type="hidden"
+                                                name="back"
+                                                value=(format!("/albums/{}?track={}", track.album_id, track.id))
+                                            >
+                                            <button
+                                                type="submit"
+                                                aria-label="Exclude from this playlist"
+                                                title="Exclude from this playlist"
+                                                class="inline-grid size-7 place-items-center rounded-full \
+                                                       text-muted-foreground hover:bg-foreground/10 hover:text-foreground"
+                                            >
+                                                icon(data: icons::PLAYLIST_REMOVE, size: 18)
+                                            </button>
+                                        </form>
+                                    } else {
+                                        <span class="w-2.5"></span>
+                                    }
+                                </span>
                             }
                         </div>
                     }

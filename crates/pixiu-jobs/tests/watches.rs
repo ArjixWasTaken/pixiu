@@ -16,7 +16,7 @@ use pixiu_jobs::{
     warden::BoxFuture,
     watch::{self, Catalog, CatalogError, NewWatch, Synced, WAITING_FOR_LOGIN},
 };
-use pixiu_treasury::Treasury;
+use pixiu_treasury::{Claim, Treasury};
 
 #[derive(Default)]
 struct FakeCatalog {
@@ -582,4 +582,132 @@ async fn paused_jobs_resume_later() {
     );
     assert_eq!(s.jobs.resume_paused().await.unwrap(), 1);
     assert_eq!(state(&s.jobs, JobState::Done).await, None);
+}
+
+#[tokio::test]
+async fn excluded_songs_are_orphaned_and_skipped() {
+    let s = setup().await;
+    let mut db = s.db.clone();
+    let a = hoard(&mut db, "a").await;
+    let b = hoard(&mut db, "b").await;
+    *s.catalog.playlist.lock().unwrap() = vec!["a", "b", "c"];
+    let watch = watch::add(&s.treasury, &s.jobs, playlist_watch("PLpick"))
+        .await
+        .unwrap();
+    for job in done(
+        watch::sync(&s.treasury, &s.catalog, watch.id)
+            .await
+            .unwrap(),
+    ) {
+        s.jobs.enqueue(job).await.unwrap();
+    }
+    let reference = Some(watch.id.to_string());
+    assert_eq!(
+        claims_of(&mut db, a).await,
+        [(ClaimKind::WatchPlaylist, reference.clone())]
+    );
+    // B is starred too, so something else still keeps it.
+    s.treasury
+        .claim(
+            b,
+            &Claim {
+                kind: ClaimKind::Starred,
+                reference: Some(format!("tr-{b}")),
+            },
+        )
+        .await
+        .unwrap();
+
+    // Excluding takes songs out of the mirror and lets go of them; C's
+    // queued download is forgotten.
+    for video in ["a", "b", "c"] {
+        assert!(
+            watch::exclude(&s.treasury, &s.jobs, watch.id, video)
+                .await
+                .unwrap()
+        );
+    }
+    // Twice is the same as once.
+    assert!(
+        watch::exclude(&s.treasury, &s.jobs, watch.id, "a")
+            .await
+            .unwrap()
+    );
+    assert_eq!(mirror_of(&mut db, watch.id).await.1, Vec::<String>::new());
+    assert!(claims_of(&mut db, a).await.is_empty());
+    let released = ReleasedClaim::filter_by_track_id(a)
+        .exec(&mut db)
+        .await
+        .unwrap();
+    assert_eq!(released.len(), 1);
+    assert_eq!(released[0].reason, ReleaseReason::Excluded);
+    assert_eq!(released[0].source_name.as_deref(), Some("Test playlist"));
+    let orphans: Vec<u64> = s
+        .treasury
+        .orphans()
+        .await
+        .unwrap()
+        .iter()
+        .map(|track| track.id)
+        .collect();
+    assert_eq!(orphans, [a]);
+    let downloads = s
+        .jobs
+        .unfinished()
+        .await
+        .unwrap()
+        .iter()
+        .filter(|job| job.kind == JobKind::DownloadTrack)
+        .count();
+    assert_eq!(downloads, 0);
+    let listed: Vec<(String, Option<String>)> = watch::exclusions(&mut db, watch.id)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|exclusion| (exclusion.ytm_video_id, exclusion.title))
+        .collect();
+    assert_eq!(listed.len(), 3);
+    assert!(listed.contains(&("c".to_owned(), Some("Song c".to_owned()))));
+
+    // Later syncs neither list, claim nor fetch them.
+    let jobs = done(
+        watch::sync(&s.treasury, &s.catalog, watch.id)
+            .await
+            .unwrap(),
+    );
+    assert!(jobs.is_empty(), "{:?}", videos(&jobs));
+    assert!(claims_of(&mut db, a).await.is_empty());
+    assert_eq!(mirror_of(&mut db, watch.id).await.1, Vec::<String>::new());
+
+    // Taking it back queues a sync, which lists and claims it again.
+    watch::include(&s.treasury, &s.jobs, watch.id, "a")
+        .await
+        .unwrap();
+    assert!(
+        s.jobs
+            .unfinished()
+            .await
+            .unwrap()
+            .iter()
+            .any(|job| watch::synced_watch(job) == Some(watch.id))
+    );
+    done(
+        watch::sync(&s.treasury, &s.catalog, watch.id)
+            .await
+            .unwrap(),
+    );
+    assert_eq!(mirror_of(&mut db, watch.id).await.1, ["a"]);
+    assert_eq!(
+        claims_of(&mut db, a).await,
+        [(ClaimKind::WatchPlaylist, reference)]
+    );
+
+    // Removing the watch forgets its exclusions.
+    watch::remove(&s.treasury, &s.jobs, watch.id).await.unwrap();
+    assert!(
+        watch::exclusions(&mut db, watch.id)
+            .await
+            .unwrap()
+            .is_empty()
+    );
 }

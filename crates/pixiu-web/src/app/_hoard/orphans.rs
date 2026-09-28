@@ -57,6 +57,12 @@ fn why(released: Option<&ReleasedClaim>) -> String {
             format!("taken out of the playlist{}", named(&released.source_name))
         }
         ReleaseReason::Unstarred => "unstarred in an app".to_owned(),
+        ReleaseReason::Excluded => {
+            format!(
+                "excluded from the watched playlist{}",
+                named(&released.source_name)
+            )
+        }
     };
     format!("{what} {}", relative(released.released_at))
 }
