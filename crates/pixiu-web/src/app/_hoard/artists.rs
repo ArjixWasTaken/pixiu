@@ -1,3 +1,3 @@
-//! `/artists/...`: artist pictures for the WebUI.
+//! `/artists/...`: artist pages and pictures.
 
 mod artist_id;

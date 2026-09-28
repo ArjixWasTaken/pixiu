@@ -64,7 +64,7 @@ async fn resolve_artist(db: &mut Db, wanted: &ArtistRef) -> Result<Artist, toast
     {
         return Ok(artist);
     }
-    let mut artist = find_or_create_artist(db, &wanted.name).await?;
+    let mut artist = find_or_create_artist(db, &wanted.name, None).await?;
     if artist.mbid.is_none() && wanted.mbid.is_some() {
         toasty::update!(artist {
             mbid: wanted.mbid.clone(),

@@ -13,14 +13,14 @@ use std::{
 
 use jiff::{SignedDuration, Timestamp};
 use pixiu_db::{
-    ClaimKind, Db, Job, JobKind, JobState, Playlist, PlaylistEntry, SessionState, Track,
-    TrackClaim, Watch, WatchKind, now, toasty,
+    ClaimKind, Db, Job, JobKind, JobState, Playlist, PlaylistEntry, ReleaseReason, SessionState,
+    Track, TrackClaim, Watch, WatchKind, now, toasty,
 };
-use pixiu_hunt::{AlbumKind, Discography, LIKED_MUSIC, RemotePlaylist};
-use pixiu_treasury::Treasury;
+use pixiu_hunt::{AlbumKind, Discography, LIKED_MUSIC, RemotePlaylist, RemoteTrack};
+use pixiu_treasury::{Release, Treasury};
 
 use crate::{
-    queue::{self, AlbumJob, Jobs, NewJob, SyncJob, TrackJob, Wanted},
+    queue::{self, Jobs, NewJob, SyncJob, Wanted, pending},
     warden::{BoxFuture, Warden},
 };
 
@@ -101,7 +101,7 @@ pub async fn sync(
         WatchKind::Playlist | WatchKind::LikedMusic => {
             sync_playlist(treasury, catalog, &watch).await
         }
-        WatchKind::Artist => sync_artist(&mut db, catalog, &watch).await,
+        WatchKind::Artist => sync_artist(treasury, &mut db, catalog, &watch).await,
     };
     record(&mut db, watch_id, &result).await;
     result
@@ -153,7 +153,9 @@ async fn sync_playlist(
         playlist.name.clone()
     };
     let mut db = treasury.db();
-    rename(&mut db, watch.id, &name).await.map_err(failed)?;
+    describe(&mut db, watch.id, &name, playlist.image_url.as_deref())
+        .await
+        .map_err(failed)?;
 
     // The mirror follows the playlist, order included.
     let order: Vec<String> = playlist
@@ -162,18 +164,28 @@ async fn sync_playlist(
         .map(|track| track.id.clone())
         .collect();
     let mirror = mirror(&mut db, watch.id, &name).await.map_err(failed)?;
-    set_entries(&mut db, mirror, &order).await.map_err(failed)?;
+    set_entries(&mut db, mirror, &playlist.tracks)
+        .await
+        .map_err(failed)?;
 
     // Tracks that left lose this watch's claim ...
     let listed: HashSet<&str> = order.iter().map(String::as_str).collect();
     let reference = watch.id.to_string();
     treasury
-        .release(ClaimKind::WatchPlaylist, &reference, |track| {
-            track
-                .ytm_video_id
-                .as_deref()
-                .is_some_and(|id| listed.contains(id))
-        })
+        .release(
+            ClaimKind::WatchPlaylist,
+            &reference,
+            Release {
+                reason: ReleaseReason::LeftPlaylist,
+                source_name: Some(&name),
+            },
+            |track| {
+                track
+                    .ytm_video_id
+                    .as_deref()
+                    .is_some_and(|id| listed.contains(id))
+            },
+        )
         .await
         .map_err(failed)?;
 
@@ -211,7 +223,12 @@ async fn sync_playlist(
     Ok(Synced::Done(jobs))
 }
 
-async fn sync_artist(db: &mut Db, catalog: &dyn Catalog, watch: &Watch) -> Result<Synced, String> {
+async fn sync_artist(
+    treasury: &Treasury,
+    db: &mut Db,
+    catalog: &dyn Catalog,
+    watch: &Watch,
+) -> Result<Synced, String> {
     let discography = match catalog.discography(&watch.remote_id).await {
         Ok(discography) => discography,
         Err(CatalogError::NeedsLogin(reason)) => return Ok(Synced::NeedsLogin(reason)),
@@ -233,7 +250,7 @@ async fn sync_artist(db: &mut Db, catalog: &dyn Catalog, watch: &Watch) -> Resul
             continue;
         }
         seen.push(album.id.clone());
-        if skip_old || pending.albums.contains(&album.id) {
+        if skip_old || pending.has_album(&album.id) {
             continue;
         }
         let title = format!("{} — {}", album.artists.join(", "), album.title);
@@ -246,8 +263,14 @@ async fn sync_artist(db: &mut Db, catalog: &dyn Catalog, watch: &Watch) -> Resul
         .await
         .map_err(failed)?
     {
+        // The hoard's artist of that name is this channel.
+        treasury
+            .learn_artist_channel(&discography.name, &discography.id)
+            .await
+            .map_err(failed)?;
         toasty::update!(watch {
             name: discography.name,
+            image_url: discography.image_url,
             seen,
         })
         .exec(db)
@@ -257,11 +280,22 @@ async fn sync_artist(db: &mut Db, catalog: &dyn Catalog, watch: &Watch) -> Resul
     Ok(Synced::Done(jobs))
 }
 
-async fn rename(db: &mut Db, watch_id: u64, name: &str) -> Result<(), toasty::Error> {
+/// Keeps a watch's name and picture as the platform shows them.
+async fn describe(
+    db: &mut Db,
+    watch_id: u64,
+    name: &str,
+    image_url: Option<&str>,
+) -> Result<(), toasty::Error> {
     if let Some(mut watch) = Watch::filter_by_id(watch_id).first().exec(db).await?
-        && watch.name != name
+        && (watch.name != name || watch.image_url.as_deref() != image_url)
     {
-        toasty::update!(watch { name }).exec(db).await?;
+        toasty::update!(watch {
+            name,
+            image_url: image_url.map(str::to_owned),
+        })
+        .exec(db)
+        .await?;
     }
     Ok(())
 }
@@ -297,17 +331,24 @@ async fn mirror(db: &mut Db, watch_id: u64, name: &str) -> Result<u64, toasty::E
     }
 }
 
-/// Makes the mirror list exactly `order`, when it does not already.
-async fn set_entries(db: &mut Db, playlist_id: u64, order: &[String]) -> Result<(), toasty::Error> {
+/// Makes a mirror list `tracks`, in order, each named as the platform
+/// names it.
+async fn set_entries(
+    db: &mut Db,
+    playlist_id: u64,
+    tracks: &[RemoteTrack],
+) -> Result<(), toasty::Error> {
     let mut entries = PlaylistEntry::filter_by_playlist_id(playlist_id)
         .exec(db)
         .await?;
     entries.sort_by_key(|entry| entry.position);
-    let current: Vec<&str> = entries
-        .iter()
-        .filter_map(|entry| entry.ytm_video_id.as_deref())
-        .collect();
-    if current.len() == entries.len() && current.iter().eq(order.iter()) {
+    let unchanged = entries.len() == tracks.len()
+        && entries.iter().zip(tracks).all(|(entry, track)| {
+            entry.ytm_video_id.as_deref() == Some(track.id.as_str())
+                && entry.title.as_deref() == Some(track.title.as_str())
+                && entry.artist.as_deref() == Some(track.artist_credit().as_str())
+        });
+    if unchanged {
         return Ok(());
     }
 
@@ -316,11 +357,13 @@ async fn set_entries(db: &mut Db, playlist_id: u64, order: &[String]) -> Result<
         .delete()
         .exec(&mut tx)
         .await?;
-    for (position, video_id) in order.iter().enumerate() {
+    for (position, track) in tracks.iter().enumerate() {
         toasty::create!(PlaylistEntry {
             playlist_id,
             position: u32::try_from(position).unwrap_or(u32::MAX),
-            ytm_video_id: Some(video_id.clone()),
+            ytm_video_id: Some(track.id.clone()),
+            title: Some(track.title.clone()),
+            artist: Some(track.artist_credit()),
         })
         .exec(&mut tx)
         .await?;
@@ -368,35 +411,8 @@ async fn claimed(
         .collect())
 }
 
-/// What unfinished jobs already fetch.
-#[derive(Default)]
-struct Pending {
-    tracks: HashSet<String>,
-    albums: HashSet<String>,
-}
-
-async fn pending(db: &mut Db) -> Result<Pending, toasty::Error> {
-    let mut pending = Pending::default();
-    for job in queue::unfinished(db).await? {
-        match job.kind {
-            JobKind::DownloadTrack => {
-                if let Ok(payload) = serde_json::from_str::<TrackJob>(&job.payload) {
-                    pending.tracks.insert(payload.video_id);
-                }
-            }
-            JobKind::GrabAlbum => {
-                if let Ok(payload) = serde_json::from_str::<AlbumJob>(&job.payload) {
-                    pending.albums.insert(payload.browse_id);
-                }
-            }
-            JobKind::SyncWatch | JobKind::Enrich | JobKind::Refile => {}
-        }
-    }
-    Ok(pending)
-}
-
-/// The watch a sync job syncs.
-fn synced_watch(job: &Job) -> Option<u64> {
+/// The watch a sync job brings up to date.
+pub fn synced_watch(job: &Job) -> Option<u64> {
     (job.kind == JobKind::SyncWatch)
         .then(|| serde_json::from_str::<SyncJob>(&job.payload).ok())
         .flatten()
@@ -521,14 +537,34 @@ pub async fn remove(treasury: &Treasury, jobs: &Jobs, watch_id: u64) -> Result<(
         playlist.delete().exec(&mut db).await?;
     }
     let reference = watch_id.to_string();
+    let watch = Watch::filter_by_id(watch_id).first().exec(&mut db).await?;
+    let why = Release {
+        reason: ReleaseReason::WatchRemoved,
+        source_name: watch.as_ref().map(|watch| watch.name.as_str()),
+    };
     for kind in [ClaimKind::WatchPlaylist, ClaimKind::WatchArtist] {
-        treasury.release(kind, &reference, |_| false).await?;
+        treasury.release(kind, &reference, why, |_| false).await?;
     }
-    if let Some(watch) = Watch::filter_by_id(watch_id).first().exec(&mut db).await? {
+    if let Some(watch) = watch {
         tracing::info!(watch = watch.id, remote_id = %watch.remote_id, "watch removed");
         watch.delete().exec(&mut db).await?;
     }
     Ok(())
+}
+
+/// Watches with a sync queued or under way, and that job's state:
+/// `Queued`, `Running`, or `Paused` while it waits for a login.
+///
+/// # Errors
+///
+/// Fails on database errors.
+pub async fn syncing(db: &mut Db) -> Result<HashMap<u64, JobState>, toasty::Error> {
+    Ok(queue::unfinished(db)
+        .await?
+        .iter()
+        .filter(|job| job.state != JobState::Failed)
+        .filter_map(|job| synced_watch(job).map(|watch| (watch, job.state)))
+        .collect())
 }
 
 /// Queues syncs of watches as they fall due, until aborted.

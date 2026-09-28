@@ -3,8 +3,10 @@
 
 use std::collections::{HashMap, HashSet};
 
-use pixiu_db::{Album, ClaimKind, Db, Playlist, PlaylistEntry, Track, User, now, toasty};
-use pixiu_treasury::Claim;
+use pixiu_db::{
+    Album, ClaimKind, Db, Playlist, PlaylistEntry, ReleaseReason, Track, User, now, toasty,
+};
+use pixiu_treasury::{Claim, Release};
 
 use crate::{
     Failure, Params, SubsonicState, catalog,
@@ -214,9 +216,18 @@ async fn set_tracks(
 
     let reference = playlist_id.to_string();
     let listed: HashSet<u64> = track_ids.iter().copied().collect();
+    let name = Playlist::filter_by_id(playlist_id)
+        .first()
+        .exec(db)
+        .await?
+        .map(|playlist| playlist.name);
+    let why = Release {
+        reason: ReleaseReason::PlaylistEdited,
+        source_name: name.as_deref(),
+    };
     state
         .treasury
-        .release(ClaimKind::LocalPlaylist, &reference, |track| {
+        .release(ClaimKind::LocalPlaylist, &reference, why, |track| {
             listed.contains(&track.id)
         })
         .await?;

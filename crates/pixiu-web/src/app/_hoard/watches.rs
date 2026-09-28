@@ -2,15 +2,19 @@
 
 mod watch_id;
 
-use std::collections::HashSet;
+use std::{collections::HashSet, time::Duration};
 
 use pixiu_db::{JobState, Playlist, PlaylistEntry, SessionState, Track, Watch, WatchKind};
-use pixiu_hunt::link::{self, Link};
+use pixiu_hunt::{
+    image_url_at,
+    link::{self, Link},
+};
 use pixiu_jobs::{
     queue::wanted,
     watch::{self, NewWatch, WAITING_FOR_LOGIN, WatchError},
 };
 use serde::Deserialize;
+use tokio::sync::broadcast::error::RecvError;
 use topcoat::{
     Result,
     context::Cx,
@@ -19,12 +23,17 @@ use topcoat::{
         error::{SeeOther, see_other},
         page, query_params, route,
     },
-    view::{View, attributes, class, view},
+    runtime::{Event, connected, shard, signal},
+    view::{View, attributes, class, component, emit, live, view},
 };
 
 use crate::{
+    app::_hoard::count,
     auth::{db, jobs, require_user, treasury, warden},
-    ui::{BUTTON_DANGER, BUTTON_PRIMARY, BUTTON_SECONDARY, alert, card, field, notice, relative},
+    ui::{
+        LABEL, Size, Tone, btn, confirm_dialog, cover, empty_state, icons, open_dialog,
+        page_header, progress, relative, snackbar, switch, text_field,
+    },
 };
 
 pub(super) const WATCHES_PATH: &str = "/watches";
@@ -34,18 +43,37 @@ struct WatchesQuery {
     added: Option<String>,
     removed: Option<String>,
     error: Option<String>,
+    /// A link to fill in, e.g. from an artist's page.
+    target: Option<String>,
+}
+
+/// How far a watch is along.
+enum Detail {
+    /// Songs of the playlist in the hoard, of all its songs.
+    Playlist {
+        have: usize,
+        total: usize,
+    },
+    Artist(String),
+    NotMirrored,
 }
 
 /// A watch as the page shows it.
 struct Row {
     watch: Watch,
     link: String,
-    kind: &'static str,
-    detail: String,
-    status: String,
-    status_class: &'static str,
+    detail: Detail,
+    status: Status,
     queued: usize,
     failed: usize,
+}
+
+enum Status {
+    Synced(String),
+    Syncing,
+    SyncQueued,
+    Waiting,
+    Failed(String),
 }
 
 fn remote_url(watch: &Watch) -> String {
@@ -60,7 +88,7 @@ fn remote_url(watch: &Watch) -> String {
     }
 }
 
-async fn detail(cx: &Cx, watch: &Watch) -> Result<String> {
+async fn detail(cx: &Cx, watch: &Watch) -> Result<Detail> {
     let mut db = db(cx);
     Ok(match watch.kind {
         WatchKind::Playlist | WatchKind::LikedMusic => {
@@ -69,7 +97,7 @@ async fn detail(cx: &Cx, watch: &Watch) -> Result<String> {
                 .exec(&mut db)
                 .await?
             else {
-                return Ok("Not mirrored yet".to_owned());
+                return Ok(Detail::NotMirrored);
             };
             let videos: Vec<String> = PlaylistEntry::filter_by_playlist_id(mirror.id)
                 .exec(&mut db)
@@ -86,39 +114,34 @@ async fn detail(cx: &Cx, watch: &Watch) -> Result<String> {
                     downloaded.extend(track.ytm_video_id);
                 }
             }
-            let songs = if videos.len() == 1 { "song" } else { "songs" };
-            format!(
-                "{} of {} {songs} in the hoard",
-                videos
+            Detail::Playlist {
+                have: videos
                     .iter()
                     .filter(|video| downloaded.contains(*video))
                     .count(),
-                videos.len()
-            )
+                total: videos.len(),
+            }
         }
         WatchKind::Artist => {
             let releases = if watch.include_singles {
-                "albums, EPs and singles"
+                "Albums, singles and EPs"
             } else {
-                "albums"
+                "Albums only"
             };
             let from = if watch.only_new {
-                "released from now on"
+                "Only releases from now on"
             } else {
-                "old and new"
+                "Old releases included"
             };
-            format!(
-                "{} releases known · grabs {releases}, {from}",
-                watch.seen.len()
-            )
+            Detail::Artist(format!(
+                "{} · {releases} · {from}",
+                count(watch.seen.len(), "release known", "releases known")
+            ))
         }
     })
 }
 
-#[page]
-async fn page(cx: &Cx) -> Result<impl View> {
-    require_user(cx).await?;
-    let query = query_params::<WatchesQuery>(cx)?;
+async fn rows(cx: &Cx) -> Result<Vec<Row>> {
     let mut watches = Watch::all().exec(&mut db(cx)).await?;
     watches.sort_by_key(|watch| watch.created_at);
     let logged_in = matches!(
@@ -126,22 +149,23 @@ async fn page(cx: &Cx) -> Result<impl View> {
         Some(SessionState::Valid | SessionState::Degraded)
     );
     let unfinished = jobs(cx).unfinished().await?;
-    let liked_watched = watches
-        .iter()
-        .any(|watch| watch.kind == WatchKind::LikedMusic);
+    let syncing = watch::syncing(&mut db(cx)).await?;
 
     let mut rows = Vec::with_capacity(watches.len());
     for watch in watches {
         let waiting = watch.last_error.as_deref() == Some(WAITING_FOR_LOGIN)
             || (watch.kind == WatchKind::LikedMusic && !logged_in);
-        let (status, status_class) = match (&watch.last_error, watch.last_synced_at) {
-            _ if waiting => (WAITING_FOR_LOGIN.to_owned(), "text-gold"),
-            (Some(error), _) => (error.clone(), "text-destructive"),
-            (None, Some(synced)) => (
-                format!("Synced {}", relative(synced)),
-                "text-muted-foreground",
-            ),
-            (None, None) => ("Not synced yet".to_owned(), "text-muted-foreground"),
+        let status = match (
+            syncing.get(&watch.id),
+            &watch.last_error,
+            watch.last_synced_at,
+        ) {
+            (Some(JobState::Running), _, _) => Status::Syncing,
+            _ if waiting => Status::Waiting,
+            (Some(_), _, _) => Status::SyncQueued,
+            (None, Some(error), _) => Status::Failed(error.clone()),
+            (None, None, Some(synced)) => Status::Synced(format!("Synced {}", relative(synced))),
+            (None, None, None) => Status::Synced("Not synced yet".to_owned()),
         };
         let mine = unfinished
             .iter()
@@ -155,134 +179,282 @@ async fn page(cx: &Cx) -> Result<impl View> {
         });
         rows.push(Row {
             link: remote_url(&watch),
-            // Liked music says what it is by its name.
-            kind: match watch.kind {
-                WatchKind::Playlist => "Playlist",
-                WatchKind::LikedMusic => "",
-                WatchKind::Artist => "Artist",
-            },
             detail: detail(cx, &watch).await?,
             status,
-            status_class,
             queued,
             failed,
             watch,
         });
     }
+    Ok(rows)
+}
+
+fn dialog_id(watch: &Watch) -> String {
+    format!("remove-watch-{}", watch.id)
+}
+
+#[page]
+async fn page(cx: &Cx) -> Result<impl View> {
+    require_user(cx).await?;
+    let query = query_params::<WatchesQuery>(cx)?;
+    let watches = Watch::all().exec(&mut db(cx)).await?;
+    let logged_in = matches!(
+        warden(cx).health().state,
+        Some(SessionState::Valid | SessionState::Degraded)
+    );
+    let liked_watched = watches
+        .iter()
+        .any(|watch| watch.kind == WatchKind::LikedMusic);
+    let orphaned = treasury(cx).orphan_count().await?;
+    let target = signal(cx, || query.target.clone().unwrap_or_default());
 
     Ok(view! {
-        <div class="mx-auto flex max-w-5xl flex-col gap-8">
-            <header class="flex flex-col gap-1">
-                <h2 class="text-3xl font-bold text-gold">"Watches"</h2>
-                <p class="text-muted-foreground">
-                    "Playlists and artists píxiū keeps up with. Watched playlists show up "
-                    "as playlists in your Subsonic clients; what leaves them is kept, as an "
-                    "orphan."
-                </p>
-            </header>
-
-            if query.added.is_some() {
-                notice("Watching. The first sync is on the " <a href="/jobs" class="underline">"Jobs"</a> " page.")
-            }
-            if query.removed.is_some() {
-                notice("No longer watched. Its tracks stay; those nothing else wants are now " <a href="/orphans" class="underline">"orphans"</a> ".")
-            }
-            if let Some(error) = &query.error {
-                alert((error))
-            }
-
-            card(
-                <form method="post" action="/watches/add" class="flex flex-col gap-4">
-                    <h3 class="text-lg">"Watch a playlist or an artist"</h3>
-                    <div class="flex items-end gap-3">
-                        <div class="flex-1">
-                            field(
-                                label: "YouTube Music link",
-                                attrs: attributes! {
-                                    name="target" required=""
-                                    placeholder="https://music.youtube.com/playlist?list=…"
-                                },
-                            )
-                        </div>
-                        <button type="submit" class=(BUTTON_PRIMARY)>"Watch"</button>
-                    </div>
-                    <fieldset class="flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted-foreground">
-                        <legend class="mb-1 text-xs uppercase tracking-widest">"For artists"</legend>
-                        <label class="flex items-center gap-2">
-                            <input type="checkbox" name="only_new" checked="" class="accent-gold">
-                            "Only releases from now on"
-                        </label>
-                        <label class="flex items-center gap-2">
-                            <input type="checkbox" name="singles" class="accent-gold">
-                            "Singles and EPs too"
-                        </label>
-                    </fieldset>
-                </form>
+        <div class="flex flex-col gap-7">
+            page_header(
+                eyebrow: "Watches",
+                title: "Keep up with playlists and artists",
+                lede: "Watches sync on their own every few hours. Watched playlists show up in \
+                       Subsonic apps as read-only playlists.",
             )
 
-            if !liked_watched {
-                card(
-                    <div class="flex items-center justify-between gap-4">
-                        <div class="flex flex-col gap-1">
-                            <h3 class="text-lg">"Your liked music"</h3>
-                            <p class="text-sm text-muted-foreground">
-                                "Mirror the songs you like on YouTube Music as a playlist; new "
-                                "likes are downloaded."
-                                if !logged_in {
-                                    " Needs a " <a href="/settings/sources" class="underline">"YouTube Music login"</a> "."
-                                }
-                            </p>
-                        </div>
-                        <form method="post" action="/watches/liked" class="shrink-0">
-                            <button type="submit" class=(BUTTON_SECONDARY)>"Watch liked music"</button>
-                        </form>
-                    </div>
-                )
+            if query.added.is_some() {
+                snackbar(message: "Watching. The first sync is queued.", action: ("Jobs", "/jobs"))
+            }
+            if query.removed.is_some() {
+                if orphaned > 0 {
+                    snackbar(
+                        message: "No longer watched. Songs nothing else keeps are now orphans.",
+                        action: ("Orphans", "/orphans"),
+                    )
+                } else {
+                    snackbar(message: "No longer watched. Its music stays in the hoard.")
+                }
+            }
+            if let Some(error) = &query.error {
+                snackbar(message: error, error: true)
             }
 
-            if rows.is_empty() {
-                <p class="text-center text-sm text-muted-foreground">"Nothing watched yet."</p>
-            } else {
-                card(
-                    <ul class="divide-y divide-border">
-                        for row in &rows {
-                            <li class="flex items-start justify-between gap-4 py-4 first:pt-0 last:pb-0">
-                                <div class="min-w-0 flex-1">
-                                    <p class="flex items-baseline gap-2">
-                                        <a href=(&row.link) target="_blank" rel="noreferrer" class="truncate font-medium hover:underline">
-                                            (&row.watch.name)
-                                        </a>
-                                        <span class="shrink-0 text-xs uppercase tracking-widest text-muted-foreground">(row.kind)</span>
-                                    </p>
-                                    <p class="text-sm text-muted-foreground">(&row.detail)</p>
-                                    <p class=(class!("text-sm", row.status_class))>
-                                        (&row.status)
-                                        if row.queued > 0 {
-                                            " · " (row.queued) " queued"
-                                        }
-                                        if row.failed > 0 {
-                                            " · " <a href="/jobs" class="text-destructive underline">(row.failed) " failed"</a>
-                                        }
-                                    </p>
-                                </div>
-                                <div class="flex shrink-0 items-center gap-2">
-                                    <form method="post" action=(format!("/watches/{}/sync", row.watch.id))>
-                                        <button type="submit" class=(BUTTON_SECONDARY)>"Sync now"</button>
-                                    </form>
-                                    <form
-                                        method="post"
-                                        action=(format!("/watches/{}/remove", row.watch.id))
-                                        onsubmit="return confirm('Stop watching? Its tracks stay; those nothing else wants become orphans.')"
-                                    >
-                                        <button type="submit" class=(BUTTON_DANGER)>"Remove"</button>
-                                    </form>
-                                </div>
-                            </li>
-                        }
-                    </ul>
+            <form
+                method="post"
+                action="/watches/add"
+                class="flex flex-col gap-3.5 rounded-3xl bg-card p-5 [--field-bg:var(--card)]"
+            >
+                <div class="flex flex-wrap items-start gap-3">
+                    <div class="flex min-w-0 flex-[1_1_320px] flex-col gap-1">
+                        text_field(
+                            label: "YouTube Music link",
+                            leading: icons::LINK,
+                            attrs: attributes! {
+                                name="target" required="" autocomplete="off"
+                                :value=$(target.get())
+                                @input=$(|e: Event| target.set(e.target.value))
+                            },
+                        )
+                        link_hint(target: $(target.get()))
+                    </div>
+                    <button type="submit" class=(btn(Tone::Filled, Size::M))>"Watch"</button>
+                </div>
+            </form>
+
+            if !liked_watched {
+                <div
+                    class="flex flex-wrap items-center gap-x-5 gap-y-3.5 rounded-[20px] border \
+                           border-border px-5 py-[18px]"
+                >
+                    <div class="flex flex-[1_1_280px] flex-col gap-0.5">
+                        <span class="text-base font-medium">"Watch your liked music"</span>
+                        <span class="text-sm text-muted-foreground">
+                            "Mirrors your YouTube Music likes as a playlist. "
+                            if logged_in {
+                                "New likes are downloaded."
+                            } else {
+                                "Needs a " <a href="/settings/sources">"YouTube Music login"</a> "."
+                            }
+                        </span>
+                    </div>
+                    <form method="post" action="/watches/liked">
+                        <button type="submit" class=(btn(Tone::Tonal, Size::S))>"Watch liked music"</button>
+                    </form>
+                </div>
+            }
+
+            watch_list()
+
+            for watch in &watches {
+                let id = dialog_id(watch);
+                let action = format!("/watches/{}/remove", watch.id);
+                confirm_dialog(
+                    id: &id,
+                    headline: "Remove this watch?",
+                    action: &action,
+                    confirm: "Remove",
+                    "“" (&watch.name) "” stops syncing, and its music stays in the hoard. "
+                    "Songs nothing else keeps become orphans."
                 )
             }
         </div>
+    })
+}
+
+/// What the pasted link is, as the admin types, and the artist options
+/// when it is an artist.
+#[shard]
+async fn link_hint(cx: &Cx, target: String) -> Result<impl View> {
+    require_user(cx).await?;
+    let target = target.trim();
+    let parsed = (!target.is_empty()).then(|| link::parse(target)).flatten();
+    let (hint, bad) = match (&parsed, target.is_empty()) {
+        (_, true) => (
+            "Paste a playlist or artist link from music.youtube.com",
+            false,
+        ),
+        (Some(Link::Artist(_)), _) => ("Artist link: choose what to follow", false),
+        (Some(Link::Playlist(_)), _) => ("Playlist link", false),
+        (Some(Link::LikedMusic), _) => ("Your liked music", false),
+        (Some(Link::Album(_) | Link::Track(_)), _) => {
+            ("That’s an album or a song. Grab it on Hunt instead.", true)
+        }
+        (None, _) => ("That isn’t a YouTube Music playlist or artist link.", true),
+    };
+    let artist = matches!(parsed, Some(Link::Artist(_)));
+    Ok(view! {
+        <span class=(class!("px-4 text-xs leading-4", "text-destructive" if bad else "text-muted-foreground"))>
+            (hint)
+        </span>
+        if artist {
+            <div class="flex flex-wrap gap-x-7 gap-y-3 px-1 pt-3">
+                switch(attrs: attributes! { name="only_new" checked="" }, "Only releases from now on")
+                switch(attrs: attributes! { name="singles" }, "Singles and EPs too")
+            </div>
+        }
+    })
+}
+
+/// The watches, live: syncs start and finish while the page is open.
+#[shard]
+async fn watch_list(cx: &Cx) -> Result<impl View> {
+    require_user(cx).await?;
+    Ok(live! {
+        let mut updates = jobs(cx).subscribe();
+        loop {
+            let rows = rows(cx).await?;
+            let token = emit! { watch_rows(rows: rows) }?;
+            if !connected(cx) {
+                break Ok(token);
+            }
+            if matches!(updates.recv().await, Err(RecvError::Closed)) {
+                break Ok(token);
+            }
+            tokio::time::sleep(Duration::from_millis(500)).await;
+            while updates.try_recv().is_ok() {}
+        }
+    })
+}
+
+#[component]
+async fn watch_rows(rows: Vec<Row>) -> Result<impl View> {
+    Ok(view! {
+        if rows.is_empty() {
+            empty_state(<p class="m-0">"Nothing watched yet. Paste a playlist or artist link above."</p>)
+        } else {
+            <section class="flex flex-col gap-2.5">
+                for row in &rows {
+                    let watch = &row.watch;
+                    let artist = watch.kind == WatchKind::Artist;
+                    <div class="flex flex-wrap items-center gap-x-5 gap-y-4 rounded-[20px] bg-card px-[18px] py-4">
+                        <div class="w-16 shrink-0">
+                            if let Some(url) = &watch.image_url {
+                                <img
+                                    src=(image_url_at(url, 160))
+                                    alt=""
+                                    loading="lazy"
+                                    referrerpolicy="no-referrer"
+                                    class=(class!(
+                                        "aspect-square w-full object-cover",
+                                        "rounded-full" if artist else "rounded-xl",
+                                    ))
+                                >
+                            } else {
+                                cover(album: None, size: 120)
+                            }
+                        </div>
+                        <div class="flex min-w-0 flex-[1_1_260px] flex-col gap-1.5">
+                            <span class=(class!(LABEL, "tracking-[.1em]"))>
+                                match watch.kind {
+                                    WatchKind::Playlist => "Playlist",
+                                    WatchKind::LikedMusic => "Liked music",
+                                    WatchKind::Artist => "Artist",
+                                }
+                            </span>
+                            <a
+                                href=(&row.link)
+                                target="_blank"
+                                rel="noopener"
+                                class="text-[17px] font-medium text-foreground hover:text-foreground hover:underline"
+                            >
+                                (&watch.name)
+                            </a>
+                            match &row.detail {
+                                Detail::Playlist { have, total } => {
+                                    <div class="flex max-w-[360px] items-center gap-2.5">
+                                        progress(
+                                            value: Some(if *total == 0 { 0.0 } else {
+                                                #[allow(clippy::cast_precision_loss)]
+                                                let fraction = *have as f64 / *total as f64;
+                                                fraction
+                                            }),
+                                            attrs: attributes! { class="flex-1" },
+                                        )
+                                        <span class="text-[13px] whitespace-nowrap text-muted-foreground">
+                                            (have) " of " (count(*total, "song", "songs")) " in the hoard"
+                                        </span>
+                                    </div>
+                                },
+                                Detail::Artist(text) => {
+                                    <span class="text-[13px] text-muted-foreground">(text)</span>
+                                },
+                                Detail::NotMirrored => {
+                                    <span class="text-[13px] text-muted-foreground">"Not mirrored yet"</span>
+                                },
+                            }
+                            <span class="text-[13px] leading-[18px]">
+                                match &row.status {
+                                    Status::Synced(text) => <span class="text-muted-foreground">(text)</span>,
+                                    Status::Syncing => <span class="text-gold">"Syncing…"</span>,
+                                    Status::SyncQueued => <span class="text-muted-foreground">"Sync queued"</span>,
+                                    Status::Waiting => {
+                                        <a href="/settings/sources" class="text-slate-pale hover:text-foreground">
+                                            "Waiting for a YouTube Music login"
+                                        </a>
+                                    },
+                                    Status::Failed(error) => <span class="text-destructive">(error)</span>,
+                                }
+                                if row.queued > 0 {
+                                    <span class="text-muted-foreground">" · " (row.queued) " queued"</span>
+                                }
+                                if row.failed > 0 {
+                                    " · " <a href="/jobs" class="text-destructive">(row.failed) " failed"</a>
+                                }
+                            </span>
+                        </div>
+                        <div class="flex gap-2">
+                            <form method="post" action=(format!("/watches/{}/sync", watch.id))>
+                                <button type="submit" class=(btn(Tone::Tonal, Size::S))>"Sync now"</button>
+                            </form>
+                            <form method="post" action=(format!("/watches/{}/remove", watch.id))>
+                                <button
+                                    type="submit"
+                                    onclick=(format!("{}; return false", open_dialog(&dialog_id(watch))))
+                                    class=(btn(Tone::Text, Size::S))
+                                >
+                                    "Remove"
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                }
+            </section>
+        }
     })
 }
 

@@ -6,8 +6,8 @@ use std::{
 };
 
 use pixiu_db::{
-    Album, Artist, ClaimKind, Db, Job, JobKind, JobState, Playlist, PlaylistEntry, Track,
-    TrackClaim, TrackOrigin, Watch, WatchKind, now, toasty,
+    Album, Artist, ClaimKind, Db, Job, JobKind, JobState, Playlist, PlaylistEntry, ReleaseReason,
+    ReleasedClaim, Track, TrackClaim, TrackOrigin, Watch, WatchKind, now, toasty,
 };
 use pixiu_hunt::{AlbumKind, Discography, RemoteAlbum, RemotePlaylist, RemoteTrack};
 use pixiu_jobs::{
@@ -39,6 +39,7 @@ impl Catalog for FakeCatalog {
                     id: (*video_id).to_owned(),
                     title: format!("Song {video_id}"),
                     artists: vec!["Somebody".to_owned()],
+                    artist_id: None,
                     album: None,
                     duration_secs: Some(180),
                     track_number: None,
@@ -49,6 +50,7 @@ impl Catalog for FakeCatalog {
             Ok(RemotePlaylist {
                 id: id.to_owned(),
                 name: "Test playlist".to_owned(),
+                image_url: Some("https://example.com/playlist.jpg".to_owned()),
                 tracks,
             })
         })
@@ -68,6 +70,7 @@ impl Catalog for FakeCatalog {
                     id: (*id).to_owned(),
                     title: format!("Release {id}"),
                     artists: vec!["The Band".to_owned()],
+                    artist_id: Some(channel_id.to_owned()),
                     year: Some(2026),
                     kind: *kind,
                     cover_url: None,
@@ -77,6 +80,7 @@ impl Catalog for FakeCatalog {
             Ok(Discography {
                 id: channel_id.to_owned(),
                 name: "The Band".to_owned(),
+                image_url: Some("https://example.com/band.jpg".to_owned()),
                 albums,
             })
         })
@@ -280,6 +284,19 @@ async fn playlists_are_mirrored_and_claims_follow_them() {
             vec!["a".into(), "b".into(), "c".into()]
         )
     );
+    // Songs not downloaded yet are named as the platform names them.
+    let named: Vec<(Option<String>, Option<String>)> = PlaylistEntry::all()
+        .exec(&mut db)
+        .await
+        .unwrap()
+        .into_iter()
+        .filter(|entry| entry.ytm_video_id.as_deref() == Some("c"))
+        .map(|entry| (entry.title, entry.artist))
+        .collect();
+    assert_eq!(
+        named,
+        [(Some("Song c".to_owned()), Some("Somebody".to_owned()))]
+    );
     let reference = Some(watch.id.to_string());
     assert_eq!(
         claims_of(&mut db, b).await,
@@ -287,6 +304,10 @@ async fn playlists_are_mirrored_and_claims_follow_them() {
     );
     let synced = Watch::get_by_id(&mut db, &watch.id).await.unwrap();
     assert_eq!(synced.name, "Test playlist");
+    assert_eq!(
+        synced.image_url.as_deref(),
+        Some("https://example.com/playlist.jpg")
+    );
     assert!(synced.last_synced_at.is_some() && synced.last_error.is_none());
 
     // While the downloads are queued, syncing does not queue them again.
@@ -387,6 +408,15 @@ async fn artists_bring_their_releases() {
     let mut db = s.db.clone();
     *s.catalog.albums.lock().unwrap() =
         vec![("old", AlbumKind::Album), ("single", AlbumKind::Single)];
+    // Already in the hoard, but nothing said which channel is theirs.
+    let band = toasty::create!(Artist {
+        name: "The Band",
+        name_key: "the band",
+        created_at: now(),
+    })
+    .exec(&mut db)
+    .await
+    .unwrap();
 
     // Only new releases, no singles: the first sync takes note of the album.
     let newcomer = watch::add(
@@ -412,6 +442,13 @@ async fn artists_bring_their_releases() {
     let noted = Watch::get_by_id(&mut db, &newcomer.id).await.unwrap();
     assert_eq!(noted.seen, ["old"]);
     assert_eq!(noted.name, "The Band");
+    assert_eq!(
+        noted.image_url.as_deref(),
+        Some("https://example.com/band.jpg")
+    );
+    // Now the hoard's artist knows its channel.
+    let band = Artist::get_by_id(&mut db, &band.id).await.unwrap();
+    assert_eq!(band.ytm_channel_id.as_deref(), Some("UCnew"));
 
     *s.catalog.albums.lock().unwrap() = vec![
         ("fresh", AlbumKind::Album),
@@ -499,6 +536,14 @@ async fn removing_a_watch_lets_go() {
             .is_none()
     );
     assert!(claims_of(&mut db, kept).await.is_empty());
+    // The orphan it leaves knows why.
+    let released = ReleasedClaim::filter_by_track_id(kept)
+        .exec(&mut db)
+        .await
+        .unwrap();
+    assert_eq!(released.len(), 1);
+    assert_eq!(released[0].reason, ReleaseReason::WatchRemoved);
+    assert_eq!(released[0].source_name.as_deref(), Some("Test playlist"));
     let left: Vec<String> = s
         .jobs
         .unfinished()

@@ -199,6 +199,12 @@ fn fixture(name: &str) -> Vec<u8> {
 }
 
 /// The text after `prefix` in `html`, up to the next `"` or `<`.
+/// A page without the Pulse column, which repeats running jobs on every
+/// page.
+fn main_of(page: &str) -> &str {
+    page.split("aria-label=\"Pulse\"").next().unwrap_or(page)
+}
+
 fn between<'a>(html: &'a str, prefix: &str, suffix: &str) -> &'a str {
     let start = html
         .find(prefix)
@@ -247,7 +253,11 @@ async fn albums_are_browsed_looked_up_and_edited() {
 
     // Accepting queued a MusicBrainz lookup (the workers are off in tests).
     let jobs = server.get("/jobs").await.text().await.unwrap();
-    assert_eq!(jobs.matches("Look up Test Album").count(), 1, "{jobs}");
+    assert_eq!(
+        main_of(&jobs).matches("Look up Test Album").count(),
+        1,
+        "{jobs}"
+    );
 
     let library = server.get("/library").await.text().await.unwrap();
     assert!(library.contains("Test Album") && library.contains("Not looked up"));
@@ -255,7 +265,7 @@ async fn albums_are_browsed_looked_up_and_edited() {
     let album_page = format!("/albums/{id}");
     let page = server.get(&album_page).await.text().await.unwrap();
     assert!(page.contains("First Light") && page.contains("Second Wind"));
-    assert!(page.contains("Not looked up on MusicBrainz yet"));
+    assert!(page.contains("Not looked up yet."));
 
     // Looking it up again, or from a chosen release, queues more lookups.
     let lookup = server.post_form(&format!("{album_page}/lookup"), &[]).await;
@@ -278,7 +288,7 @@ async fn albums_are_browsed_looked_up_and_edited() {
         .await;
     assert_eq!(location(&chosen), format!("{album_page}?queued=1"));
     let jobs = server.get("/jobs").await.text().await.unwrap();
-    assert_eq!(jobs.matches("Look up Test Album").count(), 3);
+    assert_eq!(main_of(&jobs).matches("Look up Test Album").count(), 3);
 
     // Editing renames it, tags and files included.
     let first = between(&page, "name=\"title-", "\"").to_owned();
@@ -329,7 +339,11 @@ async fn albums_are_browsed_looked_up_and_edited() {
         "/jobs"
     );
     let jobs = server.get("/jobs").await.text().await.unwrap();
-    assert_eq!(jobs.matches("Look up Renamed Album").count(), 1, "{jobs}");
+    assert_eq!(
+        main_of(&jobs).matches("Look up Renamed Album").count(),
+        1,
+        "{jobs}"
+    );
 }
 
 #[tokio::test]
@@ -375,9 +389,14 @@ async fn the_file_layout_is_set_in_settings() {
         assert_eq!(location(&moved), "/jobs");
     }
     let jobs = server.get("/jobs").await.text().await.unwrap();
-    assert_eq!(jobs.matches("Move files to the new layout").count(), 1);
+    assert_eq!(
+        main_of(&jobs)
+            .matches("Move files to the new layout")
+            .count(),
+        1
+    );
     let settings = server.get("/settings").await.text().await.unwrap();
-    assert!(settings.contains("Moving files to the layout"));
+    assert!(settings.contains("Moving files…"));
 
     let reset = server
         .post_form("/settings/layout", &[("template", ""), ("reset", "1")])
@@ -386,7 +405,10 @@ async fn the_file_layout_is_set_in_settings() {
         .await
         .unwrap();
     assert!(reset.contains("01-04 Vibing Over Venus.opus"), "{reset}");
-    assert!(!reset.contains("Back to the default"));
+    // The default cannot be gone back to.
+    let reset_button = &reset[..reset.find("Back to the default").unwrap()];
+    let reset_button = &reset_button[reset_button.rfind("<button").unwrap()..];
+    assert!(reset_button.contains(" disabled"), "{reset_button}");
 }
 
 #[tokio::test]
@@ -417,7 +439,8 @@ async fn offerings_become_subsonic_music() {
 
     let review = server.get("/offerings").await.text().await.unwrap();
     assert!(review.contains("Test Album"), "{review}");
-    assert!(review.contains("Accept 2"), "{review}");
+    assert!(review.contains(">Accept<"), "{review}");
+    assert!(review.contains("2 files"), "{review}");
     let accept_end = review.find("/accept\"").expect("an accept form");
     let batch = &review
         [review[..accept_end].rfind("/offerings/").unwrap() + "/offerings/".len()..accept_end];
@@ -427,7 +450,7 @@ async fn offerings_become_subsonic_music() {
         .await;
     assert_eq!(location(&accepted), "/offerings?accepted=2");
     let review = server.get("/offerings").await.text().await.unwrap();
-    assert!(review.contains("Nothing awaits review."));
+    assert!(review.contains("No offerings wait for review."));
 
     // The dashboard shows the album, with its cover.
     let home = server.get("/").await.text().await.unwrap();
@@ -513,7 +536,7 @@ async fn first_run_setup_then_login_and_logout() {
     let home = server.get("/").await;
     assert_eq!(home.status(), StatusCode::OK);
     let home = home.text().await.unwrap();
-    assert!(home.contains("The Hoard"));
+    assert!(home.contains("The hoard"));
     assert!(home.contains("keeper"));
     // Subsonic clients want the bare server address; they append `/rest`.
     assert!(home.contains(&format!(">{}</code>", server.url(""))));
@@ -573,7 +596,7 @@ async fn hunting_queues_jobs() {
             .text()
             .await
             .unwrap()
-            .contains("No jobs yet")
+            .contains("Nothing going on")
     );
 
     let hostile = server
@@ -609,7 +632,7 @@ async fn hunting_queues_jobs() {
         "{jobs}"
     );
     assert!(jobs.contains("Some Album"));
-    assert_eq!(jobs.matches(">Queued").count(), 2, "{jobs}");
+    assert_eq!(main_of(&jobs).matches(">Queued").count(), 2, "{jobs}");
 
     // Clearing keeps unfinished jobs.
     assert_eq!(
@@ -637,7 +660,8 @@ async fn watches_are_added_synced_and_removed() {
     assert_eq!(location(&added), "/watches?added=1");
     let watches = page().await;
     assert!(watches.contains("PLpixiuTest"), "{watches}");
-    assert!(watches.contains("Not synced yet"));
+    // Its first sync is queued.
+    assert!(watches.contains("Sync queued"));
     // Its first sync waits in the queue (the workers are off in tests).
     let jobs = server.get("/jobs").await.text().await.unwrap();
     assert!(jobs.contains("Sync PLpixiuTest"), "{jobs}");
@@ -684,9 +708,10 @@ async fn watches_are_added_synced_and_removed() {
         .find(|id| !id.is_empty())
         .expect("a watch's form");
     let synced = server.post_form(&format!("/watches/{id}/sync"), &[]).await;
-    assert_eq!(location(&synced), "/jobs");
+    // The watch list follows the sync.
+    assert_eq!(location(&synced), "/watches");
     let jobs = server.get("/jobs").await.text().await.unwrap();
-    assert_eq!(jobs.matches("Sync PLpixiuTest").count(), 1);
+    assert_eq!(main_of(&jobs).matches("Sync PLpixiuTest").count(), 1);
 
     let removed = server
         .post_form(&format!("/watches/{id}/remove"), &[])
@@ -782,8 +807,11 @@ async fn orphans_are_listed_kept_and_deleted() {
         .await;
     assert_eq!(location(&deleted), "/orphans?deleted=1");
     let page = server.get(location(&deleted)).await.text().await.unwrap();
-    assert!(page.contains("No orphans"), "{page}");
-    assert!(page.contains("Deleted 1 track."));
+    assert!(
+        page.contains("Everything in the hoard is wanted."),
+        "{page}"
+    );
+    assert!(page.contains("Deleted 1 track from disk."));
 }
 
 #[tokio::test]
@@ -810,7 +838,7 @@ async fn sources_report_the_youtube_music_session() {
         .unwrap();
     assert_eq!(
         status,
-        serde_json::json!({ "open": false, "logged_in": false })
+        serde_json::json!({ "open": false, "logged_in": false, "host": null })
     );
 }
 
@@ -840,7 +868,7 @@ async fn an_expired_session_is_announced_on_every_page() {
         );
     }
     let sources = server.get("/settings/sources").await.text().await.unwrap();
-    assert!(sources.contains("Expired: log in again"));
+    assert!(sources.contains(">Expired<"));
     assert!(sources.contains("signed out everywhere"));
     assert!(sources.contains("Log in again"));
 }

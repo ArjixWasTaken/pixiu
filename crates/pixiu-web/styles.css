@@ -1,70 +1,188 @@
 /* píxiū theme.
 
    Colors come from the logo: a midnight field, the beast's gold scrollwork and
-   its slate-blue body. Components use the tokens below rather than raw colors,
-   so the palette can be retuned in one place. There is only a dark scheme;
-   the logo lives on midnight. */
+   its slate-blue body. The shapes and type follow Material 3: Roboto, pill
+   buttons, outlined fields, tonal containers. Components use the tokens below
+   rather than raw colors, so the palette can be retuned in one place. There is
+   only a dark scheme; the logo lives on midnight. */
 
 @import "tailwindcss";
 
 @source "./src/**/*.rs";
 
+/* The design switches from the bottom bar to the nav rail at 760px, and
+   shows the Pulse column from 1280px (Tailwind's own `xl`). */
+@theme {
+  --breakpoint-md: 760px;
+}
+
 @theme inline {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Cinzel", ui-serif, Georgia, serif;
+  --font-sans: "Roboto", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Roboto Mono", ui-monospace, monospace;
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-muted: var(--muted);
+  --color-foreground-soft: var(--foreground-soft);
   --color-muted-foreground: var(--muted-foreground);
+  --color-dim: var(--dim);
+  --color-card: var(--card);
+  --color-hover: var(--hover);
+  --color-muted: var(--muted);
+  --color-highest: var(--highest);
+  --color-border: var(--border);
+  --color-outline: var(--outline);
   --color-gold: var(--gold);
   --color-gold-soft: var(--gold-soft);
   --color-gold-foreground: var(--gold-foreground);
+  --color-gold-container: var(--gold-container);
   --color-slate: var(--slate);
   --color-slate-soft: var(--slate-soft);
+  --color-slate-container: var(--slate-container);
+  --color-slate-pale: var(--slate-pale);
   --color-destructive: var(--destructive);
-  --color-border: var(--border);
-  --color-ring: var(--ring);
-  --color-input: var(--input);
+  --color-destructive-container: var(--destructive-container);
+  --color-destructive-soft: var(--destructive-soft);
+  --color-success: var(--success);
+  --color-ring: var(--gold);
 }
 
 :root {
   color-scheme: dark;
 
-  /* The logo's own background. */
+  /* The logo's own background, and the surfaces stacked on it. */
   --background: #0f1622;
-  --foreground: #ece5d4;
+  --dim: #0c121c;
   --card: #141d2c;
-  --card-foreground: #ece5d4;
+  --hover: #172133;
   --muted: #1a2436;
+  --highest: #212d42;
+  --border: #26324a;
+  --outline: #4a5873;
+
+  --foreground: #ece5d4;
+  --foreground-soft: #c9c3b4;
   --muted-foreground: #97a0b4;
+
   --gold: #e6b65c;
   --gold-soft: #f1cd84;
   --gold-foreground: #1b1406;
+  --gold-container: #3a2e14;
   --slate: #3f5b74;
   --slate-soft: #6f8ca6;
+  --slate-container: #2c4257;
+  --slate-pale: #bcd0e2;
   --destructive: #e0695f;
-  --border: #26324a;
-  --ring: #e6b65c;
-  --input: #0c121c;
+  --destructive-container: #3a1c1a;
+  --destructive-soft: #f3b1aa;
+  --success: #7fc79a;
+}
+
+@keyframes pxpulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+@keyframes pxslide {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(250%); }
+}
+
+@keyframes pxsnack {
+  0% { opacity: 0; transform: translateY(12px); }
+  6%, 88% { opacity: 1; transform: none; }
+  100% { opacity: 0; transform: translateY(12px); visibility: hidden; }
+}
+
+/* A progress bar that runs from `--from` (0 to 1) to full over `--run`. */
+@keyframes pxgrow {
+  from { transform: scaleX(var(--from, 0)); }
+  to { transform: scaleX(1); }
+}
+
+@utility animate-pxgrow {
+  animation: pxgrow var(--run, 0s) linear forwards;
+}
+
+@utility animate-pxpulse {
+  animation: pxpulse 1.6s ease-in-out infinite;
+}
+
+@utility animate-pxslide {
+  animation: pxslide 1.4s ease-in-out infinite;
+}
+
+@utility animate-pxsnack {
+  animation: pxsnack 6s ease forwards;
 }
 
 @layer base {
-  body {
-    @apply bg-background font-sans text-foreground antialiased;
-    background-image:
-      radial-gradient(60rem 30rem at 50% -10rem, rgb(230 182 92 / 0.07), transparent 70%),
-      radial-gradient(40rem 30rem at 100% 100%, rgb(63 91 116 / 0.12), transparent 70%);
-    background-attachment: fixed;
+  html {
+    background: #0a0f18;
   }
 
-  h1, h2, h3 {
-    @apply font-display tracking-wide;
+  body {
+    @apply bg-background font-sans text-foreground antialiased;
+  }
+
+  a {
+    @apply text-gold;
+  }
+
+  a:hover {
+    @apply text-gold-soft;
   }
 
   :focus-visible {
     @apply outline-2 outline-offset-2 outline-ring;
+  }
+
+  button, summary, label[for], input[type="checkbox"], input[type="file"] {
+    cursor: pointer;
+  }
+
+  summary::-webkit-details-marker {
+    display: none;
+  }
+}
+
+@layer components {
+  /* An outlined or filled text field with a floating label: the label sits
+     inside the field until it has focus or a value. Needs `placeholder=" "`
+     on the input, which `ui::text_field` provides. */
+  .field-label {
+    @apply pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 px-1 text-base text-muted-foreground transition-all;
+  }
+
+  .field-input:focus ~ .field-label,
+  .field-input:not(:placeholder-shown) ~ .field-label {
+    @apply top-0 text-xs;
+  }
+
+  .field-input:focus ~ .field-label {
+    @apply text-gold;
+  }
+
+  .field-filled .field-input:focus ~ .field-label,
+  .field-filled .field-input:not(:placeholder-shown) ~ .field-label {
+    @apply top-3;
+  }
+
+  .field-invalid .field-label,
+  .field-invalid .field-input:focus ~ .field-label {
+    @apply text-destructive;
+  }
+
+  .field-lead .field-label {
+    @apply left-11;
+  }
+
+  .field-lead .field-input:focus ~ .field-label,
+  .field-lead .field-input:not(:placeholder-shown) ~ .field-label {
+    @apply left-3;
+  }
+
+  .field-filled.field-lead .field-input:focus ~ .field-label,
+  .field-filled.field-lead .field-input:not(:placeholder-shown) ~ .field-label {
+    @apply left-11;
   }
 }

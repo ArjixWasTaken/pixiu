@@ -10,17 +10,23 @@ use tokio::io::AsyncWriteExt;
 use topcoat::{
     Result,
     context::Cx,
+    icon::icon,
     router::{
         content::multipart::Multipart,
         error::{SeeOther, see_other},
         page, query_params, route,
     },
+    runtime::signal,
     view::{View, class, view},
 };
 
 use crate::{
+    app::_hoard::count,
     auth::{offerings, require_user},
-    ui::{BUTTON_DANGER, BUTTON_PRIMARY, alert, card, format_bytes, format_duration, notice},
+    ui::{
+        ICON_BUTTON, Size, TRUNCATE, Tone, btn, format_bytes, format_duration, icons, page_header,
+        relative, snackbar,
+    },
 };
 
 pub(super) const OFFERINGS_PATH: &str = "/offerings";
@@ -48,7 +54,8 @@ fn by_batch(offerings: Vec<Offering>) -> Vec<(String, Vec<Offering>)> {
     batches
 }
 
-/// "Album, by Artist" for a batch, or a count when it mixes albums.
+/// "Album" and "Artist · year" for a batch, or a count when it mixes
+/// albums.
 fn describe(items: &[Offering]) -> (String, String) {
     let first = &items[0];
     let same_album = items
@@ -62,10 +69,27 @@ fn describe(items: &[Offering]) -> (String, String) {
             .unwrap_or_default();
         (first.album.clone(), format!("{artist}{year}"))
     } else {
-        (
-            format!("{} files", items.len()),
-            "Several albums".to_owned(),
-        )
+        ("Several albums".to_owned(), String::new())
+    }
+}
+
+/// Where a batch came from: its archives, or loose files.
+fn origin(items: &[Offering]) -> String {
+    let mut archives: Vec<&str> = items
+        .iter()
+        .filter_map(|item| item.archive.as_deref())
+        .collect();
+    archives.sort_unstable();
+    archives.dedup();
+    let loose = items.iter().filter(|item| item.archive.is_none()).count();
+    match (archives.as_slice(), loose) {
+        ([], _) => "uploaded as files".to_owned(),
+        ([archive], 0) => format!("from {archive}"),
+        (archives, 0) => format!("from {} archives", archives.len()),
+        (archives, _) => format!(
+            "from {} and loose files",
+            count(archives.len(), "archive", "archives")
+        ),
     }
 }
 
@@ -74,55 +98,72 @@ async fn page(cx: &Cx) -> Result<impl View> {
     require_user(cx).await?;
     let query = query_params::<OfferingsQuery>(cx)?;
     let batches = by_batch(offerings(cx).pending().await?);
+    let uploading = signal(cx, || false);
+    let accepted_message = query.accepted.map(|accepted| {
+        format!(
+            "{} joined the treasure.",
+            count(accepted as usize, "track", "tracks")
+        )
+    });
+    let failed_message = query.failed.map(|failed| {
+        format!(
+            "{} could not be absorbed; the reason is shown next to each.",
+            count(failed as usize, "file", "files"),
+        )
+    });
 
     Ok(view! {
-        <div class="mx-auto flex max-w-5xl flex-col gap-8">
-            <header class="flex flex-col gap-1">
-                <h2 class="text-3xl font-bold text-gold">"Offerings"</h2>
-                <p class="text-muted-foreground">
-                    "Upload music you already own. píxiū reads its tags, you review, "
-                    "and it joins the hoard."
-                </p>
-            </header>
+        <div class="flex flex-col gap-7">
+            page_header(eyebrow: "Offerings", title: "Feed it music you already own")
 
-            card(
-                <form
-                    method="post"
-                    action="/offerings/upload"
-                    enctype="multipart/form-data"
-                    class="flex flex-col gap-4 sm:flex-row sm:items-end"
+            if let Some(message) = &accepted_message {
+                snackbar(message: message, action: ("Library", "/library"))
+            }
+            if let Some(message) = &failed_message {
+                snackbar(message: message, error: true)
+            }
+
+            <form method="post" action="/offerings/upload" enctype="multipart/form-data">
+                <label
+                    class="relative flex min-h-[190px] cursor-pointer flex-col items-center justify-center \
+                           gap-2.5 rounded-[28px] border-[1.5px] border-dashed border-gold/50 bg-dim p-7 \
+                           text-center transition hover:border-gold \
+                           bg-[radial-gradient(60%_80%_at_50%_0%,rgb(230_182_92/.08),transparent_70%)] \
+                           focus-within:border-gold"
                 >
-                    <label class="flex flex-1 flex-col gap-1.5 text-sm">
-                        <span class="font-medium">"Audio files or zip archives"</span>
-                        <input
-                            type="file"
-                            name="files"
-                            multiple=""
-                            required=""
-                            accept=(ACCEPT)
-                            class="rounded-lg border border-dashed border-border bg-input \
-                                   p-3 text-sm text-muted-foreground file:mr-3 file:rounded-md \
-                                   file:border-0 file:bg-gold/15 file:px-3 file:py-1.5 \
-                                   file:text-gold"
-                        >
-                    </label>
-                    <button type="submit" class=(BUTTON_PRIMARY)>"Offer"</button>
-                </form>
-            )
-
-            if let Some(accepted) = query.accepted {
-                notice((accepted) " offering(s) joined the hoard.")
-            }
-            if let Some(failed) = query.failed {
-                alert(
-                    (failed)
-                    " offering(s) could not be absorbed; the reason is shown next to each."
-                )
-            }
+                    <span class="grid size-14 place-items-center rounded-full bg-gold-container text-gold-soft">
+                        icon(data: icons::UPLOAD, size: 24)
+                    </span>
+                    <span class="text-lg" :hidden=$(uploading.get())>
+                        "Drop audio files or zip archives here"
+                    </span>
+                    <span class="text-lg" :hidden=$(!uploading.get())>"Offering…"</span>
+                    <span class="text-sm text-muted-foreground">
+                        "Several at once. MP3, FLAC, M4A, Opus, Ogg, WAV or ZIP. "
+                        <span class="font-medium text-gold">"Choose files"</span>
+                    </span>
+                    <input
+                        type="file"
+                        name="files"
+                        multiple=""
+                        required=""
+                        accept=(ACCEPT)
+                        aria-label="Audio files or zip archives"
+                        onchange="if (this.files.length) this.form.requestSubmit()"
+                        @change=$(|_e| uploading.set(true))
+                        class="absolute inset-0 cursor-pointer opacity-0"
+                    >
+                </label>
+                <noscript>
+                    <div class="mt-3 flex justify-end">
+                        <button type="submit" class=(btn(Tone::Filled, Size::S))>"Offer"</button>
+                    </div>
+                </noscript>
+            </form>
 
             if batches.is_empty() {
-                <p class="text-center text-sm text-muted-foreground">
-                    "Nothing awaits review."
+                <p class="m-0 text-center text-sm text-muted-foreground">
+                    "No offerings wait for review. Whatever you upload lands here first."
                 </p>
             }
             for (batch, items) in &batches {
@@ -140,84 +181,85 @@ async fn batch_card(batch: &str, items: &[Offering]) -> Result<impl View> {
         .iter()
         .filter(|item| item.status == OfferingStatus::Pending)
         .count();
+    let offered = items
+        .iter()
+        .map(|item| item.created_at)
+        .min()
+        .map(relative)
+        .unwrap_or_default();
 
     Ok(view! {
-        card(
-            <div class="flex flex-col gap-4">
-                <div class="flex flex-wrap items-start justify-between gap-4">
-                    <div>
-                        <h3 class="text-lg">(title)</h3>
-                        <p class="text-sm text-muted-foreground">
-                            (subtitle) " · " (format_bytes(size))
-                        </p>
-                    </div>
-                    <div class="flex gap-2">
-                        if readable > 0 {
-                            <form method="post" action=(format!("/offerings/{batch}/accept"))>
-                                <button type="submit" class=(BUTTON_PRIMARY)>
-                                    "Accept " (readable)
-                                </button>
-                            </form>
+        <section class="overflow-hidden rounded-3xl bg-card">
+            <div class="flex flex-wrap items-center gap-x-4 gap-y-3 border-b border-border px-5 py-[18px]">
+                <div class="flex min-w-0 flex-[1_1_240px] flex-col gap-0.5">
+                    <span class="text-lg">(title)</span>
+                    <span class="text-[13px] text-muted-foreground">
+                        if !subtitle.is_empty() {
+                            (subtitle) " · "
                         }
-                        <form method="post" action=(format!("/offerings/{batch}/discard"))>
-                            <button type="submit" class=(BUTTON_DANGER)>"Discard"</button>
-                        </form>
-                    </div>
+                        (count(items.len(), "file", "files")) " · " (origin(items))
+                        " · " (format_bytes(size)) " · offered " (offered)
+                    </span>
                 </div>
-                <table class="w-full text-left text-sm">
-                    <thead class="text-xs uppercase tracking-wider text-muted-foreground">
-                        <tr>
-                            <th class="w-16 py-2 font-medium">"#"</th>
-                            <th class="py-2 font-medium">"Title"</th>
-                            <th class="py-2 font-medium">"Artist"</th>
-                            <th class="w-16 py-2 text-right font-medium">"Time"</th>
-                            <th class="w-10"></th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-border">
-                        for item in items {
-                            <tr class=(class!(
-                                "align-top",
-                                "text-muted-foreground" if item.status == OfferingStatus::Unreadable,
-                            ))>
-                                <td class="py-2 tabular-nums text-muted-foreground">
-                                    if let Some(disc) = item.disc_number {
-                                        (disc) "-"
-                                    }
-                                    (item.track_number.map(|n| n.to_string()).unwrap_or_default())
-                                </td>
-                                <td class="py-2">
-                                    <span class="font-medium">(&item.title)</span>
-                                    if let Some(error) = &item.error {
-                                        <p class="text-xs text-destructive">(error)</p>
-                                    }
-                                    <p class="text-xs text-muted-foreground">(&item.file_name)</p>
-                                </td>
-                                <td class="py-2">(&item.artist)</td>
-                                <td class="py-2 text-right tabular-nums">
-                                    (format_duration(item.duration_ms))
-                                </td>
-                                <td class="py-2 text-right">
-                                    <form
-                                        method="post"
-                                        action=(format!("/offerings/item/{}/discard", item.id))
-                                    >
-                                        <button
-                                            type="submit"
-                                            title="Discard this file"
-                                            class="rounded px-2 text-muted-foreground \
-                                                   hover:text-destructive"
-                                        >
-                                            "✕"
-                                        </button>
-                                    </form>
-                                </td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
+                <div class="flex gap-2">
+                    <form method="post" action=(format!("/offerings/{batch}/discard"))>
+                        <button type="submit" class=(btn(Tone::Text, Size::S))>"Discard"</button>
+                    </form>
+                    if readable > 0 {
+                        <form method="post" action=(format!("/offerings/{batch}/accept"))>
+                            <button type="submit" class=(btn(Tone::Filled, Size::S))>
+                                if readable == items.len() { "Accept" } else { "Accept " (readable) }
+                            </button>
+                        </form>
+                    }
+                </div>
             </div>
-        )
+            for item in items {
+                let unreadable = item.status == OfferingStatus::Unreadable;
+                <div
+                    class="grid min-h-14 grid-cols-[36px_minmax(0,1fr)_auto_auto] items-center gap-3 \
+                           border-b border-muted py-1.5 pr-2 pl-5"
+                >
+                    <span class="font-mono text-[13px] text-slate-soft">
+                        match (item.disc_number, item.track_number) {
+                            (Some(disc), Some(number)) if disc > 1 => (format!("{disc}·{number:02}")),
+                            (_, Some(number)) => (format!("{number:02}")),
+                            _ => "",
+                        }
+                    </span>
+                    <span class="flex min-w-0 flex-col gap-0.5">
+                        <span class=(class!(TRUNCATE, "text-[15px]", "text-muted-foreground" if unreadable))>
+                            (&item.title)
+                        </span>
+                        if let Some(error) = &item.error {
+                            <span class="text-[13px] text-destructive">(error)</span>
+                        } else {
+                            <span class=(class!(TRUNCATE, "text-[13px] text-muted-foreground"))>
+                                (&item.artist) " · " (&item.file_name)
+                            </span>
+                        }
+                    </span>
+                    <span class="text-[13px] text-muted-foreground tabular-nums">
+                        if !unreadable {
+                            (format_duration(item.duration_ms))
+                        }
+                    </span>
+                    <form method="post" action=(format!("/offerings/item/{}/discard", item.id))>
+                        <button
+                            type="submit"
+                            aria-label="Discard this file"
+                            title="Discard this file"
+                            class=(ICON_BUTTON)
+                        >
+                            icon(data: icons::CLOSE, size: 20)
+                        </button>
+                    </form>
+                </div>
+            }
+            <div class="px-5 py-3 text-[13px] text-muted-foreground">
+                "Accepted files join the treasure and are looked up on MusicBrainz."
+            </div>
+        </section>
     })
 }
 

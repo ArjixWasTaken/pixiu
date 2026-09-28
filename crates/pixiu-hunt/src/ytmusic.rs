@@ -191,6 +191,7 @@ impl YtMusic {
         };
         playlist.tracks.extend_all(&query).await?;
         Ok(RemotePlaylist {
+            image_url: image(&playlist.thumbnail),
             id: playlist.id,
             name: playlist.name,
             tracks: playlist.tracks.items.into_iter().map(track).collect(),
@@ -206,6 +207,7 @@ impl YtMusic {
     pub async fn discography(&self, channel_id: &str) -> Result<Discography, HuntError> {
         let artist = self.rp.query().music_artist(channel_id, true).await?;
         Ok(Discography {
+            image_url: image(&artist.header_image),
             id: artist.id,
             name: artist.name,
             albums: artist.albums.into_iter().map(album_item).collect(),
@@ -283,6 +285,7 @@ fn image(thumbnails: &[Thumbnail]) -> Option<String> {
 fn track(item: TrackItem) -> RemoteTrack {
     RemoteTrack {
         artists: artist_names(&item.artists),
+        artist_id: item.artist_id,
         album: item.album.map(|album| AlbumRef {
             id: album.id,
             title: album.name,
@@ -308,6 +311,7 @@ fn album_kind(kind: AlbumType) -> AlbumKind {
 fn album_item(item: AlbumItem) -> RemoteAlbum {
     RemoteAlbum {
         artists: artist_names(&item.artists),
+        artist_id: item.artist_id,
         year: item.year,
         kind: album_kind(item.album_type),
         cover_url: image(&item.cover),
@@ -320,6 +324,7 @@ fn album_item(item: AlbumItem) -> RemoteAlbum {
 fn album(album: MusicAlbum) -> RemoteAlbum {
     let cover_url = image(&album.cover);
     let artists = artist_names(&album.artists);
+    let artist_id = album.artist_id.clone();
     let reference = AlbumRef {
         id: album.id.clone(),
         title: album.name.clone(),
@@ -336,6 +341,7 @@ fn album(album: MusicAlbum) -> RemoteAlbum {
             }
             if track.artists.is_empty() {
                 track.artists.clone_from(&artists);
+                track.artist_id.clone_from(&artist_id);
             }
             track
         })
@@ -344,6 +350,7 @@ fn album(album: MusicAlbum) -> RemoteAlbum {
         id: album.id,
         title: album.name,
         artists,
+        artist_id,
         year: album.year,
         kind: album_kind(album.album_type),
         cover_url,

@@ -4,7 +4,8 @@
 use std::{io, path::Path};
 
 use pixiu_db::{
-    Album, Annotation, Artist, ClaimKind, Db, PlaylistEntry, Track, TrackClaim, now, toasty,
+    Album, Annotation, Artist, ClaimKind, Db, PlaylistEntry, ReleaseReason, ReleasedClaim, Track,
+    TrackClaim, now, toasty,
 };
 
 use crate::{
@@ -12,8 +13,20 @@ use crate::{
     ingest::{Claim, IngestError, Treasury},
 };
 
+/// Why claims are being released, remembered for the orphans they leave.
+#[derive(Debug, Clone, Copy)]
+pub struct Release<'a> {
+    pub reason: ReleaseReason,
+    /// The watch or playlist, by name: it may be gone by the time anyone
+    /// asks.
+    pub source_name: Option<&'a str>,
+}
+
 impl Treasury {
     /// Gives a track `claim`, unless it has it already.
+    ///
+    /// A claimed track is wanted again, so the record of claims it lost is
+    /// dropped.
     ///
     /// # Errors
     ///
@@ -35,11 +48,16 @@ impl Treasury {
             .exec(&mut db)
             .await?;
         }
+        ReleasedClaim::filter_by_track_id(track_id)
+            .delete()
+            .exec(&mut db)
+            .await?;
         Ok(())
     }
 
     /// Takes back every claim of `kind` that refers to `reference`, except
-    /// those on tracks `keep` picks. Returns the tracks that lost one.
+    /// those on tracks `keep` picks, and records `why` for each. Returns the
+    /// tracks that lost one.
     ///
     /// # Errors
     ///
@@ -48,6 +66,7 @@ impl Treasury {
         &self,
         kind: ClaimKind,
         reference: &str,
+        why: Release<'_>,
         keep: impl Fn(&Track) -> bool,
     ) -> Result<Vec<u64>, toasty::Error> {
         let mut db = self.db.clone();
@@ -67,6 +86,15 @@ impl Treasury {
                 continue;
             }
             released.push(claim.track_id);
+            toasty::create!(ReleasedClaim {
+                track_id: claim.track_id,
+                kind,
+                reason: why.reason,
+                source_name: why.source_name.map(str::to_owned),
+                released_at: now(),
+            })
+            .exec(&mut db)
+            .await?;
             claim.delete().exec(&mut db).await?;
         }
         Ok(released)
@@ -89,6 +117,34 @@ impl Treasury {
             .await?;
         tracks.sort_by_key(|track| std::cmp::Reverse((track.added_at, track.id)));
         Ok(tracks)
+    }
+
+    /// The latest released claim of each track among `ids`: why it became
+    /// an orphan, when known.
+    ///
+    /// # Errors
+    ///
+    /// Fails on database errors.
+    pub async fn released_claims(
+        &self,
+        ids: &[u64],
+    ) -> Result<std::collections::HashMap<u64, ReleasedClaim>, toasty::Error> {
+        let mut latest = std::collections::HashMap::new();
+        if ids.is_empty() {
+            return Ok(latest);
+        }
+        let rows = ReleasedClaim::filter(ReleasedClaim::fields().track_id().in_list(ids.to_vec()))
+            .exec(&mut self.db.clone())
+            .await?;
+        for row in rows {
+            match latest.get(&row.track_id) {
+                Some(seen) if (seen.released_at, seen.id) >= (row.released_at, row.id) => {}
+                _ => {
+                    latest.insert(row.track_id, row);
+                }
+            }
+        }
+        Ok(latest)
     }
 
     /// How many orphans there are.
@@ -130,6 +186,10 @@ impl Treasury {
 
         forget_annotation(db, &format!("tr-{}", track.id)).await?;
         PlaylistEntry::filter_by_track_id(Some(track.id))
+            .delete()
+            .exec(db)
+            .await?;
+        ReleasedClaim::filter_by_track_id(track.id)
             .delete()
             .exec(db)
             .await?;

@@ -8,6 +8,7 @@ use pixiu_db::{Annotation, Db, Track, User, now, toasty};
 use crate::{
     Failure, Params, SubsonicState,
     ids::{self, Id},
+    playing,
     response::{ApiError, Element, ErrorCode, Payload},
 };
 
@@ -152,7 +153,7 @@ pub(crate) async fn scrobble(
         let player = params.get("c").unwrap_or("unknown");
         state
             .now_playing
-            .announced(&user.username, player, (&track).into());
+            .announced(&user.username, player, playing::song(&track));
         return Ok(Payload::default());
     }
 

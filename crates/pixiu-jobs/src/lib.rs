@@ -6,5 +6,5 @@ pub mod queue;
 pub mod warden;
 pub mod watch;
 
-pub use queue::{Executor, JobUpdate, Jobs, NewJob, Outcome, Wanted};
+pub use queue::{Executor, Family, JobUpdate, Jobs, NewJob, Outcome, Pending, Wanted, pending};
 pub use warden::{Health, Warden};

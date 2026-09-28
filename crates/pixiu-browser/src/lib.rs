@@ -559,6 +559,16 @@ impl LoginDesk {
         }
     }
 
+    /// The host of the page the open browser shows, e.g.
+    /// `accounts.google.com`.
+    pub async fn host(&self) -> Option<String> {
+        let url = match self.current.lock().await.as_ref() {
+            Some(browser) => browser.url().await?,
+            None => return None,
+        };
+        host_of(&url)
+    }
+
     /// Cookies of the open browser for `domain_suffix`.
     ///
     /// # Errors
@@ -788,5 +798,34 @@ mod tests {
             cookie_header(&[cookie("SID", "a"), cookie("HSID", "b")]),
             "SID=a; HSID=b"
         );
+    }
+}
+
+/// The host part of an absolute URL.
+fn host_of(url: &str) -> Option<String> {
+    let rest = url.split_once("://")?.1;
+    let authority = rest.split(['/', '?', '#']).next()?;
+    let host = authority
+        .rsplit_once('@')
+        .map_or(authority, |(_, host)| host);
+    let host = host.split(':').next()?;
+    (!host.is_empty()).then(|| host.to_ascii_lowercase())
+}
+
+#[cfg(test)]
+mod host_tests {
+    use super::host_of;
+
+    #[test]
+    fn hosts_are_read_from_urls() {
+        assert_eq!(
+            host_of("https://accounts.google.com/v3/signin?x=1").as_deref(),
+            Some("accounts.google.com")
+        );
+        assert_eq!(
+            host_of("http://user@Example.com:8080/").as_deref(),
+            Some("example.com")
+        );
+        assert_eq!(host_of("about:blank"), None);
     }
 }

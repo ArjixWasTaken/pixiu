@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use pixiu_browser::LoginDesk;
-use pixiu_core::SecretBox;
+use pixiu_core::{SecretBox, playing::NowPlaying};
 use pixiu_db::{Db, User, WebSession, now, toasty};
 use pixiu_hunt::Hunter;
 use pixiu_jobs::{Jobs, Warden};
@@ -50,6 +50,10 @@ pub(crate) fn jobs(cx: &Cx) -> &Arc<Jobs> {
 }
 
 pub(crate) fn login_desk(cx: &Cx) -> &Arc<LoginDesk> {
+    app_context(cx)
+}
+
+pub(crate) fn now_playing(cx: &Cx) -> &NowPlaying {
     app_context(cx)
 }
 

@@ -3,8 +3,12 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use pixiu_db::{Album, Artist, ClaimKind, Db, OfferingStatus, Track, TrackClaim};
-use pixiu_treasury::{Claim, IngestError, OfferingError, Offerings, Provenance, Treasury, tags};
+use pixiu_db::{
+    Album, Artist, ClaimKind, Db, OfferingStatus, ReleaseReason, ReleasedClaim, Track, TrackClaim,
+};
+use pixiu_treasury::{
+    Claim, IngestError, OfferingError, Offerings, Provenance, Release, Treasury, tags,
+};
 use tokio::io::AsyncWriteExt;
 
 fn fixture(name: &str) -> PathBuf {
@@ -100,7 +104,7 @@ async fn ingest_files_tracks_under_the_layout() {
                 &staged,
                 &info,
                 None,
-                Provenance::offering(),
+                Provenance::offering("upload.flac", None),
                 Claim::offering(),
             )
             .await
@@ -155,7 +159,7 @@ async fn ingest_files_tracks_under_the_layout() {
             &staged,
             &info,
             None,
-            Provenance::offering(),
+            Provenance::offering("upload.flac", None),
             Claim::offering(),
         )
         .await
@@ -178,7 +182,7 @@ async fn a_new_layout_moves_the_hoard() {
                     &staged,
                     &info,
                     None,
-                    Provenance::offering(),
+                    Provenance::offering("upload.flac", None),
                     Claim::offering(),
                 )
                 .await
@@ -394,7 +398,13 @@ async fn discarding_a_batch_removes_everything() {
 #[tokio::test]
 async fn downloads_dedupe_by_platform_ids() {
     let hoard = Hoard::new().await;
-    let youtube = |video: &str| Provenance::youtube_music(video, Some("MPREb_album".to_owned()));
+    let youtube = |video: &str| {
+        Provenance::youtube_music(
+            video,
+            Some("MPREb_album".to_owned()),
+            Some("UCartist".to_owned()),
+        )
+    };
 
     let staged = hoard.stage("02-second-wind.mp3");
     let mut info = tags::read(&staged).unwrap();
@@ -432,6 +442,49 @@ async fn downloads_dedupe_by_platform_ids() {
     let mut db = hoard.db.clone();
     let album = Album::get_by_id(&mut db, &first.album_id).await.unwrap();
     assert_eq!(album.ytm_browse_id.as_deref(), Some("MPREb_album"));
+    // The album artist learned its channel.
+    let artist = Artist::get_by_id(&mut db, &album.artist_id).await.unwrap();
+    assert_eq!(artist.ytm_channel_id.as_deref(), Some("UCartist"));
+
+    // A later download by the same channel finds the artist even under
+    // another name.
+    let staged = hoard.stage("01-first-light.flac");
+    let mut info = tags::read(&staged).unwrap();
+    info.album_artist = Some("Test Artist (Official)".to_owned());
+    info.album = Some("Another Album".to_owned());
+    let third = hoard
+        .treasury
+        .ingest(
+            &staged,
+            &info,
+            None,
+            Provenance::youtube_music("video-3", None, Some("UCartist".to_owned())),
+            Claim::offering(),
+        )
+        .await
+        .unwrap();
+    let third_album = Album::get_by_id(&mut db, &third.album_id).await.unwrap();
+    assert_eq!(third_album.artist_id, artist.id);
+}
+
+#[tokio::test]
+async fn offerings_remember_their_upload_names() {
+    let hoard = Hoard::new().await;
+    let staged = hoard.stage("01-first-light.flac");
+    let info = tags::read(&staged).unwrap();
+    let track = hoard
+        .treasury
+        .ingest(
+            &staged,
+            &info,
+            None,
+            Provenance::offering("First Light.flac", Some("album.zip".to_owned())),
+            Claim::offering(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(track.source_name.as_deref(), Some("First Light.flac"));
+    assert_eq!(track.source_archive.as_deref(), Some("album.zip"));
 }
 
 #[tokio::test]
@@ -448,7 +501,7 @@ async fn orphans_are_kept_until_the_admin_deletes_them() {
                 &staged,
                 &info,
                 None,
-                Provenance::offering(),
+                Provenance::offering("upload.flac", None),
                 Claim::offering(),
             )
             .await
@@ -488,10 +541,46 @@ async fn orphans_are_kept_until_the_admin_deletes_them() {
     }
     let released = hoard
         .treasury
-        .release(ClaimKind::WatchPlaylist, "7", |_| false)
+        .release(
+            ClaimKind::WatchPlaylist,
+            "7",
+            Release {
+                reason: ReleaseReason::LeftPlaylist,
+                source_name: Some("Deep focus"),
+            },
+            |_| false,
+        )
         .await
         .unwrap();
     assert_eq!(released, [first]);
+    // The orphan remembers why.
+    let why = hoard.treasury.released_claims(&[first]).await.unwrap();
+    let why = &why[&first];
+    assert_eq!(why.reason, ReleaseReason::LeftPlaylist);
+    assert_eq!(why.source_name.as_deref(), Some("Deep focus"));
+
+    // Claimed again, it is wanted, and the record goes.
+    hoard.treasury.claim(first, &watch).await.unwrap();
+    assert!(
+        ReleasedClaim::filter_by_track_id(first)
+            .exec(&mut db)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    hoard
+        .treasury
+        .release(
+            ClaimKind::WatchPlaylist,
+            "7",
+            Release {
+                reason: ReleaseReason::WatchRemoved,
+                source_name: None,
+            },
+            |_| false,
+        )
+        .await
+        .unwrap();
     let orphans: Vec<u64> = hoard
         .treasury
         .orphans()

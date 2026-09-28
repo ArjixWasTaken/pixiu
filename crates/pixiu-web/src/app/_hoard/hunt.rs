@@ -9,17 +9,21 @@ use serde::Deserialize;
 use topcoat::{
     Result,
     context::Cx,
+    icon::icon,
     router::{
         content::Form,
         error::{SeeOther, bad_request, see_other},
         page, query_params, route,
     },
-    view::{View, attributes, component, view},
+    view::{View, attributes, class, component, view},
 };
 
 use crate::{
     auth::{db, hunter, jobs, require_user},
-    ui::{BUTTON_PRIMARY, BUTTON_SECONDARY, alert, card, field, format_duration, notice},
+    ui::{
+        H2, Size, TRUNCATE, Tone, alert, btn, cover, empty_state, format_duration, icons, in_hoard,
+        page_header, snackbar, text_field,
+    },
 };
 
 #[query_params(error = bad_request)]
@@ -94,122 +98,141 @@ async fn page(cx: &Cx) -> Result<impl View> {
         Some(Ok(results)) => hoarded(cx, results).await?,
         _ => Hoarded::default(),
     };
+    let pending = pixiu_jobs::pending(&mut db(cx)).await?;
     let q_value = q.clone().unwrap_or_default();
+    let nothing = format!("Nothing found for “{q_value}”");
 
     Ok(view! {
-        <div class="mx-auto flex max-w-5xl flex-col gap-8">
-            <header class="flex flex-col gap-1">
-                <h2 class="text-3xl font-bold text-gold">"Hunt"</h2>
-                <p class="text-muted-foreground">
-                    "Search YouTube Music and bring music into the hoard."
-                </p>
-            </header>
-
-            <form method="get" action="/hunt" class="flex items-end gap-3">
-                <div class="flex-1">
-                    field(
-                        label: "Search",
+        <div class="flex flex-col gap-7">
+            <section class="flex flex-col gap-4">
+                page_header(eyebrow: "Hunt", title: "What should the beast bring back?")
+                <form method="get" action="/hunt" class="max-w-[720px]">
+                    text_field(
+                        label: "Artist, album or song",
+                        filled: true,
+                        leading: icons::SEARCH,
+                        placeholder: "Search YouTube Music",
                         attrs: attributes! {
-                            name="q" value=(&q_value) placeholder="Artist, album or song"
-                            autofocus="" required=""
+                            type="search" name="q" value=(&q_value) required=""
+                            autofocus=(q.is_none())
                         },
                     )
-                </div>
-                <button type="submit" class=(BUTTON_PRIMARY)>"Search"</button>
-            </form>
+                </form>
+            </section>
 
             if query.queued.is_some() {
-                notice("Queued. Follow the download on the " <a href="/jobs" class="underline">"Jobs"</a> " page.")
+                snackbar(message: "Queued. Follow it on Jobs.", action: ("Jobs", "/jobs"))
             }
 
             match &search {
                 Some(Err(error)) => {
-                    alert("YouTube Music could not be searched: " (error.to_string()))
+                    alert(
+                        title: "YouTube Music couldn’t be searched.",
+                        <code class="font-mono text-[13px] break-words">(error.to_string())</code>
+                        <span>"Try again in a moment."</span>
+                    )
                 }
                 Some(Ok(results)) => {
                     if results.albums.is_empty() && results.tracks.is_empty() {
-                        <p class="text-sm text-muted-foreground">"Nothing found."</p>
+                        empty_state(
+                            title: nothing.as_str(),
+                            <p class="m-0">"Try the artist’s name alone, or check the spelling."</p>
+                        )
                     }
                     if !results.albums.is_empty() {
-                        <section class="flex flex-col gap-4">
-                            <h3 class="text-lg">"Albums"</h3>
-                            <ul class="grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-4">
+                        <section class="flex flex-col gap-3.5">
+                            <h2 class=(H2)>"Albums"</h2>
+                            <div
+                                class="grid grid-cols-[repeat(auto-fill,minmax(min(100%,300px),1fr))] gap-3"
+                            >
                                 for album in &results.albums {
-                                    <li class="flex flex-col gap-2">
-                                        remote_cover(url: album.cover_url.as_deref())
-                                        <div class="min-w-0">
-                                            <p class="truncate font-medium" title=(&album.title)>
+                                    <div class="flex items-center gap-3.5 rounded-[20px] bg-card p-3">
+                                        <div class="w-[84px] shrink-0">
+                                            remote_cover(url: album.cover_url.as_deref())
+                                        </div>
+                                        <div class="flex min-w-0 flex-1 flex-col gap-1">
+                                            <span class=(class!(TRUNCATE, "text-[15px] font-medium")) title=(&album.title)>
                                                 (&album.title)
-                                            </p>
-                                            <p class="truncate text-sm text-muted-foreground">
+                                            </span>
+                                            <span class=(class!(TRUNCATE, "text-[13px] text-muted-foreground"))>
                                                 (album.artists.join(", "))
-                                            </p>
-                                            <p class="text-xs text-muted-foreground">
+                                            </span>
+                                            <span class="text-xs text-slate-soft">
                                                 (kind_label(album.kind))
                                                 if let Some(year) = album.year {
                                                     " · " (year)
                                                 }
-                                            </p>
-                                        </div>
-                                        if hoarded.albums.contains(&album.id) {
-                                            <span class="text-xs text-gold">"In the hoard"</span>
-                                        } else {
-                                            <form method="post" action="/hunt/grab-album">
-                                                <input type="hidden" name="browse_id" value=(&album.id)>
-                                                <input
-                                                    type="hidden"
-                                                    name="title"
-                                                    value=(format!("{} — {}", album.artists.join(", "), album.title))
-                                                >
-                                                <input type="hidden" name="q" value=(&q_value)>
-                                                <button type="submit" class=(BUTTON_SECONDARY)>"Grab album"</button>
-                                            </form>
-                                        }
-                                    </li>
-                                }
-                            </ul>
-                        </section>
-                    }
-                    if !results.tracks.is_empty() {
-                        card(
-                            <h3 class="mb-3 text-lg">"Songs"</h3>
-                            <table class="w-full text-left text-sm">
-                                <tbody class="divide-y divide-border">
-                                    for track in &results.tracks {
-                                        <tr>
-                                            <td class="py-2 pr-3">
-                                                <p class="font-medium">(&track.title)</p>
-                                                <p class="text-xs text-muted-foreground">
-                                                    (track.artist_credit())
-                                                    if let Some(album) = &track.album {
-                                                        " · " (&album.title)
-                                                    }
-                                                </p>
-                                            </td>
-                                            <td class="w-16 py-2 text-right tabular-nums text-muted-foreground">
-                                                (track.duration_secs.map(|secs| format_duration(u64::from(secs) * 1000)).unwrap_or_default())
-                                            </td>
-                                            <td class="w-32 py-2 text-right">
-                                                if hoarded.tracks.contains(&track.id) {
-                                                    <span class="text-xs text-gold">"In the hoard"</span>
+                                            </span>
+                                            <div class="mt-1">
+                                                if hoarded.albums.contains(&album.id) {
+                                                    in_hoard()
+                                                } else if pending.has_album(&album.id) {
+                                                    <a href="/jobs" class="text-[13px] text-muted-foreground">
+                                                        "Queued on Jobs"
+                                                    </a>
                                                 } else {
-                                                    <form method="post" action="/hunt/grab-track">
-                                                        <input type="hidden" name="video_id" value=(&track.id)>
+                                                    <form method="post" action="/hunt/grab-album">
+                                                        <input type="hidden" name="browse_id" value=(&album.id)>
                                                         <input
                                                             type="hidden"
                                                             name="title"
-                                                            value=(format!("{} — {}", track.artist_credit(), track.title))
+                                                            value=(format!("{} — {}", album.artists.join(", "), album.title))
                                                         >
                                                         <input type="hidden" name="q" value=(&q_value)>
-                                                        <button type="submit" class=(BUTTON_SECONDARY)>"Grab"</button>
+                                                        <button type="submit" class=(btn(Tone::Tonal, Size::Xs))>
+                                                            icon(data: icons::DOWNLOAD, size: 18)
+                                                            "Grab album"
+                                                        </button>
                                                     </form>
                                                 }
-                                            </td>
-                                        </tr>
-                                    }
-                                </tbody>
-                            </table>
-                        )
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </section>
+                    }
+                    if !results.tracks.is_empty() {
+                        <section class="flex flex-col gap-1.5">
+                            <h2 class=(class!(H2, "mb-2"))>"Songs"</h2>
+                            for track in &results.tracks {
+                                <div
+                                    class="grid min-h-16 grid-cols-[minmax(0,1fr)_auto_auto] items-center \
+                                           gap-4 border-b border-muted px-3 py-2"
+                                >
+                                    <span class="flex min-w-0 flex-col gap-0.5">
+                                        <span class=(class!(TRUNCATE, "text-[15px]"))>(&track.title)</span>
+                                        <span class=(class!(TRUNCATE, "text-[13px] text-muted-foreground"))>
+                                            (track.artist_credit())
+                                            if let Some(album) = &track.album {
+                                                " · " (&album.title)
+                                            }
+                                        </span>
+                                    </span>
+                                    <span class="text-[13px] text-muted-foreground tabular-nums">
+                                        (track.duration_secs.map(|secs| format_duration(u64::from(secs) * 1000)).unwrap_or_default())
+                                    </span>
+                                    <span>
+                                        if hoarded.tracks.contains(&track.id) {
+                                            in_hoard()
+                                        } else if pending.tracks.contains(&track.id) {
+                                            <a href="/jobs" class="text-[13px] text-muted-foreground">"Queued"</a>
+                                        } else {
+                                            <form method="post" action="/hunt/grab-track">
+                                                <input type="hidden" name="video_id" value=(&track.id)>
+                                                <input
+                                                    type="hidden"
+                                                    name="title"
+                                                    value=(format!("{} — {}", track.artist_credit(), track.title))
+                                                >
+                                                <input type="hidden" name="q" value=(&q_value)>
+                                                <button type="submit" class=(btn(Tone::Outlined, Size::Xs))>"Grab"</button>
+                                            </form>
+                                        }
+                                    </span>
+                                </div>
+                            }
+                        </section>
                     }
                 }
                 None => "",
@@ -229,12 +252,10 @@ async fn remote_cover(url: Option<&str>) -> Result<impl View> {
                     alt=""
                     loading="lazy"
                     referrerpolicy="no-referrer"
-                    class="aspect-square w-full rounded-xl border border-border object-cover"
+                    class="aspect-square w-full rounded-xl object-cover"
                 >
             }
-            None => {
-                <div class="aspect-square w-full rounded-xl border border-border bg-muted"></div>
-            }
+            None => cover(album: None),
         }
     })
 }

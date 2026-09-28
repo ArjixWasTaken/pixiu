@@ -4,9 +4,10 @@
 use std::sync::Arc;
 
 use pixiu_browser::{Cookie, LoginDesk, cookie_header};
-use pixiu_db::{Album, Job, JobKind, JobState, SessionState, Track, Watch};
+use pixiu_db::{Album, Job, JobKind, JobState, ReleaseReason, SessionState, Track, Watch};
 use pixiu_enrich::Sources;
 use pixiu_hunt::{Discography, DownloadRequest, HuntError, Hunter, RemotePlaylist, SessionCheck};
+use pixiu_treasury::Release;
 
 use crate::{
     enrich::{self, PlatformLyrics},
@@ -132,7 +133,15 @@ impl HuntExecutor {
                     && !watch_exists(&self.hunter, watch_id).await
                 {
                     let released = treasury
-                        .release(claim.kind, reference, |other| other.id != track.id)
+                        .release(
+                            claim.kind,
+                            reference,
+                            Release {
+                                reason: ReleaseReason::WatchRemoved,
+                                source_name: None,
+                            },
+                            |other| other.id != track.id,
+                        )
                         .await;
                     if let Err(error) = released {
                         tracing::warn!(%error, "cannot drop the claim of a removed watch");

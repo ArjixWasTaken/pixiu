@@ -39,8 +39,8 @@ use tokio::sync::Semaphore;
 use tower_http::cors::{Any, CorsLayer};
 
 pub use params::Params;
+pub use pixiu_core::playing::NowPlaying;
 pub use pixiu_media::Codec;
-pub use playing::NowPlaying;
 pub use response::{ApiError, Element, ErrorCode, Format, Payload, SubsonicResponse};
 
 /// Shared state for API handlers.

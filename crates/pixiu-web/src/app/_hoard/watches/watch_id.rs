@@ -23,7 +23,8 @@ async fn sync(cx: &Cx) -> Result<SeeOther> {
     if let Some(watch) = Watch::filter_by_id(id).first().exec(&mut db(cx)).await? {
         watch::queue_sync(jobs(cx), &watch).await?;
     }
-    Ok(see_other("/jobs"))
+    // The watch list follows the sync live.
+    Ok(see_other(WATCHES_PATH))
 }
 
 #[route(POST "./remove")]

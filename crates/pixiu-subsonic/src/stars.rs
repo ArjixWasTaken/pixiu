@@ -6,8 +6,8 @@
 //! while starred, even after leaving a watched playlist.
 
 use jiff::Timestamp;
-use pixiu_db::{Album, Annotation, Artist, ClaimKind, Db, Track, now, toasty};
-use pixiu_treasury::Claim;
+use pixiu_db::{Album, Annotation, Artist, ClaimKind, Db, ReleaseReason, Track, now, toasty};
+use pixiu_treasury::{Claim, Release};
 
 use crate::{
     Failure, Params, SubsonicState, annotations,
@@ -124,7 +124,15 @@ pub(crate) async fn unstar(state: &SubsonicState, params: &Params) -> Result<Pay
         annotate(&mut db, id, |_, rating| (None, rating)).await?;
         state
             .treasury
-            .release(ClaimKind::Starred, &id.to_string(), |_| false)
+            .release(
+                ClaimKind::Starred,
+                &id.to_string(),
+                Release {
+                    reason: ReleaseReason::Unstarred,
+                    source_name: None,
+                },
+                |_| false,
+            )
             .await?;
     }
     Ok(Payload::default())

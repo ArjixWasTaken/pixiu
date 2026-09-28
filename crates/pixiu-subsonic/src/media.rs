@@ -21,7 +21,7 @@ use tokio_util::io::ReaderStream;
 use tower::ServiceExt;
 use tower_http::services::ServeFile;
 
-use crate::{Failure, Params, SubsonicState, browse::not_found, ids::Id};
+use crate::{Failure, Params, SubsonicState, browse::not_found, ids::Id, playing};
 
 /// Request headers that matter for serving a file.
 const FORWARDED: [HeaderName; 6] = [
@@ -164,7 +164,7 @@ pub(crate) async fn stream(
     {
         state
             .now_playing
-            .streamed(&user.username, player, (&track).into());
+            .streamed(&user.username, player, playing::song(&track));
     }
     match plan(&track.suffix, track.bitrate, params, state.transcode_format) {
         Plan::Original => Ok(original(&track, &path, method, headers, false).await),

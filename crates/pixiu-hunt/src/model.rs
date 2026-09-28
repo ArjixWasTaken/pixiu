@@ -17,6 +17,9 @@ pub struct RemoteTrack {
     pub title: String,
     /// Artist names, primary first.
     pub artists: Vec<String>,
+    /// The primary artist's channel (`UC…`), when the platform names one.
+    #[serde(default)]
+    pub artist_id: Option<String>,
     pub album: Option<AlbumRef>,
     pub duration_secs: Option<u32>,
     pub track_number: Option<u16>,
@@ -48,6 +51,9 @@ pub struct RemoteAlbum {
     pub id: String,
     pub title: String,
     pub artists: Vec<String>,
+    /// The primary artist's channel (`UC…`), when the platform names one.
+    #[serde(default)]
+    pub artist_id: Option<String>,
     pub year: Option<u16>,
     pub kind: AlbumKind,
     pub cover_url: Option<String>,
@@ -69,14 +75,19 @@ pub struct RemoteArtist {
 pub struct RemotePlaylist {
     pub id: String,
     pub name: String,
+    #[serde(default)]
+    pub image_url: Option<String>,
     pub tracks: Vec<RemoteTrack>,
 }
 
 /// An artist and their releases, newest first.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Discography {
+    /// The artist's channel id.
     pub id: String,
     pub name: String,
+    #[serde(default)]
+    pub image_url: Option<String>,
     pub albums: Vec<RemoteAlbum>,
 }
 
@@ -163,6 +174,7 @@ mod tests {
             id: "x".to_owned(),
             title: "t".to_owned(),
             artists: vec!["A".to_owned(), "B".to_owned()],
+            artist_id: None,
             album: None,
             duration_secs: None,
             track_number: None,

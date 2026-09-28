@@ -2,7 +2,7 @@
 //! restarts, run a few at a time, with live progress for the WebUI.
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     sync::{Arc, Mutex},
     time::Duration,
 };
@@ -120,6 +120,90 @@ pub fn enriched_album(job: &Job) -> Option<u64> {
         .map(|payload| payload.album_id)
 }
 
+/// How the jobs that follow from one job are doing: an album grab's
+/// downloads.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Family {
+    pub total: usize,
+    pub done: usize,
+    pub failed: usize,
+    pub running: usize,
+    pub waiting: usize,
+    /// How far the running ones are, summed, in whole jobs.
+    partial: f64,
+}
+
+impl Family {
+    /// Whether some of the family has yet to finish.
+    #[must_use]
+    pub fn in_flight(&self) -> bool {
+        self.running + self.waiting > 0
+    }
+
+    /// Overall completion, from 0 to 1.
+    #[must_use]
+    pub fn fraction(&self) -> f64 {
+        if self.total == 0 {
+            return 1.0;
+        }
+        #[allow(clippy::cast_precision_loss)]
+        let total = self.total as f64;
+        #[allow(clippy::cast_precision_loss)]
+        let finished = (self.done + self.failed) as f64;
+        ((finished + self.partial) / total).min(1.0)
+    }
+}
+
+/// What unfinished jobs already fetch, by YouTube Music id.
+#[derive(Debug, Default)]
+pub struct Pending {
+    /// Tracks to download, by video id.
+    pub tracks: HashSet<String>,
+    /// Albums to grab, by browse id.
+    pub albums: HashSet<String>,
+    /// Albums whose grab has become track downloads that are still under
+    /// way, by browse id.
+    pub album_tracks: HashSet<String>,
+}
+
+impl Pending {
+    /// Whether the album is being grabbed, in either stage.
+    #[must_use]
+    pub fn has_album(&self, browse_id: &str) -> bool {
+        self.albums.contains(browse_id) || self.album_tracks.contains(browse_id)
+    }
+}
+
+/// What unfinished jobs, failed ones included, already fetch.
+///
+/// # Errors
+///
+/// Fails on database errors.
+pub async fn pending(db: &mut Db) -> Result<Pending, toasty::Error> {
+    let mut pending = Pending::default();
+    for job in unfinished(db).await? {
+        match job.kind {
+            JobKind::DownloadTrack => {
+                if let Ok(payload) = serde_json::from_str::<TrackJob>(&job.payload) {
+                    pending.tracks.insert(payload.video_id);
+                    if job.parent_id.is_some()
+                        && let Some(album) = payload.reference
+                    {
+                        pending.album_tracks.insert(album);
+                    }
+                }
+            }
+            JobKind::GrabAlbum => {
+                if let Ok(payload) = serde_json::from_str::<AlbumJob>(&job.payload) {
+                    pending.albums.insert(payload.browse_id);
+                }
+            }
+            JobKind::SyncWatch | JobKind::Enrich | JobKind::Refile => {}
+        }
+    }
+    Ok(pending)
+}
+
 /// Jobs that have not finished: queued, running, paused or failed.
 ///
 /// # Errors
@@ -145,6 +229,8 @@ pub struct NewJob {
     pub kind: JobKind,
     pub payload: String,
     pub title: String,
+    /// The job this one follows from; see [`Job::parent_id`].
+    pub parent: Option<u64>,
 }
 
 impl NewJob {
@@ -153,6 +239,7 @@ impl NewJob {
             kind,
             payload: serde_json::to_string(payload).expect("job payloads serialize"),
             title: title.to_owned(),
+            parent: None,
         }
     }
 
@@ -315,6 +402,7 @@ impl Jobs {
             kind: job.kind,
             payload: job.payload,
             title: job.title,
+            parent_id: job.parent,
             state: JobState::Queued,
             progress: 0_u8,
             attempts: 0_u32,
@@ -340,6 +428,42 @@ impl Jobs {
             .await?;
         jobs.truncate(limit);
         Ok(jobs)
+    }
+
+    /// How the jobs that follow from each of `parents` are doing.
+    ///
+    /// # Errors
+    ///
+    /// Fails on database errors.
+    pub async fn families(&self, parents: &[u64]) -> Result<HashMap<u64, Family>, toasty::Error> {
+        let mut families: HashMap<u64, Family> = HashMap::new();
+        if parents.is_empty() {
+            return Ok(families);
+        }
+        let children = Job::filter(
+            Job::fields()
+                .parent_id()
+                .in_list(parents.iter().map(|id| Some(*id)).collect::<Vec<_>>()),
+        )
+        .exec(&mut self.db.clone())
+        .await?;
+        for child in children {
+            let Some(parent) = child.parent_id else {
+                continue;
+            };
+            let family = families.entry(parent).or_default();
+            family.total += 1;
+            match child.state {
+                JobState::Done => family.done += 1,
+                JobState::Failed => family.failed += 1,
+                JobState::Running => {
+                    family.running += 1;
+                    family.partial += f64::from(self.progress(child.id).unwrap_or(0)) / 100.0;
+                }
+                JobState::Queued | JobState::Paused => family.waiting += 1,
+            }
+        }
+        Ok(families)
     }
 
     /// Queues a failed job again.
@@ -421,11 +545,25 @@ impl Jobs {
     /// # Errors
     ///
     /// Fails on database errors.
+    ///
+    /// A family (an album grab and its downloads) is cleared only once all of
+    /// it has finished, so its progress stays whole while it runs.
     pub async fn clear_finished(&self) -> Result<(), toasty::Error> {
-        Job::filter_by_state(JobState::Done)
-            .delete()
-            .exec(&mut self.db.clone())
-            .await?;
+        let mut db = self.db.clone();
+        let in_flight: HashSet<u64> = unfinished(&mut db)
+            .await?
+            .into_iter()
+            .filter_map(|job| job.parent_id)
+            .collect();
+        for job in Job::filter_by_state(JobState::Done).exec(&mut db).await? {
+            let busy = in_flight.contains(&job.id)
+                || job
+                    .parent_id
+                    .is_some_and(|parent| in_flight.contains(&parent));
+            if !busy {
+                job.delete().exec(&mut db).await?;
+            }
+        }
         let _ = self.updates.send(JobUpdate::Cleared);
         Ok(())
     }
@@ -562,12 +700,15 @@ impl Jobs {
         self.progress.lock().unwrap().remove(&id);
         self.notify(id, state, progress);
 
+        // An expansion's jobs are its children; see `Jobs::families`.
+        let parent = matches!(outcome, Outcome::Expand(_)).then_some(id);
         if let Outcome::Expand(follow_ups)
         | Outcome::DoneWith {
             then: follow_ups, ..
         } = outcome
         {
-            for follow_up in follow_ups {
+            for mut follow_up in follow_ups {
+                follow_up.parent = follow_up.parent.or(parent);
                 if let Err(error) = self.enqueue(follow_up).await {
                     tracing::error!(%error, "cannot queue a follow-up job");
                 }

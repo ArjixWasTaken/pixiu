@@ -6,7 +6,11 @@ use std::{
 };
 
 use pixiu_db::{Job, JobKind, JobState, now, toasty};
-use pixiu_jobs::{Executor, JobUpdate, Jobs, NewJob, Outcome, queue::TrackJob, warden::BoxFuture};
+use pixiu_jobs::{
+    Executor, JobUpdate, Jobs, NewJob, Outcome,
+    queue::{AlbumJob, TrackJob},
+    warden::BoxFuture,
+};
 
 /// Succeeds, fails or expands depending on the video id, and records
 /// what ran.
@@ -30,9 +34,12 @@ impl Executor for Shared {
             fake.ran.lock().unwrap().push(job.title.clone());
             progress(50);
             if job.kind == JobKind::GrabAlbum {
+                let payload: AlbumJob = serde_json::from_str(&job.payload).unwrap();
+                let album = payload.browse_id;
+                let second = if album == "stuck" { "hold" } else { "a2" };
                 return Outcome::Expand(vec![
-                    NewJob::track("a1", "Album track 1", Some("album".into())),
-                    NewJob::track("a2", "Album track 2", Some("album".into())),
+                    NewJob::track("a1", "Album track 1", Some(album.clone())),
+                    NewJob::track(second, "Album track 2", Some(album)),
                 ]);
             }
             let payload: TrackJob = serde_json::from_str(&job.payload).unwrap();
@@ -47,6 +54,7 @@ impl Executor for Shared {
                     }
                 }
                 "known" => Outcome::AlreadyDone { track_id: 3 },
+                "hold" => Outcome::Paused("waiting for a login".into()),
                 _ => Outcome::Done { track_id: Some(1) },
             }
         })
@@ -100,6 +108,15 @@ async fn jobs_run_expand_fail_and_retry() {
     assert_eq!(by_title("Hoarded track").track_id, Some(3));
     assert_eq!(by_title("An album").state, JobState::Done);
     assert_eq!(by_title("Album track 1").state, JobState::Done);
+    // The album's tracks are its family.
+    let album = by_title("An album").id;
+    assert_eq!(by_title("Album track 1").parent_id, Some(album));
+    assert_eq!(by_title("Album track 2").parent_id, Some(album));
+    assert_eq!(by_title("Good track").parent_id, None);
+    let family = jobs.families(&[album]).await.unwrap()[&album];
+    assert_eq!((family.total, family.done), (2, 2));
+    assert!(!family.in_flight());
+    assert!((family.fraction() - 1.0).abs() < f64::EPSILON);
     let flaky = by_title("Flaky track");
     assert_eq!(flaky.state, JobState::Failed);
     assert_eq!(flaky.error.as_deref(), Some("network down"));
@@ -134,6 +151,49 @@ async fn jobs_run_expand_fail_and_retry() {
     jobs.clear_finished().await.unwrap();
     assert_eq!(updates.try_recv().unwrap(), JobUpdate::Cleared);
     assert!(jobs.recent(50).await.unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn album_grabs_stay_whole_until_their_tracks_finish() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = pixiu_db::open(&dir.path().join("pixiu.db")).await.unwrap();
+    let jobs = Jobs::new(
+        db.clone(),
+        Box::new(Shared(Arc::new(FakeExecutor::default()))),
+    );
+    jobs.start();
+    let album = jobs
+        .enqueue(NewJob::album("stuck", "Stuck album"))
+        .await
+        .unwrap();
+
+    let all = wait_for(&jobs, |jobs| {
+        jobs.len() == 3
+            && jobs
+                .iter()
+                .any(|job| job.title == "Album track 2" && job.state == JobState::Paused)
+            && jobs
+                .iter()
+                .any(|job| job.title == "Album track 1" && job.state == JobState::Done)
+    })
+    .await;
+    assert!(
+        all.iter()
+            .all(|job| job.id == album.id || job.parent_id == Some(album.id))
+    );
+    let family = jobs.families(&[album.id]).await.unwrap()[&album.id];
+    assert_eq!((family.total, family.done, family.waiting), (2, 1, 1));
+    assert!(family.in_flight());
+    assert!((family.fraction() - 0.5).abs() < f64::EPSILON);
+
+    // The album is still being grabbed, through its tracks.
+    let pending = pixiu_jobs::pending(&mut db.clone()).await.unwrap();
+    assert!(pending.has_album("stuck"));
+    assert!(pending.tracks.contains("hold"));
+
+    // Clearing keeps the family while a track waits.
+    jobs.clear_finished().await.unwrap();
+    assert_eq!(jobs.recent(50).await.unwrap().len(), 3);
 }
 
 #[tokio::test]

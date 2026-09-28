@@ -106,7 +106,7 @@ impl Api {
                     &staged,
                     &info,
                     None,
-                    Provenance::offering(),
+                    Provenance::offering("upload.flac", None),
                     Claim::offering(),
                 )
                 .await

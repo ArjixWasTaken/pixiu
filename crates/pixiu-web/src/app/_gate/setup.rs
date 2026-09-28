@@ -18,7 +18,7 @@ use topcoat::{
 
 use crate::{
     auth::{LOGIN_PATH, SETUP_PATH, db, hash_password, is_claimed, secrets, start_session},
-    ui::{BUTTON_PRIMARY, alert, card, field},
+    ui::{LABEL, LOGO, Size, Tone, alert, btn, text_field},
 };
 
 const MIN_PASSWORD_LEN: usize = 8;
@@ -37,40 +37,61 @@ async fn page(cx: &Cx) -> Result<impl View> {
     let problem = query.error.as_deref().and_then(Problem::from_code);
 
     Ok(view! {
-        card(
-            <form method="post" action=(SETUP_PATH) class="flex flex-col gap-4">
-                <div class="flex flex-col gap-1">
-                    <h2 class="text-xl font-semibold">"Claim this hoard"</h2>
-                    <p class="text-sm text-muted-foreground">
-                        "Create the admin account. The same credentials sign in "
-                        "to the WebUI and Subsonic clients."
-                    </p>
+        <div class="flex min-h-dvh flex-wrap">
+            <div
+                class="flex min-h-80 flex-[1_1_360px] items-center justify-center p-10 \
+                       bg-[radial-gradient(60%_60%_at_50%_45%,rgb(230_182_92/.12),transparent_70%)]"
+            >
+                <div class="relative grid aspect-square w-[min(340px,70vw)] place-items-center">
+                    <div class="absolute inset-0 rounded-full border border-gold/35"></div>
+                    <div class="absolute inset-[18px] rounded-full border border-dashed border-gold/20"></div>
+                    <img src=(LOGO) alt="píxiū" class="h-auto w-[78%]">
                 </div>
-                if let Some(problem) = problem {
-                    alert((problem.message()))
-                }
-                field(
-                    label: "Username",
-                    attrs: attributes! {
-                        name="username" autocomplete="username" required="" autofocus=""
-                    },
-                )
-                field(
-                    label: "Password",
-                    attrs: attributes! {
-                        name="password" type="password" autocomplete="new-password"
-                        required="" minlength="8"
-                    },
-                )
-                field(
-                    label: "Confirm password",
-                    attrs: attributes! {
-                        name="confirm" type="password" autocomplete="new-password" required=""
-                    },
-                )
-                <button type="submit" class=(BUTTON_PRIMARY)>"Claim"</button>
-            </form>
-        )
+            </div>
+            <div class="flex flex-[1_1_360px] items-center justify-center px-6 py-10">
+                <form
+                    method="post"
+                    action=(SETUP_PATH)
+                    class="flex w-full max-w-[380px] flex-col gap-5"
+                >
+                    <div class="flex flex-col gap-2">
+                        <span class=(LABEL)>"First run"</span>
+                        <h1 class="m-0 text-[40px] leading-11 font-normal">"Claim this hoard"</h1>
+                        <p class="m-0 text-[15px] leading-[22px] text-pretty text-muted-foreground">
+                            "There's no keeper yet. The account you make here is the only one, "
+                            "and it also signs in your Subsonic apps."
+                        </p>
+                    </div>
+                    text_field(
+                        label: "Username",
+                        invalid: problem == Some(Problem::EmptyUsername),
+                        attrs: attributes! {
+                            name="username" autocomplete="username" required="" autofocus=""
+                        },
+                    )
+                    text_field(
+                        label: "Password",
+                        supporting: "At least 8 characters",
+                        invalid: problem == Some(Problem::ShortPassword),
+                        attrs: attributes! {
+                            name="password" type="password" autocomplete="new-password"
+                            required="" minlength="8"
+                        },
+                    )
+                    text_field(
+                        label: "Confirm password",
+                        invalid: problem == Some(Problem::Mismatch),
+                        attrs: attributes! {
+                            name="confirm" type="password" autocomplete="new-password" required=""
+                        },
+                    )
+                    if let Some(problem) = problem {
+                        alert((problem.message()))
+                    }
+                    <button type="submit" class=(btn(Tone::Filled, Size::M))>"Claim the hoard"</button>
+                </form>
+            </div>
+        </div>
     })
 }
 

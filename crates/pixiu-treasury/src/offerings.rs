@@ -5,6 +5,7 @@
 //! and accepted offerings are [ingested](Treasury::ingest) into the treasure.
 
 use std::{
+    collections::HashMap,
     io,
     path::{Path, PathBuf},
 };
@@ -122,11 +123,19 @@ impl Offerings {
     pub async fn process_batch(&self, batch: &str) -> Result<Vec<Offering>, OfferingError> {
         let dir = self.batch_dir(batch)?;
 
+        // Which archive each unpacked file came from, by its staged path.
+        let mut unpacked: HashMap<PathBuf, String> = HashMap::new();
         for path in list_files(&dir).await? {
             if has_extension(&path, &["zip"]) {
                 let target = dir.clone();
                 let archive = path.clone();
-                tokio::task::spawn_blocking(move || extract_zip(&archive, &target)).await??;
+                let files =
+                    tokio::task::spawn_blocking(move || extract_zip(&archive, &target)).await??;
+                let name = path
+                    .file_name()
+                    .map(|name| name.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                unpacked.extend(files.into_iter().map(|file| (file, name.clone())));
                 tokio::fs::remove_file(&path).await?;
             }
         }
@@ -134,7 +143,8 @@ impl Offerings {
         let mut offerings = Vec::new();
         for path in list_files(&dir).await? {
             if has_extension(&path, AUDIO_EXTENSIONS) {
-                offerings.push(self.register(batch, &path).await?);
+                let archive = unpacked.get(&path).map(String::as_str);
+                offerings.push(self.register(batch, &path, archive).await?);
             } else if !is_cover_image(&path) {
                 tokio::fs::remove_file(&path).await?;
             }
@@ -145,7 +155,12 @@ impl Offerings {
         Ok(offerings)
     }
 
-    async fn register(&self, batch: &str, path: &Path) -> Result<Offering, OfferingError> {
+    async fn register(
+        &self,
+        batch: &str,
+        path: &Path,
+        archive: Option<&str>,
+    ) -> Result<Offering, OfferingError> {
         let file_name = path
             .file_name()
             .map(|name| name.to_string_lossy().into_owned())
@@ -162,6 +177,7 @@ impl Offerings {
             Ok(info) => toasty::create!(Offering {
                 batch,
                 file_name: &file_name,
+                archive: archive.map(str::to_owned),
                 staged_path,
                 size,
                 status: OfferingStatus::Pending,
@@ -185,6 +201,7 @@ impl Offerings {
             Err(error) => toasty::create!(Offering {
                 batch,
                 file_name: &file_name,
+                archive: archive.map(str::to_owned),
                 staged_path,
                 size,
                 status: OfferingStatus::Unreadable,
@@ -269,7 +286,7 @@ impl Offerings {
                 &path,
                 &info,
                 cover.as_ref(),
-                Provenance::offering(),
+                Provenance::offering(offering.file_name.clone(), offering.archive.clone()),
                 Claim::offering(),
             )
             .await?;
@@ -437,13 +454,14 @@ fn free_name(dir: &Path, name: &str) -> PathBuf {
 }
 
 /// Extracts the audio files and cover images of a zip archive into `dir`,
-/// flattening its folders.
-fn extract_zip(archive: &Path, dir: &Path) -> Result<(), OfferingError> {
+/// flattening its folders. Returns the files it wrote.
+fn extract_zip(archive: &Path, dir: &Path) -> Result<Vec<PathBuf>, OfferingError> {
     let file = std::fs::File::open(archive)?;
     let mut zip =
         zip::ZipArchive::new(file).map_err(|error| OfferingError::Archive(error.to_string()))?;
 
     let mut extracted = 0_u64;
+    let mut files = Vec::new();
     for index in 0..zip.len() {
         let mut entry = zip
             .by_index(index)
@@ -469,6 +487,7 @@ fn extract_zip(archive: &Path, dir: &Path) -> Result<(), OfferingError> {
         let target = free_name(dir, &layout::sanitize(&name.to_string_lossy(), "file"));
         let mut out = std::fs::File::create_new(&target)?;
         io::copy(&mut entry, &mut out)?;
+        files.push(target);
     }
-    Ok(())
+    Ok(files)
 }

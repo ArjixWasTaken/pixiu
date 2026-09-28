@@ -12,6 +12,7 @@ const context = canvas.getContext("2d");
 const status = document.getElementById("login-status");
 const done = document.getElementById("done");
 const hint = document.getElementById("autofill-hint");
+const host = document.getElementById("login-host");
 
 const scheme = location.protocol === "https:" ? "wss:" : "ws:";
 let socket = null;
@@ -315,9 +316,10 @@ const htmlInCanvas =
   typeof context.drawElementImage === "function" && typeof canvas.requestPaint === "function";
 const mirrors = htmlInCanvas ? createMirrors() : null;
 
+hint.closest("[data-hint]").dataset.mirrors = String(Boolean(mirrors));
 hint.textContent = mirrors
   ? `Your password manager can fill the sign-in fields. It sees them on ${location.origin}, so add that address to your Google login.`
-  : "Tip: in Chrome with HTML-in-Canvas enabled (chrome://flags/#canvas-draw-element), your password manager can fill these fields.";
+  : "Want your password manager to fill this in? In Chrome, enable chrome://flags/#canvas-draw-element and reload. The sign-in fields then get real inputs laid over them. Typing works fine without it.";
 
 // ---- status --------------------------------------------------------------------
 
@@ -334,11 +336,13 @@ async function poll() {
   const current = await state();
   if (!current) return;
   done.disabled = !current.logged_in;
+  status.closest("[data-login-pill]").dataset.signedIn = String(current.logged_in);
   status.textContent = current.logged_in
-    ? "Signed in. Press Done to connect."
+    ? "Signed in: press Done"
     : current.open
-      ? "Not signed in yet."
-      : "The login browser closed.";
+      ? "Not signed in yet"
+      : "The login browser closed";
+  host.textContent = current.host ?? (current.open ? "loading…" : "closed");
 }
 setInterval(poll, 2000);
 poll();

@@ -271,11 +271,17 @@ impl Hunter {
             .map_err(|error| HuntError::Tags(error.to_string()))?;
         info.artists.clone_from(&track.artists);
 
+        // The channel of whichever artist became the album artist above.
+        let album_artist_id = match album {
+            Some(album) if !album.artists.is_empty() => album.artist_id.clone(),
+            _ => track.artist_id.clone(),
+        };
         let provenance = Provenance::youtube_music(
             video_id,
             album
                 .map(|album| album.id.clone())
                 .or_else(|| track.album.as_ref().map(|album| album.id.clone())),
+            album_artist_id,
         );
         let stored = self
             .treasury

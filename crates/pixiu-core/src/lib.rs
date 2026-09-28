@@ -2,6 +2,7 @@
 
 pub mod config;
 pub mod password;
+pub mod playing;
 pub mod secrets;
 
 pub use config::{Config, ConfigError, CookieSecurity, StreamConfig, TranscodeFormat};

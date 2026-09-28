@@ -16,28 +16,17 @@ use topcoat::{
         error::{SeeOther, see_other},
         page, route,
     },
+    runtime::{Event, shard, signal},
     view::{View, attributes, class, component, view},
 };
 
 use crate::{
-    app::_hoard::server_url,
+    app::_hoard::{count, server_url},
     auth::{db, jobs, require_user, treasury, warden},
     ui::{
-        BUTTON_DANGER, BUTTON_PRIMARY, BUTTON_SECONDARY, alert, card, field, notice, session_status,
+        CARD_TITLE, LABEL, LINK_CLASS, Size, Tone, btn, copy_button, dot, page_header, progress,
+        relative, session_look, snackbar, surface, text_field,
     },
-};
-
-/// The track the layout preview files.
-const EXAMPLE: TrackLocation<'static> = TrackLocation {
-    album_artist: "Kevin MacLeod",
-    artist: "Kevin MacLeod",
-    album: "The August Album",
-    year: Some(2023),
-    genre: Some("Ambient"),
-    disc: Some(1),
-    track: Some(4),
-    title: "Vibing Over Venus",
-    suffix: "opus",
 };
 
 pub(super) const SETTINGS_PATH: &str = "/settings";
@@ -63,7 +52,7 @@ pub(super) async fn settings(
     keys.sort_by_key(|key| key.created_at);
     let token_ready = user.subsonic_secret.is_some();
     let server = server_url(cx);
-    let (session, session_color) = session_status(warden(cx).health().state);
+    let look = session_look(warden(cx).health().state);
     let unlooked = Album::all()
         .exec(&mut db(cx))
         .await?
@@ -71,218 +60,242 @@ pub(super) async fn settings(
         .filter(|album| album.enrichment.is_none())
         .count();
     let layout = treasury(cx).layout();
+    let current = layout.as_str().to_owned();
+    let is_default = current == Template::DEFAULT;
     let misplaced = treasury(cx).misplaced().await?;
     let refiling = jobs(cx)
         .unfinished()
         .await?
         .iter()
         .any(|job| job.kind == JobKind::Refile);
+    let draft = signal(cx, || layout_draft.unwrap_or(&current).to_owned());
+    let saved_template = current.clone();
 
     Ok(view! {
-        <div class="mx-auto flex max-w-3xl flex-col gap-8">
-            <header class="flex flex-col gap-1">
-                <h2 class="text-3xl font-bold text-gold">"Settings"</h2>
-            </header>
+        <div class="flex flex-col gap-5">
+            page_header(eyebrow: "Settings", title: "How the hoard is kept")
 
-            card(
-                <div class="flex flex-col gap-4">
-                    <h3 class="text-lg">"Subsonic clients"</h3>
-                    <dl class="grid grid-cols-[8rem_1fr] gap-x-4 gap-y-2 text-sm">
-                        <dt class="text-muted-foreground">"Server"</dt>
-                        <dd><code class="text-gold-soft">(&server)</code></dd>
-                        <dt class="text-muted-foreground">"Username"</dt>
-                        <dd>(&user.username)</dd>
-                        <dt class="text-muted-foreground">"Password"</dt>
-                        <dd>
-                            "Your píxiū password. "
-                            if token_ready {
-                                "Clients may send it hashed (token authentication)."
-                            } else {
-                                "Token authentication starts working after your next "
-                                "sign-in."
-                            }
-                        </dd>
-                    </dl>
-                    <p class="text-sm text-muted-foreground">
-                        "Clients that support OpenSubsonic API keys can use a key "
-                        "instead of the password."
-                    </p>
-                </div>
+            if layout_saved {
+                snackbar(message: "Saved. New tracks follow the new layout.")
+            }
+
+            surface(
+                <h2 class=(CARD_TITLE)>"Subsonic apps"</h2>
+                <dl
+                    class="m-0 grid grid-cols-[minmax(120px,auto)_minmax(0,1fr)] items-baseline gap-x-5 \
+                           gap-y-3 text-sm"
+                >
+                    <dt class="text-muted-foreground">"Server address"</dt>
+                    <dd class="m-0 flex flex-wrap items-center gap-2">
+                        <code class="font-mono text-sm font-medium text-gold-soft">(&server)</code>
+                        copy_button(text: server.clone(), class: LINK_CLASS)
+                    </dd>
+                    <dt class="text-muted-foreground">"Username"</dt>
+                    <dd class="m-0">(&user.username)</dd>
+                    <dt class="text-muted-foreground">"Password"</dt>
+                    <dd class="m-0 leading-5 text-foreground-soft">
+                        "Your píxiū password. Apps that support it can use an API key instead (below)."
+                    </dd>
+                    <dt class="text-muted-foreground">"Token auth"</dt>
+                    <dd class="m-0 flex items-center gap-2">
+                        if token_ready {
+                            <span class="size-2 rounded-full bg-success"></span>
+                            "Works: apps may send the password hashed"
+                        } else {
+                            <span class="size-2 rounded-full bg-gold"></span>
+                            "Starts after your next sign-in"
+                        }
+                    </dd>
+                </dl>
             )
 
-            card(
-                <div class="flex items-center justify-between gap-4">
-                    <div class="flex flex-col gap-1">
-                        <h3 class="text-lg">"Sources"</h3>
-                        <p class="flex items-center gap-2 text-sm text-muted-foreground">
-                            "YouTube Music"
-                            <span class=(class!("size-2.5 rounded-full", session_color))></span>
-                            (session)
-                        </p>
+            <div class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,300px),1fr))] gap-5">
+                surface(
+                    attrs: attributes! { class="gap-3" },
+                    <h2 class=(CARD_TITLE)>"Sources"</h2>
+                    <div class="flex items-center gap-2.5 text-[15px]">
+                        dot(look: look)
+                        "YouTube Music · " (look.long)
                     </div>
-                    <a href="/settings/sources" class=(BUTTON_SECONDARY)>"Manage"</a>
-                </div>
-            )
-
-            card(
-                <div class="flex items-center justify-between gap-4">
-                    <div class="flex flex-col gap-1">
-                        <h3 class="text-lg">"MusicBrainz, covers and lyrics"</h3>
-                        <p class="text-sm text-muted-foreground">
-                            "New albums are looked up by themselves. "
-                            if unlooked == 0 {
-                                "Every album has been looked up."
-                            } else {
-                                (unlooked) if unlooked == 1 { " album has" } else { " albums have" }
-                                " not been looked up yet."
-                            }
-                        </p>
+                    <div class="mt-auto">
+                        <a href="/settings/sources" class=(btn(Tone::Tonal, Size::S))>"Manage"</a>
                     </div>
-                    if unlooked > 0 {
-                        <form method="post" action="/settings/lookup" class="shrink-0">
-                            <button type="submit" class=(BUTTON_SECONDARY)>"Look them up"</button>
-                        </form>
-                    }
-                </div>
-            )
-
-            card(
-                <div id="layout" class="flex flex-col gap-4">
-                    <div class="flex flex-col gap-1">
-                        <h3 class="text-lg">"File layout"</h3>
-                        <p class="text-sm text-muted-foreground">
-                            "Where tracks are filed in the treasure. "
-                            <code>"{field}"</code>
-                            " inserts album_artist, artist, album, year, genre, disc, track "
-                            "or title ("
-                            <code>"{track:02}"</code>
-                            " pads numbers); a part in "
-                            <code>"[brackets]"</code>
-                            " is left out when a value in it is missing; "
-                            <code>"/"</code>
-                            " makes a folder; "
-                            <code>"\\["</code>
-                            " is a plain bracket. The file extension is added."
-                        </p>
-                    </div>
-                    if layout_saved {
-                        notice("Saved. New tracks follow the new layout.")
-                    }
-                    if let Some(error) = layout_error {
-                        alert((error))
-                    }
-                    <form method="post" action="/settings/layout" class="flex flex-col gap-3">
-                        field(
-                            label: "Template",
-                            attrs: attributes! {
-                                name="template"
-                                value=(layout_draft.unwrap_or(layout.as_str()))
-                                required=""
-                                spellcheck="false"
-                                autocomplete="off"
-                            },
-                        )
-                        <p class="text-xs text-muted-foreground">
-                            "Files tracks like "
-                            <code class="text-gold-soft">
-                                (layout.track_path(EXAMPLE).display().to_string())
-                            </code>
-                        </p>
-                        <div class="flex flex-wrap gap-3">
-                            <button type="submit" class=(BUTTON_PRIMARY)>"Save"</button>
-                            if layout.as_str() != Template::DEFAULT {
-                                <button type="submit" name="reset" value="1" class=(BUTTON_SECONDARY)>
-                                    "Back to the default"
-                                </button>
-                            }
-                        </div>
-                    </form>
-                    if refiling {
-                        <p class="text-sm text-muted-foreground">
-                            "Moving files to the layout… see " <a href="/jobs" class="underline">"Jobs"</a> "."
-                        </p>
-                    } else if misplaced > 0 {
-                        <form
-                            method="post"
-                            action="/settings/refile"
-                            class="flex items-center justify-between gap-4"
-                        >
-                            <p class="text-sm text-muted-foreground">
-                                (misplaced)
-                                if misplaced == 1 {
-                                    " track is not where the layout wants it."
-                                } else {
-                                    " tracks are not where the layout wants them."
-                                }
-                            </p>
-                            <button type="submit" class=(class!(BUTTON_SECONDARY, "shrink-0"))>"Move them"</button>
-                        </form>
-                    }
-                </div>
-            )
-
-            card(
-                <div class="flex flex-col gap-4">
-                    <h3 class="text-lg">"API keys"</h3>
-                    if let (Some(name), Some(key)) = (created_name, created_key) {
-                        notice(
-                            "Key “" (name) "” created. Copy it now; it will not be shown again."
-                        )
-                        <code
-                            class="block select-all break-all rounded-lg border \
-                                   border-gold/40 bg-input px-3 py-2 text-sm text-gold-soft"
-                        >
-                            (key)
-                        </code>
-                    }
-                    if keys.is_empty() {
-                        <p class="text-sm text-muted-foreground">"No API keys yet."</p>
+                )
+                surface(
+                    attrs: attributes! { class="gap-3" },
+                    <h2 class=(CARD_TITLE)>"MusicBrainz"</h2>
+                    if unlooked == 0 {
+                        <span class="text-[15px] text-foreground-soft">"Every album has been looked up."</span>
                     } else {
-                        <ul class="divide-y divide-border">
-                            for key in &keys {
-                                <li class="flex items-center justify-between gap-4 py-3">
-                                    <div>
-                                        <p class="font-medium">(&key.name)</p>
-                                        <p class="text-xs text-muted-foreground">
-                                            "Created " (key.created_at.strftime("%Y-%m-%d").to_string())
-                                            " · "
-                                            match key.last_used_at {
-                                                Some(used) => {
-                                                    "last used "
-                                                    (used.strftime("%Y-%m-%d %H:%M").to_string())
-                                                }
-                                                None => "never used",
-                                            }
-                                        </p>
-                                    </div>
-                                    <form
-                                        method="post"
-                                        action=(format!("/settings/api-keys/{}/revoke", key.id))
-                                    >
-                                        <button type="submit" class=(BUTTON_DANGER)>"Revoke"</button>
-                                    </form>
-                                </li>
-                            }
-                        </ul>
+                        <span class="text-[15px] text-foreground-soft">
+                            (count(unlooked, "album has", "albums have")) " not been looked up yet."
+                        </span>
+                        <form method="post" action="/settings/lookup" class="mt-auto">
+                            <button type="submit" class=(btn(Tone::Tonal, Size::S))>"Look them up"</button>
+                        </form>
                     }
+                )
+            </div>
+
+            surface(
+                attrs: attributes! { id="layout" },
+                <h2 class=(CARD_TITLE)>"File layout"</h2>
+                <p class="m-0 text-sm leading-5 text-muted-foreground">
+                    "Where each track is filed inside the treasure. The file extension is added."
+                </p>
+                <form id="layout-form" method="post" action="/settings/layout" class="flex flex-col gap-4">
+                    text_field(
+                        label: "Layout template",
+                        mono: true,
+                        invalid: layout_error.is_some(),
+                        supporting: layout_error,
+                        attrs: attributes! {
+                            name="template" required="" spellcheck="false" autocomplete="off"
+                            :value=$(draft.get())
+                            @input=$(|e: Event| draft.set(e.target.value))
+                        },
+                    )
+                    layout_preview(draft: $(draft.get()))
+                    <details class="text-sm text-foreground-soft">
+                        <summary class="font-medium text-gold">"Template syntax"</summary>
+                        <div class="flex flex-col gap-2 pt-3 leading-5">
+                            <div class="flex flex-wrap gap-1.5">
+                                for field in Template::FIELDS {
+                                    <code class="rounded-md bg-highest px-2 py-0.5 font-mono text-[13px] text-foreground">
+                                        "{" (field) "}"
+                                    </code>
+                                }
+                            </div>
+                            <span><code class="font-mono text-gold-soft">"{track:02}"</code>" pads numbers to two digits."</span>
+                            <span><code class="font-mono text-gold-soft">"[parts]"</code>" are left out when a value inside is missing."</span>
+                            <span>
+                                <code class="font-mono text-gold-soft">"\\["</code>" is a plain bracket. "
+                                <code class="font-mono text-gold-soft">"/"</code>" makes a folder."
+                            </span>
+                        </div>
+                    </details>
+                    <div class="flex flex-wrap gap-2">
+                        <button
+                            type="submit"
+                            :disabled=$(draft.get().trim() == saved_template)
+                            class=(btn(Tone::Filled, Size::S))
+                        >
+                            "Save"
+                        </button>
+                        <button
+                            type="submit"
+                            name="reset"
+                            value="1"
+                            formnovalidate=""
+                            disabled=(is_default)
+                            class=(btn(Tone::Text, Size::S))
+                        >
+                            "Back to the default"
+                        </button>
+                    </div>
+                </form>
+                if refiling {
+                    <div class="flex flex-col gap-2 rounded-[14px] bg-dim px-4 py-3.5">
+                        <span class="text-sm text-foreground-soft">
+                            "Moving files… " <a href="/jobs">"Jobs"</a> " follows it."
+                        </span>
+                        progress(value: None)
+                    </div>
+                } else if misplaced > 0 {
                     <form
                         method="post"
-                        action="/settings/api-keys"
-                        class="flex flex-col gap-3 sm:flex-row sm:items-end"
+                        action="/settings/refile"
+                        class="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-[14px] bg-gold-container px-4 py-3.5"
                     >
-                        <div class="flex-1">
-                            field(
-                                label: "New key for",
-                                attrs: attributes! {
-                                    name="name" placeholder="e.g. Symfonium on my phone"
-                                    required="" maxlength="100"
-                                },
-                            )
-                        </div>
-                        <button type="submit" class=(BUTTON_PRIMARY)>"Create key"</button>
+                        <span class="flex-[1_1_240px] text-sm text-gold-soft">
+                            (count(misplaced, "track is", "tracks are"))
+                            if misplaced == 1 { " not where the layout wants it." } else { " not where the layout wants them." }
+                        </span>
+                        <button type="submit" class=(btn(Tone::Filled, Size::S))>"Move them"</button>
                     </form>
-                </div>
+                }
             )
+
+            surface(
+                <h2 class=(CARD_TITLE)>"API keys"</h2>
+                <p class="m-0 text-sm leading-5 text-muted-foreground">
+                    "Give each Subsonic app its own key, so you can revoke one without touching the others."
+                </p>
+                if let (Some(name), Some(key)) = (created_name, created_key) {
+                    <div class="flex flex-col gap-2.5 rounded-2xl border border-gold bg-gold-container p-4">
+                        <span class="text-sm text-gold-soft">
+                            "Here is the key for “" (name) "”. It is shown only this once."
+                        </span>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <code
+                                class="min-w-0 flex-[1_1_260px] rounded-[10px] bg-dim px-3 py-2.5 font-mono \
+                                       text-sm font-medium break-all text-foreground select-all"
+                            >
+                                (key)
+                            </code>
+                            copy_button(text: key, class: btn(Tone::Filled, Size::S))
+                            <a href=(SETTINGS_PATH) class=(btn(Tone::Text, Size::S))>"Done"</a>
+                        </div>
+                    </div>
+                }
+                <div class="flex flex-col">
+                    for key in &keys {
+                        <div class="flex min-h-[60px] flex-wrap items-center gap-x-4 gap-y-1 border-b border-muted py-1.5">
+                            <div class="flex min-w-0 flex-[1_1_220px] flex-col gap-0.5">
+                                <span class="text-[15px]">(&key.name)</span>
+                                <span class="text-[13px] text-muted-foreground">
+                                    "Created " (relative(key.created_at)) " · "
+                                    match key.last_used_at {
+                                        Some(used) => { "last used " (relative(used)) },
+                                        None => "never used",
+                                    }
+                                </span>
+                            </div>
+                            <form method="post" action=(format!("/settings/api-keys/{}/revoke", key.id))>
+                                <button type="submit" class=(btn(Tone::Text, Size::S))>"Revoke"</button>
+                            </form>
+                        </div>
+                    }
+                    if keys.is_empty() {
+                        <p class="m-0 text-sm text-muted-foreground">"No keys yet. Name one after the app it’s for."</p>
+                    }
+                </div>
+                <form method="post" action="/settings/api-keys" class="flex flex-wrap items-center gap-3">
+                    text_field(
+                        label: "Key name, e.g. Symfonium on phone",
+                        attrs: attributes! {
+                            wrapper-class="flex-[1_1_260px]" name="name" required="" maxlength="100"
+                        },
+                    )
+                    <button type="submit" class=(btn(Tone::Tonal, Size::M))>"Create key"</button>
+                </form>
+            )
+        </div>
+    })
+}
+
+/// Where the draft template would file an example track, as the admin
+/// types.
+#[shard]
+async fn layout_preview(cx: &Cx, draft: String) -> Result<impl View> {
+    require_user(cx).await?;
+    let preview = Template::preview(&draft);
+    let example = TrackLocation::EXAMPLE;
+    Ok(view! {
+        <div class="flex flex-col gap-1.5 rounded-[14px] border border-border bg-dim px-4 py-3.5">
+            <span class=(class!(LABEL, "tracking-[.1em]"))>
+                "Example · " (example.title) ", track " (example.track.unwrap_or(1)) " of " (example.album)
+            </span>
+            match preview {
+                Ok(path) => {
+                    <code class="font-mono text-sm leading-5 break-all text-gold-soft">
+                        (path.display().to_string())
+                    </code>
+                },
+                Err(error) => {
+                    <span class="text-sm text-destructive">(error.to_string())</span>
+                },
+            }
         </div>
     })
 }

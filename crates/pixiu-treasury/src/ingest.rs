@@ -27,26 +27,42 @@ pub struct Provenance {
     pub ytm_video_id: Option<String>,
     /// The YouTube Music album browse id, for downloads from there.
     pub ytm_browse_id: Option<String>,
+    /// The album artist's YouTube Music channel, for downloads from there.
+    pub ytm_artist_id: Option<String>,
+    /// For uploads, the file name it was offered under.
+    pub source_name: Option<String>,
+    /// For uploads, the zip archive it was unpacked from.
+    pub source_archive: Option<String>,
 }
 
 impl Provenance {
-    /// A file the admin uploaded.
+    /// A file the admin uploaded as `file_name`, perhaps inside `archive`.
     #[must_use]
-    pub fn offering() -> Self {
+    pub fn offering(file_name: impl Into<String>, archive: Option<String>) -> Self {
         Self {
             origin: TrackOrigin::Offering,
             ytm_video_id: None,
             ytm_browse_id: None,
+            ytm_artist_id: None,
+            source_name: Some(file_name.into()),
+            source_archive: archive,
         }
     }
 
     /// A download from YouTube Music.
     #[must_use]
-    pub fn youtube_music(video_id: impl Into<String>, browse_id: Option<String>) -> Self {
+    pub fn youtube_music(
+        video_id: impl Into<String>,
+        browse_id: Option<String>,
+        artist_id: Option<String>,
+    ) -> Self {
         Self {
             origin: TrackOrigin::Download,
             ytm_video_id: Some(video_id.into()),
             ytm_browse_id: browse_id,
+            ytm_artist_id: artist_id,
+            source_name: None,
+            source_archive: None,
         }
     }
 }
@@ -167,11 +183,16 @@ impl Treasury {
         let album_artist_name = info.album_artist.as_deref().unwrap_or(primary);
         let title = info.title.as_deref().unwrap_or(UNTITLED);
 
-        let album_artist = find_or_create_artist(&mut db, album_artist_name).await?;
+        let album_artist = find_or_create_artist(
+            &mut db,
+            album_artist_name,
+            provenance.ytm_artist_id.as_deref(),
+        )
+        .await?;
         let artist_id = if name_key(primary) == album_artist.name_key {
             album_artist.id
         } else {
-            find_or_create_artist(&mut db, primary).await?.id
+            find_or_create_artist(&mut db, primary, None).await?.id
         };
         let album = find_or_create_album(
             &mut db,
@@ -287,6 +308,8 @@ impl Treasury {
             isrc: info.isrc.clone(),
             ytm_video_id: provenance.ytm_video_id,
             origin: provenance.origin,
+            source_name: provenance.source_name,
+            source_archive: provenance.source_archive,
             added_at: now(),
         })
         .exec(&mut tx)
@@ -330,21 +353,80 @@ impl Treasury {
     }
 }
 
+/// The artist with YouTube Music channel `channel`, else the one named
+/// `name`, which learns the channel if it did not know one; else a new
+/// artist.
 pub(crate) async fn find_or_create_artist(
     db: &mut Db,
     name: &str,
+    channel: Option<&str>,
 ) -> Result<Artist, toasty::Error> {
+    if let Some(channel) = channel
+        && let Some(artist) = Artist::filter_by_ytm_channel_id(Some(channel.to_owned()))
+            .first()
+            .exec(db)
+            .await?
+    {
+        return Ok(artist);
+    }
     let key = name_key(name);
-    if let Some(artist) = Artist::filter_by_name_key(&key).first().exec(db).await? {
+    if let Some(mut artist) = Artist::filter_by_name_key(&key).first().exec(db).await? {
+        if artist.ytm_channel_id.is_none()
+            && let Some(channel) = channel
+        {
+            toasty::update!(artist {
+                ytm_channel_id: Some(channel.to_owned()),
+            })
+            .exec(db)
+            .await?;
+        }
         return Ok(artist);
     }
     toasty::create!(Artist {
         name,
         name_key: key,
+        ytm_channel_id: channel.map(str::to_owned),
         created_at: now(),
     })
     .exec(db)
     .await
+}
+
+impl Treasury {
+    /// Tells the artist named `name` its YouTube Music channel, if it has
+    /// none yet and no other artist has that channel.
+    ///
+    /// # Errors
+    ///
+    /// Fails on database errors.
+    pub async fn learn_artist_channel(
+        &self,
+        name: &str,
+        channel: &str,
+    ) -> Result<(), toasty::Error> {
+        let mut db = self.db.clone();
+        if Artist::filter_by_ytm_channel_id(Some(channel.to_owned()))
+            .first()
+            .exec(&mut db)
+            .await?
+            .is_some()
+        {
+            return Ok(());
+        }
+        if let Some(mut artist) = Artist::filter_by_name_key(name_key(name))
+            .first()
+            .exec(&mut db)
+            .await?
+            && artist.ytm_channel_id.is_none()
+        {
+            toasty::update!(artist {
+                ytm_channel_id: Some(channel.to_owned()),
+            })
+            .exec(&mut db)
+            .await?;
+        }
+        Ok(())
+    }
 }
 
 /// The album a track belongs to: by platform id when known (names can

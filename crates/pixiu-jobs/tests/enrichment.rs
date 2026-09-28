@@ -113,7 +113,7 @@ async fn hoard() -> Hoard {
                 &staged,
                 &info,
                 None,
-                Provenance::offering(),
+                Provenance::offering("upload.flac", None),
                 Claim::offering(),
             )
             .await

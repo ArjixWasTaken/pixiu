@@ -6,7 +6,7 @@ use std::{
 };
 
 use pixiu_core::SecretBox;
-use pixiu_db::{Db, SessionState};
+use pixiu_db::{Db, SessionEventKind, SessionState};
 use pixiu_hunt::SessionCheck;
 use pixiu_jobs::warden::{BoxFuture, Platform, Refresher, Warden};
 
@@ -149,8 +149,37 @@ async fn transient_failures_degrade_then_recover() {
     assert_eq!(health.last_error, None);
     assert_eq!(
         event_log(&warden).await,
-        ["Connected", "Session working again"]
+        [
+            "Connected",
+            "Check failed: timeout",
+            "Session working again"
+        ]
     );
+    let mut kinds: Vec<SessionEventKind> = warden
+        .events(10)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|event| event.kind)
+        .collect();
+    kinds.reverse();
+    assert_eq!(
+        kinds,
+        [
+            SessionEventKind::Connected,
+            SessionEventKind::Degraded,
+            SessionEventKind::Recovered
+        ]
+    );
+
+    // Failing again while degraded is not news.
+    setup.script.check_answers([
+        SessionCheck::Unreachable("timeout".into()),
+        SessionCheck::Unreachable("timeout again".into()),
+    ]);
+    warden.validate().await;
+    warden.validate().await;
+    assert_eq!(event_log(&warden).await.len(), 4);
 }
 
 #[tokio::test]

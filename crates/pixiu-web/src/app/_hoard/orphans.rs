@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use pixiu_db::{Album, ClaimKind};
+use pixiu_db::{Album, ClaimKind, ReleaseReason, ReleasedClaim};
 use pixiu_treasury::Claim;
 use topcoat::{
     Result,
@@ -14,12 +14,17 @@ use topcoat::{
         request::Bytes,
         route,
     },
+    runtime::{Event, signal},
     view::{View, view},
 };
 
 use crate::{
+    app::_hoard::count,
     auth::{db, require_user, treasury},
-    ui::{BUTTON_DANGER, BUTTON_SECONDARY, card, format_bytes, format_duration, notice, relative},
+    ui::{
+        CHECKBOX, Size, Tone, btn, confirm_dialog, empty_state, format_bytes, format_duration,
+        open_dialog, page_header, relative, snackbar,
+    },
 };
 
 pub(super) const ORPHANS_PATH: &str = "/orphans";
@@ -30,11 +35,40 @@ struct OrphansQuery {
     kept: Option<String>,
 }
 
+/// Why nothing keeps a track any more, for people.
+fn why(released: Option<&ReleasedClaim>) -> String {
+    let Some(released) = released else {
+        return "nothing claims it".to_owned();
+    };
+    let named = |name: &Option<String>| {
+        name.as_deref()
+            .map(|name| format!(" “{name}”"))
+            .unwrap_or_default()
+    };
+    let what = match released.reason {
+        ReleaseReason::LeftPlaylist => {
+            format!("left the watched playlist{}", named(&released.source_name))
+        }
+        ReleaseReason::WatchRemoved => match &released.source_name {
+            Some(name) => format!("its watch “{name}” was removed"),
+            None => "its watch was removed".to_owned(),
+        },
+        ReleaseReason::PlaylistEdited => {
+            format!("taken out of the playlist{}", named(&released.source_name))
+        }
+        ReleaseReason::Unstarred => "unstarred in an app".to_owned(),
+    };
+    format!("{what} {}", relative(released.released_at))
+}
+
 #[page]
 async fn page(cx: &Cx) -> Result<impl View> {
     require_user(cx).await?;
     let query = query_params::<OrphansQuery>(cx)?;
-    let orphans = treasury(cx).orphans().await?;
+    let treasury = treasury(cx);
+    let orphans = treasury.orphans().await?;
+    let ids: Vec<u64> = orphans.iter().map(|track| track.id).collect();
+    let released = treasury.released_claims(&ids).await?;
     let album_ids: Vec<u64> = orphans.iter().map(|track| track.album_id).collect();
     let albums: HashMap<u64, String> = if album_ids.is_empty() {
         HashMap::new()
@@ -46,117 +80,185 @@ async fn page(cx: &Cx) -> Result<impl View> {
             .map(|album| (album.id, album.title))
             .collect()
     };
-    let total: u64 = orphans.iter().map(|track| track.size).sum();
+    let total_size: u64 = orphans.iter().map(|track| track.size).sum();
+    let total = orphans.len();
+    let selected = signal(cx, || 0usize);
+    let deleted_message = query.deleted.map(|deleted| {
+        format!(
+            "Deleted {} from disk.",
+            count(
+                usize::try_from(deleted).unwrap_or(usize::MAX),
+                "track",
+                "tracks"
+            ),
+        )
+    });
+    let summary = format!(
+        "{} · {}",
+        count(total, "orphan", "orphans"),
+        format_bytes(total_size)
+    );
 
     Ok(view! {
-        <div class="mx-auto flex max-w-5xl flex-col gap-8">
-            <header class="flex flex-col gap-1">
-                <h2 class="text-3xl font-bold text-gold">"Orphans"</h2>
-                <p class="text-muted-foreground">
-                    "Tracks nothing keeps any more: they left a watched playlist, or "
-                    "the playlist or watch that wanted them is gone. píxiū never deletes "
-                    "them by itself."
-                </p>
-            </header>
+        <div class="flex flex-col gap-6">
+            page_header(
+                eyebrow: "Orphans",
+                title: "Nothing keeps these any more",
+                lede: "They left a watched playlist, or their watch was removed. píxiū never gives \
+                       treasure back on its own: keep them for good, or delete them yourself.",
+            )
 
-            if let Some(deleted) = query.deleted {
-                notice(
-                    "Deleted " (deleted) if deleted == 1 { " track." } else { " tracks." }
-                )
+            if let Some(message) = &deleted_message {
+                snackbar(message: message)
             }
             if query.kept.is_some() {
-                notice("Kept. It stays in the hoard for good.")
+                snackbar(message: "Kept for good. It stays in the hoard.")
             }
 
             if orphans.is_empty() {
-                card(
-                    <p class="py-6 text-center text-sm text-muted-foreground">
-                        "No orphans. Everything in the hoard is wanted."
-                    </p>
+                empty_state(
+                    title: "Everything in the hoard is wanted.",
+                    <p class="m-0">"Tracks show up here when nothing keeps them any more."</p>
                 )
             } else {
-                card(
-                    <form id="orphans" method="post" action="/orphans/delete">
-                        <table class="w-full text-left text-sm">
-                            <tbody class="divide-y divide-border">
-                                for track in &orphans {
-                                    <tr class="align-middle">
-                                        <td class="w-8 py-3">
-                                            <input
-                                                type="checkbox"
-                                                name="track"
-                                                value=(track.id)
-                                                aria-label=(format!("Select {}", track.title))
-                                                class="accent-gold"
-                                            >
-                                        </td>
-                                        <td class="py-3 pr-4">
-                                            <p class="font-medium">(&track.title)</p>
-                                            <p class="text-xs text-muted-foreground">
-                                                (&track.artist_credit)
-                                                if let Some(album) = albums.get(&track.album_id) {
-                                                    " · " (album)
-                                                }
-                                            </p>
-                                        </td>
-                                        <td class="w-40 py-3 text-xs text-muted-foreground">
-                                            (format_duration(track.duration_ms)) " · " (format_bytes(track.size))
-                                            <br>
-                                            "Added " (relative(track.added_at))
-                                        </td>
-                                        <td class="w-44 py-3">
-                                            <div class="flex justify-end gap-2">
-                                                <button
-                                                    form="keep-one"
-                                                    name="track"
-                                                    value=(track.id)
-                                                    class=(BUTTON_SECONDARY)
-                                                >
-                                                    "Keep"
-                                                </button>
-                                                <button
-                                                    form="delete-one"
-                                                    name="track"
-                                                    value=(track.id)
-                                                    onclick="return confirm('Delete this track and its file?')"
-                                                    class=(BUTTON_DANGER)
-                                                >
-                                                    "Delete"
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    </form>
-                    <div class="mt-4 flex items-center justify-between gap-4 border-t border-border pt-4">
-                        <p class="text-sm text-muted-foreground">
-                            (orphans.len()) if orphans.len() == 1 { " orphan, " } else { " orphans, " }
-                            (format_bytes(total))
-                        </p>
-                        <div class="flex items-center gap-2">
-                            <button
-                                form="orphans"
-                                type="submit"
-                                onclick="return confirm('Delete the selected tracks and their files?')"
-                                class=(BUTTON_SECONDARY)
+                <form id="orphans" method="post" action="/orphans/delete"></form>
+                <section class="overflow-hidden rounded-3xl bg-card">
+                    <div
+                        :class=$(if selected.get() > 0 {
+                            "flex items-center gap-3 px-4 py-2.5 bg-slate-container"
+                        } else {
+                            "flex items-center gap-3 px-4 py-2.5"
+                        })
+                    >
+                        <label class="grid size-10 place-items-center">
+                            <input
+                                type="checkbox"
+                                id="orphans-all"
+                                aria-label="Select every orphan"
+                                class=(CHECKBOX)
+                                :checked=$(selected.get() == total)
+                                // Checks or clears every row, then counts them.
+                                @change=$(|_e: Event| selected.set(raw!(
+                                    "(document.querySelectorAll('[data-orphan]').forEach(c => { c.checked = ${_e}.target.checked; }), document.querySelectorAll('[data-orphan]:checked').length)",
+                                    0usize
+                                )))
                             >
-                                "Delete selected"
-                            </button>
-                            <form
-                                method="post"
-                                action="/orphans/delete"
-                                onsubmit="return confirm('Delete every orphan and its file?')"
-                            >
-                                <input type="hidden" name="all" value="1">
-                                <button type="submit" class=(BUTTON_DANGER)>"Delete all"</button>
-                            </form>
-                        </div>
+                        </label>
+                        <span class="flex-1 text-sm font-medium">
+                            $(if selected.get() == 0 {
+                                summary.clone()
+                            } else {
+                                let n = selected.get();
+                                raw!("${n} + ' selected'", format!("{n} selected"))
+                            })
+                        </span>
+                        <button
+                            type="button"
+                            :hidden=$(selected.get() == 0)
+                            onclick=(open_dialog("delete-selected"))
+                            class=(btn(Tone::Filled, Size::S))
+                        >
+                            "Delete selected"
+                        </button>
+                        <button
+                            type="button"
+                            :hidden=$(selected.get() > 0)
+                            onclick=(open_dialog("delete-all"))
+                            class=(btn(Tone::Text, Size::S))
+                        >
+                            "Delete all"
+                        </button>
                     </div>
-                )
-                <form id="delete-one" method="post" action="/orphans/delete"></form>
+                    for track in &orphans {
+                        let album = albums.get(&track.album_id).map_or("", String::as_str);
+                        <div
+                            class="flex min-h-16 flex-wrap items-center gap-x-3 gap-y-1 border-t border-muted \
+                                   px-3 py-2"
+                        >
+                            <label class="grid size-10 place-items-center">
+                                <input
+                                    type="checkbox"
+                                    aria-label=(format!("Select {}", track.title))
+                                    form="orphans"
+                                    name="track"
+                                    value=(track.id)
+                                    data-orphan=""
+                                    class=(CHECKBOX)
+                                    @change=$(|_e| selected.set(raw!("document.querySelectorAll('[data-orphan]:checked').length", 0usize)))
+                                >
+                            </label>
+                            <div class="flex min-w-0 flex-[1_1_200px] flex-col gap-0.5">
+                                <a
+                                    href=(format!("/albums/{}?track={}", track.album_id, track.id))
+                                    class="text-[15px] text-foreground hover:text-foreground hover:underline"
+                                >
+                                    (&track.title)
+                                </a>
+                                <span class="text-[13px] text-muted-foreground">
+                                    (&track.artist_credit) " · " (album) " · "
+                                    (format_duration(track.duration_ms)) " · " (format_bytes(track.size))
+                                </span>
+                                <span class="text-[13px] text-muted-foreground">
+                                    "Added " (relative(track.added_at)) "; " (why(released.get(&track.id)))
+                                </span>
+                            </div>
+                            <div class="ml-auto flex gap-1">
+                                <button
+                                    type="submit"
+                                    form="keep-one"
+                                    name="track"
+                                    value=(track.id)
+                                    class=(btn(Tone::Text, Size::S))
+                                >
+                                    "Keep"
+                                </button>
+                                <button
+                                    type="submit"
+                                    form="delete-one-direct"
+                                    name="track"
+                                    value=(track.id)
+                                    onclick=(format!(
+                                        "document.getElementById('delete-one-track').value = '{}'; {}; return false",
+                                        track.id,
+                                        open_dialog("delete-one"),
+                                    ))
+                                    class=(btn(Tone::Text, Size::S))
+                                >
+                                    "Delete"
+                                </button>
+                            </div>
+                        </div>
+                    }
+                </section>
                 <form id="keep-one" method="post" action="/orphans/keep"></form>
+                // Without JavaScript, "Delete" posts here directly.
+                <form id="delete-one-direct" method="post" action="/orphans/delete"></form>
+
+                confirm_dialog(
+                    id: "delete-one",
+                    headline: "Delete from disk?",
+                    action: "/orphans/delete",
+                    confirm: "Delete",
+                    <input type="hidden" id="delete-one-track" name="track" value="">
+                    "This deletes the track for good. Files that are gone can’t be brought back."
+                )
+                confirm_dialog(
+                    id: "delete-selected",
+                    headline: "Delete from disk?",
+                    action: "/orphans/delete",
+                    confirm: "Delete",
+                    submits: "orphans",
+                    "This deletes the selected tracks for good. Files that are gone can’t be brought back."
+                )
+                confirm_dialog(
+                    id: "delete-all",
+                    headline: "Delete from disk?",
+                    action: "/orphans/delete",
+                    confirm: "Delete all",
+                    <input type="hidden" name="all" value="1">
+                    "This deletes " (count(total, "orphan", "every orphan")) " ("
+                    (format_bytes(total_size)) ") for good. Files that are gone can’t be brought back."
+                )
             }
         </div>
     })

@@ -104,6 +104,11 @@ pub struct Artist {
 
     pub mbid: Option<String>,
 
+    /// The artist's YouTube Music channel (`UC…`), when a download or a
+    /// watch has named it. Lets the admin watch the artist.
+    #[index]
+    pub ytm_channel_id: Option<String>,
+
     /// A short biography, from Wikipedia.
     pub bio: Option<String>,
 
@@ -260,10 +265,19 @@ pub struct Track {
 
     pub origin: TrackOrigin,
 
+    /// For offerings, the file name it was uploaded under.
+    pub source_name: Option<String>,
+
+    /// For offerings, the zip archive it was unpacked from.
+    pub source_archive: Option<String>,
+
     pub added_at: Timestamp,
 
     #[has_many]
     pub claims: toasty::Deferred<Vec<TrackClaim>>,
+
+    #[has_many]
+    pub released_claims: toasty::Deferred<Vec<ReleasedClaim>>,
 }
 
 /// Why a track is kept. A track without claims is an orphan: kept on disk,
@@ -298,6 +312,44 @@ pub struct TrackClaim {
     pub created_at: Timestamp,
 }
 
+/// Why a claim on a track was let go.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, toasty::Embed)]
+pub enum ReleaseReason {
+    /// The track left a watched playlist.
+    LeftPlaylist,
+    /// The watch that claimed it was removed.
+    WatchRemoved,
+    /// A Subsonic app removed it from a playlist.
+    PlaylistEdited,
+    /// A Subsonic app unstarred it.
+    Unstarred,
+}
+
+/// A claim that was released, kept so an orphan can say why nothing keeps it
+/// any more. Cleared when the track is claimed again or deleted.
+#[derive(Debug, toasty::Model)]
+pub struct ReleasedClaim {
+    #[key]
+    #[auto]
+    pub id: u64,
+
+    #[index]
+    pub track_id: u64,
+
+    #[belongs_to]
+    pub track: toasty::Deferred<Track>,
+
+    pub kind: ClaimKind,
+
+    pub reason: ReleaseReason,
+
+    /// The watch or playlist the claim came from, named as it was then: the
+    /// watch itself may be gone.
+    pub source_name: Option<String>,
+
+    pub released_at: Timestamp,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, toasty::Embed)]
 pub enum OfferingStatus {
     /// Tagged and waiting for the admin's review.
@@ -319,6 +371,9 @@ pub struct Offering {
     pub batch: String,
 
     pub file_name: String,
+
+    /// The zip archive the file was unpacked from, if any.
+    pub archive: Option<String>,
 
     /// The staged file, relative to the offerings directory.
     pub staged_path: String,
@@ -437,6 +492,27 @@ pub struct SourceSession {
     pub last_error: Option<String>,
 }
 
+/// What happened to a platform session.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, toasty::Embed)]
+pub enum SessionEventKind {
+    Connected,
+    Disconnected,
+    /// Working again after trouble or expiry.
+    Recovered,
+    Refreshed,
+    /// A check failed for a transient reason.
+    Degraded,
+    Expired,
+}
+
+impl SessionEventKind {
+    /// Whether the event is bad news.
+    #[must_use]
+    pub fn is_problem(self) -> bool {
+        matches!(self, Self::Degraded | Self::Expired)
+    }
+}
+
 /// A notable change in a platform session, for the admin's history.
 #[derive(Debug, toasty::Model)]
 pub struct SessionEvent {
@@ -446,6 +522,8 @@ pub struct SessionEvent {
 
     #[index]
     pub source: String,
+
+    pub kind: SessionEventKind,
 
     pub message: String,
 
@@ -505,6 +583,10 @@ pub struct Job {
     /// The track a finished download produced.
     pub track_id: Option<u64>,
 
+    /// The job that queued this one: an album grab for its tracks.
+    #[index]
+    pub parent_id: Option<u64>,
+
     pub created_at: Timestamp,
 
     pub started_at: Option<Timestamp>,
@@ -541,6 +623,10 @@ pub struct Watch {
 
     /// The name on the platform, filled in by the first sync.
     pub name: String,
+
+    /// The playlist's thumbnail or the artist's picture on the platform,
+    /// filled in by syncs.
+    pub image_url: Option<String>,
 
     /// Artists: grab singles and EPs too, not only albums.
     pub include_singles: bool,
@@ -604,6 +690,13 @@ pub struct PlaylistEntry {
 
     /// The YouTube Music video, in mirrors. It shows once it is downloaded.
     pub ytm_video_id: Option<String>,
+
+    /// Mirrors: the song's title on the platform, to name it before it is
+    /// downloaded.
+    pub title: Option<String>,
+
+    /// Mirrors: the song's artists on the platform.
+    pub artist: Option<String>,
 }
 
 /// Where lyrics come from.

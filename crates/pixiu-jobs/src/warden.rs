@@ -12,7 +12,7 @@ use std::{future::Future, pin::Pin, sync::Arc, time::Duration};
 
 use jiff::Timestamp;
 use pixiu_core::SecretBox;
-use pixiu_db::{Db, SessionEvent, SessionState, SourceSession, now, toasty};
+use pixiu_db::{Db, SessionEvent, SessionEventKind, SessionState, SourceSession, now, toasty};
 use pixiu_hunt::SessionCheck;
 use tokio::sync::watch;
 
@@ -175,7 +175,7 @@ impl Warden {
                     .await?;
                 }
             }
-            record(&mut db, "Connected").await
+            record(&mut db, SessionEventKind::Connected, "Connected").await
         }
         .await;
         result.map_err(|error| error.to_string())?;
@@ -189,7 +189,7 @@ impl Warden {
         let mut db = self.db.clone();
         if let Ok(Some(session)) = load(&mut db).await {
             let _ = session.delete().exec(&mut db).await;
-            let _ = record(&mut db, "Disconnected").await;
+            let _ = record(&mut db, SessionEventKind::Disconnected, "Disconnected").await;
         }
         self.publish().await;
     }
@@ -282,9 +282,14 @@ impl Warden {
             .exec(&mut db)
             .await;
             if recovered {
-                let _ = record(&mut db, "Session working again").await;
+                let _ = record(
+                    &mut db,
+                    SessionEventKind::Recovered,
+                    "Session working again",
+                )
+                .await;
             } else if refreshed {
-                let _ = record(&mut db, "Cookies refreshed").await;
+                let _ = record(&mut db, SessionEventKind::Refreshed, "Cookies refreshed").await;
             }
         }
         self.publish().await
@@ -295,12 +300,22 @@ impl Warden {
         if let Ok(Some(mut session)) = load(&mut db).await {
             // An expired session stays expired until the admin logs in.
             if session.state != SessionState::Expired {
+                let worsened = session.state == SessionState::Valid;
                 let _ = toasty::update!(session {
                     state: SessionState::Degraded,
                     last_error: Some(reason.to_owned()),
                 })
                 .exec(&mut db)
                 .await;
+                // Only the change is news; repeated failures are not.
+                if worsened {
+                    let _ = record(
+                        &mut db,
+                        SessionEventKind::Degraded,
+                        &format!("Check failed: {reason}"),
+                    )
+                    .await;
+                }
             }
         }
         tracing::warn!(reason, "YouTube Music session check inconclusive");
@@ -319,7 +334,12 @@ impl Warden {
             })
             .exec(&mut db)
             .await;
-            let _ = record(&mut db, &format!("Session expired: {reason}")).await;
+            let _ = record(
+                &mut db,
+                SessionEventKind::Expired,
+                &format!("Session expired: {reason}"),
+            )
+            .await;
         }
         tracing::warn!(reason, "YouTube Music session expired");
         self.publish().await
@@ -362,9 +382,10 @@ async fn load(db: &mut Db) -> Result<Option<SourceSession>, toasty::Error> {
         .await
 }
 
-async fn record(db: &mut Db, message: &str) -> Result<(), toasty::Error> {
+async fn record(db: &mut Db, kind: SessionEventKind, message: &str) -> Result<(), toasty::Error> {
     toasty::create!(SessionEvent {
         source: SOURCE,
+        kind,
         message,
         created_at: now(),
     })

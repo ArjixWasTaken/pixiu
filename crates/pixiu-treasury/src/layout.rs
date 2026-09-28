@@ -122,7 +122,44 @@ pub struct Template {
     pieces: Vec<Piece>,
 }
 
+impl TrackLocation<'static> {
+    /// A track to show what a template does with, in settings.
+    pub const EXAMPLE: Self = Self {
+        album_artist: "Kevin MacLeod",
+        artist: "Kevin MacLeod",
+        album: "The August Album",
+        year: Some(2023),
+        genre: Some("Ambient"),
+        disc: Some(1),
+        track: Some(4),
+        title: "Vibing Over Venus",
+        suffix: "opus",
+    };
+}
+
 impl Template {
+    /// The fields a template can use, by name.
+    pub const FIELDS: [&'static str; 8] = [
+        "album_artist",
+        "artist",
+        "album",
+        "year",
+        "genre",
+        "disc",
+        "track",
+        "title",
+    ];
+
+    /// Where `text` would file [`TrackLocation::EXAMPLE`], without saving
+    /// anything: for previews while the admin types.
+    ///
+    /// # Errors
+    ///
+    /// Fails when `text` is not a valid template.
+    pub fn preview(text: &str) -> Result<PathBuf, TemplateError> {
+        Ok(Self::parse(text)?.track_path(TrackLocation::EXAMPLE))
+    }
+
     pub const DEFAULT: &'static str =
         "{album_artist}/[{year} - ]{album}/[[{disc:02}-]{track:02} ]{title}";
 
@@ -334,6 +371,12 @@ fn truncate_bytes(s: &str, max: usize) -> &str {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn listed_fields_are_the_known_ones() {
+        let known: Vec<&str> = Field::ALL.iter().map(|(name, _)| *name).collect();
+        assert_eq!(known, Template::FIELDS);
+    }
+
     use std::path::Path;
 
     use super::*;

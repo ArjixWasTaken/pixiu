@@ -27,7 +27,7 @@ use topcoat::{
 use super::{SOURCES_PATH, with_error};
 use crate::{
     auth::{login_desk, require_user, warden},
-    ui::{BUTTON_PRIMARY, BUTTON_SECONDARY, card},
+    ui::{EYEBROW, Size, Tone, btn},
 };
 
 const SCREEN_SCRIPT: Asset = asset!("assets/login-screen.js");
@@ -39,39 +39,70 @@ async fn page(cx: &Cx) -> Result<impl View> {
         return Err(redirect(SOURCES_PATH).into());
     }
     Ok(view! {
-        <div class="mx-auto flex max-w-5xl flex-col gap-6">
-            <header class="flex flex-col gap-1">
-                <h2 class="text-3xl font-bold text-gold">"Log in to YouTube Music"</h2>
-                <p class="text-muted-foreground">
-                    "This is a browser running on your píxiū server. Log in as you would "
-                    "anywhere else; you can paste into it. When you are signed in, press "
-                    "Done."
-                </p>
-            </header>
-            card(
+        <div class="flex flex-col gap-[18px]">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div class="flex flex-col gap-1">
+                    <span class=(EYEBROW)>"Log in to YouTube Music"</span>
+                    <h1 class="m-0 text-[28px] leading-9 font-normal">"Sign in inside the login browser"</h1>
+                    <p class="m-0 max-w-[64ch] text-sm leading-5 text-muted-foreground">
+                        "A real browser runs on your server. Its screen streams here and your clicks "
+                        "and typing go to it, so Google’s normal sign-in works, two-factor included."
+                    </p>
+                </div>
+                <div
+                    data-login-pill=""
+                    class="group flex h-10 items-center gap-2.5 rounded-full bg-muted px-4 text-sm font-medium"
+                >
+                    <span
+                        class="size-2.5 rounded-full bg-gold animate-pxpulse \
+                               group-data-[signed-in=true]:animate-none group-data-[signed-in=true]:bg-success"
+                    ></span>
+                    <span id="login-status">"Not signed in yet"</span>
+                </div>
+            </div>
+            <div class="overflow-hidden rounded-[20px] border border-border bg-dim">
+                <div
+                    class="flex items-center gap-2.5 border-b border-border px-3.5 py-2 font-mono text-xs \
+                           text-muted-foreground"
+                >
+                    <span class="size-2 rounded-full bg-destructive animate-pxpulse"></span>
+                    <span>"live · " <span id="login-host">"starting…"</span></span>
+                    <span class="flex-1"></span>
+                    <span>(pixiu_browser::WIDTH) " × " (pixiu_browser::HEIGHT)</span>
+                </div>
                 <canvas
                     id="screen"
                     width=(pixiu_browser::WIDTH)
                     height=(pixiu_browser::HEIGHT)
                     tabindex="0"
-                    class="block h-auto w-full cursor-default rounded-lg border border-border bg-black outline-none focus:border-gold/60"
+                    class="block h-auto w-full cursor-default bg-black outline-none focus:ring-2 \
+                           focus:ring-gold/60 focus:ring-inset"
                 ></canvas>
-                // Owns the sign-in fields mirrored into the canvas (see the
-                // script), so password managers see a login form.
-                <form id="mirror" action="#"></form>
-                <p id="autofill-hint" class="mt-3 text-xs text-muted-foreground"></p>
-                <div class="mt-4 flex items-center justify-between gap-4">
-                    <p id="login-status" class="text-sm text-muted-foreground">"Not signed in yet."</p>
-                    <div class="flex items-center gap-2">
-                        <form method="post" action="/settings/sources/login/cancel">
-                            <button type="submit" class=(BUTTON_SECONDARY)>"Cancel"</button>
-                        </form>
-                        <form method="post" action="/settings/sources/login/finish">
-                            <button id="done" type="submit" disabled="" class=(BUTTON_PRIMARY)>"Done"</button>
-                        </form>
-                    </div>
-                </div>
-            )
+            </div>
+            // Owns the sign-in fields mirrored into the canvas (see the
+            // script), so password managers see a login form.
+            <form id="mirror" action="#"></form>
+            <div
+                data-hint=""
+                class="group flex items-start gap-3 rounded-2xl border border-border px-4 py-3.5 text-[13px] \
+                       leading-[19px] text-foreground-soft"
+            >
+                <span
+                    class="shrink-0 rounded-md bg-slate-container px-2 py-0.5 text-[11px] font-medium \
+                           tracking-[.06em] text-foreground group-data-[mirrors=true]:hidden"
+                >
+                    "TIP"
+                </span>
+                <span id="autofill-hint"></span>
+            </div>
+            <div class="flex flex-wrap justify-end gap-2">
+                <form method="post" action="/settings/sources/login/cancel">
+                    <button type="submit" class=(btn(Tone::Text, Size::S))>"Cancel"</button>
+                </form>
+                <form method="post" action="/settings/sources/login/finish">
+                    <button id="done" type="submit" disabled="" class=(btn(Tone::Filled, Size::S))>"Done"</button>
+                </form>
+            </div>
             <script type="module" src=(SCREEN_SCRIPT)></script>
         </div>
     })
@@ -178,6 +209,8 @@ async fn relay(desk: Arc<LoginDesk>, mut socket: WebSocket) {
 struct Status {
     open: bool,
     logged_in: bool,
+    /// The host of the page the browser shows.
+    host: Option<String>,
 }
 
 /// Lets the page enable "Done" once the browser holds a login.
@@ -187,7 +220,12 @@ async fn status(cx: &Cx) -> Result<Json<Status>> {
     let desk = login_desk(cx);
     let open = desk.is_open().await;
     let logged_in = open && is_logged_in(&desk.cookies(COOKIE_DOMAIN).await.unwrap_or_default());
-    Ok(Json(Status { open, logged_in }))
+    let host = desk.host().await;
+    Ok(Json(Status {
+        open,
+        logged_in,
+        host,
+    }))
 }
 
 #[route(POST "./finish")]

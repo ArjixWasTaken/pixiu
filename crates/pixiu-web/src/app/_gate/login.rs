@@ -18,7 +18,7 @@ use crate::{
         LOGIN_PATH, SETUP_PATH, current_user, db, is_claimed, remember_password, start_session,
         verify_password,
     },
-    ui::{BUTTON_PRIMARY, alert, card, field},
+    ui::{LOGO_SMALL, Size, Tone, alert, btn, text_field},
 };
 
 #[query_params(error = bad_request)]
@@ -37,28 +37,43 @@ async fn page(cx: &Cx) -> Result<impl View> {
     let failed = query_params::<LoginQuery>(cx)?.error.is_some();
 
     Ok(view! {
-        card(
-            <form method="post" action=(LOGIN_PATH) class="flex flex-col gap-4">
-                <h2 class="text-xl font-semibold">"Enter the hoard"</h2>
-                if failed {
-                    alert("Wrong username or password.")
-                }
-                field(
+        <div
+            class="flex min-h-dvh items-center justify-center px-5 py-8 \
+                   bg-[radial-gradient(50%_40%_at_50%_20%,rgb(230_182_92/.10),transparent_70%)]"
+        >
+            <form
+                method="post"
+                action=(LOGIN_PATH)
+                class="flex w-full max-w-[400px] flex-col gap-5"
+            >
+                <div class="flex flex-col items-center gap-3.5 text-center">
+                    <div
+                        class="grid size-28 place-items-center rounded-full border border-gold/40 bg-dim"
+                    >
+                        <img src=(LOGO_SMALL) alt="" width="88" height="88" class="size-[88px]">
+                    </div>
+                    <h1 class="m-0 text-[32px] leading-10 font-normal">"Enter the hoard"</h1>
+                    <p class="m-0 text-sm text-muted-foreground">"Sign in as the keeper of this píxiū."</p>
+                </div>
+                text_field(
                     label: "Username",
                     attrs: attributes! {
                         name="username" autocomplete="username" required="" autofocus=""
                     },
                 )
-                field(
+                text_field(
                     label: "Password",
                     attrs: attributes! {
                         name="password" type="password" autocomplete="current-password"
                         required=""
                     },
                 )
-                <button type="submit" class=(BUTTON_PRIMARY)>"Sign in"</button>
+                if failed {
+                    alert("Wrong username or password.")
+                }
+                <button type="submit" class=(btn(Tone::Filled, Size::M))>"Sign in"</button>
             </form>
-        )
+        </div>
     })
 }
 

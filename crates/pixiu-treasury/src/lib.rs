@@ -14,6 +14,7 @@ pub mod offerings;
 mod refile;
 pub mod tags;
 
+pub use claims::Release;
 pub use edit::{AlbumEdit, ArtistRef, TrackEdit};
 pub use ingest::{Claim, IngestError, Provenance, Treasury};
 pub use layout::{Template, TemplateError};

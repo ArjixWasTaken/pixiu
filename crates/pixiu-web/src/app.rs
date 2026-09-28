@@ -14,7 +14,7 @@ use std::time::Duration;
 use std::sync::Arc;
 
 use pixiu_browser::LoginDesk;
-use pixiu_core::{CookieSecurity, SecretBox};
+use pixiu_core::{CookieSecurity, SecretBox, playing::NowPlaying};
 use pixiu_db::Db;
 use pixiu_hunt::Hunter;
 use pixiu_jobs::{Jobs, Warden};
@@ -32,7 +32,7 @@ use topcoat::{
 
 use crate::{
     session_store::PixiuCookieStore,
-    ui::{CINZEL, FAVICON, INTER},
+    ui::{FAVICON, ROBOTO, ROBOTO_MONO},
 };
 
 /// How long a WebUI login lasts.
@@ -50,6 +50,7 @@ pub struct WebDeps {
     pub warden: Arc<Warden>,
     pub jobs: Arc<Jobs>,
     pub login_desk: Arc<LoginDesk>,
+    pub now_playing: NowPlaying,
 }
 
 /// Builds the WebUI router. Callers may register more routes (the Subsonic
@@ -71,6 +72,7 @@ pub fn router_builder(deps: WebDeps) -> RouterBuilder {
         .app_context(deps.warden)
         .app_context(deps.jobs)
         .app_context(deps.login_desk)
+        .app_context(deps.now_playing)
         // Uploads stream to disk, and whole albums are large. The handler
         // checks the session before reading any of the body. (Layers match
         // route groups, hence `(_hoard)`.)
@@ -95,11 +97,11 @@ async fn shell(slot: Slot<'_>) -> Result<impl View> {
                 <link rel="icon" type="image/png" href=(FAVICON)>
                 topcoat::dev::script()
                 topcoat::runtime::script()
-                topcoat::font::link(font: CINZEL)
-                topcoat::font::link(font: INTER)
+                topcoat::font::link(font: ROBOTO)
+                topcoat::font::link(font: ROBOTO_MONO)
                 <link rel="stylesheet" href=(tailwind::stylesheet!())>
             </head>
-            <body class="min-h-screen">(slot)</body>
+            <body>(slot)</body>
         </html>
     })
 }

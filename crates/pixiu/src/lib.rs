@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use pixiu_browser::{BrowserOptions, LoginDesk};
-use pixiu_core::{Config, SecretBox, TranscodeFormat};
+use pixiu_core::{Config, SecretBox, TranscodeFormat, playing::NowPlaying};
 use pixiu_db::Db;
 use pixiu_hunt::{Hunter, YtMusic};
 use pixiu_jobs::{
@@ -40,6 +40,8 @@ pub struct Services {
     pub warden: Arc<Warden>,
     pub jobs: Arc<Jobs>,
     pub login_desk: Arc<LoginDesk>,
+    /// Fed by the Subsonic API, shown by the WebUI.
+    pub now_playing: NowPlaying,
 }
 
 impl Services {
@@ -100,6 +102,7 @@ impl Services {
             warden,
             jobs,
             login_desk,
+            now_playing: NowPlaying::default(),
         })
     }
 
@@ -124,6 +127,7 @@ pub fn app(services: &Services, config: &Config, assets: AssetBundle) -> Router 
             TranscodeFormat::Aac => Codec::Aac,
         },
         transcodes: Arc::new(Semaphore::new(config.stream.max_transcodes.max(1))),
+        now_playing: services.now_playing.clone(),
         ..SubsonicState::new(
             services.db.clone(),
             services.treasury.clone(),
@@ -142,6 +146,7 @@ pub fn app(services: &Services, config: &Config, assets: AssetBundle) -> Router 
         warden: Arc::clone(&services.warden),
         jobs: Arc::clone(&services.jobs),
         login_desk: Arc::clone(&services.login_desk),
+        now_playing: services.now_playing.clone(),
     })
     .route(TowerRoute::any("/rest/{*rest}", subsonic))
     // Web-based Subsonic clients post to the API from other origins. The
