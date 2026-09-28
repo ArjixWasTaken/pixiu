@@ -243,7 +243,7 @@ async fn offerings_are_reviewed_then_absorbed() {
     ));
     offerings.discard(unreadable[0].id).await.unwrap();
 
-    let failures = offerings.accept_batch(&batch).await.unwrap();
+    let failures = offerings.accept_batch(&batch).await.unwrap().failures;
     assert!(failures.is_empty(), "{failures:?}");
     assert!(offerings.pending().await.unwrap().is_empty());
     assert!(

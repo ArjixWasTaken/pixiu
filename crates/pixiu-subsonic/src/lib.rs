@@ -10,6 +10,7 @@ mod browse;
 mod catalog;
 pub mod ids;
 mod lists;
+mod lyrics;
 mod media;
 mod params;
 mod playlists;
@@ -172,6 +173,8 @@ async fn dispatch(
         "download" => Reply::Raw(media::stream(state, params, method, headers, true).await?),
         "getCoverArt" => Reply::Raw(media::cover_art(state, params, method, headers).await?),
         "getPlayQueue" => queue::get(state, &user).await?.into(),
+        "getLyrics" => lyrics::by_name(state, params).await?.into(),
+        "getLyricsBySongId" => lyrics::by_song(state, params).await?.into(),
         "getPlaylists" => playlists::list(state, &user).await?.into(),
         "getPlaylist" => playlists::get(state, &user, params).await?.into(),
         "createPlaylist" => playlists::create(state, &user, params).await?.into(),

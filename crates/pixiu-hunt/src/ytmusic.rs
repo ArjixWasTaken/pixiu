@@ -222,6 +222,21 @@ impl YtMusic {
         Ok(track(self.rp.query().music_details(video_id).await?.track))
     }
 
+    /// A track's lyrics as YouTube Music shows them (plain text), with the
+    /// credit line naming their source.
+    ///
+    /// # Errors
+    ///
+    /// Fails when YouTube Music cannot be reached.
+    pub async fn lyrics(&self, video_id: &str) -> Result<Option<(String, String)>, HuntError> {
+        let query = self.rp.query();
+        let Some(lyrics_id) = query.music_details(video_id).await?.lyrics_id else {
+            return Ok(None);
+        };
+        let lyrics = query.music_lyrics(&lyrics_id).await?;
+        Ok((!lyrics.body.trim().is_empty()).then_some((lyrics.body, lyrics.footer)))
+    }
+
     /// Finds the best audio stream of a track: Opus in WebM when available.
     ///
     /// # Errors

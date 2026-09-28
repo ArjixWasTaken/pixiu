@@ -276,6 +276,7 @@ pub(crate) async fn artist_info(
     let artist = load_artist(state, id).await?;
     let name = if id3 { "artistInfo2" } else { "artistInfo" };
     Ok(Element::new(name)
+        .field_opt("biography", artist.bio.as_deref())
         .field_opt("musicBrainzId", artist.mbid.as_deref())
         .list("similarArtist", Vec::new())
         .into())

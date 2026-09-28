@@ -10,7 +10,8 @@ use axum::{
 use md5::{Digest, Md5};
 use pixiu_core::SecretBox;
 use pixiu_db::{
-    ApiKey, ClaimKind, Db, Playlist, PlaylistEntry, Track, TrackClaim, User, now, toasty,
+    ApiKey, Artist, ClaimKind, Db, Lyrics, LyricsSource, Playlist, PlaylistEntry, Track,
+    TrackClaim, User, now, toasty,
 };
 use pixiu_subsonic::SubsonicState;
 use pixiu_treasury::{Claim, Provenance, Treasury, tags};
@@ -208,7 +209,7 @@ async fn authentication_methods() {
     let json = api.get("/rest/getOpenSubsonicExtensions?f=json").await.ok();
     assert_eq!(
         names(&json["openSubsonicExtensions"], "name"),
-        ["formPost", "apiKeyAuthentication"]
+        ["formPost", "apiKeyAuthentication", "songLyrics"]
     );
 }
 
@@ -780,4 +781,98 @@ async fn playlists_are_made_changed_and_mirrored() {
     ] {
         assert_eq!(api.call(method, &query).await.error_code(), 50, "{method}");
     }
+}
+
+#[tokio::test]
+async fn lyrics_and_biographies_are_served() {
+    let api = Api::new().await;
+    let mut db = api.db.clone();
+    let album = api.album_id("Test Album").await;
+    let json = api.call("getAlbum", &format!("id={album}")).await.ok();
+    let songs = names(&json["album"]["song"], "id");
+    let key = |id: &str| id.trim_start_matches("tr-").parse::<u64>().unwrap();
+
+    for (id, synced, plain) in [
+        (
+            &songs[0],
+            Some("[00:01.50]Dawn breaks\n[00:04.00]Light comes"),
+            None,
+        ),
+        (&songs[1], None, Some("Wind blows\nAgain")),
+    ] {
+        toasty::create!(Lyrics {
+            track_id: key(id),
+            source: LyricsSource::Lrclib,
+            synced: synced.map(str::to_owned),
+            plain: plain.map(str::to_owned),
+            fetched_at: now(),
+        })
+        .exec(&mut db)
+        .await
+        .unwrap();
+    }
+
+    let json = api
+        .call("getLyricsBySongId", &format!("id={}", songs[0]))
+        .await
+        .ok();
+    let lyrics = &json["lyricsList"]["structuredLyrics"][0];
+    assert_eq!(lyrics["synced"], true);
+    assert_eq!(lyrics["displayTitle"], "First Light");
+    assert_eq!(lyrics["line"][0]["start"], 1500);
+    assert_eq!(lyrics["line"][0]["value"], "Dawn breaks");
+    assert_eq!(lyrics["line"][1]["start"], 4000);
+
+    let json = api
+        .call("getLyricsBySongId", &format!("id={}", songs[1]))
+        .await
+        .ok();
+    let lyrics = &json["lyricsList"]["structuredLyrics"][0];
+    assert_eq!(lyrics["synced"], false);
+    assert_eq!(names(&lyrics["line"], "value"), ["Wind blows", "Again"]);
+    assert!(lyrics["line"][0].get("start").is_none());
+
+    // The classic endpoint finds them by name, as plain text.
+    let json = api
+        .call("getLyrics", "artist=Test%20Artist&title=first%20light")
+        .await
+        .ok();
+    assert_eq!(json["lyrics"]["title"], "First Light");
+    assert_eq!(json["lyrics"]["value"], "Dawn breaks\nLight comes");
+    let json = api
+        .call("getLyrics", "artist=Nobody&title=Nothing")
+        .await
+        .ok();
+    assert!(json["lyrics"].get("value").is_none());
+    // Songs without lyrics have an empty list.
+    let untitled = api.call("search3", "query=Untitled").await.ok();
+    let third = untitled["searchResult3"]["song"][0]["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let json = api
+        .call("getLyricsBySongId", &format!("id={third}"))
+        .await
+        .ok();
+    assert_eq!(
+        json["lyricsList"]["structuredLyrics"],
+        serde_json::json!([])
+    );
+
+    // Biographies come with artists.
+    let mut artist = Artist::all().exec(&mut db).await.unwrap().remove(0);
+    let artist_id = artist.id;
+    toasty::update!(artist {
+        bio: Some("Makes test music.".to_owned()),
+        mbid: Some("art-test".to_owned()),
+    })
+    .exec(&mut db)
+    .await
+    .unwrap();
+    let json = api
+        .call("getArtistInfo2", &format!("id=ar-{artist_id}"))
+        .await
+        .ok();
+    assert_eq!(json["artistInfo2"]["biography"], "Makes test music.");
+    assert_eq!(json["artistInfo2"]["musicBrainzId"], "art-test");
 }

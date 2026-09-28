@@ -99,6 +99,7 @@ async fn job_table(jobs: &Jobs, recent: &[Job]) -> Result<impl View> {
                                         JobKind::DownloadTrack => "Download",
                                         JobKind::GrabAlbum => "Album",
                                         JobKind::SyncWatch => "Watch",
+                                        JobKind::Enrich => "Lookup",
                                     }
                                     " · " (job.created_at.strftime("%Y-%m-%d %H:%M").to_string())
                                 </p>

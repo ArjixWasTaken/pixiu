@@ -34,6 +34,29 @@ pub async fn sized(original: &Path, cache_dir: &Path, size: Option<u32>) -> io::
     tokio::task::spawn_blocking(move || resize(&original, &cached, size)).await?
 }
 
+/// An image's width and height, when it is one.
+#[must_use]
+pub fn dimensions(data: &[u8]) -> Option<(u32, u32)> {
+    image::ImageReader::new(std::io::Cursor::new(data))
+        .with_guessed_format()
+        .ok()?
+        .into_dimensions()
+        .ok()
+}
+
+/// The MIME type of an image, from its content.
+#[must_use]
+pub fn mime_of(data: &[u8]) -> Option<&'static str> {
+    Some(match image::guess_format(data).ok()? {
+        image::ImageFormat::Jpeg => "image/jpeg",
+        image::ImageFormat::Png => "image/png",
+        image::ImageFormat::WebP => "image/webp",
+        image::ImageFormat::Gif => "image/gif",
+        image::ImageFormat::Bmp => "image/bmp",
+        _ => return None,
+    })
+}
+
 /// Removes the resized copies of `original` from the cache.
 ///
 /// # Errors

@@ -3198,6 +3198,7 @@ dependencies = [
  "pixiu-browser",
  "pixiu-core",
  "pixiu-db",
+ "pixiu-enrich",
  "pixiu-hunt",
  "pixiu-jobs",
  "pixiu-subsonic",
@@ -3262,6 +3263,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "pixiu-enrich"
+version = "0.1.0"
+dependencies = [
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "strsim",
+ "thiserror",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "pixiu-hunt"
 version = "0.1.0"
 dependencies = [
@@ -3289,6 +3303,7 @@ dependencies = [
  "pixiu-browser",
  "pixiu-core",
  "pixiu-db",
+ "pixiu-enrich",
  "pixiu-hunt",
  "pixiu-treasury",
  "rand 0.10.3",
@@ -3323,6 +3338,7 @@ dependencies = [
  "md-5",
  "pixiu-core",
  "pixiu-db",
+ "pixiu-enrich",
  "pixiu-treasury",
  "quick-xml",
  "serde_json",
@@ -3361,6 +3377,7 @@ dependencies = [
  "pixiu-browser",
  "pixiu-core",
  "pixiu-db",
+ "pixiu-enrich",
  "pixiu-hunt",
  "pixiu-jobs",
  "pixiu-treasury",

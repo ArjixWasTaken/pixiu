@@ -50,6 +50,15 @@ pub enum OfferingError {
 }
 
 /// The staging area for uploads.
+/// What accepting a batch did.
+#[derive(Debug, Default)]
+pub struct BatchOutcome {
+    /// The albums the accepted tracks went into.
+    pub albums: Vec<u64>,
+    /// The offerings that could not be absorbed, and why.
+    pub failures: Vec<(Offering, OfferingError)>,
+}
+
 #[derive(Clone)]
 pub struct Offerings {
     dir: PathBuf,
@@ -276,29 +285,33 @@ impl Offerings {
     /// # Errors
     ///
     /// Fails only on database errors; per-offering failures are returned.
-    pub async fn accept_batch(
-        &self,
-        batch: &str,
-    ) -> Result<Vec<(Offering, OfferingError)>, OfferingError> {
+    pub async fn accept_batch(&self, batch: &str) -> Result<BatchOutcome, OfferingError> {
         let offerings = Offering::filter_by_batch(batch)
             .exec(&mut self.db())
             .await?;
-        let mut failures = Vec::new();
+        let mut outcome = BatchOutcome::default();
         for mut offering in offerings {
             if offering.status != OfferingStatus::Pending {
                 continue;
             }
-            if let Err(error) = self.accept(offering.id).await {
-                // Keep the reason for the review page.
-                toasty::update!(offering {
-                    error: Some(error.to_string())
-                })
-                .exec(&mut self.db())
-                .await?;
-                failures.push((offering, error));
+            match self.accept(offering.id).await {
+                Ok(track) => {
+                    if !outcome.albums.contains(&track.album_id) {
+                        outcome.albums.push(track.album_id);
+                    }
+                }
+                Err(error) => {
+                    // Keep the reason for the review page.
+                    toasty::update!(offering {
+                        error: Some(error.to_string())
+                    })
+                    .exec(&mut self.db())
+                    .await?;
+                    outcome.failures.push((offering, error));
+                }
             }
         }
-        Ok(failures)
+        Ok(outcome)
     }
 
     /// Deletes an offering and its staged file.

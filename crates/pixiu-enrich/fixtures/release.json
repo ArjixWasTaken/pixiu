@@ -1,0 +1,41 @@
+{
+  "id": "rel-august",
+  "title": "The August Album",
+  "date": "2023-08-01",
+  "country": "XW",
+  "status": "Official",
+  "artist-credit": [
+    { "name": "Kevin MacLeod", "joinphrase": "", "artist": { "id": "art-kevin", "name": "Kevin MacLeod", "sort-name": "MacLeod, Kevin" } }
+  ],
+  "release-group": { "id": "rg-august", "title": "The August Album", "primary-type": "Album" },
+  "cover-art-archive": { "artwork": true, "count": 1, "front": true, "back": false },
+  "media": [
+    {
+      "position": 1,
+      "format": "Digital Media",
+      "track-count": 2,
+      "tracks": [
+        {
+          "id": "t1",
+          "number": "1",
+          "position": 1,
+          "title": "Evening",
+          "length": 187000,
+          "recording": { "id": "rec-evening", "title": "Evening", "length": 187000, "isrcs": [] }
+        },
+        {
+          "id": "t2",
+          "number": "2",
+          "position": 2,
+          "title": "Morning",
+          "length": 154000,
+          "artist-credit": [
+            { "name": "Kevin MacLeod", "joinphrase": " feat. ", "artist": { "id": "art-kevin", "name": "Kevin MacLeod" } },
+            { "name": "Somebody", "joinphrase": "", "artist": { "id": "art-somebody", "name": "Somebody" } }
+          ],
+          "recording": { "id": "rec-morning", "title": "Morning", "length": 154000, "isrcs": ["QZTB82300002"] }
+        }
+      ]
+    }
+  ]
+}

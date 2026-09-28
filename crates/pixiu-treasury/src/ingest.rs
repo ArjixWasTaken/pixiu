@@ -77,6 +77,8 @@ pub enum IngestError {
     Io(#[from] io::Error),
     #[error("database error: {0}")]
     Db(#[from] toasty::Error),
+    #[error("background task failed: {0}")]
+    Join(#[from] tokio::task::JoinError),
 }
 
 /// The music library on disk and in the database.
@@ -308,7 +310,7 @@ impl Treasury {
     }
 
     /// `relative`, or a numbered variant of it that is not taken on disk.
-    async fn free_path(&self, relative: PathBuf) -> PathBuf {
+    pub(crate) async fn free_path(&self, relative: PathBuf) -> PathBuf {
         let mut candidate = relative.clone();
         for n in 2.. {
             if !tokio::fs::try_exists(self.root.join(&candidate))
@@ -323,7 +325,10 @@ impl Treasury {
     }
 }
 
-async fn find_or_create_artist(db: &mut Db, name: &str) -> Result<Artist, toasty::Error> {
+pub(crate) async fn find_or_create_artist(
+    db: &mut Db,
+    name: &str,
+) -> Result<Artist, toasty::Error> {
     let key = name_key(name);
     if let Some(artist) = Artist::filter_by_name_key(&key).first().exec(db).await? {
         return Ok(artist);
@@ -406,7 +411,7 @@ fn primary_artist(credit: &str) -> &str {
     }
 }
 
-fn path_string(path: &Path) -> String {
+pub(crate) fn path_string(path: &Path) -> String {
     path.to_str()
         .expect("treasure paths are built from UTF-8 strings")
         .to_owned()

@@ -1,8 +1,11 @@
 //! Everything behind the login: the app shell and the Hoard dashboard (`/`).
 
+mod albums;
+mod artists;
 mod covers;
 mod hunt;
 mod jobs;
+mod library;
 mod offerings;
 mod orphans;
 mod settings;
@@ -35,6 +38,7 @@ use crate::{
 
 const NAV: &[(&str, &str)] = &[
     ("/", "Hoard"),
+    ("/library", "Library"),
     ("/hunt", "Hunt"),
     ("/watches", "Watches"),
     ("/jobs", "Jobs"),
@@ -257,7 +261,8 @@ async fn page(cx: &Cx) -> Result<impl View> {
                     <h3 class="text-lg">"Recently hoarded"</h3>
                     <ul class="grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-4">
                         for album in &recent {
-                            <li class="flex flex-col gap-2">
+                            <li>
+                            <a href=(format!("/albums/{}", album.id)) class="flex flex-col gap-2">
                                 if album.cover.is_some() {
                                     <img
                                         src=(format!("/covers/{}?size=300", album.id))
@@ -284,6 +289,7 @@ async fn page(cx: &Cx) -> Result<impl View> {
                                         }
                                     </p>
                                 </div>
+                            </a>
                             </li>
                         }
                     </ul>

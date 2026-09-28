@@ -208,6 +208,130 @@ fn between<'a>(html: &'a str, prefix: &str, suffix: &str) -> &'a str {
     &html[start..end]
 }
 
+/// Uploads the test album and accepts it.
+async fn offer_test_album(server: &TestServer) {
+    let form = reqwest::multipart::Form::new()
+        .part(
+            "files",
+            reqwest::multipart::Part::bytes(fixture("01-first-light.flac"))
+                .file_name("01-first-light.flac"),
+        )
+        .part(
+            "files",
+            reqwest::multipart::Part::bytes(fixture("02-second-wind.mp3"))
+                .file_name("02-second-wind.mp3"),
+        );
+    let response = server
+        .client
+        .post(server.url("/offerings/upload"))
+        .multipart(form)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(location(&response), "/offerings");
+    let review = server.get("/offerings").await.text().await.unwrap();
+    let accept_end = review.find("/accept\"").expect("an accept form");
+    let batch = &review
+        [review[..accept_end].rfind("/offerings/").unwrap() + "/offerings/".len()..accept_end];
+    let accepted = server
+        .post_form(&format!("/offerings/{batch}/accept"), &[])
+        .await;
+    assert_eq!(location(&accepted), "/offerings?accepted=2");
+}
+
+#[tokio::test]
+async fn albums_are_browsed_looked_up_and_edited() {
+    let server = TestServer::start().await;
+    server.claim().await;
+    offer_test_album(&server).await;
+
+    // Accepting queued a MusicBrainz lookup (the workers are off in tests).
+    let jobs = server.get("/jobs").await.text().await.unwrap();
+    assert_eq!(jobs.matches("Look up Test Album").count(), 1, "{jobs}");
+
+    let library = server.get("/library").await.text().await.unwrap();
+    assert!(library.contains("Test Album") && library.contains("Not looked up"));
+    let id = between(&library, "href=\"/albums/", "\"").to_owned();
+    let album_page = format!("/albums/{id}");
+    let page = server.get(&album_page).await.text().await.unwrap();
+    assert!(page.contains("First Light") && page.contains("Second Wind"));
+    assert!(page.contains("Not looked up on MusicBrainz yet"));
+
+    // Looking it up again, or from a chosen release, queues more lookups.
+    let lookup = server.post_form(&format!("{album_page}/lookup"), &[]).await;
+    assert_eq!(location(&lookup), format!("{album_page}?queued=1"));
+    let bad = server
+        .post_form(
+            &format!("{album_page}/use"),
+            &[("release", "not a release")],
+        )
+        .await;
+    assert!(location(&bad).starts_with(&format!("{album_page}?error=")));
+    let chosen = server
+        .post_form(
+            &format!("{album_page}/use"),
+            &[(
+                "release",
+                "https://musicbrainz.org/release/8c0b6e0e-6c9d-4ac5-8a31-3f2f3f5c0d1e",
+            )],
+        )
+        .await;
+    assert_eq!(location(&chosen), format!("{album_page}?queued=1"));
+    let jobs = server.get("/jobs").await.text().await.unwrap();
+    assert_eq!(jobs.matches("Look up Test Album").count(), 3);
+
+    // Editing renames it, tags and files included.
+    let first = between(&page, "name=\"title-", "\"").to_owned();
+    let edited = server
+        .post_form(
+            &format!("{album_page}/edit"),
+            &[
+                ("title", "Renamed Album"),
+                ("artist", "Test Artist"),
+                ("year", "2025"),
+                (&format!("title-{first}"), "First Light (Edit)"),
+                (&format!("number-{first}"), "1"),
+            ],
+        )
+        .await;
+    assert_eq!(location(&edited), format!("{album_page}?saved=1"));
+    let page = server.get(&album_page).await.text().await.unwrap();
+    assert!(
+        page.contains("Renamed Album") && page.contains("First Light (Edit)"),
+        "{page}"
+    );
+
+    // Clients see it; the files moved with it.
+    let settings = server
+        .post_form("/settings/api-keys", &[("name", "tests")])
+        .await
+        .text()
+        .await
+        .unwrap();
+    let auth = format!("apiKey=pixiu_{}", between(&settings, "pixiu_", "<"));
+    let json = subsonic(&server, "getAlbum", &format!("{auth}&id=al-{id}")).await;
+    assert_eq!(json["album"]["name"], "Renamed Album");
+    assert_eq!(json["album"]["year"], 2025);
+    let path = json["album"]["song"][0]["path"].as_str().unwrap();
+    assert!(
+        path.starts_with("Test Artist/2025 - Renamed Album/"),
+        "{path}"
+    );
+
+    // Settings offers to look up whatever was never looked up.
+    let settings = server.get("/settings").await.text().await.unwrap();
+    assert!(
+        settings.contains("1 album has not been looked up yet."),
+        "{settings}"
+    );
+    assert_eq!(
+        location(&server.post_form("/settings/lookup", &[]).await),
+        "/jobs"
+    );
+    let jobs = server.get("/jobs").await.text().await.unwrap();
+    assert_eq!(jobs.matches("Look up Renamed Album").count(), 1, "{jobs}");
+}
+
 #[tokio::test]
 async fn offerings_become_subsonic_music() {
     let server = TestServer::start().await;

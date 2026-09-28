@@ -10,6 +10,7 @@ publish = false
 pixiu-browser.workspace = true
 pixiu-core.workspace = true
 pixiu-db.workspace = true
+pixiu-enrich.workspace = true
 pixiu-hunt.workspace = true
 pixiu-treasury.workspace = true
 

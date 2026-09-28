@@ -4,11 +4,15 @@
 use std::sync::Arc;
 
 use pixiu_browser::{Cookie, LoginDesk, cookie_header};
-use pixiu_db::{Job, JobKind, SessionState, Track, Watch};
+use pixiu_db::{Album, Job, JobKind, JobState, SessionState, Track, Watch};
+use pixiu_enrich::Sources;
 use pixiu_hunt::{Discography, DownloadRequest, HuntError, Hunter, RemotePlaylist, SessionCheck};
 
 use crate::{
-    queue::{AlbumJob, Executor, NewJob, Outcome, SyncJob, TrackJob},
+    enrich::{self, PlatformLyrics},
+    queue::{
+        self, AlbumJob, EnrichJob, Executor, NewJob, Outcome, SyncJob, TrackJob, enriched_album,
+    },
     warden::{BoxFuture, Platform, Refresher, Warden},
     watch::{self, Catalog, CatalogError, Synced},
 };
@@ -68,6 +72,25 @@ impl Refresher for BrowserRefresher {
 pub struct HuntExecutor {
     pub hunter: Arc<Hunter>,
     pub warden: Arc<Warden>,
+    /// MusicBrainz and friends, for enriching albums.
+    pub sources: Arc<dyn Sources>,
+}
+
+/// YouTube Music lyrics, through the hunter.
+pub struct HunterLyrics(pub Arc<Hunter>);
+
+impl PlatformLyrics for HunterLyrics {
+    fn lyrics<'a>(&'a self, video_id: &'a str) -> BoxFuture<'a, Option<(String, String)>> {
+        Box::pin(async move {
+            match self.0.ytmusic().lyrics(video_id).await {
+                Ok(lyrics) => lyrics,
+                Err(error) => {
+                    tracing::debug!(%error, video_id, "no lyrics from YouTube Music");
+                    None
+                }
+            }
+        })
+    }
 }
 
 impl Executor for HuntExecutor {
@@ -81,6 +104,7 @@ impl Executor for HuntExecutor {
                 JobKind::DownloadTrack => self.download(job, progress).await,
                 JobKind::GrabAlbum => self.expand_album(job).await,
                 JobKind::SyncWatch => self.sync_watch(job).await,
+                JobKind::Enrich => self.enrich(job).await,
             }
         })
     }
@@ -113,8 +137,9 @@ impl HuntExecutor {
                         tracing::warn!(%error, "cannot drop the claim of a removed watch");
                     }
                 }
-                Outcome::Done {
+                Outcome::DoneWith {
                     track_id: Some(track.id),
+                    then: self.enrich_later(track.album_id).await,
                 }
             }
             // Already here: whoever wants it now keeps it too.
@@ -166,6 +191,74 @@ impl HuntExecutor {
             }
         }
         Outcome::Expand(jobs)
+    }
+
+    /// An enrich job for the album, unless one is already waiting.
+    async fn enrich_later(&self, album_id: u64) -> Vec<NewJob> {
+        let mut db = self.hunter.treasury().db();
+        let waiting = queue::unfinished(&mut db).await.is_ok_and(|jobs| {
+            jobs.iter()
+                .any(|job| job.state == JobState::Queued && enriched_album(job) == Some(album_id))
+        });
+        let Ok(Some(album)) = Album::filter_by_id(album_id).first().exec(&mut db).await else {
+            return Vec::new();
+        };
+        if waiting {
+            return Vec::new();
+        }
+        vec![NewJob::enrich(
+            album_id,
+            &format!("Look up {}", album.title),
+            None,
+            false,
+        )]
+    }
+
+    async fn enrich(&self, job: &Job) -> Outcome {
+        let payload: EnrichJob = match serde_json::from_str(&job.payload) {
+            Ok(payload) => payload,
+            Err(error) => return Outcome::Failed(format!("invalid job: {error}")),
+        };
+        let treasury = self.hunter.treasury();
+        // Downloads of the album still to come would each ask again; the
+        // last one's request does the work.
+        let automatic = payload.release.is_none() && !payload.fresh;
+        if automatic && self.album_downloads_pending(payload.album_id).await {
+            return Outcome::Done { track_id: None };
+        }
+        let request = enrich::Request {
+            album_id: payload.album_id,
+            release: payload.release,
+            fresh: payload.fresh,
+        };
+        let lyrics = HunterLyrics(Arc::clone(&self.hunter));
+        match enrich::enrich(treasury, self.sources.as_ref(), &lyrics, &request).await {
+            Ok(summary) => {
+                tracing::info!(album = request.album_id, %summary, "album enriched");
+                Outcome::Done { track_id: None }
+            }
+            Err(error) => Outcome::Failed(error),
+        }
+    }
+
+    /// Whether downloads for the album (grabbed as an album) are queued.
+    async fn album_downloads_pending(&self, album_id: u64) -> bool {
+        let mut db = self.hunter.treasury().db();
+        let Ok(Some(album)) = Album::filter_by_id(album_id).first().exec(&mut db).await else {
+            return false;
+        };
+        let Some(browse_id) = album.ytm_browse_id else {
+            return false;
+        };
+        queue::unfinished(&mut db).await.is_ok_and(|jobs| {
+            jobs.iter().any(|job| {
+                matches!(job.state, JobState::Queued | JobState::Running)
+                    && job.kind == JobKind::DownloadTrack
+                    && serde_json::from_str::<TrackJob>(&job.payload).is_ok_and(|payload| {
+                        payload.reference.as_deref() == Some(browse_id.as_str())
+                    })
+            })
+        })
     }
 
     async fn sync_watch(&self, job: &Job) -> Outcome {

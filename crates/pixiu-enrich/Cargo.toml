@@ -1,0 +1,23 @@
+[package]
+name = "pixiu-enrich"
+description = "MusicBrainz tags, cover art, lyrics and artist information for píxiū's hoard"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+strsim.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+# The same reqwest rustypipe already brings in.
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-webpki-roots", "json"] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+[lints]
+workspace = true

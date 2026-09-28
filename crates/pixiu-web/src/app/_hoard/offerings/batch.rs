@@ -1,6 +1,7 @@
 //! `/offerings/{batch}/...`: act on everything uploaded together.
 
-use pixiu_db::OfferingStatus;
+use pixiu_db::{Album, OfferingStatus};
+use pixiu_jobs::NewJob;
 use topcoat::{
     Result,
     context::Cx,
@@ -11,7 +12,7 @@ use topcoat::{
 };
 
 use super::OFFERINGS_PATH;
-use crate::auth::{offerings, require_user};
+use crate::auth::{db, jobs, offerings, require_user};
 
 path_param!(batch);
 
@@ -27,7 +28,21 @@ async fn accept(cx: &Cx) -> Result<SeeOther> {
         .iter()
         .filter(|item| item.batch == batch && item.status == OfferingStatus::Pending)
         .count();
-    let failures = offerings.accept_batch(batch).await?;
+    let outcome = offerings.accept_batch(batch).await?;
+    // Look the new albums up on MusicBrainz, and find their lyrics.
+    for album_id in outcome.albums {
+        if let Some(album) = Album::filter_by_id(album_id)
+            .first()
+            .exec(&mut db(cx))
+            .await?
+        {
+            let title = format!("Look up {}", album.title);
+            jobs(cx)
+                .enqueue(NewJob::enrich(album_id, &title, None, false))
+                .await?;
+        }
+    }
+    let failures = outcome.failures;
     let accepted = total - failures.len();
     Ok(see_other(if failures.is_empty() {
         format!("{OFFERINGS_PATH}?accepted={accepted}")

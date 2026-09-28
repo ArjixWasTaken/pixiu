@@ -84,6 +84,18 @@ pub struct SyncJob {
     pub watch_id: u64,
 }
 
+/// An album to look up on MusicBrainz, with its cover, lyrics and artist.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EnrichJob {
+    pub album_id: u64,
+    /// The release the admin picked; otherwise one is searched for.
+    #[serde(default)]
+    pub release: Option<String>,
+    /// Search again, even if the album is matched already.
+    #[serde(default)]
+    pub fresh: bool,
+}
+
 /// What a job wants, from its payload: `None` for jobs that want nothing
 /// (syncs) or cannot be read.
 #[must_use]
@@ -95,8 +107,17 @@ pub fn wanted(job: &Job) -> Option<Wanted> {
         JobKind::GrabAlbum => serde_json::from_str::<AlbumJob>(&job.payload)
             .ok()
             .map(|payload| payload.wanted),
-        JobKind::SyncWatch => None,
+        JobKind::SyncWatch | JobKind::Enrich => None,
     }
+}
+
+/// The album an enrich job is about.
+#[must_use]
+pub fn enriched_album(job: &Job) -> Option<u64> {
+    (job.kind == JobKind::Enrich)
+        .then(|| serde_json::from_str::<EnrichJob>(&job.payload).ok())
+        .flatten()
+        .map(|payload| payload.album_id)
 }
 
 /// Jobs that have not finished: queued, running, paused or failed.
@@ -175,6 +196,16 @@ impl NewJob {
     pub fn sync(watch_id: u64, title: &str) -> Self {
         Self::new(JobKind::SyncWatch, &SyncJob { watch_id }, title)
     }
+
+    #[must_use]
+    pub fn enrich(album_id: u64, title: &str, release: Option<String>, fresh: bool) -> Self {
+        let payload = EnrichJob {
+            album_id,
+            release,
+            fresh,
+        };
+        Self::new(JobKind::Enrich, &payload, title)
+    }
 }
 
 /// How a job ended.
@@ -190,6 +221,11 @@ pub enum Outcome {
     Failed(String),
     /// Done, and these jobs follow from it.
     Expand(Vec<NewJob>),
+    /// Done with a result, and these jobs follow from it.
+    DoneWith {
+        track_id: Option<u64>,
+        then: Vec<NewJob>,
+    },
     /// Cannot run until something outside píxiū changes, like a platform
     /// login; see [`Jobs::resume_paused`].
     Paused(String),
@@ -488,6 +524,7 @@ impl Jobs {
             Outcome::Done { track_id } => (JobState::Done, *track_id, None),
             Outcome::AlreadyDone { track_id } => (JobState::Done, Some(*track_id), None),
             Outcome::Expand(_) => (JobState::Done, None, None),
+            Outcome::DoneWith { track_id, .. } => (JobState::Done, *track_id, None),
             Outcome::Failed(error) => {
                 tracing::warn!(id, title = %job.title, %error, "job failed");
                 (JobState::Failed, None, Some(error.clone()))
@@ -515,7 +552,11 @@ impl Jobs {
         self.progress.lock().unwrap().remove(&id);
         self.notify(id, state, progress);
 
-        if let Outcome::Expand(follow_ups) = outcome {
+        if let Outcome::Expand(follow_ups)
+        | Outcome::DoneWith {
+            then: follow_ups, ..
+        } = outcome
+        {
             for follow_up in follow_ups {
                 if let Err(error) = self.enqueue(follow_up).await {
                     tracing::error!(%error, "cannot queue a follow-up job");

@@ -104,6 +104,18 @@ pub struct Artist {
 
     pub mbid: Option<String>,
 
+    /// A short biography, from Wikipedia.
+    pub bio: Option<String>,
+
+    /// Where the biography comes from, for attribution.
+    pub bio_url: Option<String>,
+
+    /// A picture of the artist, relative to the cache directory.
+    pub image: Option<String>,
+
+    /// When the biography and picture were last looked for.
+    pub info_fetched_at: Option<Timestamp>,
+
     pub created_at: Timestamp,
 
     #[has_many]
@@ -135,7 +147,20 @@ pub struct Album {
 
     pub genre: Option<String>,
 
+    /// MusicBrainz release id.
     pub mbid: Option<String>,
+
+    /// MusicBrainz release group id.
+    pub rg_mbid: Option<String>,
+
+    /// How looking the album up on MusicBrainz went; `None` until tried.
+    pub enrichment: Option<Enrichment>,
+
+    /// Releases that might be the album, as JSON, when no match was
+    /// certain enough (see [`Enrichment::Review`]).
+    pub candidates: Option<String>,
+
+    pub enriched_at: Option<Timestamp>,
 
     /// The album's YouTube Music browse id, when it was hunted there.
     #[index]
@@ -148,6 +173,17 @@ pub struct Album {
 
     #[has_many]
     pub tracks: toasty::Deferred<Vec<Track>>,
+}
+
+/// How looking an album up on MusicBrainz went.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, toasty::Embed)]
+pub enum Enrichment {
+    /// Matched to a release; tags follow it.
+    Matched,
+    /// Some releases might be it; the admin picks one.
+    Review,
+    /// MusicBrainz knows nothing like it.
+    Unmatched,
 }
 
 /// How a track entered the hoard.
@@ -424,6 +460,9 @@ pub enum JobKind {
     GrabAlbum,
     /// Bring a watch up to date with the platform.
     SyncWatch,
+    /// Look an album up on MusicBrainz, fetch its cover, lyrics and artist
+    /// information.
+    Enrich,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, toasty::Embed)]
@@ -563,4 +602,47 @@ pub struct PlaylistEntry {
 
     /// The YouTube Music video, in mirrors. It shows once it is downloaded.
     pub ytm_video_id: Option<String>,
+}
+
+/// Where lyrics come from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, toasty::Embed)]
+pub enum LyricsSource {
+    /// Embedded in the audio file.
+    File,
+    /// LRCLIB, which often has them time-synced.
+    Lrclib,
+    /// YouTube Music (plain text).
+    YouTubeMusic,
+    /// LRCLIB knows the track has no words.
+    Instrumental,
+    /// Looked for everywhere, found nowhere.
+    Missing,
+}
+
+impl LyricsSource {
+    /// Whether there are words to show.
+    #[must_use]
+    pub fn has_words(self) -> bool {
+        !matches!(self, Self::Instrumental | Self::Missing)
+    }
+}
+
+/// A track's lyrics.
+#[derive(Debug, toasty::Model)]
+pub struct Lyrics {
+    #[key]
+    #[auto]
+    pub id: u64,
+
+    #[unique]
+    pub track_id: u64,
+
+    pub source: LyricsSource,
+
+    /// Time-synced lyrics in LRC format (`[mm:ss.xx] line`).
+    pub synced: Option<String>,
+
+    pub plain: Option<String>,
+
+    pub fetched_at: Timestamp,
 }

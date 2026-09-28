@@ -76,11 +76,14 @@ impl Services {
         )
         .await
         .context("failed to load the YouTube Music session")?;
+        let sources = pixiu_enrich::Online::new(config.enrich.contact.as_deref())
+            .context("failed to set up MusicBrainz and friends")?;
         let jobs = Jobs::new(
             db.clone(),
             Box::new(HuntExecutor {
                 hunter: Arc::clone(&hunter),
                 warden: Arc::clone(&warden),
+                sources: Arc::new(sources),
             }),
         );
         Ok(Self {

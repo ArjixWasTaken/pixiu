@@ -31,6 +31,7 @@ pub struct Config {
     pub paths: PathsConfig,
     pub browser: BrowserConfig,
     pub hunt: HuntConfig,
+    pub enrich: EnrichConfig,
     pub log: LogConfig,
 }
 
@@ -51,6 +52,16 @@ pub struct HuntConfig {
     /// `rustypipe-botguard`, which answers YouTube's proof-of-origin
     /// challenges. Not used when unset.
     pub botguard: Option<PathBuf>,
+}
+
+/// Looking music up on MusicBrainz, LRCLIB and Wikipedia.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct EnrichConfig {
+    /// How the services can reach whoever runs this píxiū (an email
+    /// address or a URL), sent in the User-Agent as MusicBrainz and
+    /// Wikimedia ask.
+    pub contact: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

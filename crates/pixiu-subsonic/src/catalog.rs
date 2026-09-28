@@ -357,7 +357,10 @@ pub(crate) fn artist_id3(
     Element::new(name)
         .attr("id", ids::artist(artist.id))
         .attr("name", artist.name.as_str())
-        .attr_opt("coverArt", has_cover.then(|| ids::artist(artist.id)))
+        .attr_opt(
+            "coverArt",
+            (has_cover || artist.image.is_some()).then(|| ids::artist(artist.id)),
+        )
         .attr("albumCount", album_count)
         .attr_opt("musicBrainzId", artist.mbid.as_deref())
         .attr("sortName", artist.name.as_str())

@@ -167,7 +167,11 @@ impl Treasury {
         Ok(())
     }
 
-    async fn forget_artist_if_empty(&self, db: &mut Db, artist_id: u64) -> Result<(), IngestError> {
+    pub(crate) async fn forget_artist_if_empty(
+        &self,
+        db: &mut Db,
+        artist_id: u64,
+    ) -> Result<(), IngestError> {
         let used = Album::filter_by_artist_id(artist_id)
             .first()
             .exec(db)
@@ -211,7 +215,7 @@ async fn forget_annotation(db: &mut Db, item: &str) -> Result<(), toasty::Error>
     Ok(())
 }
 
-async fn remove_file(path: &Path) -> io::Result<()> {
+pub(crate) async fn remove_file(path: &Path) -> io::Result<()> {
     match tokio::fs::remove_file(path).await {
         Err(error) if error.kind() != io::ErrorKind::NotFound => Err(error),
         _ => Ok(()),

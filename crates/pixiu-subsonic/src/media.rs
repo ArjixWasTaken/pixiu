@@ -10,7 +10,7 @@ use axum::{
     http::{HeaderMap, HeaderName, HeaderValue, Method, Request, header},
     response::Response,
 };
-use pixiu_db::{Album, Track};
+use pixiu_db::{Album, Artist, Track};
 use tower::ServiceExt;
 use tower_http::services::ServeFile;
 
@@ -124,7 +124,25 @@ pub(crate) async fn cover_art(
     headers: &HeaderMap,
 ) -> Result<Response, Failure> {
     let mut db = state.db.clone();
-    let album = match Id::parse(params.require("id")?) {
+    let size = params.get("size").and_then(|size| size.parse().ok());
+    let id = Id::parse(params.require("id")?);
+    // An artist's own picture, when píxiū has one.
+    if let Some(Id::Artist(artist_id)) = id
+        && let Some(image) = Artist::filter_by_id(artist_id)
+            .first()
+            .exec(&mut db)
+            .await?
+            .and_then(|artist| artist.image)
+    {
+        let path = pixiu_treasury::covers::sized(
+            &state.treasury.cache_dir().join(image),
+            state.treasury.cache_dir(),
+            size,
+        )
+        .await?;
+        return Ok(serve_file(&path, method, headers).await);
+    }
+    let album = match id {
         Some(Id::Album(id)) => Album::filter_by_id(id).first().exec(&mut db).await?,
         Some(Id::Track(id)) => match Track::filter_by_id(id).first().exec(&mut db).await? {
             Some(track) => {
@@ -147,7 +165,6 @@ pub(crate) async fn cover_art(
         return Err(not_found("cover art"));
     };
 
-    let size = params.get("size").and_then(|size| size.parse().ok());
     let path = pixiu_treasury::covers::sized(
         &state.treasury.resolve(&cover),
         state.treasury.cache_dir(),

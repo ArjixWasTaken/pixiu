@@ -7,14 +7,16 @@
 
 mod claims;
 pub mod covers;
+mod edit;
 mod ingest;
 pub mod layout;
 pub mod offerings;
 pub mod tags;
 
+pub use edit::{AlbumEdit, ArtistRef, TrackEdit};
 pub use ingest::{Claim, IngestError, Provenance, Treasury};
-pub use offerings::{OfferingError, Offerings};
-pub use tags::{AudioInfo, Cover, TagError};
+pub use offerings::{BatchOutcome, OfferingError, Offerings};
+pub use tags::{AudioInfo, Cover, TagChanges, TagError};
 
 /// Normalizes a name for matching: case-insensitive, whitespace-collapsed.
 #[must_use]

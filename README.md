@@ -11,8 +11,9 @@ that also hunts: it downloads music from streaming platforms (YouTube Music
 first) into a library it owns, and serves that hoard to any Subsonic client.
 
 > **Status: early development.** píxiū serves the music you upload, hunts
-> music on YouTube Music, and keeps up with the playlists and artists you
-> watch. MusicBrainz tagging and lyrics are next.
+> music on YouTube Music, keeps up with the playlists and artists you watch,
+> and tags it all with MusicBrainz and lyrics. Transcoding and ratings are
+> next.
 
 ## What works
 
@@ -28,6 +29,18 @@ first) into a library it owns, and serves that hoard to any Subsonic client.
   discography). Syncing is one-way and runs on a schedule, or on demand.
   Liked music needs a login; while the session is expired its syncs wait,
   and resume by themselves once you log in again.
+- **Tagging.** Each album píxiū takes in is looked up on
+  [MusicBrainz](https://musicbrainz.org/). A certain match retags and
+  refiles it (titles, track numbers, MusicBrainz ids), takes a larger cover
+  from the Cover Art Archive when there is one, and brings the artist's
+  biography and picture from Wikipedia. When several releases might be it,
+  the album waits on the Library page for you to pick one (or paste a
+  MusicBrainz release link); albums MusicBrainz doesn't know keep their tags.
+  You can also edit an album's tags by hand.
+- **Lyrics** come from the file itself, [LRCLIB](https://lrclib.net) (often
+  time-synced) or YouTube Music. Instrumentals are recognized as such; songs
+  with no lyrics anywhere are looked up again a month later, or whenever you
+  look their album up.
 - **Orphans.** Every track records why it is kept (an offering, a grab, a
   watch, a playlist). When a song leaves a watched playlist, or you stop
   watching something, its files stay; tracks nothing keeps any more are
@@ -50,9 +63,10 @@ first) into a library it owns, and serves that hoard to any Subsonic client.
   genres), album lists, random songs, search (`search2`/`search3`, including
   empty queries for clients that sync the whole library), streaming and
   downloads with seeking (HTTP ranges), resized cover art, play counts
-  (`scrobble`), play queues that follow you across devices, and playlists
-  (your own, plus the mirrors of watched playlists). Tested with Feishin and
-  Airsonic Refix.
+  (`scrobble`), play queues that follow you across devices, playlists
+  (your own, plus the mirrors of watched playlists), lyrics (time-synced
+  through OpenSubsonic's `getLyricsBySongId`), and artist biographies and
+  pictures. Tested with Feishin and Airsonic Refix.
 - **Authentication**: your píxiū password (plain or token authentication), or
   OpenSubsonic API keys created in Settings. Browser-based clients may call the
   API from other origins (CORS).
@@ -109,13 +123,14 @@ nesting (`PIXIU_SERVER__PORT=4533`). See [`pixiu.example.toml`](pixiu.example.to
 | `paths.treasure_dir` | `treasure` | The music library, owned by píxiū. |
 | `browser.executable` | from `PATH` | Chromium, for the login browser. |
 | `browser.no_sandbox` | `false` | Needed in most containers; the Docker image sets it. |
+| `enrich.contact` | unset | An email address or URL of yours, which MusicBrainz and Wikimedia ask for. It goes in the `User-Agent` of píxiū's lookups (MusicBrainz, the Cover Art Archive, LRCLIB and Wikipedia) and nowhere else. |
 | `hunt.botguard` | unset | [`rustypipe-botguard`](https://codeberg.org/ThetaDev/rustypipe-botguard), which answers YouTube's proof-of-origin challenges so more YouTube clients can be used for downloads. The Docker image ships it at `/usr/local/bin/rustypipe-botguard`. |
 
 ## Development
 
 ```sh
 cargo test --workspace                 # unit + end-to-end tests
-cargo test --workspace -- --ignored    # also drive Chromium and YouTube Music
+cargo test --workspace -- --ignored    # also drive Chromium, YouTube Music, MusicBrainz and LRCLIB
 cargo clippy --workspace --all-targets
 ```
 
@@ -125,6 +140,7 @@ cargo clippy --workspace --all-targets
 | `pixiu-browser` | The login browser: Chromium over CDP, its screen streamed as JPEG frames. |
 | `pixiu-core` | Configuration, secrets at rest and password hashing. |
 | `pixiu-db` | [Toasty](https://github.com/tokio-rs/toasty) models and migrations (SQLite). |
+| `pixiu-enrich` | MusicBrainz lookups and matching, the Cover Art Archive, LRCLIB and Wikipedia. |
 | `pixiu-hunt` | YouTube Music ([rustypipe](https://codeberg.org/ThetaDev/rustypipe)), downloads and tagging. |
 | `pixiu-jobs` | The job queue and the session warden. |
 | `pixiu-media` | Remuxing with FFmpeg's libraries. |

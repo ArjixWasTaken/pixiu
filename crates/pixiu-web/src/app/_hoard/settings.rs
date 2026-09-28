@@ -3,17 +3,21 @@
 mod api_keys;
 mod sources;
 
-use pixiu_db::ApiKey;
+use pixiu_db::{Album, ApiKey};
+use pixiu_jobs::NewJob;
 use topcoat::{
     Result,
     context::Cx,
-    router::page,
+    router::{
+        error::{SeeOther, see_other},
+        page, route,
+    },
     view::{View, attributes, class, component, view},
 };
 
 use crate::{
     app::_hoard::server_url,
-    auth::{db, require_user, warden},
+    auth::{db, jobs, require_user, warden},
     ui::{BUTTON_DANGER, BUTTON_PRIMARY, BUTTON_SECONDARY, card, field, notice, session_status},
 };
 
@@ -37,6 +41,12 @@ pub(super) async fn settings(
     let token_ready = user.subsonic_secret.is_some();
     let server = server_url(cx);
     let (session, session_color) = session_status(warden(cx).health().state);
+    let unlooked = Album::all()
+        .exec(&mut db(cx))
+        .await?
+        .iter()
+        .filter(|album| album.enrichment.is_none())
+        .count();
 
     Ok(view! {
         <div class="mx-auto flex max-w-3xl flex-col gap-8">
@@ -81,6 +91,28 @@ pub(super) async fn settings(
                         </p>
                     </div>
                     <a href="/settings/sources" class=(BUTTON_SECONDARY)>"Manage"</a>
+                </div>
+            )
+
+            card(
+                <div class="flex items-center justify-between gap-4">
+                    <div class="flex flex-col gap-1">
+                        <h3 class="text-lg">"MusicBrainz, covers and lyrics"</h3>
+                        <p class="text-sm text-muted-foreground">
+                            "New albums are looked up by themselves. "
+                            if unlooked == 0 {
+                                "Every album has been looked up."
+                            } else {
+                                (unlooked) if unlooked == 1 { " album has" } else { " albums have" }
+                                " not been looked up yet."
+                            }
+                        </p>
+                    </div>
+                    if unlooked > 0 {
+                        <form method="post" action="/settings/lookup" class="shrink-0">
+                            <button type="submit" class=(BUTTON_SECONDARY)>"Look them up"</button>
+                        </form>
+                    }
                 </div>
             )
 
@@ -148,4 +180,18 @@ pub(super) async fn settings(
             )
         </div>
     })
+}
+
+/// Queues a lookup of every album never looked up.
+#[route(POST "./lookup")]
+async fn lookup(cx: &Cx) -> Result<SeeOther> {
+    require_user(cx).await?;
+    let albums = Album::all().exec(&mut db(cx)).await?;
+    for album in albums.iter().filter(|album| album.enrichment.is_none()) {
+        let title = format!("Look up {}", album.title);
+        jobs(cx)
+            .enqueue(NewJob::enrich(album.id, &title, None, false))
+            .await?;
+    }
+    Ok(see_other("/jobs"))
 }

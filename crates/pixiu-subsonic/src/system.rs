@@ -10,7 +10,11 @@ use crate::{
 };
 
 /// OpenSubsonic extensions and the versions of each that píxiū implements.
-const EXTENSIONS: &[(&str, &[u32])] = &[("formPost", &[1]), ("apiKeyAuthentication", &[1])];
+const EXTENSIONS: &[(&str, &[u32])] = &[
+    ("formPost", &[1]),
+    ("apiKeyAuthentication", &[1]),
+    ("songLyrics", &[1]),
+];
 
 pub(crate) fn extensions() -> Payload {
     Payload::list(

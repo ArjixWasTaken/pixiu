@@ -204,3 +204,123 @@ mod tests {
         assert_eq!(leading_year("abcd"), None);
     }
 }
+
+/// New values for a file's tags. Missing MusicBrainz ids and ISRCs leave
+/// whatever the file has.
+#[derive(Debug, Clone, Default)]
+pub struct TagChanges<'a> {
+    pub title: &'a str,
+    pub artist: &'a str,
+    pub album: &'a str,
+    pub album_artist: &'a str,
+    pub track_number: Option<u32>,
+    pub disc_number: Option<u32>,
+    pub year: Option<i32>,
+    pub recording_mbid: Option<&'a str>,
+    pub release_mbid: Option<&'a str>,
+    pub release_group_mbid: Option<&'a str>,
+    pub artist_mbid: Option<&'a str>,
+    pub album_artist_mbid: Option<&'a str>,
+    pub isrc: Option<&'a str>,
+}
+
+fn primary_tag(path: &Path) -> Result<Tag, TagError> {
+    let file = Probe::open(path)?.guess_file_type()?.read()?;
+    Ok(file
+        .primary_tag()
+        .cloned()
+        .unwrap_or_else(|| Tag::new(file.primary_tag_type())))
+}
+
+fn save(tag: &Tag, path: &Path) -> Result<(), TagError> {
+    use lofty::{config::WriteOptions, tag::TagExt};
+    tag.save_to_path(path, WriteOptions::default())
+        .map_err(|error| TagError::Io(std::io::Error::other(error.to_string())))
+}
+
+/// Updates the tags of the file at `path`, keeping the rest (pictures,
+/// comments, ...). Blocking.
+///
+/// # Errors
+///
+/// Fails when the file cannot be read or written.
+pub fn update(path: &Path, changes: &TagChanges<'_>) -> Result<(), TagError> {
+    let mut tag = primary_tag(path)?;
+    tag.set_title(changes.title.to_owned());
+    tag.set_artist(changes.artist.to_owned());
+    tag.set_album(changes.album.to_owned());
+    tag.insert_text(ItemKey::AlbumArtist, changes.album_artist.to_owned());
+    match changes.track_number {
+        Some(number) => tag.set_track(number),
+        None => tag.remove_track(),
+    }
+    match changes.disc_number {
+        Some(number) => tag.set_disk(number),
+        None => tag.remove_disk(),
+    }
+    if let Some(year) = changes.year {
+        tag.insert_text(ItemKey::RecordingDate, year.to_string());
+    }
+    for (key, value) in [
+        (ItemKey::MusicBrainzRecordingId, changes.recording_mbid),
+        (ItemKey::MusicBrainzReleaseId, changes.release_mbid),
+        (
+            ItemKey::MusicBrainzReleaseGroupId,
+            changes.release_group_mbid,
+        ),
+        (ItemKey::MusicBrainzArtistId, changes.artist_mbid),
+        (
+            ItemKey::MusicBrainzReleaseArtistId,
+            changes.album_artist_mbid,
+        ),
+        (ItemKey::Isrc, changes.isrc),
+    ] {
+        if let Some(value) = value {
+            tag.insert_text(key, value.to_owned());
+        }
+    }
+    save(&tag, path)
+}
+
+/// Makes `cover` the file's embedded front cover. Blocking.
+///
+/// # Errors
+///
+/// Fails when the file cannot be read or written.
+pub fn embed_cover(path: &Path, cover: &Cover) -> Result<(), TagError> {
+    use lofty::picture::{MimeType, Picture};
+    let mut tag = primary_tag(path)?;
+    tag.remove_picture_type(PictureType::CoverFront);
+    let mime = match cover.mime.as_str() {
+        "image/png" => MimeType::Png,
+        "image/gif" => MimeType::Gif,
+        "image/bmp" => MimeType::Bmp,
+        _ => MimeType::Jpeg,
+    };
+    tag.push_picture(
+        Picture::unchecked(cover.data.clone())
+            .pic_type(PictureType::CoverFront)
+            .mime_type(mime)
+            .build(),
+    );
+    save(&tag, path)
+}
+
+/// Lyrics embedded in the file, if any. Blocking.
+#[must_use]
+pub fn lyrics(path: &Path) -> Option<String> {
+    let file = Probe::open(path)
+        .ok()?
+        .guess_file_type()
+        .ok()?
+        .read()
+        .ok()?;
+    file.tags().iter().find_map(|tag| {
+        [ItemKey::Lyrics, ItemKey::UnsyncLyrics]
+            .into_iter()
+            .find_map(|key| tag.get_string(key))
+            .map(str::trim)
+            .filter(|text| !text.is_empty())
+            .map(str::to_owned)
+    })
+}

@@ -1,0 +1,464 @@
+//! Enriching albums, with fake MusicBrainz, Cover Art Archive, LRCLIB and
+//! Wikipedia.
+
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+    sync::Mutex,
+};
+
+use pixiu_db::{Album, Artist, Db, Enrichment, Lyrics, LyricsSource, Track, toasty};
+use pixiu_enrich::{
+    ArtistInfo, BoxFuture, Candidate, Credit, EnrichError, FoundLyrics, LocalAlbum, LyricsQuery,
+    Release, ReleaseTrack, Sources,
+};
+use pixiu_jobs::enrich::{self, NoPlatformLyrics, PlatformLyrics, Request};
+use pixiu_treasury::{Claim, Provenance, Treasury, tags};
+
+fn fixture(name: &str) -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../fixtures/audio")
+        .join(name)
+}
+
+#[derive(Default)]
+struct FakeSources {
+    candidates: Vec<Candidate>,
+    releases: HashMap<String, Release>,
+    lyrics: HashMap<String, FoundLyrics>,
+    searches: Mutex<u32>,
+}
+
+impl Sources for FakeSources {
+    fn search<'a>(
+        &'a self,
+        _album: &'a LocalAlbum,
+    ) -> BoxFuture<'a, Result<Vec<Candidate>, EnrichError>> {
+        *self.searches.lock().unwrap() += 1;
+        Box::pin(async move { Ok(self.candidates.clone()) })
+    }
+
+    fn release<'a>(&'a self, id: &'a str) -> BoxFuture<'a, Result<Release, EnrichError>> {
+        Box::pin(async move { self.releases.get(id).cloned().ok_or(EnrichError::NotFound) })
+    }
+
+    fn front_cover<'a>(
+        &'a self,
+        _release_id: &'a str,
+    ) -> BoxFuture<'a, Result<Option<Vec<u8>>, EnrichError>> {
+        Box::pin(async move { Ok(Some(std::fs::read(fixture("folder.jpg")).unwrap())) })
+    }
+
+    fn lyrics<'a>(
+        &'a self,
+        query: &'a LyricsQuery,
+    ) -> BoxFuture<'a, Result<Option<FoundLyrics>, EnrichError>> {
+        Box::pin(async move { Ok(self.lyrics.get(&query.title).cloned()) })
+    }
+
+    fn artist_info<'a>(
+        &'a self,
+        artist_mbid: &'a str,
+    ) -> BoxFuture<'a, Result<Option<ArtistInfo>, EnrichError>> {
+        Box::pin(async move {
+            Ok((artist_mbid == "art-test").then(|| ArtistInfo {
+                bio: "Test Artist makes test music.".to_owned(),
+                url: "https://en.wikipedia.org/wiki/Test_Artist".to_owned(),
+                image_url: Some("https://example.com/test-artist.jpg".to_owned()),
+            }))
+        })
+    }
+
+    fn image<'a>(&'a self, _url: &'a str) -> BoxFuture<'a, Result<Vec<u8>, EnrichError>> {
+        Box::pin(async move { Ok(std::fs::read(fixture("folder.jpg")).unwrap()) })
+    }
+}
+
+struct YouTubeLyrics;
+
+impl PlatformLyrics for YouTubeLyrics {
+    fn lyrics<'a>(
+        &'a self,
+        _video_id: &'a str,
+    ) -> pixiu_jobs::warden::BoxFuture<'a, Option<(String, String)>> {
+        Box::pin(async { Some(("Sung words".to_owned(), "Source: Somebody".to_owned())) })
+    }
+}
+
+struct Hoard {
+    _dir: tempfile::TempDir,
+    db: Db,
+    treasury: Treasury,
+    album_id: u64,
+}
+
+/// "Test Album" by "Test Artist": First Light (1) and Second Wind (2).
+async fn hoard() -> Hoard {
+    let dir = tempfile::tempdir().unwrap();
+    let db = pixiu_db::open(&dir.path().join("pixiu.db")).await.unwrap();
+    let treasury = Treasury::new(
+        db.clone(),
+        dir.path().join("treasure"),
+        dir.path().join("cache"),
+    );
+    let staging = dir.path().join("staging");
+    std::fs::create_dir_all(&staging).unwrap();
+    let mut album_id = 0;
+    for name in ["01-first-light.flac", "02-second-wind.mp3"] {
+        let staged = staging.join(name);
+        std::fs::copy(fixture(name), &staged).unwrap();
+        let info = tags::read(&staged).unwrap();
+        album_id = treasury
+            .ingest(
+                &staged,
+                &info,
+                None,
+                Provenance::offering(),
+                Claim::offering(),
+            )
+            .await
+            .unwrap()
+            .album_id;
+    }
+    Hoard {
+        _dir: dir,
+        db,
+        treasury,
+        album_id,
+    }
+}
+
+fn credit(name: &str, artists: &[(&str, &str)]) -> Credit {
+    Credit {
+        name: name.to_owned(),
+        artists: artists
+            .iter()
+            .map(|(id, name)| ((*id).to_owned(), (*name).to_owned()))
+            .collect(),
+    }
+}
+
+fn release(id: &str, title: &str, tracks: &[(&str, u64)]) -> Release {
+    let artist = credit("Test Artist", &[("art-test", "Test Artist")]);
+    Release {
+        id: id.to_owned(),
+        title: title.to_owned(),
+        artist: artist.clone(),
+        date: Some("2024-05-01".to_owned()),
+        country: None,
+        release_group_id: Some(format!("rg-{id}")),
+        has_front_cover: true,
+        tracks: tracks
+            .iter()
+            .enumerate()
+            .map(|(index, (title, length))| ReleaseTrack {
+                recording_id: format!("rec-{title}"),
+                title: (*title).to_owned(),
+                artist: if *title == "Second Wind" {
+                    credit(
+                        "Test Artist feat. Guest",
+                        &[("art-test", "Test Artist"), ("art-guest", "Guest")],
+                    )
+                } else {
+                    artist.clone()
+                },
+                length_ms: Some(*length),
+                position: u32::try_from(index + 1).unwrap(),
+                disc: 1,
+                isrcs: vec![format!("ISRC{}", index + 1)],
+            })
+            .collect(),
+    }
+}
+
+fn candidate(id: &str) -> Candidate {
+    Candidate {
+        id: id.to_owned(),
+        title: "Test Album".to_owned(),
+        artist: "Test Artist".to_owned(),
+        date: None,
+        country: None,
+        format: None,
+        track_count: 2,
+        score: 0.9,
+    }
+}
+
+async fn tracks(db: &mut Db, album_id: u64) -> Vec<Track> {
+    let mut tracks = Track::filter_by_album_id(album_id).exec(db).await.unwrap();
+    tracks.sort_by_key(|track| track.track_number);
+    tracks
+}
+
+#[tokio::test]
+async fn a_certain_match_retags_and_refiles_the_album() {
+    let mut hoard = hoard().await;
+    let durations: Vec<u64> = tracks(&mut hoard.db, hoard.album_id)
+        .await
+        .iter()
+        .map(|track| track.duration_ms)
+        .collect();
+    let sources = FakeSources {
+        candidates: vec![candidate("rel-test")],
+        releases: HashMap::from([(
+            "rel-test".to_owned(),
+            release(
+                "rel-test",
+                "Test Album: Remastered",
+                &[("First Light", durations[0]), ("Second Wind", durations[1])],
+            ),
+        )]),
+        lyrics: HashMap::from([(
+            "First Light".to_owned(),
+            FoundLyrics {
+                synced: Some("[00:00.10]Light".to_owned()),
+                plain: Some("Light".to_owned()),
+                instrumental: false,
+            },
+        )]),
+        ..FakeSources::default()
+    };
+    let request = Request {
+        album_id: hoard.album_id,
+        release: None,
+        fresh: false,
+    };
+    let summary = enrich::enrich(&hoard.treasury, &sources, &NoPlatformLyrics, &request)
+        .await
+        .unwrap();
+    assert!(summary.contains("Matched"), "{summary}");
+
+    let album = Album::get_by_id(&mut hoard.db, &hoard.album_id)
+        .await
+        .unwrap();
+    assert_eq!(album.title, "Test Album: Remastered");
+    assert_eq!(album.enrichment, Some(Enrichment::Matched));
+    assert_eq!(album.mbid.as_deref(), Some("rel-test"));
+    assert_eq!(album.rg_mbid.as_deref(), Some("rg-rel-test"));
+    // The Cover Art Archive's cover is larger, so it replaced the file's.
+    let cover = album.cover.as_deref().unwrap();
+    assert_eq!(cover, "Test Artist/2024 - Test Album_ Remastered/cover.jpg");
+    assert!(hoard.treasury.resolve(cover).is_file());
+
+    let tracks = tracks(&mut hoard.db, hoard.album_id).await;
+    assert_eq!(
+        tracks
+            .iter()
+            .map(|track| track.path.as_str())
+            .collect::<Vec<_>>(),
+        [
+            "Test Artist/2024 - Test Album_ Remastered/01-01 First Light.flac",
+            "Test Artist/2024 - Test Album_ Remastered/01-02 Second Wind.mp3",
+        ]
+    );
+    assert_eq!(tracks[1].mbid.as_deref(), Some("rec-Second Wind"));
+    assert_eq!(tracks[1].artist_credit, "Test Artist feat. Guest");
+    // The old directory is gone, the files say what the database says.
+    assert!(
+        !hoard
+            .treasury
+            .resolve("Test Artist/2024 - Test Album")
+            .exists()
+    );
+    let written = tags::read(&hoard.treasury.resolve(&tracks[0].path)).unwrap();
+    assert_eq!(written.album.as_deref(), Some("Test Album: Remastered"));
+    assert_eq!(written.mbid.as_deref(), Some("rec-First Light"));
+    assert_eq!(written.album_mbid.as_deref(), Some("rel-test"));
+    assert!(
+        written
+            .cover
+            .is_some_and(|cover| cover.mime == "image/jpeg")
+    );
+
+    // The artist learned their id, a biography and a picture.
+    let artist = Artist::get_by_id(&mut hoard.db, &album.artist_id)
+        .await
+        .unwrap();
+    assert_eq!(artist.mbid.as_deref(), Some("art-test"));
+    assert_eq!(artist.bio.as_deref(), Some("Test Artist makes test music."));
+    assert!(artist.image.is_some());
+
+    // Lyrics: LRCLIB had the first; nobody had the second.
+    let first = Lyrics::get_by_track_id(&mut hoard.db, &tracks[0].id)
+        .await
+        .unwrap();
+    assert_eq!(first.source, LyricsSource::Lrclib);
+    assert_eq!(first.synced.as_deref(), Some("[00:00.10]Light"));
+    let second = Lyrics::get_by_track_id(&mut hoard.db, &tracks[1].id)
+        .await
+        .unwrap();
+    assert_eq!(second.source, LyricsSource::Missing);
+
+    // Enriching again sticks to the release: no new search.
+    enrich::enrich(&hoard.treasury, &sources, &NoPlatformLyrics, &request)
+        .await
+        .unwrap();
+    assert_eq!(*sources.searches.lock().unwrap(), 1);
+}
+
+#[tokio::test]
+async fn doubtful_matches_wait_for_the_admin() {
+    let mut hoard = hoard().await;
+    let durations: Vec<u64> = tracks(&mut hoard.db, hoard.album_id)
+        .await
+        .iter()
+        .map(|track| track.duration_ms)
+        .collect();
+    // Only one of the two tracks is on this release.
+    let sources = FakeSources {
+        candidates: vec![candidate("rel-partial")],
+        releases: HashMap::from([(
+            "rel-partial".to_owned(),
+            release(
+                "rel-partial",
+                "Test Album",
+                &[("First Light", durations[0]), ("Other", 999_000)],
+            ),
+        )]),
+        ..FakeSources::default()
+    };
+    let automatic = Request {
+        album_id: hoard.album_id,
+        release: None,
+        fresh: false,
+    };
+    let summary = enrich::enrich(&hoard.treasury, &sources, &YouTubeLyrics, &automatic)
+        .await
+        .unwrap();
+    assert!(summary.contains("pick one"), "{summary}");
+    let album = Album::get_by_id(&mut hoard.db, &hoard.album_id)
+        .await
+        .unwrap();
+    assert_eq!(album.enrichment, Some(Enrichment::Review));
+    assert_eq!(album.title, "Test Album", "nothing changed yet");
+    let candidates: Vec<Candidate> =
+        serde_json::from_str(album.candidates.as_deref().unwrap()).unwrap();
+    assert_eq!(candidates[0].id, "rel-partial");
+    assert!(candidates[0].score >= 0.5 && candidates[0].score < 0.85);
+
+    // The admin picks it: the track it has is tagged from it.
+    let picked = Request {
+        album_id: hoard.album_id,
+        release: Some("rel-partial".to_owned()),
+        fresh: false,
+    };
+    enrich::enrich(&hoard.treasury, &sources, &YouTubeLyrics, &picked)
+        .await
+        .unwrap();
+    let album = Album::get_by_id(&mut hoard.db, &hoard.album_id)
+        .await
+        .unwrap();
+    assert_eq!(album.enrichment, Some(Enrichment::Matched));
+    assert!(album.candidates.is_none());
+    let tracks = tracks(&mut hoard.db, hoard.album_id).await;
+    assert_eq!(tracks[0].mbid.as_deref(), Some("rec-First Light"));
+    assert_eq!(tracks[1].mbid, None);
+}
+
+#[tokio::test]
+async fn unknown_albums_stay_as_they_are() {
+    let mut hoard = hoard().await;
+    let sources = FakeSources::default();
+    let request = Request {
+        album_id: hoard.album_id,
+        release: None,
+        fresh: false,
+    };
+    let summary = enrich::enrich(&hoard.treasury, &sources, &YouTubeLyrics, &request)
+        .await
+        .unwrap();
+    assert!(summary.contains("nothing like it"), "{summary}");
+    let album = Album::get_by_id(&mut hoard.db, &hoard.album_id)
+        .await
+        .unwrap();
+    assert_eq!(album.enrichment, Some(Enrichment::Unmatched));
+    assert_eq!(album.title, "Test Album");
+    // Offered files have no YouTube id, so no YouTube lyrics either.
+    for track in tracks(&mut hoard.db, hoard.album_id).await {
+        let lyrics = Lyrics::get_by_track_id(&mut hoard.db, &track.id)
+            .await
+            .unwrap();
+        assert_eq!(lyrics.source, LyricsSource::Missing);
+    }
+}
+
+#[tokio::test]
+async fn instrumentals_are_known_as_such() {
+    let mut hoard = hoard().await;
+    // As if downloaded from YouTube Music, which has lyrics for everything.
+    for mut track in tracks(&mut hoard.db, hoard.album_id).await {
+        let video = format!("video-{}", track.id);
+        toasty::update!(track {
+            ytm_video_id: Some(video)
+        })
+        .exec(&mut hoard.db)
+        .await
+        .unwrap();
+    }
+    let sources = FakeSources {
+        lyrics: HashMap::from([(
+            "First Light".to_owned(),
+            FoundLyrics {
+                instrumental: true,
+                ..FoundLyrics::default()
+            },
+        )]),
+        ..FakeSources::default()
+    };
+    let request = Request {
+        album_id: hoard.album_id,
+        release: None,
+        fresh: false,
+    };
+    let summary = enrich::enrich(&hoard.treasury, &sources, &YouTubeLyrics, &request)
+        .await
+        .unwrap();
+    assert!(summary.ends_with("Lyrics for 1 tracks."), "{summary}");
+
+    // LRCLIB knows the first has no words, so YouTube Music is not asked.
+    let tracks = tracks(&mut hoard.db, hoard.album_id).await;
+    let first = Lyrics::get_by_track_id(&mut hoard.db, &tracks[0].id)
+        .await
+        .unwrap();
+    assert_eq!(first.source, LyricsSource::Instrumental);
+    assert_eq!((first.synced, first.plain), (None, None));
+    let second = Lyrics::get_by_track_id(&mut hoard.db, &tracks[1].id)
+        .await
+        .unwrap();
+    assert_eq!(second.source, LyricsSource::YouTubeMusic);
+    assert_eq!(second.plain.as_deref(), Some("Sung words"));
+
+    // Later LRCLIB has words after all. That waits for a lookup the admin
+    // asks for.
+    let sources = FakeSources {
+        lyrics: HashMap::from([(
+            "First Light".to_owned(),
+            FoundLyrics {
+                plain: Some("Words after all".to_owned()),
+                ..FoundLyrics::default()
+            },
+        )]),
+        ..FakeSources::default()
+    };
+    let first_source = async |db: &mut Db| {
+        Lyrics::get_by_track_id(db, &tracks[0].id)
+            .await
+            .unwrap()
+            .source
+    };
+    enrich::enrich(&hoard.treasury, &sources, &YouTubeLyrics, &request)
+        .await
+        .unwrap();
+    assert_eq!(
+        first_source(&mut hoard.db).await,
+        LyricsSource::Instrumental
+    );
+    let asked = Request {
+        fresh: true,
+        ..request
+    };
+    enrich::enrich(&hoard.treasury, &sources, &YouTubeLyrics, &asked)
+        .await
+        .unwrap();
+    assert_eq!(first_source(&mut hoard.db).await, LyricsSource::Lrclib);
+}

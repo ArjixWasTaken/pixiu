@@ -27,6 +27,14 @@ no_sandbox = false
 # fetches what the other clients cannot. The Docker image ships it at:
 # botguard = "/usr/local/bin/rustypipe-botguard"
 
+[enrich]
+# Albums are looked up on MusicBrainz (tags, covers from the Cover Art
+# Archive), lyrics on LRCLIB, and artists on Wikipedia. MusicBrainz and
+# Wikimedia ask applications for a way to reach whoever runs them: an email
+# address or a URL of yours. It is sent (in the User-Agent) to those lookups
+# only.
+# contact = "you@example.com"
+
 [log]
 # A tracing filter; RUST_LOG overrides it.
 filter = "info"

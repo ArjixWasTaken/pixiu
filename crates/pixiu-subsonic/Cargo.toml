@@ -9,6 +9,7 @@ publish = false
 [dependencies]
 pixiu-core.workspace = true
 pixiu-db.workspace = true
+pixiu-enrich.workspace = true
 pixiu-treasury.workspace = true
 
 axum.workspace = true
