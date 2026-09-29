@@ -18,15 +18,6 @@ describe('downloadService', () => {
     expect(triggerMock).toHaveBeenCalledWith(song)
   })
 
-  it('zips multiple playables', async () => {
-    const zipMock = h.mock(zipDownloadService, 'start')
-    const songs = h.factory('song').make(2)
-
-    await downloadService.fromPlayables(songs)
-
-    expect(zipMock).toHaveBeenCalledWith(songs, 'koel-download', 'none')
-  })
-
   it('zips an artist’s songs', async () => {
     const zipMock = h.mock(zipDownloadService, 'start')
     const artist = h.factory('artist').make()

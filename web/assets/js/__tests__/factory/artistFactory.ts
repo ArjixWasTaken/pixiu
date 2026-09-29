@@ -3,7 +3,7 @@ import { faker } from '@faker-js/faker'
 export default (): Artist => {
   return {
     type: 'artists',
-    id: faker.string.ulid(),
+    id: `ar-${faker.number.int({ min: 1, max: 1_000_000 })}`,
     name: faker.person.fullName(),
     image: 'foo.jpg',
     created_at: faker.date.past().toISOString(),

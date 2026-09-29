@@ -98,15 +98,6 @@ describe('Router', () => {
       expect(route).toBeNull()
       expect(router.$currentRoute.value.screen).toBe('404')
     })
-
-    it('follows redirect routes', () => {
-      const goSpy = vi.spyOn(Router, 'go').mockImplementation(() => {})
-
-      const uuid = '019cc197-f709-733b-a9f2-a2a7fb6cf1c2'
-      router.resolve(`#/songs/${uuid}`)
-
-      expect(goSpy).toHaveBeenCalledWith('queue')
-    })
   })
 
   describe('activateRoute', () => {

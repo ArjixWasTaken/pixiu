@@ -1,11 +1,11 @@
-//! A real Chromium that the admin drives from the WebUI to log in to
+//! A real Chromium that the admin drives from the web player to log in to
 //! streaming platforms.
 //!
 //! The browser runs headless on the server. Its screen is streamed as JPEG
 //! frames (CDP `Page.startScreencast`), and the admin's mouse and keyboard
 //! input is replayed into it, so logins work exactly as in a desktop
 //! browser, including two-factor prompts. Its sign-in fields are reported
-//! too ([`Field`]), so the WebUI can mirror them for password managers.
+//! too ([`Field`]), so the web player can mirror them for password managers.
 //! Afterwards its cookies are harvested. The profile persists, so the same
 //! session can later be refreshed without the admin.
 
@@ -82,7 +82,7 @@ pub struct Frame {
     pub height: u32,
 }
 
-/// Input from the admin, as sent by the WebUI. `Debug` leaves out text,
+/// Input from the admin, as sent by the web player. `Debug` leaves out text,
 /// which may be a password.
 #[derive(Clone, PartialEq, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -125,7 +125,7 @@ pub enum Input {
         text: String,
     },
     /// Replaces what a [`Field`] holds, as typing would: how a password
-    /// manager's fill in the WebUI reaches the page.
+    /// manager's fill in the web player reaches the page.
     Fill {
         key: String,
         value: String,
@@ -466,7 +466,7 @@ impl LoginBrowser {
     }
 }
 
-/// A WebUI viewer's view of the login browser.
+/// A web player viewer's view of the login browser.
 pub struct Viewer {
     /// The most recent frame, to show at once.
     pub latest: Option<Frame>,
@@ -474,7 +474,7 @@ pub struct Viewer {
     pub fields: watch::Receiver<Vec<Field>>,
 }
 
-/// Holds at most one login browser, shared by every WebUI viewer, and
+/// Holds at most one login browser, shared by every web player viewer, and
 /// closes it once nobody has used it for a while.
 pub struct LoginDesk {
     options: BrowserOptions,

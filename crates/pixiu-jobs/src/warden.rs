@@ -6,7 +6,7 @@
 //! revisits the platform in the headless browser with the persistent
 //! profile, which rotates short-lived cookies, and stores the fresh ones.
 //! When even that fails (a password change, "sign out everywhere"), the
-//! session is marked expired and the WebUI asks the admin to log in again.
+//! session is marked expired and the web player asks the admin to log in again.
 
 use std::{future::Future, pin::Pin, sync::Arc, time::Duration};
 
@@ -39,7 +39,7 @@ pub trait Refresher: Send + Sync {
     fn refresh(&self) -> BoxFuture<'_, Result<String, String>>;
 }
 
-/// What the WebUI shows about the session.
+/// What the web player shows about the session.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Health {
     /// `None` until the admin connects an account.

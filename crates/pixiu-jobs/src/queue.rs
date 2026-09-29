@@ -1,5 +1,5 @@
 //! The job queue: downloads and other slow work, persisted so it survives
-//! restarts, run a few at a time, with live progress for the WebUI.
+//! restarts, run a few at a time, with live progress for the web player.
 
 use std::{
     collections::{HashMap, HashSet},
@@ -345,7 +345,7 @@ pub trait Executor: Send + Sync {
     ) -> BoxFuture<'a, Outcome>;
 }
 
-/// A change to show in the WebUI.
+/// A change to show in the web player.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum JobUpdate {
     Changed {

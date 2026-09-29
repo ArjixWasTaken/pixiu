@@ -61,11 +61,6 @@ describe('useNewVersionNotification', () => {
     expect(latestVersion.value).toBe('7.0.0')
   })
 
-  it('builds release URL from latest version', () => {
-    const { latestVersionReleaseUrl } = useNewVersionNotification()
-    expect(latestVersionReleaseUrl.value).toBe('https://github.com/koel/koel/releases/tag/7.0.0')
-  })
-
   it('handles leading v prefix on either side', () => {
     commonStore.state.latest_version = 'v9.2.1'
     commonStore.state.current_version = 'v9.2.0'

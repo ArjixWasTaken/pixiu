@@ -4,7 +4,7 @@ import { faker } from '@faker-js/faker'
 export default (): Playlist => ({
   type: 'playlists',
   owner_id: faker.string.ulid(),
-  id: faker.string.uuid(),
+  id: `pl-${faker.number.int({ min: 1, max: 1_000_000 })}`,
   description: faker.lorem.sentence(),
   folder_id: faker.string.uuid(),
   name: faker.word.words(2),

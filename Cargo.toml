@@ -19,11 +19,8 @@ pixiu-jobs = { path = "crates/pixiu-jobs" }
 pixiu-media = { path = "crates/pixiu-media" }
 pixiu-subsonic = { path = "crates/pixiu-subsonic" }
 pixiu-treasury = { path = "crates/pixiu-treasury" }
-pixiu-web = { path = "crates/pixiu-web" }
 
 # Pinned exactly: both are early-stage and ship breaking changes in minor releases.
-topcoat = { version = "=0.9.0", features = ["tower", "websocket", "multipart", "sse", "tailwind", "font-fontsource"] }
-topcoat-asset = "=0.9.0"
 toasty = { version = "=0.11.0", features = ["sqlite", "migration", "jiff", "serde"] }
 toasty-cli = "=0.11.0"
 

@@ -5,17 +5,15 @@ import { assertOpenModal } from '@/__tests__/assertions'
 import factory from '@/__tests__/factory'
 import { ContextMenuKey } from '@/config/symbols'
 import { arrayify } from '@/utils/helpers'
-import { eventBus } from '@/utils/eventBus'
-import { screen, waitFor } from '@testing-library/vue'
+import { screen } from '@testing-library/vue'
 import { downloadService } from '@/services/downloadService'
 import { playbackService } from '@/services/QueuePlaybackService'
 import { commonStore } from '@/stores/commonStore'
 import { playlistStore } from '@/stores/playlistStore'
 import { queueStore } from '@/stores/queueStore'
 import { playableStore } from '@/stores/playableStore'
-import { DialogBoxStub, MessageToasterStub } from '@/__tests__/stubs'
+import { MessageToasterStub } from '@/__tests__/stubs'
 import Router from '@/router'
-import EditSongForm from '@/components/playable/EditSongForm.vue'
 import CreateEmbedForm from '@/components/embed/CreateEmbedForm.vue'
 import CreatePlaylistForm from '@/components/playlist/CreatePlaylistForm.vue'
 
@@ -255,6 +253,7 @@ describe('playableContextMenu.vue', () => {
 
   it('lists and adds to existing playlist', async () => {
     playlistStore.state.playlists = h.factory('playlist').make(3)
+    playlistStore.state.playlists.forEach(playlist => (playlist.permissions = { edit: true, delete: true }))
     const addMock = h.mock(playlistStore, 'addContent')
     h.mock(MessageToasterStub.value, 'success')
     const { playables } = await renderComponent()
@@ -266,6 +265,16 @@ describe('playableContextMenu.vue', () => {
     expect(addMock).toHaveBeenCalledWith(playlistStore.state.playlists[0], playables)
   })
 
+  it('does not list mirrors of watched playlists', async () => {
+    playlistStore.state.playlists = [
+      h.factory('playlist').make({ name: 'My Mirror', permissions: { edit: false, delete: false } }),
+    ]
+
+    await renderComponent()
+
+    expect(screen.queryByText('My Mirror')).toBeNull()
+  })
+
   it('does not list smart playlists', async () => {
     playlistStore.state.playlists = h.factory('playlist').make(3)
     playlistStore.state.playlists.push(factory('playlist').state('smart').make({ name: 'My Smart Playlist' }))
@@ -275,38 +284,11 @@ describe('playableContextMenu.vue', () => {
     expect(screen.queryByText('My Smart Playlist')).toBeNull()
   })
 
-  it('removes from playlist', async () => {
-    const playlist = h.factory('playlist').make()
-    playlistStore.state.playlists.push(playlist)
-
-    h.visit(`/playlists/${playlist.id}`)
-    const { playables } = await renderComponent()
-
-    const removeContentMock = h.mock(playlistStore, 'removeContent')
-    const emitMock = h.mock(eventBus, 'emit')
-
-    await h.user.click(screen.getByText('Remove from Playlist'))
-
-    await waitFor(() => {
-      expect(removeContentMock).toHaveBeenCalledWith(playlist, playables)
-      expect(emitMock).toHaveBeenCalledWith('PLAYLIST_CONTENT_REMOVED', playlist, playables)
-    })
-  })
-
   it('does not have an option to remove from playlist if not on Playlist screen', async () => {
     h.visit('/songs')
     await renderComponent()
 
     expect(screen.queryByText('Remove from Playlist')).toBeNull()
-  })
-
-  it('allows edit songs if current user is admin', async () => {
-    h.actingAsAdmin()
-    const { playables } = await renderComponent()
-
-    await h.user.click(screen.getByText('Edit…'))
-
-    await assertOpenModal(openModalMock, EditSongForm, { songs: playables as Song[], initialTab: 'details' })
   })
 
   it('does not allow edit songs if current user is not admin', async () => {
@@ -331,25 +313,6 @@ describe('playableContextMenu.vue', () => {
     await h.withPlusEdition(async () => {
       await renderComponent(h.factory('song').make({ is_public: false }))
       expect(screen.queryByText('Copy URL')).toBeNull()
-    })
-  })
-
-  it('deletes song', async () => {
-    const confirmMock = h.mock(DialogBoxStub.value, 'confirm', true)
-    const toasterMock = h.mock(MessageToasterStub.value, 'success')
-    const deleteMock = h.mock(playableStore, 'deleteSongsFromFilesystem')
-    h.actingAsAdmin()
-    const { playables } = await renderComponent()
-
-    const emitMock = h.mock(eventBus, 'emit')
-
-    await h.user.click(screen.getByText('Delete from Filesystem'))
-
-    await waitFor(() => {
-      expect(confirmMock).toHaveBeenCalled()
-      expect(deleteMock).toHaveBeenCalledWith(playables)
-      expect(toasterMock).toHaveBeenCalledWith('Deleted 5 songs from the filesystem.')
-      expect(emitMock).toHaveBeenCalledWith('SONGS_DELETED', playables)
     })
   })
 

@@ -32,8 +32,9 @@ pub struct User {
     pub api_keys: toasty::Deferred<Vec<ApiKey>>,
 }
 
-/// A logged-in WebUI session. Only the SHA-256 of the session token is
-/// stored, so a leaked database cannot be replayed as cookies.
+/// A cookie session of the old server-rendered WebUI. Only the SHA-256 of
+/// the session token is stored. Unused since the web player signs in with an
+/// API key; the table stays so old databases migrate cleanly.
 #[derive(Debug, toasty::Model)]
 pub struct WebSession {
     #[key]
@@ -769,7 +770,7 @@ pub struct Lyrics {
     pub fetched_at: Timestamp,
 }
 
-/// A setting made in the WebUI, by name.
+/// A setting made in the web player, by name.
 #[derive(Debug, toasty::Model)]
 pub struct Setting {
     #[key]

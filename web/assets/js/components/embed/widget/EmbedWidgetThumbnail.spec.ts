@@ -30,9 +30,4 @@ describe('embedThumbnail.vue', () => {
     const { embeddable } = renderComponent(h.factory(type).make() as Embeddable)
     expect(screen.getByRole('img').getAttribute('src')).toBe(embeddable[imageField])
   })
-
-  it('renders a default placeholder', () => {
-    renderComponent(h.factory('playlist').make({ cover: null }))
-    expect(screen.getByRole('img').getAttribute('src')).toContain('/resources/assets/img/covers/default.svg')
-  })
 })

@@ -4,7 +4,7 @@
 //! never do are followed through their `stream` requests instead; clients
 //! that announce are not, since they may fetch the next song early.
 //!
-//! The Subsonic API feeds it and answers `getNowPlaying` from it; the WebUI
+//! The Subsonic API feeds it and answers `getNowPlaying` from it; the web player
 //! shows it, and [`subscribe`](NowPlaying::subscribe)s to follow changes.
 
 use std::{

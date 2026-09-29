@@ -35,9 +35,9 @@ describe('footerPlayButton.vue', () => {
   })
 
   it.each<[string, MethodOf<typeof playableStore>, Album['id']]>([
-    ['/albums/01K610ZFJGVTCVGZ0505464ZGR', 'fetchSongsForAlbum', '01K610ZFJGVTCVGZ0505464ZGR'],
-    ['/artists/01K610ZFJGVTCVGZ0505464ZGR', 'fetchSongsForArtist', '01K610ZFJGVTCVGZ0505464ZGR'],
-    ['/playlists/73a36cfd-4afd-48ae-b031-ae5488858375', 'fetchForPlaylist', '73a36cfd-4afd-48ae-b031-ae5488858375'],
+    ['/albums/al-7', 'fetchSongsForAlbum', 'al-7'],
+    ['/artists/ar-7', 'fetchSongsForArtist', 'ar-7'],
+    ['/playlists/pl-7', 'fetchForPlaylist', 'pl-7'],
   ])('initiates playback for %s', async (hash, fetchMethod, id) => {
     h.createAudioPlayer()
 

@@ -2,20 +2,20 @@ import { faker } from '@faker-js/faker'
 import { genres } from '@/config/genres'
 
 const generate = (partOfCompilation = false): Song => {
-  const artistId = faker.string.ulid()
+  const artistId = `ar-${faker.number.int({ min: 1, max: 1_000_000 })}`
   const artistName = faker.person.fullName()
 
   return {
     type: 'songs',
     owner_id: faker.string.uuid(),
     artist_id: artistId,
-    album_id: faker.string.ulid(),
+    album_id: `al-${faker.number.int({ min: 1, max: 1_000_000 })}`,
     artist_name: artistName,
     album_name: faker.lorem.sentence(),
-    album_artist_id: partOfCompilation ? faker.string.ulid() + 1 : artistId,
+    album_artist_id: partOfCompilation ? `ar-${faker.number.int({ min: 1, max: 1_000_000 })}` : artistId,
     album_artist_name: partOfCompilation ? artistName : faker.person.fullName(),
     album_cover: faker.image.url(),
-    id: faker.string.uuid(),
+    id: `tr-${faker.number.int({ min: 1, max: 1_000_000 })}`,
     title: faker.lorem.sentence(),
     length: faker.number.int(),
     track: faker.number.int({ min: 1, max: 20 }),

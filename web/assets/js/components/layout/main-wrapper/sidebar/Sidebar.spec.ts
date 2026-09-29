@@ -7,19 +7,12 @@ import Component from './Sidebar.vue'
 
 const standardItems = ['All Songs', 'Albums', 'Artists', 'Genres', 'Favorites', 'Recently Played']
 
-const adminItems = [...standardItems, 'Users', 'Upload', 'Settings']
-
 describe('sidebar.vue', () => {
   const h = createHarness()
 
   it('shows the standard items', () => {
     h.actingAsUser().render(Component)
     standardItems.forEach(label => screen.getByText(label))
-  })
-
-  it('shows administrative items', () => {
-    h.actingAsAdmin().render(Component)
-    adminItems.forEach(label => screen.getByText(label))
   })
 
   it('shows the YouTube sidebar item on demand', async () => {

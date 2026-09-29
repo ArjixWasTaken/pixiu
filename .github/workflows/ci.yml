@@ -44,8 +44,39 @@ jobs:
       - name: Clippy
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
-      # The end-to-end tests bundle the WebUI assets themselves (fonts are
-      # downloaded on the first run), so no Topcoat CLI is needed here.
       # Tests that need Chromium or YouTube are `#[ignore]`d.
       - name: Test
         run: cargo test --workspace --all-features
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v5
+
+      # The pnpm version comes from `packageManager` in web/package.json.
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: web/package.json
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Types
+        run: pnpm typecheck
+
+      - name: Lint and format
+        run: pnpm check
+
+      - name: Test
+        run: pnpm test --run
+
+      - name: Build
+        run: pnpm build

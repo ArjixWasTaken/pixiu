@@ -1,7 +1,7 @@
 //! The OpenSubsonic REST API.
 //!
 //! Served by an axum [`Router`] under `/rest/{method}`, which the binary
-//! mounts into the Topcoat app. Every method also answers at
+//! mounts beside the web player and its API. Every method also answers at
 //! `/rest/{method}.view`, the form older clients use.
 
 mod annotations;

@@ -98,26 +98,6 @@ describe('editSmartPlaylistForm', () => {
     })
   })
 
-  it('sends empty cover when cover is removed', async () => {
-    const updateMock = h.mock(playlistStore, 'update')
-    const playlist = createSmartPlaylist({ cover: 'https://localhost/cover.webp' })
-
-    renderComponent(playlist)
-
-    await h.user.click(screen.getByRole('button', { name: 'Remove' }))
-    await h.type(screen.getByRole('textbox', { name: 'name' }), 'Updated')
-    await h.user.click(screen.getByRole('button', { name: 'Save' }))
-
-    await waitFor(() => {
-      expect(updateMock).toHaveBeenCalledWith(
-        playlist,
-        expect.objectContaining({
-          cover: '',
-        }),
-      )
-    })
-  })
-
   it('emits PLAYLIST_UPDATED on successful update', async () => {
     h.mock(playlistStore, 'update').mockResolvedValue(undefined)
     const emitMock = h.mock(eventBus, 'emit')

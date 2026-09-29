@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="crates/pixiu-web/assets/logo.png" alt="píxiū" width="320">
+  <img src="web/public/img/logo.png" alt="píxiū" width="320">
   <p><em>Gathers music from afar and never lets it go.</em></p>
 </div>
 
@@ -18,8 +18,14 @@ first) into a library it owns, and serves that hoard to any Subsonic client.
 
 ## What it does
 
-- **Hunting.** Search YouTube Music in the WebUI and grab songs or whole
-  albums. Downloads run in the background (the Jobs page shows their progress
+- **A web player.** A streaming-first player in the browser, forked from
+  [koel](https://koel.dev): browse and search the library, queue and play
+  (the queue and position follow you across devices), like, rate, time-synced
+  lyrics, an equalizer and visualizers, playlists, smart playlists whose songs
+  follow rules, and playlist folders. A Hunting section beside it manages
+  everything below.
+- **Hunting.** Search YouTube Music in the player and grab songs or whole
+  albums. Downloads run in the background (the Jobs screen shows their progress
   live): the Opus audio stream is remuxed losslessly into `.opus`, tagged, and
   filed into the treasure with its cover. When YouTube refuses a direct
   download, píxiū falls back to `yt-dlp`.
@@ -35,8 +41,8 @@ first) into a library it owns, and serves that hoard to any Subsonic client.
   refiles it (titles, track numbers, MusicBrainz ids), takes a larger cover
   from the Cover Art Archive when there is one, and brings the artist's
   biography and picture from Wikipedia. When several releases might be it,
-  the album waits on the Library page for you to pick one (or paste a
-  MusicBrainz release link); albums MusicBrainz doesn't know keep their tags.
+  the album's Information tab asks you to pick one (or paste a MusicBrainz
+  release link); albums MusicBrainz doesn't know keep their tags.
   You can also edit an album's tags by hand.
 - **Lyrics** come from the file itself, [LRCLIB](https://lrclib.net) (often
   time-synced) or YouTube Music. Instrumentals are recognized as such; songs
@@ -47,7 +53,7 @@ first) into a library it owns, and serves that hoard to any Subsonic client.
   watching something, its files stay; tracks nothing keeps any more are
   listed as orphans, for you to delete (one by one or all at once) or keep.
 - **YouTube Music login.** Log in through a real browser that runs on the
-  server and appears in the WebUI, so two-factor prompts work as usual. In
+  server and appears in the player, so two-factor prompts work as usual. In
   browsers with the experimental
   [HTML-in-Canvas](https://github.com/WICG/html-in-canvas) API (Chrome, with
   `chrome://flags/#canvas-draw-element`), its sign-in fields are mirrored into
@@ -55,8 +61,8 @@ first) into a library it owns, and serves that hoard to any Subsonic client.
   píxiū's address to your Google login for it to offer them. A
   session warden checks the login every half hour and refreshes its cookies
   twice a day. If Google ends the session (a password change, "sign out
-  everywhere"), every page says so until you log in again.
-- **Offerings.** Upload audio files or zip archives in the WebUI. píxiū reads
+  everywhere"), the player says so until you log in again.
+- **Offerings.** Upload audio files or zip archives in the player. píxiū reads
   their tags, you review, and accepted files are filed into the treasure,
   with the cover saved next to them. Nothing is ever deleted behind your
   back.
@@ -75,13 +81,14 @@ first) into a library it owns, and serves that hoard to any Subsonic client.
   empty queries for clients that sync the whole library), downloads, resized
   cover art, play counts (`scrobble`), what is playing now, stars and
   ratings, play queues that follow you across devices, playlists (your own,
-  plus the mirrors of watched playlists), lyrics (time-synced through
+  plus the mirrors of watched playlists and smart playlists), lyrics (time-synced through
   `getLyricsBySongId`), artist biographies and pictures, and top and
   similar songs worked out from your own library. Starring a song or an
   album also keeps it from ever becoming an orphan. Tested with Feishin and
   Airsonic Refix.
 - **Authentication**: your píxiū password (plain or token authentication), or
-  OpenSubsonic API keys created in Settings. Browser-based clients may call the
+  OpenSubsonic API keys created in Settings (the player signs in with one
+  too). Browser-based clients may call the
   API from other origins (CORS).
 
 ## Running
@@ -93,8 +100,8 @@ mkdir -p data treasure   # must be writable by uid 1000
 docker compose up -d --build
 ```
 
-The image is built on Alpine Linux (musl) and includes everything hunting
-needs: Chromium for the login browser, the FFmpeg libraries, and `yt-dlp`
+The image is built on Alpine Linux (musl) and includes the web player and
+everything hunting needs: Chromium for the login browser, the FFmpeg libraries, and `yt-dlp`
 with Deno. The compose file runs it
 hardened: a read-only root filesystem (only the volumes and two scratch
 `tmpfs` mounts are writable), no Linux capabilities, and no way to gain
@@ -114,16 +121,13 @@ Requirements:
   libavutil-dev libswresample-dev libclang-dev pkg-config`.
 - For hunting: Chromium (to log in to YouTube Music), and `yt-dlp` with
   [Deno](https://deno.com/) for the download fallback.
-- The Topcoat CLI, which bundles the WebUI's assets:
+- For the web player: Node.js (20.19 or 22.12 and later) and
+  [pnpm](https://pnpm.io/) 11.
 
 ```sh
-cargo install topcoat-cli@0.9.0 --locked
-
-topcoat asset bundle --package pixiu   # builds the binary and bundles assets next to it
-./target/debug/pixiu
+(cd web && pnpm install && pnpm build)   # the player, into web/dist
+cargo run --release                        # serves it, found in web/dist
 ```
-
-`topcoat dev --package pixiu` rebuilds and reloads on every change.
 
 ## Configuration
 
@@ -135,9 +139,9 @@ nesting (`PIXIU_SERVER__PORT=4533`). See [`pixiu.example.toml`](pixiu.example.to
 |---|---|---|
 | `server.host` | `127.0.0.1` | The Docker image uses `0.0.0.0`. |
 | `server.port` | `4533` | |
-| `server.cookie_security` | `auto` | Mark the session cookie `Secure` over HTTPS. |
 | `paths.data_dir` | `data` | Database, the secret key, caches and staged uploads. |
 | `paths.treasure_dir` | `treasure` | The music library, owned by píxiū. |
+| `paths.web_dir` | see note | The web player's files: by default `web/` next to the binary (as in the Docker image), else `web/dist`. |
 | `browser.executable` | from `PATH` | Chromium, for the login browser. |
 | `browser.no_sandbox` | `false` | Needed in most containers; the Docker image sets it. |
 | `stream.format` | `mp3` | What transcodes use when a client asks for a lower bitrate but names no format, and the file's own format cannot be made (FLAC, say): `mp3`, `opus` or `aac`. |
@@ -153,9 +157,23 @@ cargo test --workspace -- --ignored    # also drive Chromium, YouTube Music, Mus
 cargo clippy --workspace --all-targets
 ```
 
+The web player lives in `web/` (Vue, TypeScript, Vite+).
+While working on it, run the server and `pnpm dev`: the dev server reloads the
+player on every change and passes `/api` and `/rest` on to píxiū
+(`http://127.0.0.1:4600` unless `PIXIU_URL` says otherwise).
+
+```sh
+cd web
+pnpm dev          # the player with live reload
+pnpm typecheck
+pnpm check        # lint and formatting
+pnpm test         # unit tests
+```
+
 | Crate | |
 |---|---|
 | `pixiu` | The binary: configuration, wiring, serving. |
+| `pixiu-api` | The web player's JSON API (axum, mounted at `/api`). |
 | `pixiu-browser` | The login browser: Chromium over CDP, its screen streamed as JPEG frames. |
 | `pixiu-core` | Configuration, secrets at rest and password hashing. |
 | `pixiu-db` | [Toasty](https://github.com/tokio-rs/toasty) models and migrations (SQLite). |
@@ -165,7 +183,6 @@ cargo clippy --workspace --all-targets
 | `pixiu-media` | Remuxing and transcoding with FFmpeg's libraries. |
 | `pixiu-subsonic` | The OpenSubsonic REST API (axum, mounted at `/rest`). |
 | `pixiu-treasury` | The library on disk: tags, layout, ingest, covers and offerings. |
-| `pixiu-web` | The WebUI, built with [Topcoat](https://github.com/tokio-rs/topcoat). |
 
 ### Changing the database schema
 
@@ -178,3 +195,28 @@ cargo run -p pixiu-db --features cli -- migration generate --name describe_chang
 
 The server applies pending migrations on startup. A test fails if the models
 drift from the latest migration.
+
+## Credits
+
+The web player is a fork of [koel](https://github.com/koel/koel)'s frontend,
+used under the MIT License:
+
+> Copyright (c) 2015 Phan An
+>
+> Permission is hereby granted, free of charge, to any person obtaining a copy
+> of this software and associated documentation files (the "Software"), to deal
+> in the Software without restriction, including without limitation the rights
+> to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+> copies of the Software, and to permit persons to whom the Software is
+> furnished to do so, subject to the following conditions:
+>
+> The above copyright notice and this permission notice shall be included in all
+> copies or substantial portions of the Software.
+>
+> THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+> IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+> FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+> AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+> LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+> OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+> SOFTWARE.

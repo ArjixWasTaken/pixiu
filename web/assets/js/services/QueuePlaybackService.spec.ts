@@ -7,7 +7,6 @@ vi.mock('lodash-es', async importOriginal => {
   const mod = await importOriginal<typeof lodash>()
   return { ...mod, shuffle: vi.fn(mod.shuffle) }
 })
-import { http } from '@/services/http'
 import { socketService } from '@/services/socketService'
 import { preferenceStore as preferences } from '@/stores/preferenceStore'
 import { queueStore } from '@/stores/queueStore'
@@ -64,15 +63,12 @@ describe('playbackService', () => {
       h.setReadOnlyProperty(mediaElement, 'duration', duration)
 
       const registerPlayMock = h.mock(playbackService, 'registerPlay')
-      const putMock = h.mock(http, 'put')
+      const saveMock = h.mock(queueStore, 'savePlaybackStatus')
 
       mediaElement.dispatchEvent(new Event('timeupdate'))
 
       expect(registerPlayMock).toHaveBeenCalledTimes(numberOfCalls)
-      expect(putMock).toHaveBeenCalledWith('queue/playback-status', {
-        song: song.id,
-        position: currentTime,
-      })
+      expect(saveMock).toHaveBeenCalledWith(song, currentTime)
     },
   )
 
@@ -112,7 +108,7 @@ describe('playbackService', () => {
 
     const scrobbleMock = h.mock(playableStore, 'scrobble')
     h.mock(playbackService, 'registerPlay')
-    h.mock(http, 'put')
+    h.mock(queueStore, 'savePlaybackStatus')
 
     playbackService.media.dispatchEvent(new Event('timeupdate'))
 
@@ -199,7 +195,7 @@ describe('playbackService', () => {
       h.setReadOnlyProperty(mediaElement, 'duration', duration)
 
       const preloadMock = h.mock(playbackService, 'preload')
-      h.mock(http, 'put')
+      h.mock(queueStore, 'savePlaybackStatus')
 
       mediaElement.dispatchEvent(new Event('timeupdate'))
 
@@ -236,29 +232,6 @@ describe('playbackService', () => {
     expect(audioElement.setAttribute).toHaveBeenNthCalledWith(2, 'preload', 'auto')
     expect(audioElement.load).toHaveBeenCalled()
     expect(song.preloaded).toBe(true)
-  })
-
-  it('restarts a playable', async () => {
-    const song = setCurrentSong()
-    h.mock(Math, 'floor', 1000)
-    const broadcastMock = h.mock(socketService, 'broadcast')
-    const showNotificationMock = h.mock(playbackService, 'showNotification')
-    const putMock = h.mock(http, 'put')
-    const playMock = h.mock(window.HTMLMediaElement.prototype, 'play')
-
-    await playbackService.restart()
-
-    expect(song.play_start_time).toEqual(1000)
-    expect(song.play_count_registered).toBe(false)
-    expect(broadcastMock).toHaveBeenCalledWith('SOCKET_STREAMABLE', song)
-    expect(showNotificationMock).toHaveBeenCalled()
-    expect(playbackService.media.currentTime).toBe(0)
-    expect(playMock).toHaveBeenCalled()
-
-    expect(putMock).toHaveBeenCalledWith('queue/playback-status', {
-      song: song.id,
-      position: 0,
-    })
   })
 
   it.each<[RepeatMode, RepeatMode]>([

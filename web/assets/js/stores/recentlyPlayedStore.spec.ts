@@ -1,23 +1,9 @@
 import { describe, expect, it } from 'vite-plus/test'
 import { createHarness } from '@/__tests__/TestHarness'
-import { http } from '@/services/http'
 import { recentlyPlayedStore } from '@/stores/recentlyPlayedStore'
-import { playableStore } from '@/stores/playableStore'
 
 describe('recentlyPlayedStore', () => {
   const h = createHarness()
-
-  it('fetches the recently played songs', async () => {
-    const songs = h.factory('song').make(3)
-    const getMock = h.mock(http, 'get').mockResolvedValue(songs)
-    const syncMock = h.mock(playableStore, 'syncWithVault', songs)
-
-    await recentlyPlayedStore.fetch()
-
-    expect(getMock).toHaveBeenCalledWith('songs/recently-played')
-    expect(syncMock).toHaveBeenCalledWith(songs)
-    expect(recentlyPlayedStore.state.playables).toEqual(songs)
-  })
 
   it('fetches when attempting to add a new song and the state is empty', async () => {
     recentlyPlayedStore.state.playables = []

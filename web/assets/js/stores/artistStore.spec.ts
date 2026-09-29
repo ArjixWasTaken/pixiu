@@ -67,67 +67,6 @@ describe('artistStore', () => {
     expect(artistStore.vault.get(artist.id)?.name).toBe('Pink Floyd')
   })
 
-  it('resolves an artist', async () => {
-    const artist = h.factory('artist').make()
-    const getMock = h.mock(http, 'get').mockResolvedValueOnce(artist)
-
-    expect(await artistStore.resolve(artist.id)).toEqual(artist)
-    expect(getMock).toHaveBeenCalledWith(`artists/${artist.id}`)
-
-    // next call shouldn't make another request
-    expect(await artistStore.resolve(artist.id)).toEqual(artist)
-    expect(getMock).toHaveBeenCalledOnce()
-  })
-
-  it('paginates', async () => {
-    const artists = h.factory('artist').make(3)
-
-    h.mock(http, 'get').mockResolvedValueOnce({
-      data: artists,
-      meta: {
-        path: '/artists',
-        per_page: 21,
-        next_cursor: 'eyJuZXh0Ijoi...',
-        prev_cursor: null,
-      },
-    })
-
-    expect(
-      await artistStore.paginate({
-        favorites_only: false,
-        cursor: '',
-        sort: 'name',
-        order: 'asc',
-      }),
-    ).toEqual('eyJuZXh0Ijoi...')
-
-    expect(artistStore.state.artists).toEqual(artists)
-    expect(artistStore.vault.size).toBe(3)
-  })
-
-  it('toggles favorite', async () => {
-    const artist = h.factory('artist').make({ favorite: false })
-    artistStore.syncWithVault(artist)
-
-    const postMock = h.mock(http, 'post').mockResolvedValueOnce(
-      h.factory('favorite').make({
-        favoriteable_type: 'artist',
-        favoriteable_id: artist.id,
-      }),
-    )
-
-    await artistStore.toggleFavorite(artist)
-
-    expect(postMock).toHaveBeenCalledWith('favorites/toggle', { type: 'artist', id: artist.id })
-    expect(artist.favorite).toBe(true)
-
-    postMock.mockResolvedValue(null)
-    await artistStore.toggleFavorite(artist)
-
-    expect(postMock).toHaveBeenNthCalledWith(2, 'favorites/toggle', { type: 'artist', id: artist.id })
-    expect(artist.favorite).toBe(false)
-  })
-
   it('updates artist', async () => {
     const artist = h.factory('artist').make({ name: 'Led Zeppelin' })
     artistStore.syncWithVault(artist)

@@ -16,15 +16,6 @@ describe('emptyLibraryHint.vue', () => {
     screen.getByText('Have you set up your library yet?')
   })
 
-  it('invites an upload when the library is set up but empty', () => {
-    commonStore.state.storage_driver = 'local'
-    commonStore.state.media_path_set = true
-
-    h.actingAsAdmin().render(Component)
-
-    expect(screen.getByText('Upload some music').getAttribute('href')).toContain('/upload')
-  })
-
   it('invites an upload on cloud storage, where there is no media path to set', () => {
     commonStore.state.storage_driver = 's3'
     commonStore.state.media_path_set = false

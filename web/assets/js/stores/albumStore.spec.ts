@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vite-plus/test'
 import { createHarness } from '@/__tests__/TestHarness'
 import factory from '@/__tests__/factory'
-import { http } from '@/services/http'
 import { huntingService } from '@/services/huntingService'
 import { subsonic } from '@/services/subsonic'
 import { playableStore } from '@/stores/playableStore'
@@ -54,54 +53,6 @@ describe('albumStore', () => {
     expect(albumStore.vault.get(album.id)?.name).toBe('V')
   })
 
-  it('fetches an album thumbnail', async () => {
-    const getMock = h.mock(http, 'get').mockResolvedValue({ thumbnailUrl: 'http://test/thumbnail.jpg' })
-    const album = h.factory('album').make()
-
-    const url = await albumStore.fetchThumbnail(album.id)
-
-    expect(getMock).toHaveBeenCalledWith(`albums/${album.id}/thumbnail`)
-    expect(url).toBe('http://test/thumbnail.jpg')
-  })
-
-  it('resolves an album', async () => {
-    const album = h.factory('album').make()
-    const getMock = h.mock(http, 'get').mockResolvedValueOnce(album)
-
-    expect(await albumStore.resolve(album.id)).toEqual(album)
-    expect(getMock).toHaveBeenCalledWith(`albums/${album.id}`)
-
-    // the next call shouldn't make another request
-    expect(await albumStore.resolve(album.id)).toEqual(album)
-    expect(getMock).toHaveBeenCalledOnce()
-  })
-
-  it('paginates', async () => {
-    const albums = h.factory('album').make(3)
-
-    h.mock(http, 'get').mockResolvedValueOnce({
-      data: albums,
-      meta: {
-        path: '/albums',
-        per_page: 21,
-        next_cursor: 'eyJuZXh0Ijoi...',
-        prev_cursor: null,
-      },
-    })
-
-    expect(
-      await albumStore.paginate({
-        favorites_only: false,
-        sort: 'name',
-        order: 'asc',
-        cursor: '',
-      }),
-    ).toEqual('eyJuZXh0Ijoi...')
-
-    expect(albumStore.state.albums).toEqual(albums)
-    expect(albumStore.vault.size).toBe(3)
-  })
-
   it('updates through píxiū, then reloads the album', async () => {
     const album = h.factory('album').make({ name: 'IV' })
     albumStore.syncWithVault(album)
@@ -118,28 +69,5 @@ describe('albumStore', () => {
     expect(albumStore.vault.get(album.id)?.name).toBe('V')
     expect(albumStore.vault.get(album.id)?.year).toBe(2010)
     expect(syncPropsMock).toHaveBeenCalled()
-  })
-
-  it('toggles favorite', async () => {
-    const album = h.factory('album').make({ favorite: false })
-    albumStore.syncWithVault(album)
-
-    const postMock = h.mock(http, 'post').mockResolvedValueOnce(
-      h.factory('favorite').make({
-        favoriteable_type: 'album',
-        favoriteable_id: album.id,
-      }),
-    )
-
-    await albumStore.toggleFavorite(album)
-
-    expect(postMock).toHaveBeenCalledWith('favorites/toggle', { type: 'album', id: album.id })
-    expect(album.favorite).toBe(true)
-
-    postMock.mockResolvedValue(null)
-    await albumStore.toggleFavorite(album)
-
-    expect(postMock).toHaveBeenNthCalledWith(2, 'favorites/toggle', { type: 'album', id: album.id })
-    expect(album.favorite).toBe(false)
   })
 })

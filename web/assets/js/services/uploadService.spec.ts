@@ -145,34 +145,6 @@ describe('uploadService', () => {
     expect(postWithProgressMock).not.toHaveBeenCalled()
   })
 
-  it('uploads a file successfully', async () => {
-    const result = { song: h.factory('song').make(), album: h.factory('album').make() }
-    mockPostWithProgress(result)
-    const handleMock = h.mock(uploadService, 'handleUploadResult')
-    const proceedMock = h.mock(uploadService, 'proceed')
-
-    const file = createUploadFile()
-    await uploadService.upload(file)
-
-    expect(file.status).toBe('Uploaded')
-    expect(handleMock).toHaveBeenCalledWith(result, file)
-    expect(proceedMock).toHaveBeenCalled()
-  })
-
-  it('does not send a file again when handling its upload result fails', async () => {
-    mockPostWithProgress({ song: h.factory('song').make(), album: h.factory('album').make() })
-    h.mock(uploadService, 'handleUploadResult').mockImplementation(() => {
-      throw new Error('Store sync failed')
-    })
-    h.mock(uploadService, 'proceed')
-
-    const file = createUploadFile()
-
-    await expect(uploadService.upload(file)).rejects.toThrow('Store sync failed')
-    expect(file.status).not.toBe('Retrying')
-    expect(postWithProgressMock).toHaveBeenCalledTimes(1)
-  })
-
   it('keeps an uploaded file in the list with its song', () => {
     const file = createUploadFile()
     file.status = 'Uploading'

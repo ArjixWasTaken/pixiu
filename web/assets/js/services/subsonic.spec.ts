@@ -1,0 +1,91 @@
+import { describe, expect, it } from 'vite-plus/test'
+import { createHarness } from '@/__tests__/TestHarness'
+import { subsonic } from '@/services/subsonic'
+
+describe('subsonic', () => {
+  const h = createHarness()
+
+  it('maps a Subsonic song onto koel’s', () => {
+    const song = subsonic.toSong({
+      id: 'tr-3',
+      title: 'Funky Chunk',
+      duration: 239,
+      playCount: 2,
+      userRating: 4,
+      starred: '2026-09-29T16:30:34Z',
+      albumId: 'al-3',
+      album: 'Groovy',
+      coverArt: 'al-3',
+      artistId: 'ar-1',
+      artist: 'Kevin MacLeod',
+      displayAlbumArtist: 'Kevin MacLeod',
+      track: 1,
+      discNumber: 1,
+      year: 2016,
+      path: 'Kevin MacLeod/2016 - Groovy/01 Funky Chunk.opus',
+    })
+
+    expect(song).toMatchObject({
+      type: 'songs',
+      id: 'tr-3',
+      length: 239,
+      play_count: 2,
+      rating: 4,
+      favorite: true,
+      album_id: 'al-3',
+      artist_id: 'ar-1',
+      album_artist_id: 'ar-1',
+      basename: '01 Funky Chunk.opus',
+    })
+    expect(song.album_cover).toContain('/rest/getCoverArt?')
+    expect(song.album_cover).toContain('id=al-3')
+  })
+
+  it('tells mirrors of watched playlists from smart playlists', () => {
+    const mirror = subsonic.toPlaylist({ id: 'pl-1', name: 'Road trip', readonly: true })
+    const smart = subsonic.toPlaylist({
+      id: 'pl-2',
+      name: 'Lights',
+      readonly: true,
+      rules: [{ id: 'g', rules: [] }],
+      folderId: '3',
+    })
+    const own = subsonic.toPlaylist({ id: 'pl-3', name: 'Mine', readonly: false })
+
+    expect(mirror.permissions).toEqual({ edit: false, delete: false })
+    expect(smart).toMatchObject({ is_smart: true, folder_id: '3', permissions: { edit: true, delete: true } })
+    expect(own).toMatchObject({ is_smart: false, folder_id: null, permissions: { edit: true, delete: true } })
+  })
+
+  it('turns synced lyrics into LRC', async () => {
+    h.mock(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          'subsonic-response': {
+            status: 'ok',
+            lyricsList: {
+              structuredLyrics: [
+                { synced: false, line: [{ value: 'plain' }] },
+                {
+                  synced: true,
+                  line: [
+                    { start: 1000, value: 'First' },
+                    { start: 75_250, value: 'Later' },
+                  ],
+                },
+              ],
+            },
+          },
+        }),
+      ),
+    )
+
+    expect(await subsonic.lyrics('tr-1')).toBe('[00:01.00]First\n[01:15.25]Later')
+  })
+
+  it('builds stream URLs with the key, transcoding when asked', () => {
+    expect(subsonic.streamUrl('tr-1')).toContain('/rest/stream?')
+    expect(subsonic.streamUrl('tr-1')).not.toContain('maxBitRate')
+    expect(subsonic.streamUrl('tr-1', 128)).toContain('maxBitRate=128')
+  })
+})

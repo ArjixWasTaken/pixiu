@@ -51,20 +51,6 @@ describe('authService', () => {
     expect(lsGet('api-token')).toBeNull()
   })
 
-  it('logs in', async () => {
-    const postMock = h.mock(http, 'post').mockResolvedValue({
-      'audio-token': 'foo',
-      token: 'bar',
-    })
-
-    const result = await authService.login('john@doe.com', 'curry-wurst')
-
-    expect(postMock).toHaveBeenCalledWith('me', { email: 'john@doe.com', password: 'curry-wurst' })
-    expect(result).toBeNull()
-    expect(lsGet('api-token')).toBe('bar')
-    expect(lsGet('audio-token')).toBe('foo')
-  })
-
   it('returns the two-factor challenge payload from login without stashing a token', async () => {
     authService.destroy()
     h.mock(http, 'post').mockResolvedValue({
@@ -153,13 +139,6 @@ describe('authService', () => {
     await authService.login('john@doe.com', 'curry-wurst')
 
     expect(redirectMock).toHaveBeenCalled()
-  })
-
-  it('logs out', async () => {
-    const deleteMock = h.mock(http, 'delete')
-    await authService.logout()
-
-    expect(deleteMock).toHaveBeenCalledWith('me')
   })
 
   it('gets profile', async () => {

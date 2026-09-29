@@ -3,9 +3,9 @@ import { faker } from '@faker-js/faker'
 export default (): Album => {
   return {
     type: 'albums',
-    artist_id: faker.string.ulid(),
+    artist_id: `ar-${faker.number.int({ min: 1, max: 1_000_000 })}`,
     artist_name: faker.person.fullName(),
-    id: faker.string.ulid(),
+    id: `al-${faker.number.int({ min: 1, max: 1_000_000 })}`,
     name: faker.lorem.sentence(),
     cover: faker.image.url(),
     created_at: faker.date.past().toISOString(),

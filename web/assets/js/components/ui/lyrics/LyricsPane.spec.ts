@@ -1,8 +1,6 @@
 import { describe, expect, it, vi } from 'vite-plus/test'
 import { screen } from '@testing-library/vue'
 import { createHarness } from '@/__tests__/TestHarness'
-import { assertOpenModal } from '@/__tests__/assertions'
-import EditSongForm from '@/components/playable/EditSongForm.vue'
 
 const openModalMock = vi.fn()
 
@@ -66,17 +64,6 @@ describe('lyricsPane.vue', () => {
 
     expect(screen.queryByTestId('plain-text-lyrics')).toBeNull()
     screen.getByTestId('lrc-lyrics-pane')
-  })
-
-  it('provides a button to add lyrics if current user is admin', async () => {
-    const song = h.factory('song').make({ lyrics: null })
-
-    h.actingAsAdmin()
-    renderComponent(song)
-
-    await h.user.click(screen.getByRole('button', { name: 'Click here' }))
-
-    await assertOpenModal(openModalMock, EditSongForm, { songs: [song], initialTab: 'lyrics' })
   })
 
   it('does not have a button to add lyrics if current user is not an admin', async () => {
