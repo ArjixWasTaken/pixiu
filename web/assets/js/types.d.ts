@@ -442,6 +442,7 @@ interface UserPreferences extends Record<string, any> {
   show_album_art_overlay: boolean
   lyrics_zoom_level: number | null
   theme?: Theme['id'] | null
+  dark_mode?: boolean
   visualizer?: Visualizer['id'] | null
   active_extra_panel_tab: SideSheetTab | null
   make_uploads_public: boolean

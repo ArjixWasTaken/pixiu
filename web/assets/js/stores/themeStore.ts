@@ -1,64 +1,19 @@
-import { uniqBy } from 'lodash-es'
-import StyleObserver from 'style-observer'
 import { reactive } from 'vue'
 import { preferenceStore as preferences } from '@/stores/preferenceStore'
-import { http } from '@/services/http'
 import themes from '@/config/themes'
-import { cache } from '@/services/cache'
-import { isDarkColor } from '@/utils/color'
-
-export interface ThemeData {
-  name: string
-  font_family: string
-  font_size: number
-  bg_color: string
-  fg_color: string
-  highlight_color: string
-  bg_image: string
-}
-
-const setHighlightForeground = (highlight: string) =>
-  document.body.style.setProperty('--color-highlight-fg', isDarkColor(highlight) ? '#ffffff' : '#111111')
 
 export const themeStore = {
-  defaultProperties: {
-    '--color-fg': undefined,
-    '--color-bg': undefined,
-    '--color-highlight': undefined,
-    '--bg-image': undefined,
-    '--bg-position': undefined,
-    '--bg-attachment': undefined,
-    '--bg-size': undefined,
-    '--font-family': undefined,
-    '--font-size': undefined,
-  } as Record<ThemeableProperty, string | undefined>,
-
   state: reactive({
     themes,
   }),
 
-  init(theme: Theme | Theme['id'] = 'classic') {
-    for (const key in this.defaultProperties) {
-      this.defaultProperties[key] = document.body.style.getPropertyValue(key)
-    }
-
-    // calculate and set the highlight foreground color
-    const observer = new StyleObserver(([{ value }]) => setHighlightForeground(value))
-
-    observer.observe(document.body, '--color-highlight')
-
+  init(theme: Theme | Theme['id'] = 'orange') {
     if (typeof theme === 'object' && theme.is_custom) {
       // custom theme from server. Add it to the list of themes.
       this.state.themes.push(theme)
     }
 
     this.setTheme(theme)
-
-    const initialHighlight = getComputedStyle(document.body).getPropertyValue('--color-highlight').trim()
-
-    if (initialHighlight) {
-      setHighlightForeground(initialHighlight)
-    }
   },
 
   get all() {
@@ -75,14 +30,34 @@ export const themeStore = {
       theme = this.getThemeById(theme) ?? this.getDefaultTheme()
     }
 
-    document.documentElement.setAttribute('data-theme', theme.id)
-    const properties = { ...this.defaultProperties, ...(theme.properties ?? {}) }
-
-    for (const key in properties) {
-      document.body.style.setProperty(key, properties[key]) // overriding :root
-    }
-
     preferences.theme = theme.id
+    this.applyMode()
+  },
+
+  get darkMode() {
+    return preferences.dark_mode ?? true
+  },
+
+  setDarkMode(dark: boolean) {
+    preferences.dark_mode = dark
+    this.applyMode()
+  },
+
+  /**
+   * Selects the scheme's tokens: `data-mode="<scheme>-dt|-lt"` on the root,
+   * except for Baseline, whose tokens hang off `data-theme="dark|light"`.
+   */
+  applyMode() {
+    const root = document.documentElement
+    const scheme = this.getCurrentTheme().id
+
+    if (scheme === 'baseline') {
+      root.removeAttribute('data-mode')
+      root.setAttribute('data-theme', this.darkMode ? 'dark' : 'light')
+    } else {
+      root.removeAttribute('data-theme')
+      root.setAttribute('data-mode', `${scheme}-${this.darkMode ? 'dt' : 'lt'}`)
+    }
   },
 
   isCurrentTheme(theme: Theme | Theme['id']) {
@@ -95,7 +70,7 @@ export const themeStore = {
   },
 
   getDefaultTheme() {
-    return this.getThemeById('classic')!
+    return this.getThemeById('orange')!
   },
 
   getCurrentTheme() {
@@ -104,34 +79,5 @@ export const themeStore = {
 
   isValidTheme(id: Theme['id']) {
     return this.getThemeById(id) !== undefined
-  },
-
-  async store(data: ThemeData) {
-    const theme = await http.post<Theme>('themes', data)
-    this.state.themes.unshift(theme)
-    cache.remove('custom-themes')
-
-    return theme
-  },
-
-  async fetchCustomThemes() {
-    const customThemes = await cache.remember('custom-themes', async () => await http.get<Theme[]>('themes'))
-    this.state.themes = uniqBy(this.state.themes.concat(customThemes), 'id')
-  },
-
-  async destroy(theme: Theme) {
-    if (!theme.is_custom) {
-      return
-    }
-
-    const isCurrentTheme = this.isCurrentTheme(theme)
-
-    await http.delete(`themes/${theme.id}`)
-    this.state.themes = this.state.themes.filter(({ id }) => id !== theme.id)
-    cache.remove('custom-themes')
-
-    if (isCurrentTheme) {
-      this.setTheme(this.getDefaultTheme())
-    }
   },
 }

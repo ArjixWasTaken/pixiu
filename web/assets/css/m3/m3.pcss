@@ -1,0 +1,99 @@
+/* Shared pieces of the Material 3 components (components/m3). */
+
+:root {
+  --m3-elevation-1: 0 1px 2px rgb(0 0 0 / 0.3), 0 1px 3px 1px rgb(0 0 0 / 0.15);
+  --m3-elevation-2: 0 1px 2px rgb(0 0 0 / 0.3), 0 2px 6px 2px rgb(0 0 0 / 0.15);
+  --m3-elevation-3: 0 1px 3px rgb(0 0 0 / 0.3), 0 4px 8px 3px rgb(0 0 0 / 0.15);
+  --m3-elevation-4: 0 2px 3px rgb(0 0 0 / 0.3), 0 6px 10px 4px rgb(0 0 0 / 0.15);
+  --m3-elevation-5: 0 4px 4px rgb(0 0 0 / 0.3), 0 8px 12px 6px rgb(0 0 0 / 0.15);
+  --m3-ease: cubic-bezier(0.2, 0, 0, 1);
+}
+
+.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined';
+  font-weight: normal;
+  font-style: normal;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-feature-settings: 'liga';
+  font-feature-settings: 'liga';
+  -webkit-font-smoothing: antialiased;
+}
+
+/*
+ * A state layer: an overlay in the content color, 8% on hover, 10% on
+ * focus and press. Put `m3-state` on a positioned element.
+ */
+.m3-state {
+  position: relative;
+  isolation: isolate;
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: currentColor;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 150ms linear;
+    z-index: -1;
+  }
+
+  &:hover::before {
+    opacity: 0.08;
+  }
+
+  &:focus-visible::before,
+  &:active::before {
+    opacity: 0.1;
+  }
+
+  &:disabled::before,
+  &[aria-disabled='true']::before {
+    opacity: 0;
+  }
+}
+
+@keyframes m3-equalizer {
+  0%,
+  100% {
+    transform: scaleY(0.3);
+  }
+
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+@keyframes m3-indeterminate {
+  0% {
+    left: -40%;
+    width: 40%;
+  }
+
+  100% {
+    left: 100%;
+    width: 40%;
+  }
+}
+
+@keyframes m3-slide-up {
+  from {
+    transform: translateY(100%);
+  }
+
+  to {
+    transform: none;
+  }
+}
+
+@keyframes m3-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

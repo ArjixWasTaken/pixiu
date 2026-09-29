@@ -9,5 +9,4 @@ export interface ContextMenus {
   PODCAST: { podcast: Podcast }
   RADIO_STATION: { station: RadioStation }
   USER: { user: User }
-  THEME: { theme: Theme }
 }

@@ -29,6 +29,11 @@ blockquote {
 }
 
 :root {
+  color-scheme: light;
+}
+
+:root[data-mode$='-dt'],
+:root[data-theme='dark'] {
   color-scheme: dark;
 }
 
@@ -42,7 +47,7 @@ html {
   font-family: var(--font-family);
   font-size: var(--font-size);
 
-  @apply h-screen text-k-fg font-light leading-6 overflow-hidden;
+  @apply h-screen text-k-fg font-normal leading-6 overflow-hidden;
 }
 
 body::before {
@@ -68,7 +73,7 @@ textarea,
 .btn {
   font-family: var(--font-family);
 
-  @apply appearance-none border-0 outline-0 text-base font-light;
+  @apply appearance-none border-0 outline-0 text-base font-normal;
 
   &:required,
   &:invalid {
