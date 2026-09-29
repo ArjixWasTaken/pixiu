@@ -1,0 +1,113 @@
+import vueSnapshotSerializer from 'jest-serializer-vue'
+import { expect, vi } from 'vite-plus/test'
+import './shims/popover'
+import './shims/storage'
+import './shims/mediaSession'
+
+declare global {
+  interface Window {
+    createLemonSqueezy?: () => Closure
+    RUNNING_UNIT_TESTS?: boolean
+  }
+
+  interface LemonSqueezy {
+    Url: {
+      Open: () => void
+    }
+  }
+}
+
+expect.addSnapshotSerializer(vueSnapshotSerializer)
+
+globalThis.ResizeObserver =
+  globalThis.ResizeObserver ||
+  vi.fn().mockImplementation(function () {
+    return {
+      disconnect: vi.fn(),
+      observe: vi.fn(),
+      unobserve: vi.fn(),
+    }
+  })
+
+globalThis.LemonSqueezy = {
+  Url: {
+    Open: vi.fn(),
+  },
+}
+
+HTMLMediaElement.prototype.load = vi.fn()
+HTMLMediaElement.prototype.play = vi.fn()
+HTMLMediaElement.prototype.pause = vi.fn()
+
+HTMLDialogElement.prototype.show = vi.fn(function mock(this: HTMLDialogElement) {
+  this.open = true
+})
+
+HTMLDialogElement.prototype.showModal = vi.fn(function mock(this: HTMLDialogElement) {
+  this.open = true
+})
+
+HTMLDialogElement.prototype.close = vi.fn(function mock(this: HTMLDialogElement) {
+  this.open = false
+})
+
+window.KOEL = {
+  base_url: 'http://test/',
+  build: null,
+  is_demo: false,
+  pusher: { app_key: '', app_cluster: '' },
+  branding: { name: 'Koel', logo: '', cover: '' },
+  gravatar: { url: 'https://www.gravatar.com/avatar', default: 'robohash' },
+  mailer_configured: true,
+  sso_providers: [],
+  accepted_audio_extensions: [],
+}
+window.RUNNING_UNIT_TESTS = true
+
+window.createLemonSqueezy = vi.fn()
+
+Object.defineProperty(window, 'matchMedia', {
+  writable: true,
+  value: vi.fn().mockImplementation(query => ({
+    matches: true,
+    media: query,
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  })),
+})
+
+// Mock iframe's navigation API
+const iframeContentWindowMap = new WeakMap<HTMLIFrameElement, any>()
+
+Object.defineProperty(HTMLIFrameElement.prototype, 'contentWindow', {
+  configurable: true,
+  get(this: HTMLIFrameElement) {
+    if (!iframeContentWindowMap.has(this)) {
+      const stub = {
+        location: {
+          replace: vi.fn(),
+          assign: vi.fn(),
+          reload: vi.fn(),
+          href: '',
+        },
+        postMessage: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }
+      iframeContentWindowMap.set(this, stub)
+    }
+    return iframeContentWindowMap.get(this)
+  },
+})
+
+window.IntersectionObserver = vi.fn().mockImplementation(function () {
+  return {
+    observe: vi.fn(),
+    unobserve: vi.fn(),
+    disconnect: vi.fn(),
+  }
+})

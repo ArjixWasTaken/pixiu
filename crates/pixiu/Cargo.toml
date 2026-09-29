@@ -9,6 +9,7 @@ publish = false
 default-run = "pixiu"
 
 [dependencies]
+pixiu-api.workspace = true
 pixiu-browser.workspace = true
 pixiu-core.workspace = true
 pixiu-db.workspace = true

@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>píxiū</title>
+
+    <meta name="description" content="Gathers music from afar and never lets it go.">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#0f1622">
+
+    <link rel="stylesheet" href="/css/layer-order.css">
+    <link rel="icon" type="image/png" href="/img/favicon.png">
+    <link rel="apple-touch-icon" href="/img/emblem-192.png">
+
+    <script>
+      // Some dependencies expect Node's `global`.
+      window.global = window
+    </script>
+  </head>
+  <body class="text-k-fg-70">
+    <div id="app"></div>
+
+    <script>
+      window.KOEL = {
+        base_url: '/',
+        build: null,
+        clean_urls: true,
+        is_demo: false,
+        pusher: { app_key: '', app_cluster: '' },
+        branding: { name: 'píxiū', logo: '/img/emblem-192.png', cover: '' },
+        gravatar: { url: '', default: '' },
+        mailer_configured: false,
+        sso_providers: [],
+        accepted_audio_extensions: [
+          'zip', 'mp3', 'flac', 'ogg', 'oga', 'opus', 'm4a', 'aac', 'wav', 'aif', 'aiff', 'wv', 'ape', 'mpc',
+        ],
+      }
+    </script>
+    <script type="module" src="/assets/js/app.ts"></script>
+  </body>
+</html>

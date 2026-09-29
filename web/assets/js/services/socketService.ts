@@ -1,0 +1,41 @@
+import { userStore } from '@/stores/userStore'
+import { authService } from '@/services/authService'
+
+export const socketService = {
+  pusher: null as any,
+  channel: null as any,
+
+  async init() {
+    if (!window.KOEL.pusher.app_key) {
+      return false
+    }
+
+    const { default: PusherLib } = await import('pusher-js')
+
+    this.pusher = new PusherLib(window.KOEL.pusher.app_key, {
+      channelAuthorization: {
+        endpoint: `${window.KOEL.base_url}api/broadcasting/auth`,
+        transport: 'ajax',
+        headers: {
+          Authorization: `Bearer ${authService.getApiToken()}`,
+        },
+      },
+      cluster: window.KOEL.pusher.app_cluster,
+      forceTLS: true,
+    })
+
+    this.channel = this.pusher.subscribe(`private-koel.${userStore.current.id}`)
+
+    return true
+  },
+
+  broadcast(eventName: string, data: any = {}) {
+    this.channel?.trigger(`client-${eventName}`, data)
+    return this
+  },
+
+  listen(eventName: string, cb: Closure) {
+    this.channel?.bind(`client-${eventName}`, data => cb(data))
+    return this
+  },
+}

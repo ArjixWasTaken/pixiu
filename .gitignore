@@ -4,3 +4,8 @@
 *.db
 *.db-*
 .env
+
+# The web player (web/)
+/web/node_modules/
+/web/dist/
+/web/stats.html

@@ -3195,6 +3195,7 @@ dependencies = [
  "futures-util",
  "hex",
  "md-5",
+ "pixiu-api",
  "pixiu-browser",
  "pixiu-core",
  "pixiu-db",
@@ -3214,6 +3215,23 @@ dependencies = [
  "tower-http 0.7.1",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "pixiu-api"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "hex",
+ "pixiu-core",
+ "pixiu-db",
+ "rand 0.10.3",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tower",
+ "tracing",
 ]
 
 [[package]]

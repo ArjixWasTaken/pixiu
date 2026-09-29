@@ -1,0 +1,54 @@
+<template>
+  <div class="space-y-6">
+    <section v-if="!supported" class="text-k-fg-70">Offline playback is not supported in this browser.</section>
+
+    <template v-else>
+      <section class="space-y-3">
+        <h4 class="font-semibold text-k-fg uppercase tracking-wider text-sm">Storage Usage</h4>
+        <div class="space-y-2">
+          <div class="flex items-center gap-4">
+            <UsageMeter :limit="storageQuota" :used="storageUsage" aria-label="Offline storage used" class="flex-1" />
+            <span class="text-sm text-k-fg-70 whitespace-nowrap">{{ usageLabel }}</span>
+          </div>
+          <p class="text-sm text-k-fg-70">
+            {{ cachedSongCount }} {{ cachedSongCount === 1 ? 'song' : 'songs' }} available offline
+          </p>
+        </div>
+      </section>
+
+      <section v-if="cachedSongCount" class="space-y-3">
+        <Btn variant="destructive" @click.prevent="clearAll">Clear All</Btn>
+      </section>
+    </template>
+  </div>
+</template>
+
+<script lang="ts" setup>
+import { computed } from 'vue'
+import { useOfflinePlayback } from '@/composables/useOfflinePlayback'
+import { useDialogBox } from '@/composables/useDialogBox'
+import { useMessageToaster } from '@/composables/useMessageToaster'
+import { formatBytes } from '@/utils/formatters'
+
+import Btn from '@/components/ui/form/Btn.vue'
+import UsageMeter from '@/components/ui/UsageMeter.vue'
+
+const { swReady, storageUsage, storageQuota, cachedSongCount, clearAllOfflineCache } = useOfflinePlayback()
+
+const { showConfirmDialog } = useDialogBox()
+const { toastSuccess } = useMessageToaster()
+
+const supported = computed(() => swReady.value)
+
+const usageLabel = computed(() => {
+  if (!storageQuota.value) return formatBytes(storageUsage.value)
+  return `${formatBytes(storageUsage.value)} / ${formatBytes(storageQuota.value)}`
+})
+
+const clearAll = async () => {
+  if (await showConfirmDialog('Remove all offline songs? This cannot be undone.')) {
+    await clearAllOfflineCache()
+    toastSuccess('All offline songs have been removed.')
+  }
+}
+</script>

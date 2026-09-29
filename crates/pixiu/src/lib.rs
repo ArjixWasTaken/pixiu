@@ -155,10 +155,18 @@ pub fn app(services: &Services, config: &Config, assets: AssetBundle) -> Router 
         now_playing: services.now_playing.clone(),
     })
     .route(TowerRoute::any("/rest/{*rest}", subsonic))
-    // Web-based Subsonic clients post to the API from other origins. The
-    // API authenticates every request by its parameters, so the WebUI's
-    // cross-site request forgery defense does not apply to it.
-    .origin_policy(OriginPolicy::new().exempt_paths(["/rest/{*rest}"]))
+    .route(TowerRoute::any(
+        "/api/{*rest}",
+        pixiu_api::router(pixiu_api::ApiState {
+            db: services.db.clone(),
+            secrets: services.secrets.clone(),
+        }),
+    ))
+    // Web-based Subsonic clients post to the API from other origins. Both
+    // APIs authenticate every request by its parameters or bearer token,
+    // never a cookie, so the WebUI's cross-site request forgery defense
+    // does not apply to them.
+    .origin_policy(OriginPolicy::new().exempt_paths(["/rest/{*rest}", "/api/{*rest}"]))
     // Topcoat's built-in compression would gzip whole audio files (audio is
     // incompressible) and drop `Accept-Ranges`, hiding seeking from clients.
     // Compress everything else as usual.

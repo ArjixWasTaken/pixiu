@@ -1,0 +1,8 @@
+allowBuilds:
+  core-js: true
+  esbuild: true
+overrides:
+  'form-data@<2.5.4': '>=2.5.4'
+  '@rolldown/pluginutils': '1.0.0-rc.9'
+  'vite': 'npm:@voidzero-dev/vite-plus-core@^0.1.24'
+  'vitest': 'npm:@voidzero-dev/vite-plus-test@^0.1.24'
