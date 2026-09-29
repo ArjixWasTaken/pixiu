@@ -1,4 +1,4 @@
-//! The login page's sign-in fields, reported so the WebUI can mirror them as
+//! The login page's sign-in fields, reported so the web player can mirror them as
 //! real inputs that the admin's password manager can fill.
 //!
 //! Scripts run in an isolated world: the page's own scripts cannot see them,

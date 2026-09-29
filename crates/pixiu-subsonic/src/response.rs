@@ -205,7 +205,9 @@ impl Element {
         );
     }
 
-    fn to_json(&self) -> Json {
+    /// The element as JSON, as the JSON format renders it.
+    #[must_use]
+    pub fn to_json(&self) -> Json {
         let mut map = Map::new();
         for (key, value) in &self.attrs {
             map.insert((*key).to_owned(), value.to_json());

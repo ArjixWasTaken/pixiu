@@ -64,7 +64,7 @@ impl HuntError {
 impl From<reqwest::Error> for HuntError {
     fn from(error: reqwest::Error) -> Self {
         // Stream URLs are signed and name the server's IP address; keep
-        // them out of logs and the WebUI.
+        // them out of logs and the web player.
         HuntError::Download(error.without_url().to_string())
     }
 }

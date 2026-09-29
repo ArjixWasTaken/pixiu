@@ -5,15 +5,15 @@
 # Loopback by default; use "0.0.0.0" to accept connections from the network.
 host = "127.0.0.1"
 port = 4533
-# "auto": mark the session cookie Secure when the request came over HTTPS
-# (directly or via X-Forwarded-Proto). "always" / "never" force it.
-cookie_security = "auto"
 
 [paths]
 # Database, secrets and caches.
 data_dir = "data"
 # The music library. píxiū owns this directory; don't edit it by hand.
 treasure_dir = "treasure"
+# The web player's files. By default `web/` next to the binary, else
+# `web/dist` (after `pnpm build` in a checkout).
+# web_dir = "/opt/pixiu/web"
 
 [browser]
 # Chromium, for logging in to YouTube Music; found in PATH when unset.

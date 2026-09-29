@@ -1,6 +1,6 @@
 [package]
 name = "pixiu-browser"
-description = "A real Chromium, driven from the píxiū WebUI, for platform logins"
+description = "A real Chromium, driven from the píxiū web player, for platform logins"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

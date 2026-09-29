@@ -9,6 +9,7 @@ publish = false
 default-run = "pixiu"
 
 [dependencies]
+pixiu-api.workspace = true
 pixiu-browser.workspace = true
 pixiu-core.workspace = true
 pixiu-db.workspace = true
@@ -17,12 +18,12 @@ pixiu-hunt.workspace = true
 pixiu-jobs.workspace = true
 pixiu-subsonic.workspace = true
 pixiu-treasury.workspace = true
-pixiu-web.workspace = true
 
 anyhow.workspace = true
+axum.workspace = true
 tokio.workspace = true
-topcoat.workspace = true
-tower-http.workspace = true
+tower.workspace = true
+tower-http = { workspace = true, features = ["set-header"] }
 tracing.workspace = true
 tracing-subscriber.workspace = true
 
@@ -34,7 +35,6 @@ reqwest.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true
 tokio-tungstenite.workspace = true
-topcoat-asset = { workspace = true, features = ["bundler"] }
 
 [lints]
 workspace = true

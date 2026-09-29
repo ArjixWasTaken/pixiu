@@ -1,0 +1,10 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`youTubeVideoItem.vue > renders 1`] = `
+<a data-v-cf3835f1="" href="https://youtu.be/cLgJQ8Zj3AA" class="flex gap-3 text-k-fg-70 hover:text-k-fg! focus:text-k-fg active:text-k-fg" data-testid="youtube-search-result" role="button"><img data-v-cf3835f1="" alt="Guess what it is" src="https://i.ytimg.com/an_webp/cLgJQ8Zj3AA/mqdefault_6s.webp" class="self-start" width="90">
+  <aside data-v-cf3835f1="" class="space-y-1">
+    <h3 data-v-cf3835f1="" class="text-lg">Guess what it is</h3>
+    <p data-v-cf3835f1="" class="text-[0.9rem]">From the LA Opening Gala 2014: John Williams Celebration</p>
+  </aside>
+</a>
+`;

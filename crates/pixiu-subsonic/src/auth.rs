@@ -62,7 +62,7 @@ fn check_token(
     let Some(sealed) = &user.subsonic_secret else {
         return Err(ApiError::new(
             ErrorCode::TokenAuthNotSupported,
-            "token authentication needs the password; sign in to the WebUI once, \
+            "token authentication needs the password; sign in to the web player once, \
              or use an API key",
         )
         .into());

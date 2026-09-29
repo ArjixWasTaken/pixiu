@@ -1,0 +1,74 @@
+import { computed } from 'vue'
+import { commonStore } from '@/stores/commonStore'
+import { acceptsFile } from '@/utils/mediaHelper'
+import type { UploadFile, UploadStatus } from '@/services/uploadService'
+import { uploadService } from '@/services/uploadService'
+import { getAllFileEntries } from '@/utils/directoryReader'
+import { pluralize } from '@/utils/formatters'
+import { useRouter } from '@/composables/useRouter'
+import { useMessageToaster } from '@/composables/useMessageToaster'
+import { usePolicies } from '@/composables/usePolicies'
+
+const UNFINISHED_UPLOAD_STATUSES: UploadStatus[] = ['Ready', 'Uploading', 'Retrying']
+
+export const useUpload = () => {
+  const { toastSuccess, toastWarning } = useMessageToaster()
+  const { go, isCurrentScreen } = useRouter()
+
+  const { currentUserCan } = usePolicies()
+
+  const mediaPathSetUp = computed(() => {
+    return commonStore.state.storage_driver !== 'local' || commonStore.state.media_path_set
+  })
+
+  const allowsUpload = computed(() => currentUserCan.uploadSongs())
+
+  const unfinishedUploadCount = computed(
+    () => uploadService.state.files.filter(({ status }) => UNFINISHED_UPLOAD_STATUSES.includes(status)).length,
+  )
+
+  const fileEntryToFile = async (entry: FileSystemFileEntry) => new Promise<File>(resolve => entry.file(resolve))
+
+  const queueFilesForUpload = (files: Array<File>) => {
+    const entries = files.map(
+      (file): UploadFile => ({
+        file,
+        id: `${file.name}-${file.size}`, // for simplicity, a file's identity is determined by its name and size
+        status: acceptsFile(file) ? 'Ready' : 'Skipped',
+        message: acceptsFile(file) ? undefined : 'Unsupported format',
+        name: file.name,
+        progress: 0,
+      }),
+    )
+
+    const acceptedEntries = entries.filter(({ status }) => status === 'Ready')
+    uploadService.queue(entries)
+
+    return acceptedEntries
+  }
+
+  const handleDropEvent = async (event: DragEvent) => {
+    if (!event.dataTransfer) {
+      return
+    }
+
+    const fileEntries = await getAllFileEntries(event.dataTransfer.items)
+    const files = await Promise.all(fileEntries.map(entry => fileEntryToFile(entry)))
+    const queuedFiles = queueFilesForUpload(files)
+
+    if (queuedFiles.length) {
+      toastSuccess(`Queued ${pluralize(queuedFiles, 'file')} for upload`)
+      isCurrentScreen('Upload') || go('upload')
+    } else {
+      toastWarning('No files applicable for upload')
+    }
+  }
+
+  return {
+    mediaPathSetUp,
+    allowsUpload,
+    unfinishedUploadCount,
+    handleDropEvent,
+    queueFilesForUpload,
+  }
+}

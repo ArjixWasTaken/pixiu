@@ -1,8 +1,11 @@
 //! Assembles the píxiū application from its parts.
 
-use std::sync::Arc;
+pub mod web;
+
+use std::{path::Path, sync::Arc};
 
 use anyhow::Context;
+use axum::Router;
 use pixiu_browser::{BrowserOptions, LoginDesk};
 use pixiu_core::{Config, SecretBox, TranscodeFormat, playing::NowPlaying};
 use pixiu_db::Db;
@@ -14,22 +17,14 @@ use pixiu_jobs::{
 };
 use pixiu_subsonic::{Codec, SubsonicState};
 use pixiu_treasury::{Offerings, Treasury};
-use pixiu_web::WebDeps;
 use tokio::sync::Semaphore;
-use topcoat::{
-    asset::AssetBundle,
-    router::{
-        Compression, OriginPolicy, Router,
-        tower::{TowerLayer, TowerRoute},
-    },
-};
 use tower_http::compression::{
     CompressionLayer,
     predicate::{DefaultPredicate, NotForContentType, Predicate},
 };
 
-/// píxiū's long-lived parts, shared by the WebUI, the Subsonic API and the
-/// background workers.
+/// píxiū's long-lived parts, shared by the web player's API, the Subsonic
+/// API and the background workers.
 #[derive(Clone)]
 pub struct Services {
     pub db: Db,
@@ -40,7 +35,7 @@ pub struct Services {
     pub warden: Arc<Warden>,
     pub jobs: Arc<Jobs>,
     pub login_desk: Arc<LoginDesk>,
-    /// Fed by the Subsonic API, shown by the WebUI.
+    /// Fed by the Subsonic API, shown by the web player.
     pub now_playing: NowPlaying,
 }
 
@@ -106,6 +101,21 @@ impl Services {
         })
     }
 
+    /// What the web player's API needs.
+    #[must_use]
+    pub fn api_state(&self) -> pixiu_api::ApiState {
+        pixiu_api::ApiState {
+            db: self.db.clone(),
+            secrets: self.secrets.clone(),
+            treasury: self.treasury.clone(),
+            offerings: self.offerings.clone(),
+            hunter: Arc::clone(&self.hunter),
+            warden: Arc::clone(&self.warden),
+            jobs: Arc::clone(&self.jobs),
+            login_desk: Arc::clone(&self.login_desk),
+        }
+    }
+
     /// Starts the background workers: the session warden, the job queue
     /// (which resumes unfinished jobs), the watch scheduler, and resuming
     /// paused jobs whenever the login works again.
@@ -123,9 +133,10 @@ impl Services {
     }
 }
 
-/// Builds the HTTP application: the WebUI with the Subsonic API mounted at
-/// `/rest`.
-pub fn app(services: &Services, config: &Config, assets: AssetBundle) -> Router {
+/// Builds the HTTP application: the Subsonic API under `/rest`, the web
+/// player's API under `/api`, and the web player (from `web_dir`) for
+/// everything else.
+pub fn app(services: &Services, config: &Config, web_dir: &Path) -> Router {
     let subsonic = pixiu_subsonic::router(SubsonicState {
         transcode_format: match config.stream.format {
             TranscodeFormat::Mp3 => Codec::Mp3,
@@ -141,30 +152,15 @@ pub fn app(services: &Services, config: &Config, assets: AssetBundle) -> Router 
         )
     });
 
-    pixiu_web::router_builder(WebDeps {
-        db: services.db.clone(),
-        assets,
-        cookie_security: config.server.cookie_security,
-        secrets: services.secrets.clone(),
-        treasury: services.treasury.clone(),
-        offerings: services.offerings.clone(),
-        hunter: Arc::clone(&services.hunter),
-        warden: Arc::clone(&services.warden),
-        jobs: Arc::clone(&services.jobs),
-        login_desk: Arc::clone(&services.login_desk),
-        now_playing: services.now_playing.clone(),
-    })
-    .route(TowerRoute::any("/rest/{*rest}", subsonic))
-    // Web-based Subsonic clients post to the API from other origins. The
-    // API authenticates every request by its parameters, so the WebUI's
-    // cross-site request forgery defense does not apply to it.
-    .origin_policy(OriginPolicy::new().exempt_paths(["/rest/{*rest}"]))
-    // Topcoat's built-in compression would gzip whole audio files (audio is
-    // incompressible) and drop `Accept-Ranges`, hiding seeking from clients.
-    // Compress everything else as usual.
-    .compression(Compression::off())
-    .layer(TowerLayer::new(CompressionLayer::new().compress_when(
-        DefaultPredicate::new().and(NotForContentType::const_new("audio/")),
-    )))
-    .build()
+    Router::new()
+        .merge(subsonic)
+        .merge(pixiu_api::router(services.api_state()))
+        .merge(web::player(web_dir))
+        // Compressing audio gains nothing (it is incompressible) and would
+        // drop `Accept-Ranges`, hiding seeking from clients. (The default
+        // predicate already leaves images and event streams alone.)
+        .layer(
+            CompressionLayer::new()
+                .compress_when(DefaultPredicate::new().and(NotForContentType::const_new("audio/"))),
+        )
 }

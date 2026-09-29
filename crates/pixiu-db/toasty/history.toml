@@ -39,3 +39,8 @@ snapshot_name = "0006_snapshot.toml"
 id = 3104254241087282440
 name = "0007_exclusions.sql"
 snapshot_name = "0007_snapshot.toml"
+
+[[migrations]]
+id = 1846660344905623907
+name = "0008_smart_playlists.sql"
+snapshot_name = "0008_snapshot.toml"

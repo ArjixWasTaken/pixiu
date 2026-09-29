@@ -1,6 +1,21 @@
-# Alpine (musl) throughout. Works with both BuildKit and the legacy builder:
-# dependencies are cached in image layers with cargo-chef rather than with
-# BuildKit cache mounts.
+# Alpine (musl) for the server. Works with both BuildKit and the legacy
+# builder: dependencies are cached in image layers with cargo-chef rather
+# than with BuildKit cache mounts.
+
+# ---- web player ----------------------------------------------------------------
+# Static files, so any platform builds them; Debian's Node spares the build
+# tools' native binaries a musl hunt.
+FROM node:26-slim AS web
+# The build tools fetch over HTTPS, so they need the CA certificates.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && npm install --global pnpm@11.26.0
+WORKDIR /web
+COPY web/package.json web/pnpm-lock.yaml web/pnpm-workspace.yaml ./
+RUN pnpm install --frozen-lockfile
+COPY web/ ./
+RUN pnpm build
 
 # ---- tools -------------------------------------------------------------------
 FROM rust:1.98.1-alpine3.24 AS chef
@@ -10,32 +25,11 @@ FROM rust:1.98.1-alpine3.24 AS chef
 RUN apk add --no-cache \
         clang-dev cmake curl ffmpeg-dev linux-headers make musl-dev perl pkgconf
 # Link musl dynamically (Rust links it statically by default), so the binary
-# can use Alpine's FFmpeg libraries and build scripts can load libclang. The
-# Topcoat CLI builds without CARGO_HOME and RUSTFLAGS in its environment:
-# ~/.cargo points at the real cargo home, so its build shares cargo-chef's
-# registry and this setting.
-RUN rm -rf "$HOME/.cargo" && ln -s "$CARGO_HOME" "$HOME/.cargo" \
-    && printf '[target.%s-unknown-linux-musl]\nrustflags = ["-C", "target-feature=-crt-static"]\n' \
+# can use Alpine's FFmpeg libraries and build scripts can load libclang.
+RUN printf '[target.%s-unknown-linux-musl]\nrustflags = ["-C", "target-feature=-crt-static"]\n' \
         "$(uname -m)" > "$CARGO_HOME/config.toml"
-# cargo-chef caches dependency builds; the Topcoat CLI bundles the WebUI
-# assets (stylesheet, fonts, images).
-RUN cargo install cargo-chef@0.1.78 topcoat-cli@0.9.0 --locked
-# The Tailwind CLI Topcoat would download needs glibc; its musl build,
-# pinned by checksum, compiles the stylesheet instead (see pixiu-web's
-# build.rs). The version is the one topcoat-tailwind pins.
-RUN set -eux; \
-    case "$(apk --print-arch)" in \
-        x86_64) name=tailwindcss-linux-x64-musl; \
-            sha=ae828e9e989ecbddb2bef856af8b0308ba162583b4922b3a065b5e26f86b0691 ;; \
-        aarch64) name=tailwindcss-linux-arm64-musl; \
-            sha=24a0dd39cbbced9d94f6313a747cc29ab2523a6a7b69204f2151e0af6aad6eef ;; \
-        *) echo "no Tailwind build for $(apk --print-arch)" >&2; exit 1 ;; \
-    esac; \
-    curl -fsSL -o /usr/local/bin/tailwindcss \
-        "https://github.com/tailwindlabs/tailwindcss/releases/download/v4.3.2/${name}"; \
-    echo "${sha}  /usr/local/bin/tailwindcss" | sha256sum -c -; \
-    chmod 0755 /usr/local/bin/tailwindcss
-ENV PIXIU_TAILWIND=/usr/local/bin/tailwindcss
+# cargo-chef caches dependency builds.
+RUN cargo install cargo-chef@0.1.78 --locked
 WORKDIR /src
 
 # ---- dependency recipe -------------------------------------------------------
@@ -50,8 +44,7 @@ COPY --from=planner /src/recipe.json recipe.json
 RUN cargo chef cook --release --recipe-path recipe.json
 
 COPY . .
-# Builds the binary, then scans it for assets and bundles them next to it.
-RUN topcoat asset bundle --release --package pixiu
+RUN cargo build --release --package pixiu
 
 # ---- helpers -----------------------------------------------------------------
 # yt-dlp, the download fallback, as its standalone musl build, pinned by
@@ -93,9 +86,9 @@ RUN apk add --no-cache \
     && chown pixiu:pixiu /data /treasure
 
 COPY --from=helpers /usr/local/bin/yt-dlp /usr/local/bin/
-# The binary looks for its asset bundle next to itself.
+# The binary looks for the web player next to itself.
 COPY --from=build /src/target/release/pixiu /opt/pixiu/pixiu
-COPY --from=build /src/target/release/assets /opt/pixiu/assets
+COPY --from=web /web/dist /opt/pixiu/web
 
 # Chromium's sandbox needs privileges containers rarely grant.
 ENV PIXIU_SERVER__HOST=0.0.0.0 \

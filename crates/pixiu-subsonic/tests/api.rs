@@ -1165,3 +1165,44 @@ async fn lyrics_and_biographies_are_served() {
     assert_eq!(json["artistInfo2"]["biography"], "Makes test music.");
     assert_eq!(json["artistInfo2"]["musicBrainzId"], "art-test");
 }
+
+#[tokio::test]
+async fn smart_playlists_list_what_their_rules_match() {
+    let api = Api::new().await;
+    let rules =
+        r#"[{"id":"g","rules":[{"id":"r","model":"genre","operator":"is","value":["Ambient"]}]}]"#;
+    let playlist = toasty::create!(Playlist {
+        name: "Ambient",
+        public: false,
+        rules: Some(rules.to_owned()),
+        created_at: now(),
+        changed_at: now(),
+    })
+    .exec(&mut api.db.clone())
+    .await
+    .unwrap();
+    let id = format!("pl-{}", playlist.id);
+
+    let json = api.call("getPlaylist", &format!("id={id}")).await.ok();
+    assert_eq!(
+        names(&json["playlist"]["entry"], "title"),
+        ["First Light", "Second Wind"]
+    );
+    assert_eq!(json["playlist"]["readonly"], true);
+
+    // Clients may rename it, not change its songs.
+    let first = json["playlist"]["entry"][0]["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let refused = api
+        .call(
+            "updatePlaylist",
+            &format!("playlistId={id}&songIdToAdd={first}"),
+        )
+        .await;
+    assert_eq!(refused.error_code(), 50);
+    api.call("updatePlaylist", &format!("playlistId={id}&name=Calm"))
+        .await
+        .ok();
+}

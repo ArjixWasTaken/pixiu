@@ -141,7 +141,10 @@ async fn transient_failures_degrade_then_recover() {
     let health = warden.validate().await;
     assert_eq!(health.state, Some(SessionState::Degraded));
     assert_eq!(health.last_error.as_deref(), Some("timeout"));
-    assert!(watcher.has_changed().unwrap(), "the WebUI hears about it");
+    assert!(
+        watcher.has_changed().unwrap(),
+        "the web player hears about it"
+    );
     watcher.borrow_and_update();
 
     let health = warden.validate().await;

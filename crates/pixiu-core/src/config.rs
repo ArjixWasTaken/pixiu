@@ -101,9 +101,6 @@ pub struct ServerConfig {
     /// Address to bind. Defaults to loopback; the Docker image binds `0.0.0.0`.
     pub host: IpAddr,
     pub port: u16,
-    /// Whether the WebUI session cookie is marked `Secure` (and `__Host-`
-    /// prefixed).
-    pub cookie_security: CookieSecurity,
 }
 
 impl Default for ServerConfig {
@@ -111,24 +108,8 @@ impl Default for ServerConfig {
         Self {
             host: IpAddr::V4(Ipv4Addr::LOCALHOST),
             port: 4533,
-            cookie_security: CookieSecurity::Auto,
         }
     }
-}
-
-/// Browsers drop `Secure` cookies set over plain HTTP, so a hardened cookie
-/// would make logging in impossible on `http://192.168.1.10:4533`.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum CookieSecurity {
-    /// Harden the cookie when the request arrived over HTTPS (directly or
-    /// via a proxy's `X-Forwarded-Proto: https`).
-    #[default]
-    Auto,
-    /// Always harden the cookie. Use when píxiū is only reachable over HTTPS.
-    Always,
-    /// Never harden the cookie.
-    Never,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -139,6 +120,9 @@ pub struct PathsConfig {
     pub data_dir: PathBuf,
     /// The managed music library. píxiū owns everything in here.
     pub treasure_dir: PathBuf,
+    /// The web player's files (`index.html` and its assets). When unset,
+    /// `web/` next to the binary, else `web/dist` (a checkout's build).
+    pub web_dir: Option<PathBuf>,
 }
 
 impl Default for PathsConfig {
@@ -146,6 +130,7 @@ impl Default for PathsConfig {
         Self {
             data_dir: PathBuf::from("data"),
             treasure_dir: PathBuf::from("treasure"),
+            web_dir: None,
         }
     }
 }
@@ -287,7 +272,6 @@ mod tests {
                 r#"
                 [server]
                 port = 9000
-                cookie_security = "never"
 
                 [paths]
                 treasure_dir = "/music"
@@ -302,7 +286,6 @@ mod tests {
             let config = Config::load_from(&jail.directory().join("pixiu.toml")).unwrap();
             assert_eq!(config.server.port, 9100);
             assert_eq!(config.server.host, IpAddr::V4(Ipv4Addr::UNSPECIFIED));
-            assert_eq!(config.server.cookie_security, CookieSecurity::Never);
             assert_eq!(config.paths.treasure_dir, PathBuf::from("/music"));
             assert_eq!(config.paths.data_dir, PathBuf::from("data"));
             assert_eq!(config.stream.format, TranscodeFormat::Opus);

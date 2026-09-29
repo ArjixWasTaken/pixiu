@@ -5,8 +5,8 @@ pub mod password;
 pub mod playing;
 pub mod secrets;
 
-pub use config::{Config, ConfigError, CookieSecurity, StreamConfig, TranscodeFormat};
+pub use config::{Config, ConfigError, StreamConfig, TranscodeFormat};
 pub use secrets::{SecretBox, SecretError};
 
-/// The version reported to Subsonic clients and shown in the WebUI.
+/// The version reported to Subsonic clients and shown in the web player.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

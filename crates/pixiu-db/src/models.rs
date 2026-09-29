@@ -32,8 +32,9 @@ pub struct User {
     pub api_keys: toasty::Deferred<Vec<ApiKey>>,
 }
 
-/// A logged-in WebUI session. Only the SHA-256 of the session token is
-/// stored, so a leaked database cannot be replayed as cookies.
+/// A cookie session of the old server-rendered WebUI. Only the SHA-256 of
+/// the session token is stored. Unused since the web player signs in with an
+/// API key; the table stays so old databases migrate cleanly.
 #[derive(Debug, toasty::Model)]
 pub struct WebSession {
     #[key]
@@ -668,9 +669,34 @@ pub struct Playlist {
     #[unique]
     pub watch_id: Option<u64>,
 
+    /// The folder the player files it under; `None` at the top.
+    #[index]
+    pub folder_id: Option<u64>,
+
+    /// A smart playlist's rules, as JSON: groups of rules, any group
+    /// matching and all rules within it. Its songs are whatever matches
+    /// when it is read; it has no entries of its own.
+    pub rules: Option<String>,
+
     pub created_at: Timestamp,
 
     pub changed_at: Timestamp,
+}
+
+/// A folder of playlists (and folders) in the player's sidebar.
+#[derive(Debug, toasty::Model)]
+pub struct PlaylistFolder {
+    #[key]
+    #[auto]
+    pub id: u64,
+
+    pub name: String,
+
+    /// The folder it sits in; `None` at the top.
+    #[index]
+    pub parent_id: Option<u64>,
+
+    pub created_at: Timestamp,
 }
 
 /// A place in a playlist.
@@ -744,7 +770,7 @@ pub struct Lyrics {
     pub fetched_at: Timestamp,
 }
 
-/// A setting made in the WebUI, by name.
+/// A setting made in the web player, by name.
 #[derive(Debug, toasty::Model)]
 pub struct Setting {
     #[key]

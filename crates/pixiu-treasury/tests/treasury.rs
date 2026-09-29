@@ -375,6 +375,59 @@ async fn offerings_are_reviewed_then_absorbed() {
 }
 
 #[tokio::test]
+async fn uploads_are_processed_one_at_a_time_into_one_batch() {
+    let hoard = Hoard::new().await;
+    let offerings = hoard.offerings();
+    let batch = Offerings::new_batch();
+
+    let archive = zip_of(&[(
+        "Test Album/01-first-light.flac",
+        &std::fs::read(fixture("01-first-light.flac")).unwrap(),
+    )]);
+    let (zip, mut file) = offerings.create_upload(&batch, "album.zip").await.unwrap();
+    file.write_all(&archive).await.unwrap();
+    file.flush().await.unwrap();
+    let from_zip = offerings.process_upload(&batch, &zip).await.unwrap();
+    assert_eq!(from_zip.len(), 1);
+    assert_eq!(from_zip[0].archive.as_deref(), Some("album.zip"));
+    assert!(!zip.exists(), "the archive is gone once unpacked");
+
+    let (mp3, mut file) = offerings
+        .create_upload(&batch, "02-second-wind.mp3")
+        .await
+        .unwrap();
+    file.write_all(&std::fs::read(fixture("02-second-wind.mp3")).unwrap())
+        .await
+        .unwrap();
+    file.flush().await.unwrap();
+    assert_eq!(
+        offerings.process_upload(&batch, &mp3).await.unwrap().len(),
+        1
+    );
+
+    let (log, mut file) = offerings.create_upload(&batch, "rip.log").await.unwrap();
+    file.write_all(b"EAC log").await.unwrap();
+    file.flush().await.unwrap();
+    assert!(
+        offerings
+            .process_upload(&batch, &log)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert!(!log.exists(), "other files are dropped");
+
+    // Nothing is registered twice.
+    let pending = offerings.pending().await.unwrap();
+    assert_eq!(pending.len(), 2);
+    assert!(pending.iter().all(|offering| offering.batch == batch));
+
+    // A file outside the batch is refused.
+    let other = Offerings::new_batch();
+    assert!(offerings.process_upload(&other, &mp3).await.is_err());
+}
+
+#[tokio::test]
 async fn discarding_a_batch_removes_everything() {
     let hoard = Hoard::new().await;
     let offerings = hoard.offerings();

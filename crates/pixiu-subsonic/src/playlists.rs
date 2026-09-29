@@ -1,5 +1,7 @@
-//! Playlists: the admin's own, made in Subsonic clients, and mirrors of
-//! watched YouTube Music playlists, which clients may play but not change.
+//! Playlists: the admin's own, made in Subsonic clients; mirrors of
+//! watched YouTube Music playlists; and smart playlists made in the web
+//! player, whose songs follow rules. Clients may play mirrors and smart
+//! playlists but not change their songs.
 
 use std::collections::{HashMap, HashSet};
 
@@ -25,12 +27,16 @@ fn playlist_id(id: &str) -> Result<u64, Failure> {
     }
 }
 
-fn read_only() -> Failure {
-    ApiError::new(
-        ErrorCode::NotAuthorized,
-        "this playlist mirrors a watched playlist; change it on YouTube Music",
-    )
-    .into()
+/// Why a playlist's songs cannot be changed here, if they cannot.
+fn read_only(playlist: &Playlist) -> Option<Failure> {
+    let reason = if playlist.watch_id.is_some() {
+        "this playlist mirrors a watched playlist; change it on YouTube Music"
+    } else if playlist.rules.is_some() {
+        "this is a smart playlist; its songs follow its rules"
+    } else {
+        return None;
+    };
+    Some(ApiError::new(ErrorCode::NotAuthorized, reason).into())
 }
 
 async fn load(db: &mut Db, id: u64) -> Result<Playlist, Failure> {
@@ -42,14 +48,24 @@ async fn load(db: &mut Db, id: u64) -> Result<Playlist, Failure> {
 }
 
 /// A playlist's tracks: their ids in order (a track may appear twice), and
-/// the tracks. Mirrors list only what is downloaded.
+/// the tracks. Mirrors list only what is downloaded; smart playlists, what
+/// their rules match now.
 struct Listing {
     order: Vec<u64>,
     tracks: HashMap<u64, Track>,
 }
 
-async fn listing(db: &mut Db, playlist_id: u64) -> Result<Listing, toasty::Error> {
-    let mut entries = PlaylistEntry::filter_by_playlist_id(playlist_id)
+async fn listing(db: &mut Db, playlist: &Playlist) -> Result<Listing, toasty::Error> {
+    if let Some(rules) = &playlist.rules {
+        let order = crate::smart::track_ids(db, rules).await?;
+        let tracks = catalog::tracks_in_order(db, &order)
+            .await?
+            .into_iter()
+            .map(|track| (track.id, track))
+            .collect();
+        return Ok(Listing { order, tracks });
+    }
+    let mut entries = PlaylistEntry::filter_by_playlist_id(playlist.id)
         .exec(db)
         .await?;
     entries.sort_by_key(|entry| entry.position);
@@ -91,7 +107,10 @@ pub(crate) async fn cover_album(
     db: &mut Db,
     playlist_id: u64,
 ) -> Result<Option<Album>, toasty::Error> {
-    let listing = listing(db, playlist_id).await?;
+    let Some(playlist) = Playlist::filter_by_id(playlist_id).first().exec(db).await? else {
+        return Ok(None);
+    };
+    let listing = listing(db, &playlist).await?;
     cover_of(db, &listing).await
 }
 
@@ -109,13 +128,13 @@ async fn cover_of(db: &mut Db, listing: &Listing) -> Result<Option<Album>, toast
     Ok(None)
 }
 
-async fn describe(
+pub(crate) async fn describe(
     db: &mut Db,
     playlist: &Playlist,
     owner: &User,
     with_entries: bool,
 ) -> Result<Element, toasty::Error> {
-    let listing = listing(db, playlist.id).await?;
+    let listing = listing(db, playlist).await?;
     let duration: u64 = listing
         .order
         .iter()
@@ -133,7 +152,7 @@ async fn describe(
         .attr("created", playlist.created_at.to_string())
         .attr("changed", playlist.changed_at.to_string())
         .attr_opt("coverArt", cover.map(|album| ids::album(album.id)))
-        .attr("readonly", playlist.watch_id.is_some());
+        .attr("readonly", read_only(playlist).is_some());
     if with_entries {
         // Each track is rendered once, then repeated where it recurs.
         let unique: Vec<Track> = listing.tracks.into_values().collect();
@@ -266,8 +285,8 @@ pub(crate) async fn create(
     let playlist = match params.get("playlistId") {
         Some(id) => {
             let playlist = load(&mut db, playlist_id(id)?).await?;
-            if playlist.watch_id.is_some() {
-                return Err(read_only());
+            if let Some(refusal) = read_only(&playlist) {
+                return Err(refusal);
             }
             playlist
         }
@@ -293,7 +312,7 @@ pub(crate) async fn update(state: &SubsonicState, params: &Params) -> Result<Pay
     let mut db = state.db.clone();
     let mut playlist = load(&mut db, playlist_id(params.require("playlistId")?)?).await?;
     if playlist.watch_id.is_some() {
-        return Err(read_only());
+        return Err(read_only(&playlist).expect("a mirror is read-only"));
     }
     let name = params.get("name").unwrap_or(&playlist.name).to_owned();
     let comment = params
@@ -311,6 +330,10 @@ pub(crate) async fn update(state: &SubsonicState, params: &Params) -> Result<Pay
         .collect();
     let added = requested_tracks(&mut db, params.get_all("songIdToAdd")).await?;
     if !removed.is_empty() || !added.is_empty() {
+        // A smart playlist may be renamed, but its songs follow its rules.
+        if let Some(refusal) = read_only(&playlist) {
+            return Err(refusal);
+        }
         let mut track_ids: Vec<u64> = current_tracks(&mut db, playlist.id)
             .await?
             .into_iter()
@@ -336,7 +359,7 @@ pub(crate) async fn delete(state: &SubsonicState, params: &Params) -> Result<Pay
     let mut db = state.db.clone();
     let playlist = load(&mut db, playlist_id(params.require("id")?)?).await?;
     if playlist.watch_id.is_some() {
-        return Err(read_only());
+        return Err(read_only(&playlist).expect("a mirror is read-only"));
     }
     // Its tracks are kept; those nothing else claims become orphans.
     set_tracks(state, &mut db, playlist.id, &[]).await?;

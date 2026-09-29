@@ -10,7 +10,6 @@ use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, TcpStream},
 };
-use topcoat::asset::AssetBundle;
 use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
@@ -41,13 +40,11 @@ async fn serve() -> anyhow::Result<()> {
     }
     let db = pixiu_db::open(&config.paths.database_file()).await?;
     let secrets = SecretBox::load_or_create(&config.paths.secret_key_file())?;
-    let assets = AssetBundle::load().context(
-        "the WebUI asset bundle is missing; build it with `topcoat asset bundle -p pixiu`",
-    )?;
+    let web_dir = pixiu::web::locate(config.paths.web_dir.as_deref());
 
     let services = pixiu::Services::new(db, &config, secrets).await?;
     services.start();
-    let app = pixiu::app(&services, &config, assets);
+    let app = pixiu::app(&services, &config, &web_dir);
     let listener = TcpListener::bind((config.server.host, config.server.port))
         .await
         .with_context(|| {
@@ -61,8 +58,36 @@ async fn serve() -> anyhow::Result<()> {
         pixiu_core::VERSION,
         listener.local_addr()?
     );
-    topcoat::serve(listener, app).await?;
+    axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal())
+        .await?;
     Ok(())
+}
+
+/// Resolves on Ctrl+C or SIGTERM (what `docker stop` sends).
+async fn shutdown_signal() {
+    let interrupt = async {
+        let _ = tokio::signal::ctrl_c().await;
+    };
+    #[cfg(unix)]
+    let terminate = async {
+        match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+            Ok(mut signal) => {
+                signal.recv().await;
+            }
+            Err(error) => {
+                tracing::warn!(%error, "cannot listen for SIGTERM");
+                std::future::pending::<()>().await;
+            }
+        }
+    };
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+    tokio::select! {
+        () = interrupt => {},
+        () = terminate => {},
+    }
+    tracing::info!("shutting down");
 }
 
 fn init_tracing(default_filter: &str) {
