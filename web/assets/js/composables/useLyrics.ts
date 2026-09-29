@@ -1,7 +1,6 @@
 import type { Ref } from 'vue'
 import { computed, ref, watch } from 'vue'
 import { cr2lf } from '@/utils/formatters'
-import { usePolicies } from '@/composables/usePolicies'
 import { subsonic } from '@/services/subsonic'
 import { logger } from '@/utils/logger'
 
@@ -25,8 +24,6 @@ const fetchLyrics = (song: Song) => {
 }
 
 export const useLyrics = (songRef: Ref<Song>) => {
-  const { currentUserCan } = usePolicies()
-
   const plainTextLyrics = ref('')
   const lrcLyrics = ref<LrcLine[]>([])
   const userCanUpdateLyrics = ref(false)
@@ -38,7 +35,8 @@ export const useLyrics = (songRef: Ref<Song>) => {
     songRef,
     song => {
       fetchLyrics(song)
-      userCanUpdateLyrics.value = currentUserCan.editSong(song)
+      // Lyrics come from the files, LRCLIB and YouTube Music; píxiū has no editor for them.
+      userCanUpdateLyrics.value = false
       plainTextLyrics.value = ''
       lrcLyrics.value = []
 

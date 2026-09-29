@@ -61,11 +61,7 @@ export default defineConfig({
       'no-base-to-string': 'off',
       'await-thenable': 'off',
     },
-    ignorePatterns: [
-      'assets/tsconfig.json',
-      'assets/css/vendor/**',
-      'assets/js/visualizers/**',
-    ],
+    ignorePatterns: ['assets/tsconfig.json', 'assets/css/vendor/**', 'assets/js/visualizers/**'],
     options: {
       typeAware: true,
       // TODO: enable typeCheck once tsgolint supports tsconfig paths resolution
@@ -88,7 +84,8 @@ export default defineConfig({
     // During development, píxiū runs on its own port; the player's API calls
     // and audio go there.
     proxy: {
-      '/api': process.env.PIXIU_URL ?? 'http://127.0.0.1:4600',
+      // The login browser's screen streams over a WebSocket under /api.
+      '/api': { target: process.env.PIXIU_URL ?? 'http://127.0.0.1:4600', ws: true },
       '/rest': process.env.PIXIU_URL ?? 'http://127.0.0.1:4600',
     },
   },

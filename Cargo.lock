@@ -330,6 +330,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "31b698c5f9a010f6573133b09e0de5408834d0c82f8d7475a89fc1867a71cd90"
 dependencies = [
  "axum-core",
+ "base64 0.22.1",
  "bytes",
  "form_urlencoded",
  "futures-util",
@@ -342,14 +343,17 @@ dependencies = [
  "matchit 0.8.4",
  "memchr",
  "mime",
+ "multer",
  "percent-encoding",
  "pin-project-lite",
  "serde_core",
  "serde_json",
  "serde_path_to_error",
  "serde_urlencoded",
+ "sha1 0.10.7",
  "sync_wrapper",
  "tokio",
+ "tokio-tungstenite 0.29.0",
  "tower",
  "tower-layer",
  "tower-service",
@@ -3192,6 +3196,7 @@ name = "pixiu"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "axum",
  "futures-util",
  "hex",
  "md-5",
@@ -3212,6 +3217,7 @@ dependencies = [
  "tokio-tungstenite 0.30.0",
  "topcoat",
  "topcoat-asset",
+ "tower",
  "tower-http 0.7.1",
  "tracing",
  "tracing-subscriber",
@@ -3222,17 +3228,21 @@ name = "pixiu-api"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "form_urlencoded",
+ "futures-util",
  "hex",
+ "jiff",
+ "pixiu-browser",
  "pixiu-core",
  "pixiu-db",
+ "pixiu-hunt",
+ "pixiu-jobs",
  "pixiu-subsonic",
  "pixiu-treasury",
  "rand 0.10.3",
  "serde",
  "serde_json",
- "tempfile",
  "tokio",
- "tower",
  "tracing",
 ]
 

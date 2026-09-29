@@ -155,6 +155,47 @@ impl Offerings {
         Ok(offerings)
     }
 
+    /// Registers one uploaded file of a batch for review: an archive is
+    /// unpacked and its audio registered, an audio file is registered, a
+    /// cover image stays for the album, and anything else is dropped. Files
+    /// uploaded one at a time into one batch are reviewed together.
+    ///
+    /// # Errors
+    ///
+    /// Fails for invalid batch ids or a file outside the batch, invalid
+    /// archives, and I/O or database errors.
+    pub async fn process_upload(
+        &self,
+        batch: &str,
+        path: &Path,
+    ) -> Result<Vec<Offering>, OfferingError> {
+        let dir = self.batch_dir(batch)?;
+        if path.parent() != Some(dir.as_path()) {
+            return Err(OfferingError::InvalidBatch);
+        }
+        let mut offerings = Vec::new();
+        if has_extension(path, &["zip"]) {
+            let (target, archive) = (dir.clone(), path.to_owned());
+            let files =
+                tokio::task::spawn_blocking(move || extract_zip(&archive, &target)).await??;
+            let name = path
+                .file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            tokio::fs::remove_file(path).await?;
+            for file in files {
+                if has_extension(&file, AUDIO_EXTENSIONS) {
+                    offerings.push(self.register(batch, &file, Some(&name)).await?);
+                }
+            }
+        } else if has_extension(path, AUDIO_EXTENSIONS) {
+            offerings.push(self.register(batch, path, None).await?);
+        } else if !is_cover_image(path) {
+            tokio::fs::remove_file(path).await?;
+        }
+        Ok(offerings)
+    }
+
     async fn register(
         &self,
         batch: &str,

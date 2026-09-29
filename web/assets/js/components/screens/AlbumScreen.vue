@@ -82,6 +82,7 @@
 
       <div v-if="useEncyclopedia && album" v-show="activeTab === 'information'" class="info-pane">
         <AlbumInfo :album mode="full" />
+        <AlbumMusicBrainz :album class="mt-10" />
       </div>
     </ScreenTabs>
   </ScreenBase>
@@ -116,6 +117,7 @@ const validTabs = ['songs', 'other-albums', 'information'] as const
 type Tab = (typeof validTabs)[number]
 
 const AlbumInfo = defineAsyncComponent(() => import('@/components/album/AlbumInfo.vue'))
+const AlbumMusicBrainz = defineAsyncComponent(() => import('@/components/album/AlbumMusicBrainz.vue'))
 const AlbumCard = defineAsyncComponent(() => import('@/components/album/AlbumCard.vue'))
 const ContextMenu = defineAsyncComponent(() => import('@/components/album/AlbumContextMenu.vue'))
 const AlbumCardSkeleton = defineAsyncComponent(() => import('@/components/ui/album-artist/ArtistAlbumCardSkeleton.vue'))

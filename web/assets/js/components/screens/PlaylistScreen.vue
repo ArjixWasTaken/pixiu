@@ -38,6 +38,8 @@
 
     <PlayableListSkeleton v-if="loading" class="-m-6" role="status" aria-busy="true" aria-label="Loading" />
     <template v-else>
+      <MirroredWatchPanel v-if="mirror" :mirror class="mb-10" @include="includeAgain" />
+
       <PlayableList
         v-if="filteredPlayables.length"
         ref="playableList"
@@ -75,9 +77,13 @@
 import { faFile } from '@fortawesome/free-regular-svg-icons'
 import { faEllipsis } from '@fortawesome/free-solid-svg-icons'
 import { differenceBy } from 'lodash-es'
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { eventBus } from '@/utils/eventBus'
 import { pluralize } from '@/utils/formatters'
+import { logger } from '@/utils/logger'
+import type { ExcludedSong } from '@/services/huntingService'
+import { huntingStore } from '@/stores/huntingStore'
+import { useMessageToaster } from '@/composables/useMessageToaster'
 import { playlistStore } from '@/stores/playlistStore'
 import { playableStore } from '@/stores/playableStore'
 import { playlistCollaborationService } from '@/services/playlistCollaborationService'
@@ -99,6 +105,7 @@ import ScreenBase from '@/components/screens/ScreenBase.vue'
 import ScreenHeaderSkeleton from '@/components/ui/ScreenHeaderSkeleton.vue'
 import PlayableListSkeleton from '@/components/playable/playable-list/PlayableListSkeleton.vue'
 import Btn from '@/components/ui/form/Btn.vue'
+import MirroredWatchPanel from '@/components/playlist/MirroredWatchPanel.vue'
 
 const ContextMenu = defineAsyncComponent(() => import('@/components/playlist/PlaylistContextMenu.vue'))
 const EditPlaylistForm = defineAsyncComponent(() => import('@/components/playlist/EditPlaylistForm.vue'))
@@ -202,7 +209,26 @@ const editPlaylist = () => {
     : openModal<'EDIT_PLAYLIST_FORM'>(EditPlaylistForm, { playlist: p })
 }
 
-const removeSelected = async () => await removeFromPlaylist(playlist.value!, selectedPlayables.value)
+const removeSelected = async () => {
+  // Mirrors of watched playlists change on YouTube Music only.
+  if (playlist.value?.permissions.edit) {
+    await removeFromPlaylist(playlist.value, selectedPlayables.value)
+  }
+}
+
+/** For a mirror of a watched playlist, the watch and its exclusions. */
+const mirror = computed(() => (playlist.value ? (huntingStore.playlistWatches[playlist.value.id] ?? null) : null))
+
+const fetchMirror = () => playlist.value && huntingStore.fetchPlaylistWatch(playlist.value).catch(logger.error)
+
+const includeAgain = async (song: ExcludedSong) => {
+  try {
+    await huntingStore.include(mirror.value!.watch.id, song.video_id)
+    toastSuccess(`“${song.title ?? song.video_id}” is back on the watch. A sync is on its way.`)
+  } catch (error: unknown) {
+    useErrorHandler().handleHttpError(error)
+  }
+}
 
 const fetchDetails = async (refresh = false) => {
   if (loading.value) {
@@ -254,8 +280,9 @@ watch(playlistId, async id => {
   filterKeywords.value = currentState.filterKeywords
 
   await fetchDetails()
+  fetchMirror()
 
-  listConfig.reorderable = currentState.sortField === 'position'
+  listConfig.reorderable = currentState.sortField === 'position' && playlist.value.permissions.edit
   listConfig.collaborative = playlist.value.is_collaborative
   listConfig.hasCustomOrderSort = !playlist.value.is_smart
 
@@ -272,7 +299,15 @@ const requestContextMenu = (event: MouseEvent) =>
     playlist: playlist.value!,
   })
 
+const { toastSuccess } = useMessageToaster()
+
 eventBus
+  .on('WATCH_EXCLUSIONS_CHANGED', async () => {
+    if (mirror.value) {
+      await fetchDetails(true)
+      fetchMirror()
+    }
+  })
   .on('PLAYLIST_UPDATED', async ({ id }) => id === playlistId.value && (await fetchDetails()))
   .on('PLAYLIST_COLLABORATOR_REMOVED', async ({ id }) => id === playlistId.value && (await fetchDetails()))
   .on('PLAYLIST_CONTENT_REMOVED', async ({ id }, removed) => {

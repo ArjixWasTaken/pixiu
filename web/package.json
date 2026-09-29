@@ -4,10 +4,6 @@
   "description": "píxiū's web player, forked from koel's frontend (koel.dev)",
   "license": "GPL-3.0-only",
   "type": "module",
-  "engines": {
-    "node": "^20.19.0 || >=22.12.0"
-  },
-  "packageManager": "pnpm@11.26.0",
   "scripts": {
     "dev": "vp dev",
     "build": "vp build",
@@ -79,5 +75,9 @@
     "vite-plus": "^0.1.24",
     "vitest": "npm:@voidzero-dev/vite-plus-test@^0.1.24",
     "vue-tsc": "^3.2.5"
-  }
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "packageManager": "pnpm@11.26.0"
 }

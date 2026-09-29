@@ -39,9 +39,6 @@ import type { Component } from 'vue'
 import { ref } from 'vue'
 import { Filter } from '@/config/hooks'
 import { applyFilters } from '@/hooks'
-import { commonStore } from '@/stores/commonStore'
-import { useBranding } from '@/composables/useBranding'
-import { useKoelPlus } from '@/composables/useKoelPlus'
 
 import ScreenHeader from '@/components/ui/ScreenHeader.vue'
 import ScreenBase from '@/components/screens/ScreenBase.vue'
@@ -50,10 +47,9 @@ import TabList from '@/components/ui/tabs/TabList.vue'
 import TabButton from '@/components/ui/tabs/TabButton.vue'
 import TabPanelContainer from '@/components/ui/tabs/TabPanelContainer.vue'
 import TabPanel from '@/components/ui/tabs/TabPanel.vue'
-import MediaPathSettingGroup from '@/components/screens/settings/MediaPathSettingGroup.vue'
-import BrandingSettingGroup from '@/components/screens/settings/BrandingSettingGroup.vue'
-import AiSettingGroup from '@/components/screens/settings/AiSettingGroup.vue'
-import ServicesSettingGroup from '@/components/screens/settings/ServicesSettingGroup.vue'
+import YouTubeMusicSettings from '@/components/screens/settings/YouTubeMusicSettings.vue'
+import LibrarySettings from '@/components/screens/settings/LibrarySettings.vue'
+import ApiKeySettings from '@/components/screens/settings/ApiKeySettings.vue'
 
 export interface SettingsTab {
   id: string
@@ -62,20 +58,10 @@ export interface SettingsTab {
   props?: Record<string, unknown>
 }
 
-const { currentBranding } = useBranding()
-const { isPlus } = useKoelPlus()
-
-const usesLocalStorage = commonStore.state.storage_driver === 'local'
-
 const tabs = applyFilters<SettingsTab[]>(Filter.SETTINGS_TABS, [
-  ...(usesLocalStorage ? [{ id: 'media-path', label: 'Media Path', component: MediaPathSettingGroup }] : []),
-  ...(isPlus.value
-    ? [
-        { id: 'branding', label: 'Branding', component: BrandingSettingGroup, props: { currentBranding } },
-        { id: 'ai', label: 'AI', component: AiSettingGroup },
-      ]
-    : []),
-  { id: 'services', label: 'Services', component: ServicesSettingGroup },
+  { id: 'youtube-music', label: 'YouTube Music', component: YouTubeMusicSettings },
+  { id: 'library', label: 'Library', component: LibrarySettings },
+  { id: 'api-keys', label: 'API Keys', component: ApiKeySettings },
 ])
 
 const currentTabId = ref(tabs[0]?.id)

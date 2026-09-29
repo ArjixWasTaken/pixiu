@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vite-plus/test'
 import { createHarness } from '@/__tests__/TestHarness'
 import factory from '@/__tests__/factory'
 import { http } from '@/services/http'
+import { huntingService } from '@/services/huntingService'
+import { subsonic } from '@/services/subsonic'
 import { playableStore } from '@/stores/playableStore'
 import { albumStore } from '@/stores/albumStore'
 
@@ -100,25 +102,22 @@ describe('albumStore', () => {
     expect(albumStore.vault.size).toBe(3)
   })
 
-  it('updates', async () => {
+  it('updates through píxiū, then reloads the album', async () => {
     const album = h.factory('album').make({ name: 'IV' })
     albumStore.syncWithVault(album)
 
-    const updateData = {
-      name: 'V',
-      year: 2010,
-      cover: 'foo',
-    }
-
-    const putMock = h.mock(http, 'put').mockResolvedValueOnce({ ...album, ...updateData })
+    const updateData = { title: 'V', artist: 'Band', year: 2010, tracks: [] }
+    const editMock = h.mock(huntingService, 'editAlbum').mockResolvedValueOnce(undefined)
+    h.mock(subsonic, 'album').mockResolvedValueOnce({ ...album, name: 'V', year: 2010 })
+    h.mock(subsonic, 'albumSongs').mockResolvedValueOnce([])
     const syncPropsMock = h.mock(playableStore, 'syncAlbumProperties')
 
     await albumStore.update(album, updateData)
 
-    expect(putMock).toHaveBeenCalledWith(`albums/${album.id}`, updateData)
-    expect(albumStore.vault.get(album.id)?.name).toBe(updateData.name)
-    expect(albumStore.vault.get(album.id)?.year).toBe(updateData.year)
-    expect(syncPropsMock).toHaveBeenCalledWith(album)
+    expect(editMock).toHaveBeenCalledWith(album, updateData)
+    expect(albumStore.vault.get(album.id)?.name).toBe('V')
+    expect(albumStore.vault.get(album.id)?.year).toBe(2010)
+    expect(syncPropsMock).toHaveBeenCalled()
   })
 
   it('toggles favorite', async () => {

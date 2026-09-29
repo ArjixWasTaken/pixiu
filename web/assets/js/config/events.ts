@@ -22,6 +22,12 @@ export interface Events {
   SONGS_UPDATED: (result: SongUpdateResult) => void
   SONGS_DELETED: (songs: Song[]) => void
   SONG_UPLOADED: (song: Song) => void
+  /** The job board changed on the server. */
+  HUNT_JOBS_CHANGED: () => void
+  /** Uploaded files wait for review. */
+  OFFERINGS_UPLOADED: () => void
+  /** Songs were excluded from a watched playlist, or let back in. */
+  WATCH_EXCLUSIONS_CHANGED: () => void
   DOWNLOAD_ARCHIVE_SAVED: () => void
 
   EPISODE_PROGRESS_UPDATED: (episode: Episode, progress: number) => void

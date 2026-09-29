@@ -6,14 +6,12 @@ import { isSong } from '@/utils/typeGuards'
 import { logger } from '@/utils/logger'
 import { sha256 } from '@/utils/crypto'
 import { normalizeForComparison, secondsToHumanReadable } from '@/utils/formatters'
-import { authService } from '@/services/authService'
 import { cache } from '@/services/cache'
 import { http } from '@/services/http'
 import { library } from '@/services/library'
 import { subsonic } from '@/services/subsonic'
 import { useVault } from '@/composables/useVault'
 import { preferenceStore } from '@/stores/preferenceStore'
-import { commonStore } from '@/stores/commonStore'
 import { albumStore } from '@/stores/albumStore'
 import { artistStore } from '@/stores/artistStore'
 import { overviewStore } from '@/stores/overviewStore'
@@ -158,11 +156,7 @@ export const playableStore = {
    */
   registerPlay: async (playable: Playable) => {
     // A Subsonic scrobble counts the play; koel's start time is in seconds.
-    await subsonic.scrobble(
-      playable.id,
-      true,
-      playable.play_start_time ? playable.play_start_time * 1000 : undefined,
-    )
+    await subsonic.scrobble(playable.id, true, playable.play_start_time ? playable.play_start_time * 1000 : undefined)
 
     playable.play_count++
   },

@@ -260,7 +260,8 @@ export const subsonic = {
   },
 
   /** Replaces a playlist's songs. */
-  setPlaylistSongs: (id: string, songIds: string[]) => call('createPlaylist', { playlistId: id, songId: songIds }, true),
+  setPlaylistSongs: (id: string, songIds: string[]) =>
+    call('createPlaylist', { playlistId: id, songId: songIds }, true),
 
   updatePlaylist: (id: string, data: { name?: string; comment?: string; songIdToAdd?: string[] }) =>
     call('updatePlaylist', { playlistId: id, ...data }, true),
@@ -272,10 +273,7 @@ export const subsonic = {
    * plain text otherwise, empty when it has none.
    */
   async lyrics(id: string) {
-    const list = ((await call('getLyricsBySongId', { id })).lyricsList?.structuredLyrics ?? []) as Record<
-      string,
-      any
-    >[]
+    const list = ((await call('getLyricsBySongId', { id })).lyricsList?.structuredLyrics ?? []) as Record<string, any>[]
     const chosen = list.find(lyrics => lyrics.synced) ?? list[0]
 
     if (!chosen) {

@@ -1,23 +1,41 @@
 //! The JSON API behind píxiū's web player (a fork of koel's frontend).
 //!
 //! The player reads the library through the Subsonic API; this API covers
-//! what Subsonic cannot: signing in, the start-up payload, and (later)
-//! hunting, offerings and settings. Every route but signing in needs an
-//! API key as a bearer token; signing in hands one out.
+//! what Subsonic cannot: signing in, the start-up payload, sorted library
+//! lists, and everything about hunting: searches and grabs, watches, jobs,
+//! orphans, offerings, the YouTube Music account and settings. Every route
+//! but signing in needs an API key as a bearer token; signing in hands one
+//! out.
 
+mod albums;
 mod auth;
 mod bootstrap;
+mod events;
+mod hunt;
+mod jobs;
 mod library;
+mod offerings;
+mod orphans;
+mod settings;
+mod songs;
+mod sources;
+mod watches;
+
+use std::{fmt::Display, sync::Arc};
 
 use axum::{
     Json, Router,
-    extract::FromRequestParts,
+    extract::{DefaultBodyLimit, FromRequestParts},
     http::{StatusCode, header, request::Parts},
     response::{IntoResponse, Response},
-    routing::{delete, get, post},
+    routing::{delete, get, post, put},
 };
+use pixiu_browser::LoginDesk;
 use pixiu_core::SecretBox;
 use pixiu_db::{ApiKey, Db, User, now, toasty};
+use pixiu_hunt::Hunter;
+use pixiu_jobs::{Jobs, Warden};
+use pixiu_treasury::{Offerings, Treasury};
 use serde::Serialize;
 
 /// Shared state for API handlers.
@@ -26,6 +44,12 @@ pub struct ApiState {
     pub db: Db,
     /// Seals the password Subsonic token authentication needs.
     pub secrets: SecretBox,
+    pub treasury: Treasury,
+    pub offerings: Offerings,
+    pub hunter: Arc<Hunter>,
+    pub warden: Arc<Warden>,
+    pub jobs: Arc<Jobs>,
+    pub login_desk: Arc<LoginDesk>,
 }
 
 /// Builds the API router. Paths are absolute (`/api/...`), so mount it
@@ -42,6 +66,69 @@ pub fn router(state: ApiState) -> Router {
         .route("/api/genres", get(library::genres))
         .route("/api/songs", get(library::songs))
         .route("/api/songs/recently-played", get(library::recently_played))
+        .route("/api/songs/{id}/info", get(songs::info))
+        .route("/api/albums/{id}/details", get(albums::details))
+        .route("/api/albums/{id}", put(albums::edit))
+        .route("/api/albums/{id}/lookup", post(albums::lookup))
+        .route("/api/hunt", get(hunt::search))
+        .route("/api/hunt/tracks", post(hunt::grab_track))
+        .route("/api/hunt/albums", post(hunt::grab_album))
+        .route("/api/watches", get(watches::list).post(watches::add))
+        .route("/api/watches/{id}", delete(watches::remove))
+        .route("/api/watches/{id}/sync", post(watches::sync))
+        .route(
+            "/api/watches/{id}/exclusions",
+            get(watches::exclusions).post(watches::exclude),
+        )
+        .route(
+            "/api/watches/{id}/exclusions/{video}",
+            delete(watches::include),
+        )
+        .route("/api/playlists/{id}/watch", get(watches::of_playlist))
+        .route("/api/hunting", get(jobs::summary))
+        .route("/api/jobs", get(jobs::board))
+        .route("/api/jobs/finished", delete(jobs::clear_finished))
+        .route("/api/jobs/{id}/retry", post(jobs::retry))
+        .route("/api/events", get(events::stream))
+        .route("/api/orphans", get(orphans::list))
+        .route("/api/orphans/keep", post(orphans::keep))
+        .route("/api/orphans/delete", post(orphans::delete))
+        .route("/api/offerings", get(offerings::list))
+        .route(
+            "/api/offerings/upload",
+            // Uploads stream to disk; whole albums are large.
+            post(offerings::upload).layer(DefaultBodyLimit::disable()),
+        )
+        .route(
+            "/api/offerings/batches/{batch}/accept",
+            post(offerings::accept_batch),
+        )
+        .route(
+            "/api/offerings/batches/{batch}",
+            delete(offerings::discard_batch),
+        )
+        .route("/api/offerings/{id}", delete(offerings::discard))
+        .route("/api/settings", get(settings::show))
+        .route("/api/settings/layout", put(settings::save_layout))
+        .route(
+            "/api/settings/layout/preview",
+            get(settings::preview_layout),
+        )
+        .route("/api/settings/refile", post(settings::refile))
+        .route("/api/settings/lookup-all", post(settings::lookup_all))
+        .route("/api/keys", post(settings::create_key))
+        .route("/api/keys/{id}", delete(settings::revoke_key))
+        .route("/api/sources", get(sources::status))
+        .route("/api/sources/validate", post(sources::validate))
+        .route("/api/sources/refresh", post(sources::refresh))
+        .route("/api/sources/disconnect", post(sources::disconnect))
+        .route(
+            "/api/sources/login",
+            post(sources::open_login).delete(sources::cancel_login),
+        )
+        .route("/api/sources/login/status", get(sources::login_status))
+        .route("/api/sources/login/finish", post(sources::finish_login))
+        .route("/api/sources/login/ws", get(sources::screen))
         .with_state(state)
 }
 
@@ -62,6 +149,20 @@ impl ApiError {
 
     fn unauthorized() -> Self {
         Self::new(StatusCode::UNAUTHORIZED, "sign in first")
+    }
+
+    fn not_found(what: &str) -> Self {
+        Self::new(StatusCode::NOT_FOUND, format!("no such {what}"))
+    }
+
+    fn unprocessable(message: impl Into<String>) -> Self {
+        Self::new(StatusCode::UNPROCESSABLE_ENTITY, message)
+    }
+
+    /// An unexpected failure, logged here and kept vague for the client.
+    fn internal(error: impl Display, doing: &str) -> Self {
+        tracing::error!(%error, "{doing} failed in the web API");
+        Self::new(StatusCode::INTERNAL_SERVER_ERROR, "internal error")
     }
 }
 
@@ -90,8 +191,30 @@ impl From<toasty::Error> for ApiError {
 
 impl From<tokio::task::JoinError> for ApiError {
     fn from(error: tokio::task::JoinError) -> Self {
-        tracing::error!(%error, "background task failed in the web API");
-        Self::new(StatusCode::INTERNAL_SERVER_ERROR, "internal error")
+        Self::internal(error, "a background task")
+    }
+}
+
+impl From<pixiu_treasury::IngestError> for ApiError {
+    fn from(error: pixiu_treasury::IngestError) -> Self {
+        Self::internal(error, "changing the treasure")
+    }
+}
+
+impl From<pixiu_treasury::OfferingError> for ApiError {
+    fn from(error: pixiu_treasury::OfferingError) -> Self {
+        use pixiu_treasury::OfferingError;
+        match error {
+            OfferingError::NotFound => Self::not_found("offering"),
+            OfferingError::InvalidBatch => Self::not_found("batch"),
+            OfferingError::Unreadable(reason) => {
+                Self::unprocessable(format!("píxiū cannot read that file: {reason}"))
+            }
+            OfferingError::Archive(reason) => {
+                Self::unprocessable(format!("That archive cannot be opened: {reason}"))
+            }
+            error => Self::internal(error, "handling offerings"),
+        }
     }
 }
 
@@ -107,11 +230,20 @@ impl FromRequestParts<ApiState> for Session {
     type Rejection = ApiError;
 
     async fn from_request_parts(parts: &mut Parts, state: &ApiState) -> ApiResult<Self> {
+        // A bearer token, or `api_key` in the query where browsers cannot
+        // set headers (event streams, WebSockets).
+        let from_query = || {
+            form_urlencoded::parse(parts.uri.query().unwrap_or_default().as_bytes())
+                .find(|(name, _)| name == "api_key")
+                .map(|(_, value)| value.into_owned())
+        };
         let key = parts
             .headers
             .get(header::AUTHORIZATION)
             .and_then(|value| value.to_str().ok())
             .and_then(|value| value.strip_prefix("Bearer "))
+            .map(str::to_owned)
+            .or_else(from_query)
             .ok_or_else(ApiError::unauthorized)?;
         let mut db = state.db.clone();
         let Some(mut key) = ApiKey::filter_by_key_hash(ApiKey::hash(key.trim()))

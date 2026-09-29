@@ -72,11 +72,31 @@ export const routes = [
   },
   {
     name: 'upload',
-    path: '/upload',
+    path: '/offerings',
     screen: 'Upload',
     meta: {
       guard: () => usePolicies().currentUserCan.uploadSongs(),
     },
+  },
+  {
+    name: 'hunt',
+    path: '/hunt',
+    screen: 'Hunt',
+  },
+  {
+    name: 'watches',
+    path: '/watches',
+    screen: 'Watches',
+  },
+  {
+    name: 'jobs',
+    path: '/jobs',
+    screen: 'Jobs',
+  },
+  {
+    name: 'orphans',
+    path: '/orphans',
+    screen: 'Orphans',
   },
   {
     name: 'settings',

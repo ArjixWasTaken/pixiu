@@ -18,6 +18,8 @@
       <SearchForm class="flex-1" @focus-change="onSearchFocusChange" />
     </section>
 
+    <SessionExpiredNotice />
+
     <section class="scroll-mask-y pt-2 pb-10 overflow-y-auto space-y-8">
       <SidebarYourMusicSection />
       <SidebarPlaylistsSection />
@@ -49,6 +51,7 @@ import HomeButton from '@/components/layout/main-wrapper/sidebar/HomeButton.vue'
 import SearchForm from '@/components/ui/SearchForm.vue'
 import SideSheetButton from '@/components/layout/main-wrapper/side-sheet/SideSheetButton.vue'
 import SidebarManageSection from './SidebarManageSection.vue'
+import SessionExpiredNotice from './SessionExpiredNotice.vue'
 import SidebarPlaylistsSection from './SidebarPlaylistsSection.vue'
 import SidebarToggleButton from '@/components/layout/main-wrapper/sidebar/SidebarToggleButton.vue'
 import SidebarYourMusicSection from './SidebarYourLibrarySection.vue'
@@ -136,7 +139,6 @@ onBeforeUnmount(() => {
 const showManageOptions = computed(
   () => currentUserCan.manageSettings() || currentUserCan.manageUsers() || currentUserCan.uploadSongs(),
 )
-
 
 const footerItems = useHookSlot('sidebar.footer')
 

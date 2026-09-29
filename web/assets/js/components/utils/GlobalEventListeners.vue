@@ -7,6 +7,7 @@ import { onMounted } from 'vue'
 import { useRouter } from '@/composables/useRouter'
 import { eventBus } from '@/utils/eventBus'
 import { authService } from '@/services/authService'
+import { huntingStore } from '@/stores/huntingStore'
 import { forceReloadWindow } from '@/utils/helpers'
 
 let go: ReturnType<typeof useRouter>['go']
@@ -16,6 +17,7 @@ onMounted(() => {
 })
 
 eventBus.on('LOG_OUT', async () => {
+  huntingStore.disconnect()
   await authService.logout()
   go('/')
   forceReloadWindow()

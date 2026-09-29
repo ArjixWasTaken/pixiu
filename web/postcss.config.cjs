@@ -6,8 +6,8 @@ const ALIASES = {
 
 const referenceAlias = () => ({
   postcssPlugin: 'tailwind-reference-alias',
-  Once (root) {
-    root.walkAtRules('reference', (rule) => {
+  Once(root) {
+    root.walkAtRules('reference', rule => {
       const raw = rule.params.trim().replace(/^['"]|['"]$/g, '')
       for (const [alias, target] of Object.entries(ALIASES)) {
         if (raw === alias || raw.startsWith(alias + '/')) {
@@ -21,10 +21,5 @@ const referenceAlias = () => ({
 referenceAlias.postcss = true
 
 module.exports = {
-  plugins: [
-    referenceAlias(),
-    require('@tailwindcss/postcss'),
-    require('postcss-mixins'),
-    require('postcss-nested'),
-  ],
+  plugins: [referenceAlias(), require('@tailwindcss/postcss'), require('postcss-mixins'), require('postcss-nested')],
 }

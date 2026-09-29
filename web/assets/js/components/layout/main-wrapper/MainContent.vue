@@ -29,6 +29,10 @@
     <AlbumScreen v-if="screen === 'Album'" />
     <ArtistScreen v-if="screen === 'Artist'" />
     <SettingsScreen v-if="screen === 'Settings'" />
+    <HuntScreen v-if="screenLoaded('Hunt')" v-show="screen === 'Hunt'" />
+    <WatchesScreen v-if="screen === 'Watches'" />
+    <JobsScreen v-if="screen === 'Jobs'" />
+    <OrphansScreen v-if="screen === 'Orphans'" />
     <ProfileScreen v-if="screen === 'Profile'" />
     <PodcastScreen v-if="screen === 'Podcast'" />
     <EpisodeScreen v-if="screen === 'Episode'" />
@@ -87,6 +91,10 @@ const SearchSongResultsScreen = defineAsyncComponent(
   () => import('@/components/screens/search/SearchPlayableResultsScreen.vue'),
 )
 const SettingsScreen = defineAsyncComponent(() => import('@/components/screens/SettingsScreen.vue'))
+const HuntScreen = defineAsyncComponent(() => import('@/components/screens/hunting/HuntScreen.vue'))
+const WatchesScreen = defineAsyncComponent(() => import('@/components/screens/hunting/WatchesScreen.vue'))
+const JobsScreen = defineAsyncComponent(() => import('@/components/screens/hunting/JobsScreen.vue'))
+const OrphansScreen = defineAsyncComponent(() => import('@/components/screens/hunting/OrphansScreen.vue'))
 const UploadScreen = defineAsyncComponent(() => import('@/components/screens/UploadScreen.vue'))
 const UserListScreen = defineAsyncComponent(() => import('@/components/screens/UserListScreen.vue'))
 const VisualizerScreen = defineAsyncComponent(() => import('@/components/screens/VisualizerScreen.vue'))

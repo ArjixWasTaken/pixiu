@@ -10,6 +10,8 @@ import { queueStore } from '@/stores/queueStore'
 import { settingStore } from '@/stores/settingStore'
 import { themeStore } from '@/stores/themeStore'
 import { userStore } from '@/stores/userStore'
+import { huntingStore } from '@/stores/huntingStore'
+import type { HuntingSummary } from '@/services/huntingService'
 
 const initialState = {
   allows_download: false,
@@ -55,6 +57,7 @@ const initialState = {
   supports_transcoding: false,
   dir_separator: '/',
   current_theme: null! as Theme,
+  hunting: undefined as HuntingSummary | undefined,
 }
 
 type CommonStoreState = typeof initialState
@@ -88,6 +91,7 @@ export const commonStore = {
     settingStore.init(this.state.settings)
     queueStore.init(this.state.queue_state)
     themeStore.init(this.state.current_theme || themeStore.getCurrentTheme())
+    huntingStore.init(this.state.hunting)
 
     return this.state
   },

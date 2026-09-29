@@ -7,7 +7,6 @@ import { subsonic } from '@/services/subsonic'
 import { cache } from '@/services/cache'
 import models from '@/config/smart-playlist/models'
 import operators from '@/config/smart-playlist/operators'
-import { playableStore } from '@/stores/playableStore'
 
 export type CreatePlaylistData = Pick<Playlist, 'name' | 'description' | 'folder_id' | 'cover'> & {
   folder_name?: string | null
@@ -100,7 +99,8 @@ export const playlistStore = {
   },
 
   async addContent(playlist: Playlist, playables: Playable[]) {
-    if (playlist.is_smart) {
+    // Smart playlists pick their own songs; mirrors of watched playlists follow YouTube Music.
+    if (playlist.is_smart || !playlist.permissions.edit) {
       return playlist
     }
 

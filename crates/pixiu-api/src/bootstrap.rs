@@ -78,7 +78,7 @@ pub(crate) async fn bootstrap(
             "current_song": null,
             "playback_position": 0,
         },
-        "uses_musicbrainz": false,
+        "uses_musicbrainz": true,
         "uses_i_tunes": false,
         "uses_last_fm": false,
         "uses_spotify": false,
@@ -94,5 +94,6 @@ pub(crate) async fn bootstrap(
         "supports_transcoding": true,
         "dir_separator": "/",
         "current_theme": null,
+        "hunting": crate::jobs::summarize(&state).await?,
     })))
 }

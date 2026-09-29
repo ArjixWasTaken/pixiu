@@ -40,7 +40,6 @@ import { useContextMenu } from '@/composables/useContextMenu'
 import { useModal } from '@/composables/useModal'
 import { useRouter } from '@/composables/useRouter'
 import { playback } from '@/services/playbackManager'
-import { usePolicies } from '@/composables/usePolicies'
 import { useThirdPartyServices } from '@/composables/useThirdPartyServices'
 
 import StarRating from '@/components/ui/StarRating.vue'
@@ -54,11 +53,11 @@ const CreateEmbedForm = defineAsyncComponent(() => import('@/components/embed/Cr
 const { go, url } = useRouter()
 const { MenuItem, Separator, closeContextMenu, trigger } = useContextMenu()
 const { openModal } = useModal()
-const { currentUserCan } = usePolicies()
 
 const allowDownload = toRef(commonStore.state, 'allows_download')
 const allowEmbedding = toRef(commonStore.state, 'allows_embedding')
-const allowEdit = computed(() => currentUserCan.editArtist(artist.value))
+// Artists follow their albums' tags; píxiū has no artist editor.
+const allowEdit = computed(() => false)
 
 const isStandardArtist = computed(() => !artistStore.isUnknown(artist.value) && !artistStore.isVarious(artist.value))
 

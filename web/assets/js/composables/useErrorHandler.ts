@@ -29,7 +29,8 @@ export const useErrorHandler = (driver: ErrorMessageDriver = 'toast') => {
     const status = error.response.status
     const data = getHttpErrorBody(error)
 
-    if (!Object.prototype.hasOwnProperty.call(statusMessageMap, status) && status === 422) {
+    // píxiū answers `{ message }`; only field errors need parsing.
+    if (!Object.prototype.hasOwnProperty.call(statusMessageMap, status) && status === 422 && data?.errors) {
       return showError(parseValidationError(data as ServerValidationError)[0])
     }
 

@@ -11,7 +11,12 @@
     </FormRow>
 
     <FormRow>
-      <PasswordField v-model="data.password" :autocomplete="claiming ? 'new-password' : 'current-password'" placeholder="Password" required />
+      <PasswordField
+        v-model="data.password"
+        :autocomplete="claiming ? 'new-password' : 'current-password'"
+        placeholder="Password"
+        required
+      />
     </FormRow>
 
     <FormRow v-if="claiming">

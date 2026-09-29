@@ -120,7 +120,7 @@
       </template>
     </MenuItem>
 
-    <MenuItem v-if="allowEdit" @click="openEditForm">Edit…</MenuItem>
+    <MenuItem v-if="onlyOneSelected && isSong(playables[0])" @click="openSongInfo">Song Info…</MenuItem>
     <MenuItem v-if="downloadable" @click="download">Download</MenuItem>
     <MenuItem v-if="canToggleOffline" @click="toggleOffline">
       {{ allCached ? 'Remove Offline Versions' : 'Make Available Offline' }}
@@ -131,9 +131,9 @@
       <MenuItem @click="removePlayablesFromPlaylist">Remove from Playlist</MenuItem>
     </template>
 
-    <template v-if="allowEdit">
+    <template v-if="mirroredWatch && contentType === 'songs'">
       <Separator />
-      <MenuItem @click="deleteFromFilesystem">Delete from Filesystem</MenuItem>
+      <MenuItem @click="excludeFromWatch">Exclude from “{{ mirroredWatch.name }}”</MenuItem>
     </template>
 
     <template v-if="musicBrainzUrl">
@@ -176,6 +176,7 @@ import { useModal } from '@/composables/useModal'
 import { useKoelPlus } from '@/composables/useKoelPlus'
 import { useOfflinePlayback } from '@/composables/useOfflinePlayback'
 import { playback } from '@/services/playbackManager'
+import { huntingStore } from '@/stores/huntingStore'
 
 import StarRating from '@/components/ui/StarRating.vue'
 
@@ -185,7 +186,7 @@ const { playables } = toRefs(props)
 const { toastSuccess, toastError, toastWarning } = useMessageToaster()
 const { showConfirmDialog } = useDialogBox()
 const { go, getRouteParam, isCurrentScreen, url } = useRouter()
-const EditSongForm = defineAsyncComponent(() => import('@/components/playable/EditSongForm.vue'))
+const SongInfo = defineAsyncComponent(() => import('@/components/playable/SongInfo.vue'))
 const CreateEmbedForm = defineAsyncComponent(() => import('@/components/embed/CreateEmbedForm.vue'))
 
 const { MenuItem, Separator, closeContextMenu, trigger } = useContextMenu()
@@ -240,7 +241,10 @@ const viewOnMusicBrainz = () => trigger(() => window.open(musicBrainzUrl.value!,
 const firstSongPlaying = computed(() =>
   playables.value.length ? playables.value[0].playback_state === 'Playing' : false,
 )
-const normalPlaylists = computed(() => playlists.value.filter(({ is_smart }) => !is_smart))
+// Mirrors of watched playlists change on YouTube Music only.
+const normalPlaylists = computed(() =>
+  playlists.value.filter(({ is_smart, permissions }) => !is_smart && permissions.edit),
+)
 const canBeShared = computed(() => !isPlus.value || (isSong(playables.value[0]) && playables.value[0].is_public))
 const allowEmbedding = toRef(commonStore.state, 'allows_embedding')
 const canShare = computed(() => onlyOneSelected.value && (canBeShared.value || allowEmbedding.value))
@@ -312,7 +316,7 @@ const canBeRemovedFromPlaylist = computed(() => {
     return false
   }
   const playlist = playlistStore.byId(getRouteParam('id')!)
-  return playlist && !playlist.is_smart
+  return playlist && !playlist.is_smart && playlist.permissions.edit
 })
 
 const isQueueScreen = computed(() => isCurrentScreen('Queue'))
@@ -339,10 +343,23 @@ const doPlayback = () =>
     }
   })
 
-const openEditForm = () =>
-  trigger(() => {
-    if (playables.value.length && contentType.value === 'songs') {
-      openModal<'EDIT_SONG_FORM'>(EditSongForm, { songs: playables.value as Song[], initialTab: 'details' })
+const openSongInfo = () => trigger(() => openModal<'SONG_INFO'>(SongInfo, { song: playables.value[0] as Song }))
+
+/** On a mirror of a watched playlist, the watch its songs can be excluded from. */
+const mirroredWatch = computed(() =>
+  isCurrentScreen('Playlist') ? (huntingStore.playlistWatches[getRouteParam('id')!]?.watch ?? null) : null,
+)
+
+const excludeFromWatch = () =>
+  trigger(async () => {
+    const watch = mirroredWatch.value!
+
+    try {
+      await huntingStore.exclude(watch.id, playables.value as Song[])
+      toastSuccess(`Excluded ${pluralize(playables.value, 'song')} from “${watch.name}”.`)
+    } catch (error: unknown) {
+      toastError('Excluding failed.')
+      throw error
     }
   })
 
@@ -392,13 +409,4 @@ const copyUrl = () =>
 
 const showEmbedModal = () =>
   trigger(() => openModal<'CREATE_EMBED_FORM'>(CreateEmbedForm, { embeddable: playables.value[0] }))
-
-const deleteFromFilesystem = () =>
-  trigger(async () => {
-    if (await showConfirmDialog('Delete selected playable(s) from the filesystem? This action is NOT reversible!')) {
-      await playableStore.deleteSongsFromFilesystem(playables.value as Song[])
-      toastSuccess(`Deleted ${pluralize(playables.value, 'song')} from the filesystem.`)
-      eventBus.emit('SONGS_DELETED', playables.value as Song[])
-    }
-  })
 </script>

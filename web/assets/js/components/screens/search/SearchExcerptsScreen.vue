@@ -20,7 +20,10 @@
       <AlbumResultsBlock :albums="excerpt.albums" :searching data-testid="album-excerpts" />
       <PodcastExcerptResultsBlock
         v-if="commonStore.state.uses_podcasts"
-        :podcasts="excerpt.podcasts" :searching data-testid="podcast-excerpts" />
+        :podcasts="excerpt.podcasts"
+        :searching
+        data-testid="podcast-excerpts"
+      />
       <RadioStationExcerptResultsBlock
         v-if="commonStore.state.uses_radio"
         :stations="excerpt.radio_stations"

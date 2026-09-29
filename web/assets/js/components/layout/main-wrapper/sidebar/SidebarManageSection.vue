@@ -1,7 +1,7 @@
 <template>
   <SidebarSection>
     <template #header>
-      <SidebarSectionHeader>Manage</SidebarSectionHeader>
+      <SidebarSectionHeader>Hunting</SidebarSectionHeader>
     </template>
 
     <ul class="menu">
@@ -24,12 +24,13 @@
 
 <script lang="ts" setup>
 import { computed } from 'vue'
-import { faSpinner, faTools, faUpload, faUsers } from '@fortawesome/free-solid-svg-icons'
+import { faBroom, faEye, faListCheck, faSearch, faSpinner, faTools, faUpload } from '@fortawesome/free-solid-svg-icons'
 import type { IconDefinition } from '@fortawesome/fontawesome-svg-core'
 import type { RouteName } from '@/config/routes'
 import { useRouter } from '@/composables/useRouter'
 import { usePolicies } from '@/composables/usePolicies'
 import { uploadService } from '@/services/uploadService'
+import { huntingStore } from '@/stores/huntingStore'
 import { Filter } from '@/config/hooks'
 import { applyFilters } from '@/hooks'
 
@@ -53,26 +54,51 @@ const { currentUserCan } = usePolicies()
 const items = computed(() =>
   applyFilters<ManageSidebarItem[]>(Filter.MANAGE_SIDEBAR_ITEMS, [
     {
+      label: 'Hunt',
+      icon: faSearch,
+      route: 'hunt',
+      screens: ['Hunt'],
+      visible: () => true,
+    },
+    {
+      label: 'Watches',
+      icon: faEye,
+      route: 'watches',
+      screens: ['Watches'],
+      visible: () => true,
+    },
+    {
+      label: 'Jobs',
+      icon: faListCheck,
+      route: 'jobs',
+      screens: ['Jobs'],
+      visible: () => true,
+      badge: () => (huntingStore.state.jobs.failed ? String(huntingStore.state.jobs.failed) : null),
+      isBusy: () => huntingStore.state.jobs.running > 0,
+    },
+    {
+      label: 'Offerings',
+      icon: faUpload,
+      route: 'upload',
+      screens: ['Upload'],
+      visible: () => currentUserCan.uploadSongs(),
+      badge: () => (huntingStore.state.offerings ? String(huntingStore.state.offerings) : null),
+      isBusy: () => uploadService.getUnfinishedFiles().length > 0,
+    },
+    {
+      label: 'Orphans',
+      icon: faBroom,
+      route: 'orphans',
+      screens: ['Orphans'],
+      visible: () => true,
+      badge: () => (huntingStore.state.orphans ? String(huntingStore.state.orphans) : null),
+    },
+    {
       label: 'Settings',
       icon: faTools,
       route: 'settings',
       screens: ['Settings'],
       visible: () => currentUserCan.manageSettings(),
-    },
-    {
-      label: 'Upload',
-      icon: faUpload,
-      route: 'upload',
-      screens: ['Upload'],
-      visible: () => currentUserCan.uploadSongs(),
-      isBusy: () => uploadService.getUnfinishedFiles().length > 0,
-    },
-    {
-      label: 'Users',
-      icon: faUsers,
-      route: 'users.index',
-      screens: ['Users', 'Profile'],
-      visible: () => currentUserCan.manageUsers(),
     },
   ]),
 )

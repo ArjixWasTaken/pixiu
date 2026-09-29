@@ -2,7 +2,7 @@ import type { Reactive } from 'vue'
 import { reactive } from 'vue'
 import { differenceBy, unionBy } from 'lodash-es'
 import { cache } from '@/services/cache'
-import { http } from '@/services/http'
+import { huntingService } from '@/services/huntingService'
 import { library } from '@/services/library'
 import { subsonic } from '@/services/subsonic'
 import { logger } from '@/utils/logger'
@@ -12,9 +12,10 @@ import { playableStore as songStore } from '@/stores/playableStore'
 const UNKNOWN_ALBUM_NAME = 'Unknown Album'
 
 export interface AlbumUpdateData {
-  name: Album['name']
-  year: Album['year']
-  cover?: Album['cover'] | null
+  title: string
+  artist: string
+  year: number | null
+  tracks: Array<{ id: Song['id']; title: string; track: number | null }>
 }
 
 interface AlbumListPaginateParams extends CursorPaginateParams<AlbumListSortField> {
@@ -48,11 +49,17 @@ export const albumStore = {
     return album.name === UNKNOWN_ALBUM_NAME
   },
 
+  /** Changes the album's tags; píxiū moves its files to match. */
   async update(album: Album, data: AlbumUpdateData) {
-    const updated = await http.put<Album>(`albums/${album.id}`, data)
-    this.state.albums = unionBy(this.state.albums, this.syncWithVault(updated), 'id')
+    await huntingService.editAlbum(album, data)
 
-    songStore.syncAlbumProperties(album)
+    cache.remove(['album', album.id])
+    cache.remove(['album.songs', album.id])
+    const updated = this.syncWithVault(await subsonic.album(album.id))
+    this.state.albums = unionBy(this.state.albums, updated, 'id')
+
+    songStore.syncWithVault(await subsonic.albumSongs(album.id))
+    songStore.syncAlbumProperties(updated[0])
   },
 
   /**
@@ -67,9 +74,7 @@ export const albumStore = {
 
     if (!album) {
       try {
-        album = this.syncWithVault(
-          await cache.remember(['album', id], async () => await subsonic.album(id)),
-        )[0]
+        album = this.syncWithVault(await cache.remember(['album', id], async () => await subsonic.album(id)))[0]
       } catch (error: unknown) {
         logger.error(error)
       }
@@ -88,9 +93,7 @@ export const albumStore = {
   async fetchForArtist(artist: Artist | Artist['id']) {
     const id = typeof artist === 'string' ? artist : artist.id
 
-    return this.syncWithVault(
-      await cache.remember(['artist-albums', id], async () => await subsonic.artistAlbums(id)),
-    )
+    return this.syncWithVault(await cache.remember(['artist-albums', id], async () => await subsonic.artistAlbums(id)))
   },
 
   async toggleFavorite(album: Reactive<Album>) {

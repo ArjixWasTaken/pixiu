@@ -573,6 +573,10 @@ interface ScreenNames {
   Genre: true
   Genres: true
   Home: true
+  Hunt: true
+  Jobs: true
+  Orphans: true
+  Watches: true
   'Invitation.Accept': true
   MediaBrowser: true
   OfflineSongs: true

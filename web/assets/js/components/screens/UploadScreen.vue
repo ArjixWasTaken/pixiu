@@ -1,182 +1,107 @@
 <template>
   <ScreenBase>
     <template #header>
-      <ScreenHeader layout="collapsed"> Upload Media </ScreenHeader>
+      <ScreenHeader layout="collapsed">
+        Offerings
+        <template #meta>
+          <span>{{ pluralize(batches, 'batch') }} to review</span>
+        </template>
+      </ScreenHeader>
     </template>
 
     <div
-      v-if="mediaPathSetUp"
       :class="{ droppable }"
-      class="relative flex-1 min-h-0 flex flex-col"
+      class="flex flex-col gap-8"
       @dragenter.prevent="onDragEnter"
       @dragleave.prevent="onDragLeave"
       @drop.prevent="onDrop"
       @dragover.prevent
     >
-      <div v-if="showsFilters" :class="{ 'flex-1': !showsDropPrompt }" class="min-h-0 flex flex-col gap-4">
-        <UploadSummary v-if="files.length" class="mb-4" />
+      <label class="drop-prompt">
+        <Icon :icon="faUpload" size="2x" />
+        <span>{{ canDropFolders ? 'Drop files, folders or zip archives' : 'Drop files or zip archives' }}</span>
+        <span class="text-k-fg-50 text-sm"
+          >or click to choose. They wait here for review before joining the hoard.</span
+        >
+        <input
+          :accept="acceptAttribute"
+          class="sr-only"
+          multiple
+          name="file[]"
+          type="file"
+          @change="onFileInputChange"
+        />
+      </label>
 
-        <SegmentedControl v-model="currentFilter" :options="filterOptions" class="self-center" name="upload-filter">
-          <template #default="{ option }">
-            {{ option.label }}
-            <span
-              :data-count="filterCounts[option.value]"
-              :data-filter="option.value"
-              :data-testid="`upload-filter-count-${option.value}`"
-              class="count inline-flex items-center justify-center h-[16px] min-w-[16px] px-[5px] rounded-full bg-k-fg-10 text-[.8rem] leading-none tabular-nums"
-              data-badge
-            >
-              {{ filterCounts[option.value] }}
-            </span>
-          </template>
-        </SegmentedControl>
+      <section v-if="files.length" class="flex flex-col gap-3">
+        <UploadSummary />
+        <ul class="flex flex-col gap-1.5 max-h-80 overflow-y-auto">
+          <li v-for="file in files" :key="file.id" class="h-9">
+            <UploadItem :file class="h-full" data-testid="upload-item" />
+          </li>
+        </ul>
+        <footer v-if="hasFailures" class="flex justify-end gap-2">
+          <Btn size="small" variant="success" @click.prevent="retryAll">Retry failed</Btn>
+          <Btn size="small" variant="destructive" @click.prevent="removeFailed">Remove failed</Btn>
+        </footer>
+      </section>
 
-        <div class="flex-1 min-h-0 flex flex-col gap-4">
-          <DuplicateUploadList
-            v-if="currentFilter === 'duplicated' && duplicatedSongs.length"
-            :songs="duplicatedSongs"
-            class="flex-1 min-h-0"
-          />
-
-          <VirtualScroller
-            v-else-if="currentFilter !== 'duplicated' && filesByFilter[currentFilter].length"
-            :item-height="ROW_HEIGHT"
-            :items="filesByFilter[currentFilter]"
-            class="flex-1 -mr-6 pr-6"
-          >
-            <template #default="{ item }: { item: UploadFile }">
-              <div :key="item.id" :style="{ height: `${ROW_HEIGHT}px`, paddingBottom: `${ROW_GAP}px` }">
-                <UploadItem :file="item" class="h-full" data-testid="upload-item" />
-              </div>
-            </template>
-          </VirtualScroller>
-
-          <footer v-if="currentFilter === 'errored' && filesByFilter.errored.length" class="flex justify-end gap-2">
-            <Btn variant="success" data-testid="upload-retry-all-btn" @click="retryAll">Retry All</Btn>
-            <Btn variant="destructive" data-testid="upload-remove-all-btn" @click="removeFailedEntries">
-              Remove Failed
-            </Btn>
-          </footer>
-        </div>
-      </div>
-
-      <ScreenEmptyState v-if="showsDropPrompt" data-testid="upload-drop-prompt">
-        <template #icon>
-          <Icon :icon="faUpload" />
-        </template>
-
-        {{ canDropFolders ? 'Drop files or folders to upload' : 'Drop files to upload' }}
-
-        <span class="secondary block">
-          <a class="block relative text-k-fg-70! hover:text-k-fg!" role="button">
-            or click here to select songs
-            <input
-              :accept="acceptAttribute"
-              class="absolute opacity-0 w-full h-full z-2 cursor-pointer left-0 top-0"
-              multiple
-              name="file[]"
-              type="file"
-              @change="onFileInputChange"
-            />
-          </a>
-        </span>
-      </ScreenEmptyState>
+      <section v-if="batches.length" class="flex flex-col gap-4">
+        <OfferingBatchCard
+          v-for="batch in batches"
+          :key="batch.batch"
+          :batch
+          @accept="accept(batch)"
+          @discard="discard(batch)"
+          @discard-file="discardFile"
+        />
+      </section>
     </div>
-
-    <ScreenEmptyState v-else>
-      <template #icon>
-        <Icon :icon="faWarning" />
-      </template>
-      No media path set.
-    </ScreenEmptyState>
   </ScreenBase>
 </template>
 
 <script lang="ts" setup>
-import { faUpload, faWarning } from '@fortawesome/free-solid-svg-icons'
-import { computed, defineAsyncComponent, ref, toRef, onMounted, watch } from 'vue'
-
+import { faUpload } from '@fortawesome/free-solid-svg-icons'
+import { computed, onBeforeUnmount, onMounted, ref, toRef } from 'vue'
 import { isDirectoryReadingSupported as canDropFolders } from '@/utils/supports'
 import { acceptedExtensions } from '@/utils/mediaHelper'
+import { pluralize } from '@/utils/formatters'
+import { eventBus } from '@/utils/eventBus'
 import { uploadService } from '@/services/uploadService'
-import type { UploadFile, UploadStatus } from '@/services/uploadService'
+import { huntingService } from '@/services/huntingService'
+import type { OfferingBatch, OfferingFile } from '@/services/huntingService'
+import { huntingStore } from '@/stores/huntingStore'
 import { useUpload } from '@/composables/useUpload'
+import { useDialogBox } from '@/composables/useDialogBox'
+import { useMessageToaster } from '@/composables/useMessageToaster'
+import { useErrorHandler } from '@/composables/useErrorHandler'
 
-import ScreenHeader from '@/components/ui/ScreenHeader.vue'
-import ScreenEmptyState from '@/components/ui/ScreenEmptyState.vue'
+import Btn from '@/components/ui/form/Btn.vue'
 import ScreenBase from '@/components/screens/ScreenBase.vue'
-
-import DuplicateUploadList from '@/components/ui/DuplicateUploadList.vue'
+import ScreenHeader from '@/components/ui/ScreenHeader.vue'
+import UploadItem from '@/components/ui/upload/UploadItem.vue'
 import UploadSummary from '@/components/ui/upload/UploadSummary.vue'
-import SegmentedControl from '@/components/ui/SegmentedControl.vue'
-import VirtualScroller from '@/components/ui/VirtualScroller.vue'
-
-const Btn = defineAsyncComponent(() => import('@/components/ui/form/Btn.vue'))
-const UploadItem = defineAsyncComponent(() => import('@/components/ui/upload/UploadItem.vue'))
-
-type FileFilter = 'in-progress' | 'done' | 'skipped' | 'errored'
-type UploadFilter = FileFilter | 'duplicated'
-
-const FILTER_LABELS: Record<UploadFilter, string> = {
-  'in-progress': 'In Progress',
-  done: 'Done',
-  skipped: 'Skipped',
-  errored: 'Errored',
-  duplicated: 'Duplicated',
-}
-
-const FILTER_STATUSES: Record<FileFilter, UploadStatus[]> = {
-  'in-progress': ['Ready', 'Uploading', 'Retrying', 'Processing'],
-  done: ['Uploaded'],
-  skipped: ['Skipped'],
-  errored: ['Errored', 'Canceled'],
-}
-
-const ROW_GAP = 6
-const ROW_HEIGHT = 36 + ROW_GAP
+import OfferingBatchCard from '@/components/screens/hunting/OfferingBatchCard.vue'
 
 const acceptAttribute = acceptedExtensions.map(ext => `.${ext}`).join(',')
 
-const { allowsUpload, mediaPathSetUp, queueFilesForUpload, handleDropEvent } = useUpload()
-
-const duplicatedSongs = toRef(uploadService.state, 'duplicatedSongs')
+const { allowsUpload, queueFilesForUpload, handleDropEvent } = useUpload()
+const { showConfirmDialog } = useDialogBox()
+const { toastSuccess, toastWarning } = useMessageToaster()
+const { handleHttpError } = useErrorHandler('dialog')
 
 const files = toRef(uploadService.state, 'files')
-const currentFilter = ref<UploadFilter>('in-progress')
-
-const filesByFilter = computed(
-  () =>
-    Object.fromEntries(
-      Object.entries(FILTER_STATUSES).map(([filter, statuses]) => [
-        filter,
-        files.value.filter(({ status }) => statuses.includes(status)),
-      ]),
-    ) as Record<FileFilter, UploadFile[]>,
-)
-
-const filterOptions = computed(() =>
-  (Object.keys(FILTER_LABELS) as UploadFilter[]).map(filter => ({
-    value: filter,
-    label: FILTER_LABELS[filter],
-    testId: `upload-filter-${filter}`,
-  })),
-)
-
-const filterCounts = computed<Record<UploadFilter, number>>(() => ({
-  'in-progress': filesByFilter.value['in-progress'].length,
-  done: filesByFilter.value.done.length,
-  skipped: filesByFilter.value.skipped.length,
-  errored: filesByFilter.value.errored.length,
-  duplicated: duplicatedSongs.value.length,
-}))
-
-const showsFilters = computed(() => files.value.length > 0 || duplicatedSongs.value.length > 0)
-
-const showsDropPrompt = computed(
-  () => !showsFilters.value || (currentFilter.value === 'in-progress' && !filesByFilter.value['in-progress'].length),
-)
-
+const hasFailures = computed(() => files.value.some(({ status }) => status === 'Errored' || status === 'Canceled'))
+const batches = ref<OfferingBatch[]>([])
 const droppable = ref(false)
+
+const fetchBatches = async () => {
+  try {
+    batches.value = await huntingService.offerings()
+  } catch (error: unknown) {
+    handleHttpError(error)
+  }
+}
 
 const onDragEnter = () => (droppable.value = allowsUpload.value)
 
@@ -188,61 +113,79 @@ const onDragLeave = (e: MouseEvent) => {
   droppable.value = false
 }
 
-const onFileInputChange = (event: Event) => {
-  const selectedFileList = (event.target as HTMLInputElement).files
-
-  if (selectedFileList?.length) {
-    queueFilesForUpload(Array.from(selectedFileList))
-  }
-}
-
 const onDrop = async (event: DragEvent) => {
   droppable.value = false
   await handleDropEvent(event)
 }
 
-const retryAll = () => uploadService.retryAll()
-const removeFailedEntries = () => uploadService.removeFailed()
+const onFileInputChange = (event: Event) => {
+  const selected = (event.target as HTMLInputElement).files
 
-watch(
-  () => filesByFilter.value.errored.length,
-  erroredCount => {
-    if (!erroredCount && currentFilter.value === 'errored') {
-      currentFilter.value = 'in-progress'
-    }
-  },
-)
-
-onMounted(async () => {
-  await uploadService.fetchDuplicates()
-
-  if (!files.value.length && duplicatedSongs.value.length) {
-    currentFilter.value = 'duplicated'
+  if (selected?.length) {
+    queueFilesForUpload(Array.from(selected))
   }
-})
+}
+
+const retryAll = () => uploadService.retryAll()
+const removeFailed = () => uploadService.removeFailed()
+
+const changed = async () => {
+  await fetchBatches()
+  await huntingStore.refresh()
+}
+
+const accept = async (batch: OfferingBatch) => {
+  try {
+    const { failures } = await huntingService.acceptBatch(batch.batch)
+
+    if (failures.length) {
+      toastWarning(`${pluralize(failures, 'file')} could not join the hoard: ${failures[0].error}`)
+    } else {
+      toastSuccess('Accepted. The new songs are in your library and being looked up on MusicBrainz.')
+    }
+
+    await changed()
+  } catch (error: unknown) {
+    handleHttpError(error)
+  }
+}
+
+const discard = async (batch: OfferingBatch) => {
+  if (!(await showConfirmDialog(`Discard ${pluralize(batch.files, 'file')}?`))) {
+    return
+  }
+
+  try {
+    await huntingService.discardBatch(batch.batch)
+    await changed()
+  } catch (error: unknown) {
+    handleHttpError(error)
+  }
+}
+
+const discardFile = async (file: OfferingFile) => {
+  try {
+    await huntingService.discardOffering(file.id)
+    await changed()
+  } catch (error: unknown) {
+    handleHttpError(error)
+  }
+}
+
+onMounted(fetchBatches)
+eventBus.on('OFFERINGS_UPLOADED', changed)
+onBeforeUnmount(() => eventBus.off('OFFERINGS_UPLOADED', changed))
 </script>
 
 <style lang="postcss" scoped>
 @reference '@css/app.pcss';
-.droppable {
-  @apply border-2 border-dashed border-white/40 bg-black/20 rounded-3xl;
+
+.drop-prompt {
+  @apply flex flex-col items-center gap-2 p-10 rounded-3xl border-2 border-dashed border-k-fg-10 text-k-fg-70 cursor-pointer
+    hover:border-k-fg-50 hover:text-k-fg transition;
 }
 
-.count {
-  &[data-filter='in-progress'] {
-    @apply bg-k-primary text-white;
-  }
-
-  &[data-filter='done'] {
-    @apply bg-k-success text-white;
-  }
-
-  &[data-filter='errored'] {
-    @apply bg-k-danger text-white;
-  }
-
-  &[data-filter='duplicated'] {
-    @apply bg-k-warning text-white;
-  }
+.droppable .drop-prompt {
+  @apply border-k-highlight bg-black/20 text-k-fg;
 }
 </style>

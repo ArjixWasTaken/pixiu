@@ -49,9 +49,14 @@ impl Tokens {
     }
 }
 
+/// A fresh API key, in the clear.
+pub(crate) fn new_key() -> String {
+    format!("pixiu_{}", hex::encode(rand::random::<[u8; 24]>()))
+}
+
 /// Makes a new API key for `user`; returns it in the clear, once.
 async fn mint_key(state: &ApiState, user: &User) -> ApiResult<String> {
-    let key = format!("pixiu_{}", hex::encode(rand::random::<[u8; 24]>()));
+    let key = new_key();
     toasty::create!(ApiKey {
         user_id: user.id,
         name: SESSION_KEY_NAME,

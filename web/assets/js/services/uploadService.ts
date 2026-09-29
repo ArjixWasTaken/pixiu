@@ -48,6 +48,8 @@ export type UploadStatus =
 
 export interface UploadFile {
   id: string
+  /** The offering batch it joins: files dropped together are reviewed together. */
+  batch?: string
   uploadKey?: string
   file: File
   status: UploadStatus
@@ -81,9 +83,22 @@ export const uploadService = {
 
   queue(file: UploadFile | UploadFile[]) {
     this.ensureLeavingIsGuarded()
-    this.state.files = this.state.files.concat(file)
+
+    // Files dropped while others upload join their batch.
+    if (!this.getUnfinishedFiles().length) {
+      this.batch = `${Date.now()}-${Math.floor(Math.random() * 0x10000)
+        .toString(16)
+        .padStart(4, '0')}`
+    }
+
+    const files = Array.isArray(file) ? file : [file]
+    files.forEach(entry => (entry.batch ??= this.batch))
+
+    this.state.files = this.state.files.concat(files)
     this.proceed()
   },
+
+  batch: '',
 
   getUnfinishedFiles() {
     return this.state.files.filter(({ status }) => UNFINISHED_STATUSES.includes(status))
@@ -203,7 +218,7 @@ export const uploadService = {
       }
     } else {
       file.status = 'Uploaded'
-      response.data && this.handleUploadResult(response.data, file)
+      eventBus.emit('OFFERINGS_UPLOADED')
     }
 
     this.speedUp()
@@ -212,9 +227,11 @@ export const uploadService = {
 
   async uploadDirectlyToServer(file: UploadFile, onProgress: (e: ProgressEvent) => void) {
     const formData = new FormData()
+    // The batch comes first: the server files the upload as it streams in.
+    formData.append('batch', file.batch ?? this.batch)
     formData.append('file', file.file)
 
-    const { promise, abort } = postWithProgress<UploadResult | null>('upload', formData, onProgress)
+    const { promise, abort } = postWithProgress<UploadResult | null>('offerings/upload', formData, onProgress)
     this.abortHandles.set(file.id, abort)
 
     return await promise
@@ -239,8 +256,9 @@ export const uploadService = {
     return await completing.promise
   },
 
+  // píxiū reviews offerings instead of flagging duplicates.
   async fetchDuplicates() {
-    this.state.duplicatedSongs = await http.get<DuplicateUpload[]>('duplicate-uploads')
+    this.state.duplicatedSongs = []
   },
 
   async keepDuplicate(id: DuplicateUpload['id']) {

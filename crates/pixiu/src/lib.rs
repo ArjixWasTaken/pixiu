@@ -106,6 +106,21 @@ impl Services {
         })
     }
 
+    /// What the web player's API needs.
+    #[must_use]
+    pub fn api_state(&self) -> pixiu_api::ApiState {
+        pixiu_api::ApiState {
+            db: self.db.clone(),
+            secrets: self.secrets.clone(),
+            treasury: self.treasury.clone(),
+            offerings: self.offerings.clone(),
+            hunter: Arc::clone(&self.hunter),
+            warden: Arc::clone(&self.warden),
+            jobs: Arc::clone(&self.jobs),
+            login_desk: Arc::clone(&self.login_desk),
+        }
+    }
+
     /// Starts the background workers: the session warden, the job queue
     /// (which resumes unfinished jobs), the watch scheduler, and resuming
     /// paused jobs whenever the login works again.
@@ -157,10 +172,7 @@ pub fn app(services: &Services, config: &Config, assets: AssetBundle) -> Router 
     .route(TowerRoute::any("/rest/{*rest}", subsonic))
     .route(TowerRoute::any(
         "/api/{*rest}",
-        pixiu_api::router(pixiu_api::ApiState {
-            db: services.db.clone(),
-            secrets: services.secrets.clone(),
-        }),
+        pixiu_api::router(services.api_state()),
     ))
     // Web-based Subsonic clients post to the API from other origins. Both
     // APIs authenticate every request by its parameters or bearer token,
