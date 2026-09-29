@@ -7,6 +7,7 @@
 
 mod auth;
 mod bootstrap;
+mod library;
 
 use axum::{
     Json, Router,
@@ -36,6 +37,11 @@ pub fn router(state: ApiState) -> Router {
         .route("/api/auth/setup", post(auth::setup))
         .route("/api/auth/session", delete(auth::logout))
         .route("/api/bootstrap", get(bootstrap::bootstrap))
+        .route("/api/albums", get(library::albums))
+        .route("/api/artists", get(library::artists))
+        .route("/api/genres", get(library::genres))
+        .route("/api/songs", get(library::songs))
+        .route("/api/songs/recently-played", get(library::recently_played))
         .with_state(state)
 }
 

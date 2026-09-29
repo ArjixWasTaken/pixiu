@@ -17,6 +17,7 @@ mod params;
 mod playing;
 mod playlists;
 mod queue;
+pub mod render;
 pub mod response;
 mod search;
 mod stars;

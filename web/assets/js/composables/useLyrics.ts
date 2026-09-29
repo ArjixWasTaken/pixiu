@@ -2,6 +2,27 @@ import type { Ref } from 'vue'
 import { computed, ref, watch } from 'vue'
 import { cr2lf } from '@/utils/formatters'
 import { usePolicies } from '@/composables/usePolicies'
+import { subsonic } from '@/services/subsonic'
+import { logger } from '@/utils/logger'
+
+/** Songs whose lyrics were asked for, so each is asked once. */
+const fetched = new Set<Song['id']>()
+
+/** Subsonic lists songs without lyrics; they are fetched when shown. */
+const fetchLyrics = (song: Song) => {
+  if (song.lyrics || fetched.has(song.id)) {
+    return
+  }
+
+  fetched.add(song.id)
+  subsonic
+    .lyrics(song.id)
+    .then(lyrics => (song.lyrics = lyrics))
+    .catch(error => {
+      fetched.delete(song.id)
+      logger.error(error)
+    })
+}
 
 export const useLyrics = (songRef: Ref<Song>) => {
   const { currentUserCan } = usePolicies()
@@ -16,6 +37,7 @@ export const useLyrics = (songRef: Ref<Song>) => {
   watch(
     songRef,
     song => {
+      fetchLyrics(song)
       userCanUpdateLyrics.value = currentUserCan.editSong(song)
       plainTextLyrics.value = ''
       lrcLyrics.value = []

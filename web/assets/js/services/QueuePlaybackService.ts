@@ -13,7 +13,7 @@ import { arrayify, getPlayableProp } from '@/utils/helpers'
 import { eventBus } from '@/utils/eventBus'
 import { isAudioContextSupported } from '@/utils/supports'
 import { audioService } from '@/services/audioService'
-import { http } from '@/services/http'
+import { subsonic } from '@/services/subsonic'
 import { socketService } from '@/services/socketService'
 import { useEpisodeProgressTracking } from '@/composables/useEpisodeProgressTracking'
 import { BasePlaybackService } from '@/services/BasePlaybackService'
@@ -207,14 +207,8 @@ export class QueuePlaybackService extends BasePlaybackService {
     this.recordStartTime(playable)
     socketService.broadcast('SOCKET_STREAMABLE', playable)
 
-    try {
-      http.silently.put('queue/playback-status', {
-        song: playable.id,
-        position: 0,
-      })
-    } catch (error: unknown) {
-      logger.error(error)
-    }
+    queueStore.savePlaybackStatus(playable, 0)
+    subsonic.scrobble(playable.id, false).catch(error => logger.error(error))
 
     this.media.currentTime = 0
 
@@ -436,14 +430,7 @@ export class QueuePlaybackService extends BasePlaybackService {
 
     if (Math.ceil(media.currentTime) % 5 === 0) {
       // every 5 seconds, we save the current playback position to the server
-      try {
-        http.silently.put('queue/playback-status', {
-          song: currentPlayable.id,
-          position: Math.ceil(media.currentTime),
-        })
-      } catch (error: unknown) {
-        logger.error(error)
-      }
+      queueStore.savePlaybackStatus(currentPlayable, Math.ceil(media.currentTime))
 
       // if the current item is an episode, we emit an event to update the progress on the client side as well
       if (isEpisode(currentPlayable)) {

@@ -3,7 +3,8 @@ import { reactive } from 'vue'
 import { differenceBy, unionBy } from 'lodash-es'
 import { cache } from '@/services/cache'
 import { http } from '@/services/http'
-import { flattenParams } from '@/utils/helpers'
+import { library } from '@/services/library'
+import { subsonic } from '@/services/subsonic'
 import { logger } from '@/utils/logger'
 import { useVault } from '@/composables/useVault'
 import { playableStore as songStore } from '@/stores/playableStore'
@@ -58,7 +59,7 @@ export const artistStore = {
     if (!artist) {
       try {
         artist = this.syncWithVault(
-          await cache.remember(['artist', id], async () => await http.get<Artist>(`artists/${id}`)),
+          await cache.remember(['artist', id], async () => await subsonic.artist(id)),
         )[0]
       } catch (error: unknown) {
         logger.error(error)
@@ -69,13 +70,10 @@ export const artistStore = {
   },
 
   async paginate(params: ArtistListPaginateParams) {
-    const query = new URLSearchParams(flattenParams(params))
-    query.set('cursor', params.cursor ?? '')
+    const { items, nextCursor } = await library.artists(params)
+    this.state.artists = unionBy(this.state.artists, this.syncWithVault(items), 'id')
 
-    const resource = await http.get<CursorPaginatorResource<Artist>>(`artists?${query}`)
-    this.state.artists = unionBy(this.state.artists, this.syncWithVault(resource.data), 'id')
-
-    return resource.meta.next_cursor
+    return nextCursor
   },
 
   reset() {
@@ -88,12 +86,12 @@ export const artistStore = {
     // We'll update the liked status again after the HTTP request.
     artist.favorite = !artist.favorite
 
-    const favorite = await http.post<Favorite | null>(`favorites/toggle`, {
-      type: 'artist',
-      id: artist.id,
-    })
-
-    artist.favorite = Boolean(favorite)
+    try {
+      await (artist.favorite ? subsonic.star([artist.id]) : subsonic.unstar([artist.id]))
+    } catch (error) {
+      artist.favorite = !artist.favorite
+      throw error
+    }
   },
 
   async rate(artist: Reactive<Artist>, rating: number) {
@@ -101,11 +99,7 @@ export const artistStore = {
     artist.rating = rating
 
     try {
-      const updated = await http.put<Artist>(`artists/${artist.id}/rating`, { rating })
-
-      if (artist.rating === rating) {
-        artist.rating = updated.rating
-      }
+      await subsonic.setRating(artist.id, rating)
     } catch (error) {
       if (artist.rating === rating) {
         artist.rating = previous
@@ -115,7 +109,6 @@ export const artistStore = {
     }
   },
 
-  async fetchEvents(artist: Artist) {
-    return await http.get<LiveEvent[]>(`artists/${artist.id}/events`)
-  },
+  // píxiū knows no concerts.
+  fetchEvents: async (_artist: Artist): Promise<LiveEvent[]> => [],
 }

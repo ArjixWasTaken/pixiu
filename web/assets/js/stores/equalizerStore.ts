@@ -1,7 +1,7 @@
 import { reactive } from 'vue'
 import { preferenceStore as preferences } from '@/stores/preferenceStore'
 import { equalizerPresets as builtInPresets } from '@/config/audio'
-import { http } from '@/services/http'
+import { uuid } from '@/utils/crypto'
 
 const state = reactive({
   customPresets: [] as EqualizerPreset[],
@@ -53,15 +53,17 @@ export const equalizerStore = {
     preferences.current_equalizer_preset = preset ?? { name: null, preamp, gains }
   },
 
+  // Custom presets are kept with the other preferences, in the browser.
   async saveCustomPreset(name: string, preamp: number, gains: number[]): Promise<EqualizerPreset> {
-    const preset = await http.post<EqualizerPreset>('me/equalizer-presets', { name, preamp, gains })
+    const preset: EqualizerPreset = { id: uuid(), name, preamp, gains: [...gains] }
     state.customPresets = [...state.customPresets, preset].sort(byName)
+    preferences.equalizer_presets = state.customPresets
 
     return preset
   },
 
   async deleteCustomPreset(id: string) {
-    await http.delete(`me/equalizer-presets/${id}`)
     state.customPresets = state.customPresets.filter(p => p.id !== id)
+    preferences.equalizer_presets = state.customPresets
   },
 }

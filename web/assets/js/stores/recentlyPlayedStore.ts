@@ -1,5 +1,5 @@
 import { reactive } from 'vue'
-import { http } from '@/services/http'
+import { library } from '@/services/library'
 import { playableStore } from '@/stores/playableStore'
 
 const EXCERPT_COUNT = 6
@@ -14,7 +14,7 @@ export const recentlyPlayedStore = {
   }),
 
   async fetch() {
-    this.state.playables = playableStore.syncWithVault(await http.get<Playable[]>('songs/recently-played'))
+    this.state.playables = playableStore.syncWithVault(await library.recentlyPlayed(100))
     return this.state.playables
   },
 

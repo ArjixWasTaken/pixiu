@@ -231,7 +231,13 @@ export default class Router {
       const match = path.match(route.regex)
 
       if (match) {
-        const params = { ...match.groups }
+        // Ids may hold any character (a genre's is its name).
+        const params = Object.fromEntries(
+          Object.entries(match.groups ?? {}).map(([key, value]) => [
+            key,
+            value === undefined ? value : decodeURIComponent(value),
+          ]),
+        )
 
         if (queryString) {
           const searchParams = new URLSearchParams(queryString)
@@ -264,7 +270,7 @@ export default class Router {
       const value = params[key]
 
       if (value !== undefined && value !== null) {
-        return value
+        return encodeURIComponent(String(value))
       }
 
       if (isOptional) {

@@ -1,23 +1,13 @@
-import { differenceBy, orderBy, pick } from 'lodash-es'
+import { differenceBy, orderBy } from 'lodash-es'
 import { reactive } from 'vue'
-import { arrayify, moveItemsInList } from '@/utils/helpers'
+import { moveItemsInList } from '@/utils/helpers'
 import { logger } from '@/utils/logger'
 import { uuid } from '@/utils/crypto'
-import { http } from '@/services/http'
+import { subsonic } from '@/services/subsonic'
 import { cache } from '@/services/cache'
 import models from '@/config/smart-playlist/models'
 import operators from '@/config/smart-playlist/operators'
 import { playableStore } from '@/stores/playableStore'
-
-interface CreatePlaylistRequestData {
-  name: Playlist['name']
-  songs: Playable['id'][]
-  description: Playlist['description']
-  cover: string | null
-  folder_id: PlaylistFolder['id'] | null
-  folder_name?: string | null
-  rules?: SmartPlaylistRuleGroup[]
-}
 
 export type CreatePlaylistData = Pick<Playlist, 'name' | 'description' | 'folder_id' | 'cover'> & {
   folder_name?: string | null
@@ -82,17 +72,17 @@ export const playlistStore = {
   },
 
   async store(data: CreatePlaylistData, songs: Playable[] = []) {
-    const requestData: CreatePlaylistRequestData = {
-      ...pick(data, 'name', 'description', 'folder_id', 'folder_name', 'cover'),
-      songs: songs.map(song => song.id),
+    const created = await subsonic.createPlaylist(
+      data.name,
+      songs.map(song => song.id),
+    )
+
+    if (data.description) {
+      await subsonic.updatePlaylist(created.id, { comment: data.description })
+      created.description = data.description
     }
 
-    // Reformat the rules to be database-ready.
-    if (data.rules) {
-      requestData.rules = this.serializeSmartPlaylistRulesForStorage(data.rules)
-    }
-
-    const playlist = reactive(await http.post<Playlist>('playlists', requestData))
+    const playlist = reactive(created)
 
     if (playlist.is_smart) {
       this.setupSmartPlaylist(playlist)
@@ -105,7 +95,7 @@ export const playlistStore = {
   },
 
   async delete(playlist: Playlist) {
-    await http.delete(`playlists/${playlist.id}`)
+    await subsonic.deletePlaylist(playlist.id)
     this.state.playlists = differenceBy(this.state.playlists, [playlist], 'id')
   },
 
@@ -114,11 +104,7 @@ export const playlistStore = {
       return playlist
     }
 
-    const updatedPlayables = await http.post<Playable[]>(`playlists/${playlist.id}/songs`, {
-      songs: playables.map(song => song.id),
-    })
-
-    playableStore.syncWithVault(updatedPlayables)
+    await subsonic.updatePlaylist(playlist.id, { songIdToAdd: playables.map(song => song.id) })
     cache.remove(['playlist.songs', playlist.id])
 
     return playlist
@@ -129,17 +115,20 @@ export const playlistStore = {
       return playlist
     }
 
-    await http.delete(`playlists/${playlist.id}/songs`, { songs: playables.map(song => song.id) })
+    const removed = new Set(playables.map(song => song.id))
+    const current = await subsonic.playlistSongs(playlist.id)
+
+    await subsonic.setPlaylistSongs(
+      playlist.id,
+      current.filter(song => !removed.has(song.id)).map(song => song.id),
+    )
     cache.remove(['playlist.songs', playlist.id])
 
     return playlist
   },
 
   async update(playlist: Playlist, data: UpdatePlaylistData) {
-    await http.put(`playlists/${playlist.id}`, {
-      ...data,
-      rules: data.rules ? this.serializeSmartPlaylistRulesForStorage(data.rules) : null,
-    })
+    await subsonic.updatePlaylist(playlist.id, { name: data.name, comment: data.description })
 
     if (playlist.is_smart) {
       cache.remove(['playlist.songs', playlist.id])
@@ -199,11 +188,10 @@ export const playlistStore = {
     )
 
     if (orderHash !== JSON.stringify(playlist.playables?.map(({ id }) => id))) {
-      await http.silently.post(`playlists/${playlist.id}/songs/move`, {
-        placement,
-        songs: arrayify(playables).map(({ id }) => id),
-        target: target.id,
-      })
+      await subsonic.setPlaylistSongs(
+        playlist.id,
+        playlist.playables!.map(({ id }) => id),
+      )
     }
   },
 }

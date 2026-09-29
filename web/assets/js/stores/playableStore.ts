@@ -1,7 +1,7 @@
 import isMobile from 'ismobilejs'
 import { differenceBy, orderBy, unionBy, uniqBy } from 'lodash-es'
 import { Reactive, reactive, watch } from 'vue'
-import { arrayify, flattenParams, moveItemsInList, use } from '@/utils/helpers'
+import { arrayify, moveItemsInList, use } from '@/utils/helpers'
 import { isSong } from '@/utils/typeGuards'
 import { logger } from '@/utils/logger'
 import { sha256 } from '@/utils/crypto'
@@ -9,6 +9,7 @@ import { normalizeForComparison, secondsToHumanReadable } from '@/utils/formatte
 import { authService } from '@/services/authService'
 import { cache } from '@/services/cache'
 import { http } from '@/services/http'
+import { library } from '@/services/library'
 import { subsonic } from '@/services/subsonic'
 import { useVault } from '@/composables/useVault'
 import { preferenceStore } from '@/stores/preferenceStore'
@@ -138,7 +139,7 @@ export const playableStore = {
 
     if (!playable) {
       try {
-        playable = this.syncWithVault(await http.get<Playable>(`songs/${id}`))[0]
+        playable = this.syncWithVault(await subsonic.song(id))[0]
       } catch (error: unknown) {
         logger.error(error)
       }
@@ -156,21 +157,18 @@ export const playableStore = {
    * Increase the play count for a playable.
    */
   registerPlay: async (playable: Playable) => {
-    const interaction = await http.silently.post<Interaction>('interaction/play', { song: playable.id })
+    // A Subsonic scrobble counts the play; koel's start time is in seconds.
+    await subsonic.scrobble(
+      playable.id,
+      true,
+      playable.play_start_time ? playable.play_start_time * 1000 : undefined,
+    )
 
-    // Use the data from the server to make sure we don't miss a play from another device.
-    playable.play_count = interaction.play_count
+    playable.play_count++
   },
 
-  scrobble: async (song: Song) => {
-    if (!isSong(song)) {
-      throw new Error('Scrobble is only supported for songs.')
-    }
-
-    return await http.silently.post(`songs/${song.id}/scrobble`, {
-      timestamp: song.play_start_time,
-    })
-  },
+  // Koel scrobbles to Last.fm here; píxiū counted the play in registerPlay.
+  scrobble: async (_song: Song) => {},
 
   async updateSongs(songsToUpdate: Song[], data: SongUpdateData) {
     if (songsToUpdate.some(song => !isSong(song))) {
@@ -223,7 +221,7 @@ export const playableStore = {
 
     return this.ensureNotDeleted(
       (await cache.remember([`artist.songs`, id], async () =>
-        this.syncWithVault(await http.get<Song[]>(`artists/${id}/songs`)),
+        this.syncWithVault((await library.songs({ artist: id, sort: 'album_name', limit: 500 })).items),
       )) as Song[],
     )
   },
@@ -237,7 +235,7 @@ export const playableStore = {
 
     const songs = this.ensureNotDeleted(
       (await cache.remember([`playlist.songs`, id], async () =>
-        this.syncWithVault(await http.get<Song[]>(`playlists/${id}/songs`)),
+        this.syncWithVault(await subsonic.playlistSongs(id)),
       )) as Song[],
     )
 
@@ -275,38 +273,29 @@ export const playableStore = {
   async paginateSongsByGenre(genre: Genre | Genre['id'], params: SongListCursorPaginateParams) {
     const id = typeof genre === 'string' ? genre : genre.id
 
-    const query = new URLSearchParams(flattenParams(params))
-    query.set('cursor', params.cursor ?? '')
-
-    const resource = await http.get<CursorPaginatorResource<Song>>(`genres/${id}/songs?${query}`)
-
-    const songs = this.syncWithVault(resource.data) as Song[]
+    const { items, nextCursor } = await library.songs({ ...params, genre: id })
 
     return {
-      songs,
-      nextCursor: resource.meta.next_cursor,
+      songs: this.syncWithVault(items) as Song[],
+      nextCursor,
     }
   },
 
   async fetchSongsByGenre(genre: Genre | Genre['id'], random = false, limit = 500) {
     const id = typeof genre === 'string' ? genre : genre.id
 
-    const params = new URLSearchParams({
-      limit: String(limit),
-      random: String(random),
-    }).toString()
-
-    return this.syncWithVault(await http.get<Song[]>(`genres/${id}/songs/queue?${params}`))
+    return this.syncWithVault(
+      random
+        ? await subsonic.randomSongs(limit, id)
+        : (await library.songs({ genre: id, sort: 'album_name', limit })).items,
+    )
   },
 
   async paginateSongs(params: SongListCursorPaginateParams) {
-    const query = new URLSearchParams(flattenParams(params))
-    query.set('cursor', params.cursor ?? '')
+    const { items, nextCursor } = await library.songs(params)
+    this.state.playables = unionBy(this.state.playables, this.syncWithVault(items), 'id')
 
-    const resource = await http.get<CursorPaginatorResource<Playable>>(`songs?${query}`)
-    this.state.playables = unionBy(this.state.playables, this.syncWithVault(resource.data), 'id')
-
-    return resource.meta.next_cursor
+    return nextCursor
   },
 
   getMostPlayedSongs(count: number) {
@@ -388,7 +377,7 @@ export const playableStore = {
   },
 
   async fetchFavorites() {
-    this.state.favorites = this.syncWithVault(await http.get<Playable[]>('songs/favorite'))
+    this.state.favorites = this.syncWithVault(await subsonic.starredSongs())
     return this.state.favorites
   },
 
@@ -397,12 +386,12 @@ export const playableStore = {
     // We'll update the liked status again after the HTTP request.
     playable.favorite = !playable.favorite
 
-    const favorite = await http.post<Favorite | null>(`favorites/toggle`, {
-      type: 'playable',
-      id: playable.id,
-    })
-
-    playable.favorite = Boolean(favorite)
+    try {
+      await (playable.favorite ? subsonic.star([playable.id]) : subsonic.unstar([playable.id]))
+    } catch (error) {
+      playable.favorite = !playable.favorite
+      throw error
+    }
 
     this.state.favorites = playable.favorite
       ? unionBy(this.state.favorites, arrayify(playable), 'id')
@@ -414,8 +403,7 @@ export const playableStore = {
     song.rating = rating
 
     try {
-      const updated = await http.put<Song>(`songs/${song.id}/rating`, { rating })
-      song.rating = updated.rating
+      await subsonic.setRating(song.id, rating)
     } catch (e) {
       song.rating = previous
       throw e
@@ -426,41 +414,26 @@ export const playableStore = {
     playables = arrayify(playables)
     playables.forEach(playable => (playable.favorite = true))
 
-    await http.post('favorites', {
-      type: 'playable',
-      ids: playables.map(playable => playable.id),
-    })
+    await subsonic.star(playables.map(playable => playable.id))
 
     this.state.favorites = unionBy(this.state.favorites, playables, 'id')
   },
 
   async undoFavorite(playables: MaybeArray<Playable>) {
     playables = arrayify(playables)
-    playables.forEach(playable => (playable.favorite = true))
+    playables.forEach(playable => (playable.favorite = false))
 
-    await http.delete('favorites', {
-      type: 'playable',
-      ids: playables.map(playable => playable.id),
-    })
+    await subsonic.unstar(playables.map(playable => playable.id))
 
     this.state.favorites = differenceBy(this.state.favorites, playables, 'id')
   },
 
+  // Stars have no order on the server, so a new order lasts until reload.
   async moveFavoritesInList(playables: MaybeArray<Playable>, target: Playable, placement: Placement) {
-    const orderHash = JSON.stringify(this.state.favorites.map(({ id }) => id))
-
     this.state.favorites.splice(
       0,
       this.state.favorites.length,
       ...moveItemsInList(this.state.favorites, playables, target, placement),
     )
-
-    if (orderHash !== JSON.stringify(this.state.favorites.map(({ id }) => id))) {
-      await http.silently.post('favorites/move', {
-        placement,
-        songs: arrayify(playables).map(({ id }) => id),
-        target: target.id,
-      })
-    }
   },
 }

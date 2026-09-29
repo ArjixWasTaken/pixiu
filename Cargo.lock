@@ -3225,6 +3225,8 @@ dependencies = [
  "hex",
  "pixiu-core",
  "pixiu-db",
+ "pixiu-subsonic",
+ "pixiu-treasury",
  "rand 0.10.3",
  "serde",
  "serde_json",

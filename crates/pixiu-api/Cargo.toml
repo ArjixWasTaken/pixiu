@@ -10,6 +10,7 @@ publish = false
 [dependencies]
 pixiu-core.workspace = true
 pixiu-db.workspace = true
+pixiu-subsonic.workspace = true
 
 axum.workspace = true
 hex.workspace = true
@@ -20,6 +21,7 @@ tokio.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
+pixiu-treasury.workspace = true
 tempfile.workspace = true
 tower.workspace = true
 

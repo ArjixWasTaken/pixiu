@@ -1,6 +1,8 @@
 import isMobile from 'ismobilejs'
 import { reactive } from 'vue'
 import { http } from '@/services/http'
+import { subsonic } from '@/services/subsonic'
+import { logger } from '@/utils/logger'
 import { playlistFolderStore } from '@/stores/playlistFolderStore'
 import { playlistStore } from '@/stores/playlistStore'
 import { preferenceStore } from '@/stores/preferenceStore'
@@ -61,7 +63,17 @@ export const commonStore = {
   state: reactive<CommonStoreState>(initialState),
 
   async init() {
-    Object.assign(this.state, await http.get<CommonStoreState>('bootstrap'))
+    const [bootstrap, playlists, queueState] = await Promise.all([
+      http.get<CommonStoreState>('bootstrap'),
+      subsonic.playlists(),
+      // A queue that fails to load is not worth failing start-up over.
+      subsonic.playQueue().catch(error => {
+        logger.error(error)
+        return initialState.queue_state
+      }),
+    ])
+
+    Object.assign(this.state, bootstrap, { playlists, queue_state: queueState })
 
     // Always disable YouTube integration on mobile.
     this.state.uses_you_tube = this.state.uses_you_tube && !isMobile.any

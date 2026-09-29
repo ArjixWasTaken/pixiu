@@ -3,7 +3,8 @@ import { reactive } from 'vue'
 import { differenceBy, unionBy } from 'lodash-es'
 import { cache } from '@/services/cache'
 import { http } from '@/services/http'
-import { flattenParams } from '@/utils/helpers'
+import { library } from '@/services/library'
+import { subsonic } from '@/services/subsonic'
 import { logger } from '@/utils/logger'
 import { useVault } from '@/composables/useVault'
 import { playableStore as songStore } from '@/stores/playableStore'
@@ -57,8 +58,8 @@ export const albumStore = {
   /**
    * Fetch the (blurry) thumbnail-sized version of an album's cover.
    */
-  fetchThumbnail: async (id: Album['id']) => {
-    return (await http.get<{ thumbnailUrl: string }>(`albums/${id}/thumbnail`)).thumbnailUrl
+  async fetchThumbnail(id: Album['id']) {
+    return (await this.resolve(id))?.thumbnail ?? null
   },
 
   async resolve(id: Album['id']) {
@@ -67,7 +68,7 @@ export const albumStore = {
     if (!album) {
       try {
         album = this.syncWithVault(
-          await cache.remember(['album', id], async () => await http.get<Album>(`albums/${id}`)),
+          await cache.remember(['album', id], async () => await subsonic.album(id)),
         )[0]
       } catch (error: unknown) {
         logger.error(error)
@@ -78,20 +79,17 @@ export const albumStore = {
   },
 
   async paginate(params: AlbumListPaginateParams) {
-    const query = new URLSearchParams(flattenParams(params))
-    query.set('cursor', params.cursor ?? '')
+    const { items, nextCursor } = await library.albums(params)
+    this.state.albums = unionBy(this.state.albums, this.syncWithVault(items), 'id')
 
-    const resource = await http.get<CursorPaginatorResource<Album>>(`albums?${query}`)
-    this.state.albums = unionBy(this.state.albums, this.syncWithVault(resource.data), 'id')
-
-    return resource.meta.next_cursor
+    return nextCursor
   },
 
   async fetchForArtist(artist: Artist | Artist['id']) {
     const id = typeof artist === 'string' ? artist : artist.id
 
     return this.syncWithVault(
-      await cache.remember(['artist-albums', id], async () => await http.get<Album[]>(`artists/${id}/albums`)),
+      await cache.remember(['artist-albums', id], async () => await subsonic.artistAlbums(id)),
     )
   },
 
@@ -100,12 +98,12 @@ export const albumStore = {
     // We'll update the liked status again after the HTTP request.
     album.favorite = !album.favorite
 
-    const favorite = await http.post<Favorite | null>(`favorites/toggle`, {
-      type: 'album',
-      id: album.id,
-    })
-
-    album.favorite = Boolean(favorite)
+    try {
+      await (album.favorite ? subsonic.star([album.id]) : subsonic.unstar([album.id]))
+    } catch (error) {
+      album.favorite = !album.favorite
+      throw error
+    }
   },
 
   async rate(album: Reactive<Album>, rating: number) {
@@ -113,11 +111,7 @@ export const albumStore = {
     album.rating = rating
 
     try {
-      const updated = await http.put<Album>(`albums/${album.id}/rating`, { rating })
-
-      if (album.rating === rating) {
-        album.rating = updated.rating
-      }
+      await subsonic.setRating(album.id, rating)
     } catch (error) {
       if (album.rating === rating) {
         album.rating = previous

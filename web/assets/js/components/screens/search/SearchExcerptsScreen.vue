@@ -18,8 +18,11 @@
       />
       <ArtistResultsBlock :artists="excerpt.artists" :searching data-testid="artist-excerpts" />
       <AlbumResultsBlock :albums="excerpt.albums" :searching data-testid="album-excerpts" />
-      <PodcastExcerptResultsBlock :podcasts="excerpt.podcasts" :searching data-testid="podcast-excerpts" />
+      <PodcastExcerptResultsBlock
+        v-if="commonStore.state.uses_podcasts"
+        :podcasts="excerpt.podcasts" :searching data-testid="podcast-excerpts" />
       <RadioStationExcerptResultsBlock
+        v-if="commonStore.state.uses_radio"
         :stations="excerpt.radio_stations"
         :searching
         data-testid="radio-station-excerpts"
@@ -41,6 +44,7 @@ import { faSearch } from '@fortawesome/free-solid-svg-icons'
 import { intersectionBy } from 'lodash-es'
 import { ref, toRef } from 'vue'
 import { eventBus } from '@/utils/eventBus'
+import { commonStore } from '@/stores/commonStore'
 import { searchStore } from '@/stores/searchStore'
 
 import ScreenHeader from '@/components/ui/ScreenHeader.vue'

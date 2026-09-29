@@ -2,7 +2,7 @@
   <ScreenBase>
     <template #header>
       <ScreenHeader :disabled="loading" :layout="playables.length ? headerLayout : 'collapsed'">
-        Results for <span class="font-thin">{{ decodedQ }}</span>
+        Results for <span class="font-thin">{{ q }}</span>
 
         <template #thumbnail>
           <ThumbnailStack :thumbnails="thumbnails" />
@@ -31,7 +31,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, onMounted, ref, toRef } from 'vue'
+import { onMounted, ref, toRef } from 'vue'
 import { searchStore } from '@/stores/searchStore'
 import { usePlayableList } from '@/composables/usePlayableList'
 import { usePlayableListControls } from '@/composables/usePlayableListControls'
@@ -61,7 +61,6 @@ const {
 } = usePlayableList(toRef(searchStore.state, 'playables'), { type: 'Search.Playables' })
 
 const { PlayableListControls, config } = usePlayableListControls('Search.Playables')
-const decodedQ = computed(() => decodeURIComponent(q.value))
 const loading = ref(false)
 
 searchStore.resetPlayableResultState()

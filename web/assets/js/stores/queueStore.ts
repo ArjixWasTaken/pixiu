@@ -3,7 +3,8 @@ import { differenceBy, unionBy } from 'lodash-es'
 import { arrayify, moveItemsInList } from '@/utils/helpers'
 import { logger } from '@/utils/logger'
 import { isSong } from '@/utils/typeGuards'
-import { http } from '@/services/http'
+import { library } from '@/services/library'
+import { subsonic } from '@/services/subsonic'
 import { playableStore } from '@/stores/playableStore'
 
 export const queueStore = {
@@ -14,6 +15,7 @@ export const queueStore = {
   init(savedState: QueueState) {
     // don't set this.all here, as it would trigger saving state
     this.state.playables = playableStore.syncWithVault(savedState.songs)
+    this.playback = { current: savedState.current_song?.id ?? null, position: savedState.playback_position }
 
     if (!this.state.playables.length) {
       return
@@ -152,20 +154,35 @@ export const queueStore = {
   },
 
   async fetchRandom(limit = 500) {
-    this.all = await http.get<Song[]>(`queue/fetch?order=rand&limit=${limit}`)
+    this.all = await subsonic.randomSongs(limit)
     return this.all
   },
 
   async fetchInOrder(sortField: PlayableListSortField, order: SortOrder, limit = 500) {
-    this.all = await http.get<Song[]>(`queue/fetch?order=${order}&sort=${sortField}&limit=${limit}`)
+    this.all = (await library.songs({ sort: sortField, order, limit })).items
     return this.all
   },
 
+  /** What is playing and where, saved with the queue. */
+  playback: { current: null as Playable['id'] | null, position: 0 },
+
   saveState() {
-    try {
-      http.silently.put('queue/state', { songs: this.state.playables.map(({ id }) => id) })
-    } catch (error: unknown) {
-      logger.error(error)
+    subsonic
+      .savePlayQueue(
+        this.state.playables.map(({ id }) => id),
+        this.playback.current,
+        this.playback.position,
+      )
+      .catch(error => logger.error(error))
+  },
+
+  /** Saves the queue with the playing song and its position (seconds). */
+  savePlaybackStatus(playable: Playable, position: number) {
+    if (this.playback.current === playable.id && this.playback.position === position) {
+      return
     }
+
+    this.playback = { current: playable.id, position }
+    this.saveState()
   },
 }

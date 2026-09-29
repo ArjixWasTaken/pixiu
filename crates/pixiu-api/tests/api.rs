@@ -7,7 +7,10 @@ use axum::{
 };
 use pixiu_api::ApiState;
 use pixiu_core::SecretBox;
-use pixiu_db::{ApiKey, Db, User};
+use std::path::Path;
+
+use pixiu_db::{Annotation, ApiKey, Db, Track, User, now, toasty};
+use pixiu_treasury::{Claim, Provenance, Treasury, tags};
 use serde_json::{Value, json};
 use tower::ServiceExt;
 
@@ -74,6 +77,48 @@ impl Api {
             .await;
         assert_eq!(status, StatusCode::OK, "{body}");
         body["token"].as_str().unwrap().to_owned()
+    }
+
+    /// Adds the test albums: two tagged songs (genre Ambient) and one
+    /// untagged.
+    async fn stock(&self) {
+        let dir = self._dir.path();
+        let treasury = Treasury::new(self.db.clone(), dir.join("treasure"), dir.join("cache"));
+        let staging = dir.join("staging");
+        std::fs::create_dir_all(&staging).unwrap();
+        let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/audio");
+        for name in ["01-first-light.flac", "02-second-wind.mp3", "untagged.opus"] {
+            let staged = staging.join(name);
+            std::fs::copy(fixtures.join(name), &staged).unwrap();
+            let info = tags::read(&staged).unwrap();
+            treasury
+                .ingest(
+                    &staged,
+                    &info,
+                    None,
+                    Provenance::offering("upload.flac", None),
+                    Claim::offering(),
+                )
+                .await
+                .unwrap();
+        }
+    }
+
+    async fn track_id(&self, title: &str) -> u64 {
+        Track::all()
+            .exec(&mut self.db.clone())
+            .await
+            .unwrap()
+            .into_iter()
+            .find(|track| track.title == title)
+            .unwrap()
+            .id
+    }
+
+    async fn get(&self, token: &str, path: &str) -> Value {
+        let (status, body) = self.request(Method::GET, path, Some(token), None).await;
+        assert_eq!(status, StatusCode::OK, "{path}: {body}");
+        body
     }
 
     async fn keys(&self) -> Vec<ApiKey> {
@@ -194,4 +239,93 @@ async fn bootstrap_needs_a_key_and_describes_the_hoard() {
     // Using a key marks it used.
     let keys = api.keys().await;
     assert!(keys[0].last_used_at.is_some());
+}
+
+fn titles(page: &Value) -> Vec<&str> {
+    page.as_array()
+        .or_else(|| page["data"].as_array())
+        .unwrap()
+        .iter()
+        .map(|item| item["title"].as_str().or(item["name"].as_str()).unwrap())
+        .collect()
+}
+
+#[tokio::test]
+async fn songs_page_with_a_cursor_in_any_order() {
+    let api = Api::new().await;
+    let token = api.claim().await;
+    api.stock().await;
+
+    let first = api.get(&token, "/api/songs?sort=title&limit=2").await;
+    assert_eq!(titles(&first).len(), 2);
+    let cursor = first["meta"]["next_cursor"].as_str().unwrap();
+    let rest = api
+        .get(
+            &token,
+            &format!("/api/songs?sort=title&limit=2&cursor={cursor}"),
+        )
+        .await;
+    assert_eq!(titles(&rest).len(), 1);
+    assert!(rest["meta"]["next_cursor"].is_null());
+
+    let by_length = api.get(&token, "/api/songs?sort=length&order=desc").await;
+    let lengths: Vec<i64> = by_length["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|song| song["duration"].as_i64().unwrap())
+        .collect();
+    assert!(
+        lengths.windows(2).all(|pair| pair[0] >= pair[1]),
+        "{lengths:?}"
+    );
+
+    let ambient = api.get(&token, "/api/songs?genre=Ambient&sort=track").await;
+    assert_eq!(titles(&ambient), ["First Light", "Second Wind"]);
+
+    let (status, _) = api
+        .request(Method::GET, "/api/songs?sort=owner", Some(&token), None)
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+}
+
+#[tokio::test]
+async fn favorites_plays_and_genres_shape_the_lists() {
+    let api = Api::new().await;
+    let token = api.claim().await;
+    api.stock().await;
+    let second_wind = api.track_id("Second Wind").await;
+    toasty::create!(Annotation {
+        item: format!("tr-{second_wind}"),
+        play_count: 3,
+        last_played: Some(now()),
+        starred_at: Some(now()),
+    })
+    .exec(&mut api.db.clone())
+    .await
+    .unwrap();
+
+    let starred = api.get(&token, "/api/songs?favorites_only=true").await;
+    assert_eq!(titles(&starred), ["Second Wind"]);
+    let played = api
+        .get(&token, "/api/songs?sort=play_count&order=desc")
+        .await;
+    assert_eq!(titles(&played)[0], "Second Wind");
+    let recent = api.get(&token, "/api/songs/recently-played").await;
+    assert_eq!(titles(&recent), ["Second Wind"]);
+
+    let albums = api.get(&token, "/api/albums?sort=name").await;
+    assert!(titles(&albums).contains(&"Test Album"), "{albums}");
+    let artists = api.get(&token, "/api/artists").await;
+    assert!(!titles(&artists).is_empty());
+
+    let genres = api.get(&token, "/api/genres").await;
+    let ambient = genres
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|genre| genre["id"] == "Ambient")
+        .unwrap();
+    assert_eq!(ambient["song_count"], 2);
+    assert!(ambient["length"].as_u64().unwrap() > 0);
 }

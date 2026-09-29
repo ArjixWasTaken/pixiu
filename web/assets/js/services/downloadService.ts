@@ -1,4 +1,4 @@
-import { authService } from '@/services/authService'
+import { subsonic } from '@/services/subsonic'
 import { zipDownloadService } from '@/services/zipDownloadService'
 import { playableStore } from '@/stores/playableStore'
 import { arrayify } from '@/utils/helpers'
@@ -12,7 +12,7 @@ export const downloadService = {
       return
     }
 
-    await zipDownloadService.start(items, 'koel-download', 'none')
+    await zipDownloadService.start(items, 'pixiu-download', 'none')
   },
 
   async fromAlbum(album: Album) {
@@ -36,6 +36,6 @@ export const downloadService = {
   },
 
   trigger: (playable: Playable) => {
-    open(`${window.KOEL.base_url}download/songs?songs[]=${playable.id}&t=${authService.getAudioToken()}`)
+    open(subsonic.url('download', { id: playable.id }))
   },
 }

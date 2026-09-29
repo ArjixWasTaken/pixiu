@@ -39,8 +39,29 @@ const url = (method: string, params: Params = {}) => {
   return target.toString()
 }
 
-const call = async <T = Record<string, any>>(method: string, params: Params = {}): Promise<T> => {
-  const response = await fetch(url(method, params))
+/**
+ * Calls a Subsonic method. `post` sends the parameters as a form instead of
+ * in the URL, for long lists of ids.
+ */
+const call = async <T = Record<string, any>>(method: string, params: Params = {}, post = false): Promise<T> => {
+  let response: Response
+
+  if (post) {
+    const form = new URLSearchParams()
+
+    for (const [name, value] of Object.entries(params)) {
+      for (const item of Array.isArray(value) ? value : [value]) {
+        if (item !== null && item !== undefined) {
+          form.append(name, String(item))
+        }
+      }
+    }
+
+    response = await fetch(url(method), { method: 'POST', body: form })
+  } else {
+    response = await fetch(url(method, params))
+  }
+
   const body = (await response.json())['subsonic-response']
 
   if (body.status !== 'ok') {
@@ -125,6 +146,24 @@ const toArtist = (artist: Record<string, any>): Artist => ({
   permissions: { edit: true },
 })
 
+/** Subsonic's `Playlist` as koel's. Mirrors of watched playlists are read-only. */
+const toPlaylist = (playlist: Record<string, any>): Playlist => ({
+  type: 'playlists',
+  id: playlist.id,
+  owner_id: '1',
+  name: playlist.name,
+  description: playlist.comment ?? '',
+  folder_id: null,
+  is_smart: false,
+  is_collaborative: false,
+  rules: [],
+  cover: playlist.coverArt ? coverUrl(playlist.coverArt) : null,
+  permissions: { edit: !playlist.readonly, delete: !playlist.readonly },
+})
+
+const songsOf = (list: Record<string, any> | undefined, key = 'song') =>
+  ((list?.[key] ?? []) as Record<string, any>[]).map(toSong)
+
 export const subsonic = {
   url,
   call,
@@ -132,6 +171,7 @@ export const subsonic = {
   toSong,
   toAlbum,
   toArtist,
+  toPlaylist,
 
   /** Where `<audio>` fetches a song; transcoded to `bitrate` kbps when given. */
   streamUrl: (id: string, bitrate?: number) =>
@@ -157,8 +197,121 @@ export const subsonic = {
     return ((body.album?.song ?? []) as Record<string, any>[]).map(toSong)
   },
 
-  async randomSongs(size: number) {
-    const body = await call('getRandomSongs', { size })
-    return ((body.randomSongs?.song ?? []) as Record<string, any>[]).map(toSong)
+  async randomSongs(size: number, genre?: string) {
+    const body = await call('getRandomSongs', { size, genre })
+    return songsOf(body.randomSongs)
   },
+
+  async song(id: string) {
+    return toSong((await call('getSong', { id })).song)
+  },
+
+  async album(id: string) {
+    return toAlbum((await call('getAlbum', { id })).album)
+  },
+
+  async artist(id: string) {
+    return toArtist((await call('getArtist', { id })).artist)
+  },
+
+  /** An artist's albums, newest first as Subsonic lists them. */
+  async artistAlbums(id: string) {
+    const body = await call('getArtist', { id })
+    return ((body.artist?.album ?? []) as Record<string, any>[]).map(toAlbum)
+  },
+
+  async artistInfo(id: string) {
+    return (await call('getArtistInfo2', { id })).artistInfo2 ?? {}
+  },
+
+  async starredSongs() {
+    return songsOf((await call('getStarred2')).starred2)
+  },
+
+  star: (ids: string[]) => call('star', { id: ids }, true),
+  unstar: (ids: string[]) => call('unstar', { id: ids }, true),
+  setRating: (id: string, rating: number) => call('setRating', { id, rating }),
+
+  /** Counts a play (`submission`), or says what is playing now. */
+  scrobble: (id: string, submission: boolean, time?: number) => call('scrobble', { id, submission, time }),
+
+  async search(query: string, count: number) {
+    const body = await call('search3', { query, songCount: count, albumCount: count, artistCount: count })
+    const result = body.searchResult3 ?? {}
+
+    return {
+      songs: songsOf(result),
+      albums: ((result.album ?? []) as Record<string, any>[]).map(toAlbum),
+      artists: ((result.artist ?? []) as Record<string, any>[]).map(toArtist),
+    }
+  },
+
+  async playlists() {
+    const body = await call('getPlaylists')
+    return ((body.playlists?.playlist ?? []) as Record<string, any>[]).map(toPlaylist)
+  },
+
+  async playlistSongs(id: string) {
+    return songsOf((await call('getPlaylist', { id })).playlist, 'entry')
+  },
+
+  async createPlaylist(name: string, songIds: string[]) {
+    return toPlaylist((await call('createPlaylist', { name, songId: songIds }, true)).playlist)
+  },
+
+  /** Replaces a playlist's songs. */
+  setPlaylistSongs: (id: string, songIds: string[]) => call('createPlaylist', { playlistId: id, songId: songIds }, true),
+
+  updatePlaylist: (id: string, data: { name?: string; comment?: string; songIdToAdd?: string[] }) =>
+    call('updatePlaylist', { playlistId: id, ...data }, true),
+
+  deletePlaylist: (id: string) => call('deletePlaylist', { id }),
+
+  /**
+   * A song's lyrics as koel reads them: LRC when píxiū has synced lines,
+   * plain text otherwise, empty when it has none.
+   */
+  async lyrics(id: string) {
+    const list = ((await call('getLyricsBySongId', { id })).lyricsList?.structuredLyrics ?? []) as Record<
+      string,
+      any
+    >[]
+    const chosen = list.find(lyrics => lyrics.synced) ?? list[0]
+
+    if (!chosen) {
+      return ''
+    }
+
+    const lines = (chosen.line ?? []) as Array<{ start?: number; value: string }>
+
+    if (!chosen.synced) {
+      return lines.map(line => line.value).join('\n')
+    }
+
+    const stamp = (ms: number) => {
+      const minutes = String(Math.floor(ms / 60000)).padStart(2, '0')
+      const seconds = String(Math.floor((ms % 60000) / 1000)).padStart(2, '0')
+      const hundredths = String(Math.floor((ms % 1000) / 10)).padStart(2, '0')
+
+      return `[${minutes}:${seconds}.${hundredths}]`
+    }
+
+    return lines.map(line => `${stamp(line.start ?? 0)}${line.value}`).join('\n')
+  },
+
+  /** The saved queue, as koel's `QueueState`. */
+  async playQueue(): Promise<QueueState> {
+    const queue = (await call('getPlayQueue')).playQueue ?? {}
+    const songs = songsOf(queue, 'entry')
+
+    return {
+      type: 'queue-states',
+      songs,
+      current_song: songs.find(song => song.id === queue.current) ?? null,
+      playback_position: Math.floor((queue.position ?? 0) / 1000),
+    }
+  },
+
+  savePlayQueue: (ids: string[], current: string | null, positionSeconds: number) =>
+    call('savePlayQueue', { id: ids, current, position: Math.floor(positionSeconds * 1000) }, true),
 }

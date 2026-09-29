@@ -1,6 +1,6 @@
 import type { ZipWriter } from '@zip.js/zip.js'
 import { reactive } from 'vue'
-import { authService } from '@/services/authService'
+import { subsonic } from '@/services/subsonic'
 import { eventBus } from '@/utils/eventBus'
 
 export class ZipTooLargeError extends Error {}
@@ -92,8 +92,7 @@ const getFileSize = (playable: Playable) => (playable.type === 'songs' ? (playab
 export const getTotalBytes = (playables: Playable[]) =>
   playables.reduce((total, playable) => total + getFileSize(playable), 0)
 
-const getDownloadUrl = (playable: Playable) =>
-  `${window.KOEL.base_url}download/songs?songs[]=${playable.id}&t=${authService.getAudioToken()}`
+const getDownloadUrl = (playable: Playable) => subsonic.url('download', { id: playable.id })
 
 const countBytesInto = (onBytes: (count: number) => void) =>
   new TransformStream<Uint8Array, Uint8Array>({

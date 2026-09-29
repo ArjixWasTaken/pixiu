@@ -5,6 +5,12 @@ import { usePolicies } from '@/composables/usePolicies'
 const UUID_REGEX = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
 const ULID_REGEX = '[0-9A-Za-z]{26}'
 
+// píxiū's ids, as its Subsonic API writes them.
+const ALBUM_ID = 'al-[0-9]+'
+const ARTIST_ID = 'ar-[0-9]+'
+const PLAYLIST_ID = 'pl-[0-9]+'
+const SONG_ID = 'tr-[0-9]+'
+
 export const routes = [
   {
     name: 'home',
@@ -108,7 +114,7 @@ export const routes = [
     path: '/albums/:id/:tab?',
     screen: 'Album',
     constraints: {
-      id: ULID_REGEX,
+      id: ALBUM_ID,
       tab: '(songs|other-albums|information)',
     },
   },
@@ -117,7 +123,7 @@ export const routes = [
     path: '/artists/:id/:tab?',
     screen: 'Artist',
     constraints: {
-      id: ULID_REGEX,
+      id: ARTIST_ID,
       tab: '(songs|albums|information|events)',
     },
   },
@@ -126,7 +132,7 @@ export const routes = [
     path: '/playlists/:id',
     screen: 'Playlist',
     constraints: {
-      id: UUID_REGEX,
+      id: PLAYLIST_ID,
     },
   },
   {
@@ -180,7 +186,7 @@ export const routes = [
     path: '/songs/:id',
     screen: 'Queue',
     constraints: {
-      id: UUID_REGEX,
+      id: SONG_ID,
     },
     meta: {
       redirect: () => 'queue',
