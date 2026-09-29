@@ -1,7 +1,7 @@
 <template>
   <ScreenBase>
     <template #header>
-      <ScreenHeader layout="collapsed">Hunt</ScreenHeader>
+      <ScreenHeader layout="collapsed">Discover</ScreenHeader>
     </template>
 
     <form class="flex gap-2 max-w-[720px] mb-8" @submit.prevent="handleSubmit">
@@ -47,8 +47,8 @@
       <template #icon>
         <Icon :icon="faSearch" />
       </template>
-      What should the beast bring back?
-      <span class="secondary block">Search YouTube Music; grabbed songs show up on Jobs, then in your library.</span>
+      Find music on YouTube Music
+      <span class="secondary block">Downloads show up on Jobs, then in your library.</span>
     </ScreenEmptyState>
   </ScreenBase>
 </template>
@@ -98,7 +98,7 @@ const grab = async (item: HuntAlbum | HuntTrack, request: () => Promise<unknown>
   try {
     await request()
     item.standing = 'pending'
-    toastSuccess(`“${item.title}” is on its way. Jobs shows how it goes.`)
+    toastSuccess(`Downloading “${item.title}”. Jobs shows how it goes.`)
   } catch (error: unknown) {
     handleHttpError(error)
   }

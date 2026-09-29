@@ -62,8 +62,8 @@ async fn kept(db: &mut Db, track: &Track) -> ApiResult<Vec<JsonValue>> {
     for claim in TrackClaim::filter_by_track_id(track.id).exec(db).await? {
         let reference: Option<u64> = claim.reference.as_deref().and_then(|id| id.parse().ok());
         let why = match claim.kind {
-            ClaimKind::Offering => "You offered it".to_owned(),
-            ClaimKind::ManualGrab => "You grabbed or kept it".to_owned(),
+            ClaimKind::Offering => "You uploaded it".to_owned(),
+            ClaimKind::ManualGrab => "You downloaded or kept it".to_owned(),
             ClaimKind::Starred => "Starred in an app".to_owned(),
             ClaimKind::WatchPlaylist => match watch_name(db, reference).await? {
                 Some(name) => format!("Watched playlist “{name}”"),

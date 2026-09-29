@@ -194,7 +194,7 @@ pub(crate) async fn add(
         Some(Link::Artist(id)) => (WatchKind::Artist, id),
         Some(Link::Album(_) | Link::Track(_)) => {
             return Err(ApiError::unprocessable(
-                "That is an album or a song; grab it from Hunt instead.",
+                "That is an album or a song; download it from Discover instead.",
             ));
         }
         None => {

@@ -22,10 +22,10 @@ first) into a library it owns, and serves that hoard to any Subsonic client.
   [koel](https://koel.dev): browse and search the library, queue and play
   (the queue and position follow you across devices), like, rate, time-synced
   lyrics, an equalizer and visualizers, playlists, smart playlists whose songs
-  follow rules, and playlist folders. A Hunting section beside it manages
+  follow rules, and playlist folders. A Manage section beside it handles
   everything below.
-- **Hunting.** Search YouTube Music in the player and grab songs or whole
-  albums. Downloads run in the background (the Jobs screen shows their progress
+- **Downloading.** Search YouTube Music in the player (Discover) and
+  download songs or whole albums. Downloads run in the background (the Jobs screen shows their progress
   live): the Opus audio stream is remuxed losslessly into `.opus`, tagged, and
   filed into the treasure with its cover. When YouTube refuses a direct
   download, píxiū falls back to `yt-dlp`.
@@ -48,7 +48,7 @@ first) into a library it owns, and serves that hoard to any Subsonic client.
   time-synced) or YouTube Music. Instrumentals are recognized as such; songs
   with no lyrics anywhere are looked up again a month later, or whenever you
   look their album up.
-- **Orphans.** Every track records why it is kept (an offering, a grab, a
+- **Orphans.** Every track records why it is kept (an upload, a download, a
   watch, a playlist). When a song leaves a watched playlist, or you stop
   watching something, its files stay; tracks nothing keeps any more are
   listed as orphans, for you to delete (one by one or all at once) or keep.
@@ -62,7 +62,7 @@ first) into a library it owns, and serves that hoard to any Subsonic client.
   session warden checks the login every half hour and refreshes its cookies
   twice a day. If Google ends the session (a password change, "sign out
   everywhere"), the player says so until you log in again.
-- **Offerings.** Upload audio files or zip archives in the player. píxiū reads
+- **Uploads.** Upload audio files or zip archives in the player. píxiū reads
   their tags, you review, and accepted files are filed into the treasure,
   with the cover saved next to them. Nothing is ever deleted behind your
   back.
@@ -107,8 +107,8 @@ hardened: a read-only root filesystem (only the volumes and two scratch
 `tmpfs` mounts are writable), no Linux capabilities, and no way to gain
 privileges.
 
-Open <http://localhost:4533> and claim the hoard: the first visitor creates the
-admin account. Then point your Subsonic client at `http://<host>:4533` with the
+Open <http://localhost:4533> and create the admin account (the first visitor
+does). Then point your Subsonic client at `http://<host>:4533` with the
 same username and password.
 
 ### From source

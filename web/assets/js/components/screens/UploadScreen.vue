@@ -2,7 +2,7 @@
   <ScreenBase>
     <template #header>
       <ScreenHeader layout="collapsed">
-        Offerings
+        Uploads
         <template #meta>
           <span>{{ pluralize(batches, 'batch') }} to review</span>
         </template>
@@ -21,7 +21,7 @@
         <Icon :icon="faUpload" size="2x" />
         <span>{{ canDropFolders ? 'Drop files, folders or zip archives' : 'Drop files or zip archives' }}</span>
         <span class="text-k-fg-50 text-sm"
-          >or click to choose. They wait here for review before joining the hoard.</span
+          >or click to choose. They wait here for review before joining your library.</span
         >
         <input
           :accept="acceptAttribute"
@@ -139,7 +139,7 @@ const accept = async (batch: OfferingBatch) => {
     const { failures } = await huntingService.acceptBatch(batch.batch)
 
     if (failures.length) {
-      toastWarning(`${pluralize(failures, 'file')} could not join the hoard: ${failures[0].error}`)
+      toastWarning(`${pluralize(failures, 'file')} could not be added: ${failures[0].error}`)
     } else {
       toastSuccess('Accepted. The new songs are in your library and being looked up on MusicBrainz.')
     }

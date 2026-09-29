@@ -2,7 +2,7 @@
   <AuthFormCard :failed data-testid="login-form" @submit="handleSubmit">
     <FormRow v-if="claiming">
       <p class="text-center text-[.95rem] text-k-fg-70">
-        Claim this hoard: create the admin account. Subsonic apps sign in with it too.
+        Welcome to píxiū! Create the admin account; Subsonic apps sign in with it too.
       </p>
     </FormRow>
 
@@ -28,7 +28,7 @@
     </FormRow>
 
     <FormRow>
-      <Btn class="w-full" data-testid="submit" type="submit">{{ claiming ? 'Claim' : 'Log In' }}</Btn>
+      <Btn class="w-full" data-testid="submit" type="submit">{{ claiming ? 'Create Account' : 'Log In' }}</Btn>
     </FormRow>
   </AuthFormCard>
 </template>
@@ -53,7 +53,7 @@ const emit = defineEmits<{
 }>()
 
 const failed = ref(false)
-/** A fresh píxiū has no admin yet: the form claims the hoard instead. */
+/** A fresh píxiū has no admin yet: the form creates the account instead. */
 const claiming = ref(false)
 const problem = ref('')
 

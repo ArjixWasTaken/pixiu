@@ -1,7 +1,7 @@
 <template>
-  <span v-if="standing === 'hoarded'" class="standing hoarded"> <Icon :icon="faCheck" /> In the hoard </span>
+  <span v-if="standing === 'hoarded'" class="standing hoarded"> <Icon :icon="faCheck" /> In your library </span>
   <span v-else-if="standing === 'pending'" class="standing pending"> <Icon :icon="faSpinner" spin /> On its way </span>
-  <Btn v-else size="small" @click.prevent="emit('grab')">Grab</Btn>
+  <Btn v-else size="small" @click.prevent="emit('grab')">Download</Btn>
 </template>
 
 <script lang="ts" setup>

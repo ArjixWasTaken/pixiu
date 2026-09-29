@@ -20,14 +20,14 @@
 
     <p class="text-k-fg-70 mb-6 max-w-[64ch]">
       Nothing keeps these any more: they left a watched playlist, were excluded, or their watch was removed. píxiū never
-      gives treasure back on its own. Keep them for good, or delete them from disk.
+      deletes music on its own. Keep them for good, or delete them from disk.
     </p>
 
     <ScreenEmptyState v-if="loaded && !orphans.length">
       <template #icon>
         <Icon :icon="faHeartCircleCheck" />
       </template>
-      Everything in the hoard is wanted
+      Everything in your library is wanted
       <span class="secondary block">Songs show up here when nothing keeps them any more.</span>
     </ScreenEmptyState>
 

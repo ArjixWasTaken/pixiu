@@ -1,7 +1,7 @@
 <template>
   <SidebarSection>
     <template #header>
-      <SidebarSectionHeader>Hunting</SidebarSectionHeader>
+      <SidebarSectionHeader>Manage</SidebarSectionHeader>
     </template>
 
     <ul class="menu">
@@ -54,7 +54,7 @@ const { currentUserCan } = usePolicies()
 const items = computed(() =>
   applyFilters<ManageSidebarItem[]>(Filter.MANAGE_SIDEBAR_ITEMS, [
     {
-      label: 'Hunt',
+      label: 'Discover',
       icon: faSearch,
       route: 'hunt',
       screens: ['Hunt'],
@@ -77,7 +77,7 @@ const items = computed(() =>
       isBusy: () => huntingStore.state.jobs.running > 0,
     },
     {
-      label: 'Offerings',
+      label: 'Uploads',
       icon: faUpload,
       route: 'upload',
       screens: ['Upload'],

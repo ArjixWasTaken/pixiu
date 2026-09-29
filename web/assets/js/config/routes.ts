@@ -72,7 +72,7 @@ export const routes = [
   },
   {
     name: 'upload',
-    path: '/offerings',
+    path: '/upload',
     screen: 'Upload',
     meta: {
       guard: () => usePolicies().currentUserCan.uploadSongs(),
@@ -80,7 +80,7 @@ export const routes = [
   },
   {
     name: 'hunt',
-    path: '/hunt',
+    path: '/discover',
     screen: 'Hunt',
   },
   {

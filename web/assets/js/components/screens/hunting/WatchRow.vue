@@ -13,7 +13,9 @@
 
       <p class="text-sm text-k-fg-70">
         <span :class="watch.status.state" class="status">{{ statusLabel }}</span>
-        <template v-if="watch.songs"> · {{ watch.songs.have }} of {{ watch.songs.total }} songs in the hoard</template>
+        <template v-if="watch.songs">
+          · {{ watch.songs.have }} of {{ watch.songs.total }} songs in your library</template
+        >
         <template v-if="watch.kind === 'artist'">
           · {{ pluralize(watch.releases_known, 'release') }} known ·
           {{ watch.include_singles ? 'albums, singles and EPs' : 'albums only' }}

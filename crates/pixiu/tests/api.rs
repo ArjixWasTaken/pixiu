@@ -546,7 +546,7 @@ async fn orphans_are_kept_or_deleted() {
 
     let orphans = api.get(&token, "/api/orphans").await;
     assert_eq!(orphans["orphans"].as_array().unwrap().len(), 2);
-    assert_eq!(orphans["orphans"][0]["reason"], "Nothing claims it");
+    assert_eq!(orphans["orphans"][0]["reason"], "Nothing keeps it");
     assert!(orphans["total_size"].as_u64().unwrap() > 0);
 
     let kept = api
@@ -591,7 +591,7 @@ async fn songs_and_albums_tell_more_than_subsonic() {
         "{info}"
     );
     assert_eq!(info["origin"], "offering");
-    assert_eq!(info["kept"][0]["why"], "You offered it");
+    assert_eq!(info["kept"][0]["why"], "You uploaded it");
     assert!(info["kept"][0]["excludable_from"].is_null());
 
     let album_id = api.get(&token, "/api/albums?sort=name").await["data"]

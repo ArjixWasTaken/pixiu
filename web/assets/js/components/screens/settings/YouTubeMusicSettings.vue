@@ -98,7 +98,7 @@ const look = computed(() => {
         text: 'YouTube Music signed píxiū out. Log in again; downloads that need the login wait until then.',
       }
     default:
-      return { alert: 'info' as const, title: 'Not connected', text: 'píxiū hunts without a login.' }
+      return { alert: 'info' as const, title: 'Not connected', text: 'Searching and downloading work without one.' }
   }
 })
 

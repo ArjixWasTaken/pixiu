@@ -3,8 +3,8 @@
     <SettingGroup>
       <template #title>File layout</template>
       <template #subtitle>
-        Where píxiū files each song in the treasure directory. New songs follow it at once; songs already filed move
-        when you say so.
+        Where píxiū files each song in its music folder. New songs follow it at once; songs already filed move when you
+        say so.
       </template>
 
       <FormRow>

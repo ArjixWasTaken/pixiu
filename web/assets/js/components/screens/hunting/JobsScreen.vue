@@ -18,7 +18,7 @@
       </template>
       Nothing going on
       <span class="secondary block"
-        >Grab something from <a :href="url('hunt')">Hunt</a> and its download shows up here.</span
+        >Download something from <a :href="url('hunt')">Discover</a> and it shows up here.</span
       >
     </ScreenEmptyState>
 

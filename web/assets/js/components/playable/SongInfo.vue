@@ -22,7 +22,7 @@
           <dd>
             <a v-if="info.youtube_url" :href="info.youtube_url" rel="noopener" target="_blank">YouTube Music</a>
             <template v-else>
-              Offering<template v-if="info.source_name"> “{{ info.source_name }}”</template>
+              Upload<template v-if="info.source_name"> “{{ info.source_name }}”</template>
               <template v-if="info.source_archive"> from {{ info.source_archive }}</template>
             </template>
             · {{ timeAgo(info.added_at) }}
@@ -38,7 +38,7 @@
         </dl>
 
         <section>
-          <h3 class="text-sm uppercase tracking-widest text-k-fg-70 mb-2">Why the hoard keeps it</h3>
+          <h3 class="text-sm uppercase tracking-widest text-k-fg-70 mb-2">Why píxiū keeps it</h3>
           <p v-if="!info.kept.length" class="text-k-warning">Nothing keeps it: it is an orphan.</p>
           <ul class="flex flex-col gap-2">
             <li v-for="(reason, index) in info.kept" :key="index" class="flex items-center gap-3">

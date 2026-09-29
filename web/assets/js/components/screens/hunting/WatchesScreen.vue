@@ -5,7 +5,7 @@
     </template>
 
     <p class="text-k-fg-70 mb-4 max-w-[64ch]">
-      píxiū keeps watched playlists, your liked music and artists’ new releases in the hoard, and mirrors watched
+      píxiū downloads what watched playlists, your liked music and artists’ new releases add, and mirrors watched
       playlists as read-only playlists.
     </p>
 

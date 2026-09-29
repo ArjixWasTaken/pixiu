@@ -150,7 +150,7 @@ pub(crate) async fn setup(
     if User::all().first().exec(&mut tx).await?.is_some() {
         return Err(ApiError::new(
             StatusCode::CONFLICT,
-            "This hoard is already claimed.",
+            "píxiū already has an admin account.",
         ));
     }
     let user = toasty::create!(User {

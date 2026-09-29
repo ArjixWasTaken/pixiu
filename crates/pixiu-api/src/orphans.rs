@@ -13,7 +13,7 @@ use crate::{ApiError, ApiResult, ApiState, Session};
 /// Why nothing keeps a track any more, for people.
 fn why(released: Option<&ReleasedClaim>) -> String {
     let Some(released) = released else {
-        return "Nothing claims it".to_owned();
+        return "Nothing keeps it".to_owned();
     };
     let named = |name: &Option<String>| {
         name.as_deref()
