@@ -5,6 +5,7 @@
     class="playlist select-none"
     :draggable="!isMobile.any"
     :active
+    :icon
     @dblclick="onDblClick"
     @contextmenu="onContextMenu"
     @dragleave="onDragLeave"
@@ -12,21 +13,12 @@
     @dragstart.stop="onDragStart"
     @drop="onDrop"
   >
-    <template #icon>
-      <Icon v-if="isRecentlyPlayedList(list)" :icon="faClockRotateLeft" fixed-width />
-      <Icon v-else-if="isFavoriteList(list)" :icon="faHeart" fixed-width />
-      <Icon v-else-if="list.is_smart" :icon="faWandMagicSparkles" fixed-width />
-      <Icon v-else-if="list.is_collaborative" :icon="faUsers" fixed-width />
-      <ListMusicIcon v-else :size="16" />
-    </template>
     {{ list.name }}
   </SidebarItem>
 </template>
 
 <script lang="ts" setup>
-import { faClockRotateLeft, faHeart, faUsers, faWandMagicSparkles } from '@fortawesome/free-solid-svg-icons'
 import isMobile from 'ismobilejs'
-import { ListMusicIcon } from 'lucide-vue-next'
 import { computed, inject, ref, toRefs } from 'vue'
 import { defineAsyncComponent } from '@/utils/helpers'
 import { playableStore } from '@/stores/playableStore'
@@ -67,6 +59,23 @@ const active = computed(() => {
     (isCurrentScreen('RecentlyPlayed') && isRecentlyPlayedList(list.value)) ||
     (isCurrentScreen('Playlist') && (list.value as Playlist).id === getRouteParam('id'))
   )
+})
+
+/** Smart playlists, mirrors of watched YouTube Music playlists, and plain ones. */
+const icon = computed(() => {
+  if (isRecentlyPlayedList(list.value)) {
+    return 'history'
+  }
+
+  if (isFavoriteList(list.value)) {
+    return 'favorite'
+  }
+
+  if (list.value.is_smart) {
+    return 'auto_awesome'
+  }
+
+  return list.value.permissions.edit ? 'queue_music' : 'sync'
 })
 
 const href = computed(() => {
@@ -174,7 +183,7 @@ const onDrop = async (event: DragEvent) => {
 
 <style lang="postcss" scoped>
 @reference '@css/app.pcss';
-.droppable {
-  @apply ring-1 ring-offset-0 ring-k-highlight rounded-md cursor-copy;
+.droppable :deep(a) {
+  @apply ring-2 ring-offset-0 ring-(--schemes-primary) cursor-copy;
 }
 </style>

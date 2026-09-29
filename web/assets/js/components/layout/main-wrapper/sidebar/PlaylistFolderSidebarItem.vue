@@ -9,11 +9,16 @@
     @drop="onDrop"
   >
     <ul>
-      <SidebarItem tabindex="0" @click="toggle" @contextmenu.prevent.stop="onContextMenu">
-        <template #icon>
-          <Icon :icon="opened ? faFolderOpen : faFolder" fixed-width />
-        </template>
+      <SidebarItem
+        :icon="opened ? 'folder_open' : 'folder'"
+        tabindex="0"
+        @click="toggle"
+        @contextmenu.prevent.stop="onContextMenu"
+      >
         {{ folder.name }}
+        <template #trailing>
+          <M3Icon :name="opened ? 'expand_less' : 'expand_more'" :size="20" />
+        </template>
       </SidebarItem>
 
       <li v-if="opened && (childFolders.length || playlistsInFolder.length)">
@@ -27,7 +32,6 @@
 </template>
 
 <script lang="ts" setup>
-import { faFolder, faFolderOpen } from '@fortawesome/free-solid-svg-icons'
 import isMobile from 'ismobilejs'
 import { computed, inject, onBeforeUnmount, onMounted, ref, toRefs } from 'vue'
 import { defineAsyncComponent } from '@/utils/helpers'
@@ -39,6 +43,7 @@ import { DraggedPlaylistFolderKey, DraggedPlaylistKey, PlaylistFolderDropTargetK
 
 import PlaylistSidebarItem from './PlaylistSidebarItem.vue'
 import SidebarItem from './SidebarItem.vue'
+import M3Icon from '@/components/m3/M3Icon.vue'
 
 const props = defineProps<{ folder: PlaylistFolder }>()
 

@@ -1,32 +1,20 @@
 <template>
   <SidebarSection>
     <template #header>
-      <SidebarSectionHeader>Your Library</SidebarSectionHeader>
+      <SidebarSectionHeader>Your library</SidebarSectionHeader>
     </template>
 
     <ul class="menu">
-      <SidebarItem :href="url('songs.index')" :active="isCurrentScreen('Songs')">
-        <template #icon>
-          <Icon :icon="faMusic" fixed-width />
-        </template>
-        All Songs
+      <SidebarItem :href="url('songs.index')" :active="isCurrentScreen('Songs')" icon="music_note">
+        All songs
       </SidebarItem>
-      <SidebarItem :href="url('albums.index')" :active="isCurrentScreen('Albums', 'Album')">
-        <template #icon>
-          <Icon :icon="faCompactDisc" fixed-width />
-        </template>
+      <SidebarItem :href="url('albums.index')" :active="isCurrentScreen('Albums', 'Album')" icon="album">
         Albums
       </SidebarItem>
-      <SidebarItem :href="url('artists.index')" :active="isCurrentScreen('Artists', 'Artist')">
-        <template #icon>
-          <MicVocalIcon :size="16" />
-        </template>
+      <SidebarItem :href="url('artists.index')" :active="isCurrentScreen('Artists', 'Artist')" icon="artist">
         Artists
       </SidebarItem>
-      <SidebarItem :href="url('genres.index')" :active="isCurrentScreen('Genres', 'Genre')">
-        <template #icon>
-          <GuitarIcon :size="16" />
-        </template>
+      <SidebarItem :href="url('genres.index')" :active="isCurrentScreen('Genres', 'Genre')" icon="category">
         Genres
       </SidebarItem>
       <YouTubeSidebarItem v-if="youtubeVideoTitle" data-testid="youtube" :active="isCurrentScreen('YouTube')">
@@ -38,19 +26,19 @@
         :active="isCurrentScreen('Podcasts', 'Podcast', 'Episode')"
       >
         <template #icon>
-          <Icon :icon="faPodcast" fixed-width />
+          <M3Icon name="podcasts" />
         </template>
         Podcasts
       </SidebarItem>
       <SidebarItem v-if="usesRadio" :href="url('radio-stations.index')" :active="isCurrentScreen('Radio.Stations')">
         <template #icon>
-          <RadioIcon :size="16" />
+          <M3Icon name="radio" />
         </template>
         Radio
       </SidebarItem>
       <SidebarItem v-if="supportsOffline" :href="url('offline-songs')" :active="isCurrentScreen('OfflineSongs')">
         <template #icon>
-          <Icon :icon="faCloudArrowDown" fixed-width />
+          <M3Icon name="cloud_download" />
         </template>
         Available Offline
       </SidebarItem>
@@ -60,8 +48,6 @@
 </template>
 
 <script lang="ts" setup>
-import { faCloudArrowDown, faCompactDisc, faMusic, faPodcast } from '@fortawesome/free-solid-svg-icons'
-import { GuitarIcon, MicVocalIcon, RadioIcon } from 'lucide-vue-next'
 import { unescape } from 'lodash-es'
 import { computed, ref, toRef } from 'vue'
 import { useOfflinePlayback } from '@/composables/useOfflinePlayback'
@@ -69,6 +55,7 @@ import { eventBus } from '@/utils/eventBus'
 import { useRouter } from '@/composables/useRouter'
 import { commonStore } from '@/stores/commonStore'
 
+import M3Icon from '@/components/m3/M3Icon.vue'
 import SidebarSection from '@/components/layout/main-wrapper/sidebar/SidebarSection.vue'
 import SidebarSectionHeader from '@/components/layout/main-wrapper/sidebar/SidebarSectionHeader.vue'
 import SidebarItem from '@/components/layout/main-wrapper/sidebar/SidebarItem.vue'

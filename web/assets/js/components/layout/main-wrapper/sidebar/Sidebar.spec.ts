@@ -1,14 +1,22 @@
-import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
-import { fireEvent, screen } from '@testing-library/vue'
+import { afterEach, describe, expect, it } from 'vite-plus/test'
+import { screen } from '@testing-library/vue'
 import { createHarness } from '@/__tests__/TestHarness'
 import { commonStore } from '@/stores/commonStore'
 import { eventBus } from '@/utils/eventBus'
+import { setViewport } from '@/composables/useViewport'
 import Component from './Sidebar.vue'
 
-const standardItems = ['All Songs', 'Albums', 'Artists', 'Genres', 'Favorites', 'Recently Played']
+const standardItems = ['Home', 'All songs', 'Albums', 'Artists', 'Genres', 'Favorites', 'Recently Played']
 
-describe('sidebar.vue', () => {
-  const h = createHarness()
+describe('sidebar.vue on desktop', () => {
+  const h = createHarness({
+    beforeEach: () => {
+      localStorage.clear()
+      setViewport({ mobile: false })
+    },
+  })
+
+  afterEach(() => setViewport({ mobile: true, wide: true }))
 
   it('shows the standard items', () => {
     h.actingAsUser().render(Component)
@@ -24,74 +32,33 @@ describe('sidebar.vue', () => {
 
     screen.getByText('A Random Video')
   })
+
+  it('collapses into a rail and expands again', async () => {
+    h.render(Component)
+
+    await h.user.click(screen.getByRole('button', { name: 'Collapse navigation' }))
+    expect(screen.queryByText('Genres')).toBeNull()
+    screen.getByText('Discover')
+
+    await h.user.click(screen.getByRole('button', { name: 'Open navigation' }))
+    screen.getByText('Genres')
+  })
 })
 
-describe('sidebar.vue temporary expand on hover', () => {
+describe('sidebar.vue on a phone', () => {
   const h = createHarness({
-    beforeEach: () => {
-      vi.useFakeTimers()
-      localStorage.clear()
-    },
+    beforeEach: () => setViewport({ mobile: true }),
   })
 
-  afterEach(() => vi.useRealTimers())
+  it('opens as a modal drawer and closes', async () => {
+    h.render(Component)
+    expect(screen.queryByTestId('sidebar')).toBeNull()
 
-  const nav = () => screen.getByRole('navigation')
-
-  const renderCollapsed = async () => {
-    const rendered = h.render(Component)
-    await fireEvent.click(rendered.container.querySelector('.btn-toggle input[type="checkbox"]')!)
-
-    return rendered
-  }
-
-  const hoverInUntilExpanded = async () => {
-    await fireEvent.mouseEnter(nav())
-    vi.advanceTimersByTime(500)
+    eventBus.emit('TOGGLE_SIDEBAR')
     await h.tick()
-  }
+    screen.getByTestId('sidebar')
 
-  it('peeks open after hovering past the expand delay', async () => {
-    await renderCollapsed()
-    expect(nav().classList.contains('tmp-showing')).toBe(false)
-
-    await hoverInUntilExpanded()
-
-    expect(nav().classList.contains('tmp-showing')).toBe(true)
-  })
-
-  it('does not collapse the moment the cursor leaves', async () => {
-    await renderCollapsed()
-    await hoverInUntilExpanded()
-
-    await fireEvent.mouseLeave(nav(), { relatedTarget: document.body })
-    vi.advanceTimersByTime(200)
-    await h.tick()
-
-    expect(nav().classList.contains('tmp-showing')).toBe(true)
-  })
-
-  it('stays open when the cursor returns within the grace period', async () => {
-    await renderCollapsed()
-    await hoverInUntilExpanded()
-
-    await fireEvent.mouseLeave(nav(), { relatedTarget: document.body })
-    vi.advanceTimersByTime(200)
-    await fireEvent.mouseEnter(nav())
-    vi.advanceTimersByTime(1000)
-    await h.tick()
-
-    expect(nav().classList.contains('tmp-showing')).toBe(true)
-  })
-
-  it('collapses once the grace period elapses', async () => {
-    await renderCollapsed()
-    await hoverInUntilExpanded()
-
-    await fireEvent.mouseLeave(nav(), { relatedTarget: document.body })
-    vi.advanceTimersByTime(500)
-    await h.tick()
-
-    expect(nav().classList.contains('tmp-showing')).toBe(false)
+    await h.user.click(screen.getByRole('button', { name: 'Close navigation' }))
+    expect(screen.queryByTestId('sidebar')).toBeNull()
   })
 })

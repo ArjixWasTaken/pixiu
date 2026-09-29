@@ -1,16 +1,9 @@
 <template>
-  <button
-    class="relative before:absolute before:w-[28px] before:aspect-square before:top-[-6px] before:left-[-6px] before:cursor-pointer"
-    title="Create a new playlist or folder"
-    type="button"
-    @click.stop.prevent="requestContextMenu"
-  >
-    <Icon :icon="faCirclePlus" />
-  </button>
+  <M3IconButton icon="add" label="Create a new playlist or folder" @click.stop.prevent="requestContextMenu" />
 </template>
 
 <script lang="ts" setup>
-import { faCirclePlus } from '@fortawesome/free-solid-svg-icons'
+import M3IconButton from '@/components/m3/M3IconButton.vue'
 import { useContextMenu } from '@/composables/useContextMenu'
 import { defineAsyncComponent } from '@/utils/helpers'
 

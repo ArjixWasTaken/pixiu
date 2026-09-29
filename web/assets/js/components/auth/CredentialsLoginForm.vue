@@ -1,35 +1,50 @@
 <template>
   <AuthFormCard :failed data-testid="login-form" @submit="handleSubmit">
-    <FormRow v-if="claiming">
-      <p class="text-center text-[.95rem] text-k-fg-70">
-        Welcome to píxiū! Create the admin account; Subsonic apps sign in with it too.
+    <template #title>
+      <h1 class="m3-headline-small text-(--schemes-on-surface)">
+        {{ claiming ? 'Welcome to píxiū' : 'Sign in to píxiū' }}
+      </h1>
+      <p class="m3-body-medium text-(--schemes-on-surface-variant)">
+        {{
+          claiming
+            ? 'Create the admin account; Subsonic apps sign in with it too.'
+            : 'Use the same account in your Subsonic apps.'
+        }}
       </p>
-    </FormRow>
+    </template>
 
-    <FormRow>
-      <TextInput v-model="data.username" v-koel-focus autocomplete="username" placeholder="Username" required />
-    </FormRow>
+    <M3TextField v-model="data.username" autocomplete="username" autofocus label="Username" name="username" required />
 
-    <FormRow>
-      <PasswordField
-        v-model="data.password"
-        :autocomplete="claiming ? 'new-password' : 'current-password'"
-        placeholder="Password"
-        required
-      />
-    </FormRow>
+    <M3TextField
+      v-model="data.password"
+      :autocomplete="claiming ? 'new-password' : 'current-password'"
+      :type="showPassword ? 'text' : 'password'"
+      label="Password"
+      name="password"
+      required
+    >
+      <template #trailing>
+        <M3IconButton
+          :icon="showPassword ? 'visibility_off' : 'visibility'"
+          :label="showPassword ? 'Hide password' : 'Show password'"
+          @click="showPassword = !showPassword"
+        />
+      </template>
+    </M3TextField>
 
-    <FormRow v-if="claiming">
-      <PasswordField v-model="data.confirm" autocomplete="new-password" placeholder="Confirm password" required />
-    </FormRow>
+    <M3TextField
+      v-if="claiming"
+      v-model="data.confirm"
+      autocomplete="new-password"
+      label="Confirm password"
+      name="confirm"
+      required
+      type="password"
+    />
 
-    <FormRow v-if="problem">
-      <p class="text-center text-[.95rem] text-k-danger">{{ problem }}</p>
-    </FormRow>
+    <p v-if="problem" class="m3-body-medium text-center text-(--schemes-error)">{{ problem }}</p>
 
-    <FormRow>
-      <Btn class="w-full" data-testid="submit" type="submit">{{ claiming ? 'Create Account' : 'Log In' }}</Btn>
-    </FormRow>
+    <M3Button class="w-full" data-testid="submit" type="submit">{{ claiming ? 'Create account' : 'Log in' }}</M3Button>
   </AuthFormCard>
 </template>
 
@@ -40,10 +55,9 @@ import { getHttpErrorBody, isHttpError } from '@/services/http'
 import { logger } from '@/utils/logger'
 import { useForm } from '@/composables/useForm'
 
-import Btn from '@/components/ui/form/Btn.vue'
-import PasswordField from '@/components/ui/form/PasswordField.vue'
-import TextInput from '@/components/ui/form/TextInput.vue'
-import FormRow from '@/components/ui/form/FormRow.vue'
+import M3Button from '@/components/m3/M3Button.vue'
+import M3IconButton from '@/components/m3/M3IconButton.vue'
+import M3TextField from '@/components/m3/M3TextField.vue'
 import AuthFormCard from '@/components/auth/AuthFormCard.vue'
 
 const emit = defineEmits<{
@@ -56,6 +70,7 @@ const failed = ref(false)
 /** A fresh píxiū has no admin yet: the form creates the account instead. */
 const claiming = ref(false)
 const problem = ref('')
+const showPassword = ref(false)
 
 onMounted(async () => {
   try {

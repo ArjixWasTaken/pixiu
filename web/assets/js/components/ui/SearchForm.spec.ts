@@ -3,24 +3,28 @@ import { screen } from '@testing-library/vue'
 import { createHarness } from '@/__tests__/TestHarness'
 import { eventBus } from '@/utils/eventBus'
 import Router from '@/router'
+import { setViewport } from '@/composables/useViewport'
 import Component from './SearchForm.vue'
 
 describe('searchForm.vue', () => {
-  const h = createHarness()
+  const h = createHarness({
+    beforeEach: () => setViewport({ mobile: false }),
+    afterEach: () => setViewport({ mobile: true, wide: true }),
+  })
 
   it('sets focus into search box when requested', async () => {
     h.render(Component)
 
     eventBus.emit('FOCUS_SEARCH_FIELD')
 
-    expect(screen.getByRole('textbox')).toBe(document.activeElement)
+    expect(screen.getByRole('searchbox')).toBe(document.activeElement)
   })
 
   it('goes to search screen when search box is focused', async () => {
     const mock = h.mock(Router, 'go')
     h.render(Component)
 
-    await h.user.click(screen.getByRole('textbox'))
+    await h.user.click(screen.getByRole('searchbox'))
 
     expect(mock).toHaveBeenCalledWith('/#/search')
   })
@@ -29,7 +33,7 @@ describe('searchForm.vue', () => {
     const mock = h.mock(eventBus, 'emit')
     h.render(Component)
 
-    await h.type(screen.getByRole('textbox'), 'hey')
+    await h.type(screen.getByRole('searchbox'), 'hey')
 
     expect(mock).toHaveBeenCalledWith('SEARCH_KEYWORDS_CHANGED', 'hey')
   })
@@ -38,8 +42,7 @@ describe('searchForm.vue', () => {
     const goMock = h.mock(Router, 'go')
     h.render(Component)
 
-    await h.type(screen.getByRole('textbox'), 'hey')
-    await h.user.click(screen.getByRole('button', { name: 'Search' }))
+    await h.type(screen.getByRole('searchbox'), 'hey{Enter}')
 
     expect(goMock).toHaveBeenCalledWith('/#/search')
   })

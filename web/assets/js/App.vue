@@ -8,7 +8,7 @@
 
   <main
     v-if="layout === 'default' && initialized"
-    class="absolute md:relative top-0 h-full md:h-screen pt-k-header-height md:pt-0 w-full md:w-auto flex flex-col justify-end"
+    class="relative h-dvh w-full flex flex-col"
     @dragend="onDragEnd"
     @dragleave="onDragLeave"
     @dragover="onDragOver"
@@ -17,6 +17,7 @@
     <HotkeyListener />
     <MainWrapper />
     <AppFooter />
+    <MobileNavigationBar v-if="isMobile" />
     <AiAssistantScreen v-if="commonStore.state.uses_ai" v-show="isCurrentScreen('AI')" />
     <DropZone v-show="showDropZone" @close="showDropZone = false" />
   </main>
@@ -48,6 +49,7 @@ import {
   OverlayKey,
 } from '@/config/symbols'
 import { useRouter } from '@/composables/useRouter'
+import { useViewport } from '@/composables/useViewport'
 import { commonStore } from '@/stores/commonStore'
 import type { Route } from '@/router'
 
@@ -60,6 +62,7 @@ import UpdateNotification from '@/components/ui/UpdateNotification.vue'
 // Do not dynamic-import app footer, as it contains the <audio> element
 // that is necessary to properly initialize the playService and equalizer.
 import AppFooter from '@/components/layout/app-footer/index.vue'
+import MobileNavigationBar from '@/components/layout/MobileNavigationBar.vue'
 
 // GlobalEventListener must NOT be lazy-loaded, so that it can handle LOG_OUT event properly.
 import GlobalEventListeners from '@/components/utils/GlobalEventListeners.vue'
@@ -83,6 +86,7 @@ const showDropZone = ref(false)
 
 const { isCurrentScreen, resolveRoute, triggerNotFound, onRouteChanged } = useRouter()
 const { online } = useNetworkStatus()
+const { isMobile } = useViewport()
 
 const authenticated = ref(false)
 const initialized = ref(false)
