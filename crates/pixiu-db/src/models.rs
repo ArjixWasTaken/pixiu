@@ -668,9 +668,34 @@ pub struct Playlist {
     #[unique]
     pub watch_id: Option<u64>,
 
+    /// The folder the player files it under; `None` at the top.
+    #[index]
+    pub folder_id: Option<u64>,
+
+    /// A smart playlist's rules, as JSON: groups of rules, any group
+    /// matching and all rules within it. Its songs are whatever matches
+    /// when it is read; it has no entries of its own.
+    pub rules: Option<String>,
+
     pub created_at: Timestamp,
 
     pub changed_at: Timestamp,
+}
+
+/// A folder of playlists (and folders) in the player's sidebar.
+#[derive(Debug, toasty::Model)]
+pub struct PlaylistFolder {
+    #[key]
+    #[auto]
+    pub id: u64,
+
+    pub name: String,
+
+    /// The folder it sits in; `None` at the top.
+    #[index]
+    pub parent_id: Option<u64>,
+
+    pub created_at: Timestamp,
 }
 
 /// A place in a playlist.

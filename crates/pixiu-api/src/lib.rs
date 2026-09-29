@@ -16,6 +16,7 @@ mod jobs;
 mod library;
 mod offerings;
 mod orphans;
+mod playlists;
 mod settings;
 mod songs;
 mod sources;
@@ -84,7 +85,23 @@ pub fn router(state: ApiState) -> Router {
             "/api/watches/{id}/exclusions/{video}",
             delete(watches::include),
         )
+        .route(
+            "/api/playlists",
+            get(playlists::list).post(playlists::create),
+        )
+        .route("/api/playlists/{id}", put(playlists::update))
         .route("/api/playlists/{id}/watch", get(watches::of_playlist))
+        .route("/api/playlist-folders", post(playlists::create_folder))
+        .route(
+            "/api/playlist-folders/{id}",
+            put(playlists::update_folder)
+                .patch(playlists::update_folder)
+                .delete(playlists::delete_folder),
+        )
+        .route(
+            "/api/playlist-folders/{id}/playlists",
+            post(playlists::add_playlists).delete(playlists::remove_playlists),
+        )
         .route("/api/hunting", get(jobs::summary))
         .route("/api/jobs", get(jobs::board))
         .route("/api/jobs/finished", delete(jobs::clear_finished))

@@ -18,7 +18,6 @@
           <template #label>Description</template>
           <TextArea v-model="data.description" class="h-28" name="description" />
         </FormRow>
-        <ArtworkField v-model="data.cover">Pick or paste a cover (optional)</ArtworkField>
       </div>
     </main>
 
@@ -44,7 +43,6 @@ import TextInput from '@/components/ui/form/TextInput.vue'
 import FormRow from '@/components/ui/form/FormRow.vue'
 import FolderSelect from '@/components/ui/form/FolderSelect.vue'
 import TextArea from '@/components/ui/form/TextArea.vue'
-import ArtworkField from '@/components/ui/form/ArtworkField.vue'
 
 const props = defineProps<{ playlist: Playlist }>()
 const emit = defineEmits<{ (e: 'close'): void }>()

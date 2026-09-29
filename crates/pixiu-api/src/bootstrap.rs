@@ -69,7 +69,7 @@ pub(crate) async fn bootstrap(
         "cdn_url": "",
         "media_path_set": true,
         "playlists": [],
-        "playlist_folders": [],
+        "playlist_folders": crate::playlists::folders(&mut state.db.clone()).await?,
         "settings": {},
         "users": [],
         "queue_state": {

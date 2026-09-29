@@ -2,7 +2,7 @@
 //! lists them in orders no Subsonic method offers. The web player reads
 //! both APIs, so both describe the library the same way.
 
-use pixiu_db::{Album, Db, toasty};
+use pixiu_db::{Album, Db, Playlist, User, toasty};
 use serde_json::Value as Json;
 
 use crate::{annotations, catalog};
@@ -64,4 +64,20 @@ pub async fn artists(db: &mut Db, ids: &[u64]) -> Result<Vec<Json>, toasty::Erro
             .to_json()
         })
         .collect())
+}
+
+/// Every playlist (`Playlist`, without its songs), by name, owned by
+/// `owner`: the only user.
+pub async fn playlists(db: &mut Db, owner: &User) -> Result<Vec<Json>, toasty::Error> {
+    let mut playlists = Playlist::all().exec(db).await?;
+    playlists.sort_by_key(|playlist| playlist.name.to_lowercase());
+    let mut rendered = Vec::with_capacity(playlists.len());
+    for playlist in &playlists {
+        rendered.push(
+            crate::playlists::describe(db, playlist, owner, false)
+                .await?
+                .to_json(),
+        );
+    }
+    Ok(rendered)
 }

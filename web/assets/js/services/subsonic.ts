@@ -146,20 +146,29 @@ const toArtist = (artist: Record<string, any>): Artist => ({
   permissions: { edit: true },
 })
 
-/** Subsonic's `Playlist` as koel's. Mirrors of watched playlists are read-only. */
-const toPlaylist = (playlist: Record<string, any>): Playlist => ({
-  type: 'playlists',
-  id: playlist.id,
-  owner_id: '1',
-  name: playlist.name,
-  description: playlist.comment ?? '',
-  folder_id: null,
-  is_smart: false,
-  is_collaborative: false,
-  rules: [],
-  cover: playlist.coverArt ? coverUrl(playlist.coverArt) : null,
-  permissions: { edit: !playlist.readonly, delete: !playlist.readonly },
-})
+/**
+ * Subsonic's `Playlist` as koel's, with what píxiū's API adds (`folderId`,
+ * `rules`). Subsonic calls mirrors of watched playlists and smart playlists
+ * read-only; the player may still edit and delete smart playlists.
+ */
+const toPlaylist = (playlist: Record<string, any>): Playlist => {
+  const smart = Array.isArray(playlist.rules)
+  const mirror = Boolean(playlist.readonly) && !smart
+
+  return {
+    type: 'playlists',
+    id: playlist.id,
+    owner_id: '1',
+    name: playlist.name,
+    description: playlist.comment ?? '',
+    folder_id: playlist.folderId ?? null,
+    is_smart: smart,
+    is_collaborative: false,
+    rules: smart ? playlist.rules : [],
+    cover: playlist.coverArt ? coverUrl(playlist.coverArt) : null,
+    permissions: { edit: !mirror, delete: !mirror },
+  }
+}
 
 const songsOf = (list: Record<string, any> | undefined, key = 'song') =>
   ((list?.[key] ?? []) as Record<string, any>[]).map(toSong)

@@ -45,7 +45,6 @@
                 <template #label>Description</template>
                 <TextArea v-model="data.description" class="h-28" name="description" />
               </FormRow>
-              <ArtworkField v-model="data.cover">Pick or paste a cover (optional)</ArtworkField>
             </div>
           </TabPanel>
           <TabPanel
@@ -107,7 +106,6 @@ import TabButton from '@/components/ui/tabs/TabButton.vue'
 import TabList from '@/components/ui/tabs/TabList.vue'
 import Tabs from '@/components/ui/tabs/Tabs.vue'
 import TabPanel from '@/components/ui/tabs/TabPanel.vue'
-import ArtworkField from '@/components/ui/form/ArtworkField.vue'
 
 const props = defineProps<{ folder?: PlaylistFolder | null }>()
 const emit = defineEmits<{ (e: 'close'): void }>()

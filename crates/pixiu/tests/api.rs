@@ -733,3 +733,136 @@ async fn events_say_when_the_job_board_changes() {
         seen.push_str(&String::from_utf8_lossy(&chunk));
     }
 }
+
+fn rules_json(model: &str, operator: &str, value: &[&str]) -> Value {
+    json!([{ "id": "g", "rules": [{ "id": "r", "model": model, "operator": operator, "value": value }] }])
+}
+
+#[tokio::test]
+async fn smart_playlists_follow_their_rules() {
+    let api = Api::new().await;
+    let token = api.claim().await;
+    api.stock().await;
+
+    let created = api
+        .send(
+            &token,
+            Method::POST,
+            "/api/playlists",
+            json!({ "name": "Lights", "rules": rules_json("title", "contains", &["light"]) }),
+            StatusCode::OK,
+        )
+        .await;
+    let id = created["id"].as_str().unwrap().to_owned();
+    assert_eq!(created["songCount"], 1, "{created}");
+    assert_eq!(created["readonly"], true);
+    assert_eq!(created["rules"][0]["rules"][0]["model"], "title");
+
+    let updated = api
+        .send(
+            &token,
+            Method::PUT,
+            &format!("/api/playlists/{id}"),
+            json!({ "name": "Ambient", "rules": rules_json("genre", "is", &["ambient"]) }),
+            StatusCode::OK,
+        )
+        .await;
+    assert_eq!(updated["name"], "Ambient");
+    assert_eq!(updated["songCount"], 2);
+
+    api.send(
+        &token,
+        Method::POST,
+        "/api/playlists",
+        json!({ "name": "Broken", "rules": rules_json("year", "contains", &["19"]) }),
+        StatusCode::UNPROCESSABLE_ENTITY,
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn folders_hold_playlists_and_folders() {
+    let api = Api::new().await;
+    let token = api.claim().await;
+    api.stock().await;
+
+    let outer = api
+        .send(
+            &token,
+            Method::POST,
+            "/api/playlist-folders",
+            json!({ "name": "Moods" }),
+            StatusCode::OK,
+        )
+        .await;
+    let outer_id = outer["id"].as_str().unwrap().to_owned();
+    let inner = api
+        .send(
+            &token,
+            Method::POST,
+            "/api/playlist-folders",
+            json!({ "name": "Calm", "parent_id": outer_id }),
+            StatusCode::OK,
+        )
+        .await;
+    let inner_id = inner["id"].as_str().unwrap().to_owned();
+    assert_eq!(inner["parent_id"], outer_id);
+
+    // A folder cannot go inside its own subfolder.
+    api.send(
+        &token,
+        Method::PATCH,
+        &format!("/api/playlist-folders/{outer_id}"),
+        json!({ "parent_id": inner_id }),
+        StatusCode::UNPROCESSABLE_ENTITY,
+    )
+    .await;
+
+    let playlist = api
+        .send(
+            &token,
+            Method::POST,
+            "/api/playlists",
+            json!({ "name": "Soft", "folder_id": inner_id, "rules": rules_json("title", "contains", &["wind"]) }),
+            StatusCode::OK,
+        )
+        .await;
+    assert_eq!(playlist["folderId"], inner_id);
+    let playlist_id = playlist["id"].as_str().unwrap().to_owned();
+
+    api.send(
+        &token,
+        Method::DELETE,
+        &format!("/api/playlist-folders/{inner_id}/playlists"),
+        json!({ "playlists": [playlist_id] }),
+        StatusCode::NO_CONTENT,
+    )
+    .await;
+    api.send(
+        &token,
+        Method::POST,
+        &format!("/api/playlist-folders/{outer_id}/playlists"),
+        json!({ "playlists": [playlist_id] }),
+        StatusCode::NO_CONTENT,
+    )
+    .await;
+    assert_eq!(
+        api.get(&token, "/api/playlists").await[0]["folderId"],
+        outer_id
+    );
+
+    // Deleting a folder moves what it held to the top.
+    let (status, _) = api
+        .request(
+            Method::DELETE,
+            &format!("/api/playlist-folders/{outer_id}"),
+            Some(&token),
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    assert!(api.get(&token, "/api/playlists").await[0]["folderId"].is_null());
+    let bootstrap = api.get(&token, "/api/bootstrap").await;
+    assert_eq!(bootstrap["playlist_folders"][0]["name"], "Calm");
+    assert!(bootstrap["playlist_folders"][0]["parent_id"].is_null());
+}

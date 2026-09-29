@@ -68,7 +68,7 @@ export const commonStore = {
   async init() {
     const [bootstrap, playlists, queueState] = await Promise.all([
       http.get<CommonStoreState>('bootstrap'),
-      subsonic.playlists(),
+      http.get<Record<string, any>[]>('playlists').then(playlists => playlists.map(subsonic.toPlaylist)),
       // A queue that fails to load is not worth failing start-up over.
       subsonic.playQueue().catch(error => {
         logger.error(error)

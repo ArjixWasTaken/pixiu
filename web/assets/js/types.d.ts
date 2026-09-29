@@ -287,7 +287,7 @@ interface SmartPlaylistModel {
     | 'title'
     | 'length'
     | 'created_at'
-    | 'updated_at'
+    | 'rating'
     | 'album.name'
     | 'artist.name'
     | 'interactions.play_count'

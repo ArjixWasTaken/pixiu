@@ -20,6 +20,7 @@ mod queue;
 pub mod render;
 pub mod response;
 mod search;
+pub mod smart;
 mod stars;
 mod system;
 

@@ -3,6 +3,7 @@ import { reactive } from 'vue'
 import { moveItemsInList } from '@/utils/helpers'
 import { logger } from '@/utils/logger'
 import { uuid } from '@/utils/crypto'
+import { http } from '@/services/http'
 import { subsonic } from '@/services/subsonic'
 import { cache } from '@/services/cache'
 import models from '@/config/smart-playlist/models'
@@ -70,15 +71,56 @@ export const playlistStore = {
     return this.state.playlists.filter(({ folder_id }) => folder_id === folder.id)
   },
 
-  async store(data: CreatePlaylistData, songs: Playable[] = []) {
-    const created = await subsonic.createPlaylist(
-      data.name,
-      songs.map(song => song.id),
-    )
+  /** The folder chosen in a form: an existing one, or a new one by name. */
+  async resolveFolder(data: { folder_id?: PlaylistFolder['id'] | null; folder_name?: string | null }) {
+    if (data.folder_name) {
+      // Imported here: the folder store imports this one.
+      const { playlistFolderStore } = await import('@/stores/playlistFolderStore')
+      return (await playlistFolderStore.store(data.folder_name)).id
+    }
 
-    if (data.description) {
-      await subsonic.updatePlaylist(created.id, { comment: data.description })
-      created.description = data.description
+    return data.folder_id ?? null
+  },
+
+  async fileInFolder(playlist: Playlist, folderId: PlaylistFolder['id'] | null) {
+    if (playlist.folder_id === folderId) {
+      return
+    }
+
+    if (folderId) {
+      await http.post(`playlist-folders/${folderId}/playlists`, { playlists: [playlist.id] })
+    } else if (playlist.folder_id) {
+      await http.delete(`playlist-folders/${playlist.folder_id}/playlists`, { playlists: [playlist.id] })
+    }
+
+    playlist.folder_id = folderId
+  },
+
+  async store(data: CreatePlaylistData, songs: Playable[] = []) {
+    const folderId = await this.resolveFolder(data)
+    let created: Playlist
+
+    if (data.rules) {
+      created = subsonic.toPlaylist(
+        await http.post<Record<string, any>>('playlists', {
+          name: data.name,
+          description: data.description,
+          folder_id: folderId,
+          rules: this.serializeSmartPlaylistRulesForStorage(data.rules),
+        }),
+      )
+    } else {
+      created = await subsonic.createPlaylist(
+        data.name,
+        songs.map(song => song.id),
+      )
+
+      if (data.description) {
+        await subsonic.updatePlaylist(created.id, { comment: data.description })
+        created.description = data.description
+      }
+
+      await this.fileInFolder(created, folderId)
     }
 
     const playlist = reactive(created)
@@ -128,7 +170,17 @@ export const playlistStore = {
   },
 
   async update(playlist: Playlist, data: UpdatePlaylistData) {
-    await subsonic.updatePlaylist(playlist.id, { name: data.name, comment: data.description })
+    await http.put(`playlists/${playlist.id}`, {
+      name: data.name,
+      description: data.description,
+      rules: data.rules ? this.serializeSmartPlaylistRulesForStorage(data.rules) : undefined,
+    })
+
+    // A form without a folder field leaves the playlist where it is.
+    const folderId =
+      data.folder_id === undefined && !data.folder_name ? playlist.folder_id : await this.resolveFolder(data)
+    await this.fileInFolder(this.byId(playlist.id) ?? playlist, folderId)
+    data = { ...data, folder_id: folderId, folder_name: undefined }
 
     if (playlist.is_smart) {
       cache.remove(['playlist.songs', playlist.id])

@@ -41,14 +41,14 @@ const models: SmartPlaylistModel[] = [
     unit: 'seconds',
   },
   {
+    name: 'rating',
+    type: 'number',
+    label: 'Rating',
+  },
+  {
     name: 'created_at',
     type: 'date',
     label: 'Date Added',
-  },
-  {
-    name: 'updated_at',
-    type: 'date',
-    label: 'Date Modified',
   },
 ]
 
