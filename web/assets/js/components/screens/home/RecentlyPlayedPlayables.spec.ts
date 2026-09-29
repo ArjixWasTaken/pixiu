@@ -18,7 +18,7 @@ describe('recentlyPlayedPlayables.vue', () => {
     const mock = h.mock(Router, 'go')
     h.render(Component)
 
-    await h.user.click(screen.getByRole('button', { name: 'View All' }))
+    await h.user.click(screen.getByRole('button', { name: 'View all' }))
 
     expect(mock).toHaveBeenCalledWith('/#/recently-played')
   })

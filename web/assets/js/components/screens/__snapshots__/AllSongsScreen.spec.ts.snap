@@ -3,25 +3,28 @@
 exports[`allSongsScreen.vue > renders 1`] = `
 <section data-v-0fb797a2="" data-v-ddbdca5c="" class="max-h-full min-h-full w-full flex flex-col transform-gpu overflow-hidden">
   <!--v-if-->
-  <header data-v-0623237c="" data-v-ddbdca5c="" class="expanded screen-header gap-4 min-h-0 md:min-h-full flex items-end shrink-0 relative content-stretch leading-normal p-6 border-b border-b-k-fg-5">
-    <aside data-v-0623237c="" class="thumbnail-wrapper hidden md:flex items-end overflow-hidden rounded-md">
-      <!---->
-    </aside>
-    <main data-v-0623237c="" class="flex flex-1 gap-5 items-center overflow-hidden">
-      <div data-v-0623237c="" class="w-full flex-1 overflow-hidden">
-        <h1 data-v-0623237c="" class="name text-k-fg mr-4 font-thin md:font-bold my-0 leading-tight overflow-hidden"><span data-v-0623237c="" class="block truncate"> All Songs </span></h1><span data-v-0623237c="" class="meta hidden text-[0.9rem] leading-loose"><span data-v-ddbdca5c="">420 songs</span><span data-v-ddbdca5c="">34 hr 17 min</span></span>
-      </div>
-      <div data-v-ddbdca5c="" class="controls w-full flex justify-between items-center gap-4">
-        <div data-v-ddbdca5c="" class="relative" data-testid="song-list-controls">
-          <div class="flex gap-2 flex-wrap"><span data-v-c026a629="" class="btn-group inline-flex relative flex-nowrap" uppercase=""><button data-v-b156ac0d="" data-variant="highlight" class="text-base text-white border border-transparent bg-k-primary px-3.5 py-2 rounded-sm cursor-pointer btn-shuffle-all" type="button" data-testid="btn-shuffle-all" title="Shuffle all. Press Alt/⌥ to change mode."><br data-testid="Icon" icon="[object Object]" fixed-width=""> All </button><!--v-if--><!--v-if--><!--v-if--></span>
-            <!--v-if-->
+  <header data-v-0623237c="" data-v-ddbdca5c="" data-v-0fb797a2-s="" class="expanded screen-header">
+    <!--v-if-->
+    <main data-v-0623237c="" class="body"><span data-v-0623237c="" class="m3-label-large overline-text">Library</span>
+      <h1 data-v-0623237c="" class="m3-headline-medium name"> All Songs </h1>
+      <!--v-if-->
+      <p data-v-0623237c="" class="meta m3-body-medium"><span data-v-ddbdca5c="">420 songs</span><span data-v-ddbdca5c="">34 hr 17 min</span></p>
+      <div data-v-0623237c="" class="controls">
+        <div data-v-ddbdca5c="" class="controls w-full flex justify-between items-center gap-4">
+          <div data-v-ddbdca5c="" class="relative" data-testid="song-list-controls">
+            <div class="flex gap-2 flex-wrap items-center"><button data-v-bc641a16="" type="button" class="filled s with-icon m3-button m3-state m3-label-large btn-shuffle-all" data-testid="btn-shuffle-all" title="Shuffle all. Press Alt/⌥ to change mode."><span data-v-241cb009="" data-v-bc641a16="" style="font-size: 18px; width: 18px; height: 18px; font-variation-settings: 'FILL' 0, 'wght' 400, 'opsz' 20;" class="material-symbols-outlined m3-icon" aria-hidden="true">shuffle</span><span data-v-bc641a16="" class="label"> Shuffle all </span></button>
+              <!--v-if-->
+              <!--v-if-->
+              <!--v-if-->
+              <!--v-if-->
+              <!--v-if-->
+            </div>
             <!--v-if-->
           </div>
-          <!--v-if-->
         </div>
       </div>
     </main>
   </header>
-  <main data-v-0fb797a2="" class="scroll-mask-y overflow-scroll flex flex-col b-16 md:b-6 p-6 flex-1 place-content-start"><br data-v-ddbdca5c="" data-testid="song-list" class="-m-6"></main>
+  <main data-v-0fb797a2="" class="screen-body flex flex-col flex-1 place-content-start overflow-y-auto"><br data-v-ddbdca5c="" data-v-0fb797a2-s="" data-testid="song-list" class="screen-bleed"></main>
 </section>
 `;

@@ -1,5 +1,5 @@
 <template>
-  <div ref="container" :class="`as-${viewMode}`" class="grid gap-5 p-6">
+  <div ref="container" :class="`as-${viewMode}`" class="card-grid">
     <slot />
   </div>
 </template>
@@ -30,14 +30,23 @@ defineExpose({
 </script>
 
 <style lang="postcss" scoped>
-@reference '@css/app.pcss';
-div {
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+.card-grid {
+  display: grid;
+  gap: 16px;
+  padding: 12px 24px 24px;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   content-visibility: auto;
-}
 
-div.as-list {
-  @apply gap-x-4 gap-y-3 content-start items-start;
-  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+  @media (max-width: 768px) {
+    gap: 12px;
+    padding: 12px 16px 16px;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  }
+
+  &.as-list {
+    align-content: start;
+    align-items: start;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  }
 }
 </style>

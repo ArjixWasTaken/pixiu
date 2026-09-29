@@ -5,7 +5,7 @@
         Genres
 
         <template #controls>
-          <div class="flex gap-2">
+          <div class="flex gap-2 items-center">
             <GenreListSorter
               :field="preferences.genres_sort_field"
               :order="preferences.genres_sort_order"
@@ -27,17 +27,11 @@
     </ScreenEmptyState>
 
     <template v-else>
-      <ul v-if="!loading" class="genre-list grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5 gap-3">
-        <GenreCard v-for="genre in displayedGenres" :key="genre.id" :genre />
+      <ul v-if="!loading" class="genre-list grid gap-3 pt-2">
+        <GenreCard v-for="(genre, index) in displayedGenres" :key="genre.id" :genre :tone="index" />
       </ul>
 
-      <ul
-        v-else
-        class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5 gap-3"
-        role="status"
-        aria-busy="true"
-        aria-label="Loading"
-      >
+      <ul v-else class="genre-list grid gap-3 pt-2" role="status" aria-busy="true" aria-label="Loading">
         <GenreCardSkeleton v-for="key in 11" :key />
       </ul>
     </template>
@@ -119,5 +113,6 @@ onMounted(async () => {
 <style lang="postcss">
 .genre-list {
   content-visibility: auto;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
 }
 </style>

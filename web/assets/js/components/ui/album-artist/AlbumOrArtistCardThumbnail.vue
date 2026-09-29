@@ -1,74 +1,18 @@
 <template>
   <div
-    class="card-thumbnail group/thumb relative w-full aspect-square rounded-xl overflow-hidden bg-cover bg-center bg-no-repeat text-k-fg"
+    :class="{ round: !forAlbum }"
     :style="{ backgroundImage: `url(${defaultCover})` }"
+    class="card-thumbnail"
     data-testid="album-artist-card-thumbnail"
   >
-    <img
-      v-if="image"
-      :src="image"
-      :alt="entity.name"
-      class="absolute inset-0 w-full h-full object-cover"
-      loading="lazy"
-    />
+    <img v-if="image" :alt="entity.name" :src="image" loading="lazy" />
 
-    <div
-      class="overlay absolute inset-0 z-10 bg-black/60 opacity-0 group-hover/thumb:opacity-100 no-hover:opacity-100 transition-opacity duration-200"
-    />
-
-    <FavoriteButton
-      :favorite="entity.favorite"
-      size="md"
-      class="absolute top-3 left-4 z-20 transition-opacity"
-      :class="
-        entity.favorite
-          ? 'opacity-100 drop-shadow-[0_1px_4px_var(--k-bg-50)]'
-          : 'opacity-0 group-hover/thumb:opacity-100 no-hover:opacity-100'
-      "
-      @toggle="emit('toggle-favorite')"
-    />
-
-    <StarRating
-      :rateable="entity"
-      size="sm"
-      class="absolute top-3 right-4 z-20 transition-opacity"
-      :class="
-        entity.rating > 0
-          ? 'opacity-100 drop-shadow-[0_1px_4px_var(--k-bg-50)]'
-          : 'opacity-0 group-hover/thumb:opacity-100 no-hover:opacity-100'
-      "
-    />
-
-    <button
-      type="button"
-      class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 opacity-0 group-hover/thumb:opacity-100 no-hover:opacity-100 transition-opacity"
-      :title="playLabel"
-      @click.stop="playOrQueue"
-    >
-      <span
-        class="play-icon flex items-center justify-center w-[32px] aspect-square rounded-full bg-k-highlight text-k-highlight-fg"
-        aria-hidden="true"
-      >
-        <Icon :icon="faPlay" size="lg" class="ml-0.5" />
-      </span>
-      <span class="sr-only">{{ playLabel }}</span>
-    </button>
-
-    <button
-      type="button"
-      class="absolute bottom-3 right-4 z-20 p-1 opacity-0 group-hover/thumb:opacity-100 no-hover:opacity-100 hover:scale-110 transition-[opacity,transform]"
-      title="More actions"
-      @click.stop="emit('context-menu', $event)"
-    >
-      <Icon :icon="faEllipsis" />
-      <span class="sr-only">More actions</span>
-    </button>
+    <M3IconButton :label="playLabel" class="play" fill icon="play_arrow" variant="filled" @click.stop="playOrQueue" />
   </div>
 </template>
 
 <script lang="ts" setup>
 import { orderBy } from 'lodash-es'
-import { faEllipsis, faPlay } from '@fortawesome/free-solid-svg-icons'
 import { computed, toRefs } from 'vue'
 import { queueStore } from '@/stores/queueStore'
 import { playableStore } from '@/stores/playableStore'
@@ -77,13 +21,12 @@ import { useMessageToaster } from '@/composables/useMessageToaster'
 import { playback } from '@/services/playbackManager'
 import { useBranding } from '@/composables/useBranding'
 
-import FavoriteButton from '@/components/ui/FavoriteButton.vue'
-import StarRating from '@/components/ui/StarRating.vue'
+import M3IconButton from '@/components/m3/M3IconButton.vue'
 
 const props = defineProps<{ entity: Album | Artist }>()
 const { entity } = toRefs(props)
 
-const emit = defineEmits<{
+defineEmits<{
   (e: 'toggle-favorite'): void
   (e: 'context-menu', event: MouseEvent): void
 }>()
@@ -119,3 +62,50 @@ const playOrQueue = async (event: MouseEvent) => {
   go(url('queue'))
 }
 </script>
+
+<style scoped>
+.card-thumbnail {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  border-radius: 12px;
+  background-size: cover;
+  background-position: center;
+
+  &.round {
+    border-radius: 50%;
+  }
+
+  img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+}
+
+.play {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  opacity: 0;
+  box-shadow: var(--m3-elevation-2);
+  transition: opacity 150ms linear;
+
+  .round & {
+    right: calc(50% - 20px);
+    bottom: calc(50% - 20px);
+  }
+
+  .card-thumbnail:hover &,
+  .card-thumbnail:focus-within & {
+    opacity: 1;
+  }
+
+  @media (hover: none) {
+    display: none;
+  }
+}
+</style>

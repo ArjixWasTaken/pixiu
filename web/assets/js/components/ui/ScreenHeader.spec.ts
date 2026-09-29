@@ -1,6 +1,7 @@
 import { screen } from '@testing-library/vue'
 import { describe, expect, it } from 'vite-plus/test'
 import { createHarness } from '@/__tests__/TestHarness'
+import { setViewport } from '@/composables/useViewport'
 import Component from './ScreenHeader.vue'
 
 describe('screenHeader', () => {
@@ -17,6 +18,7 @@ describe('screenHeader', () => {
   })
 
   it('renders the thumbnail slot', () => {
+    setViewport({ mobile: false })
     h.render(Component, {
       slots: {
         default: 'Title',

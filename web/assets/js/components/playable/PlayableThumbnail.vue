@@ -1,26 +1,35 @@
 <template>
   <button
     :style="{ backgroundImage: `url(${defaultCover})` }"
-    :title="title"
-    class="song-thumbnail w-[48px] aspect-square bg-cover relative rounded-sm overflow-hidden active:scale-95"
-    @click.prevent="emit('clicked')"
+    :title
+    class="song-thumbnail"
+    type="button"
+    @click.prevent.stop="emit('clicked')"
   >
-    <img v-if="src" :src="src" alt="Cover image" class="w-full aspect-square object-cover" loading="lazy" />
-    <span class="absolute top-0 left-0 w-full h-full group-hover:bg-black/40 no-hover:bg-black/40 z-10" />
-    <span
-      class="absolute flex opacity-0 no-hover:opacity-100 items-center justify-center w-[24px] aspect-square rounded-full top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-k-highlight group-hover:opacity-100 duration-500 transition z-20"
-    >
-      <Icon v-if="playable.playback_state === 'Playing'" :icon="faPause" class="text-k-highlight-fg" />
-      <Icon v-else :icon="faPlay" class="text-k-highlight-fg ml-0.5" />
+    <img v-if="src" :src alt="Cover image" loading="lazy" />
+    <span v-if="current" class="now">
+      <template v-if="playable.playback_state === 'Playing'">
+        <span
+          v-for="i in 3"
+          :key="i"
+          :style="{ animationDuration: `${0.65 + i * 0.25}s`, animationDelay: `${i * -0.3}s` }"
+          class="bar"
+        />
+      </template>
+      <M3Icon v-else name="pause" />
+    </span>
+    <span v-else class="hover">
+      <M3Icon fill name="play_arrow" />
     </span>
   </button>
 </template>
 
 <script lang="ts" setup>
 import { computed, toRefs } from 'vue'
-import { faPause, faPlay } from '@fortawesome/free-solid-svg-icons'
 import { getPlayableProp } from '@/utils/helpers'
 import { useBranding } from '@/composables/useBranding'
+
+import M3Icon from '@/components/m3/M3Icon.vue'
 
 const props = defineProps<{ playable: Playable }>()
 const emit = defineEmits<{ (e: 'clicked'): void }>()
@@ -30,6 +39,7 @@ const { playable } = toRefs(props)
 const { cover: defaultCover } = useBranding()
 
 const src = computed(() => getPlayableProp(playable.value, 'album_cover', 'episode_image'))
+const current = computed(() => ['Playing', 'Paused'].includes(playable.value.playback_state!))
 
 const title = computed(() => {
   if (playable.value.playback_state === 'Playing') {
@@ -43,3 +53,59 @@ const title = computed(() => {
   return 'Play'
 })
 </script>
+
+<style scoped>
+.song-thumbnail {
+  position: relative;
+  display: block;
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-radius: 8px;
+  background-size: cover;
+  background-position: center;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+}
+
+.now,
+.hover {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  background: color-mix(in srgb, var(--schemes-scrim) 45%, transparent);
+  color: var(--schemes-primary);
+}
+
+.hover {
+  opacity: 0;
+  color: #fff;
+  transition: opacity 150ms linear;
+
+  .song-thumbnail:hover &,
+  :global(.song-item:hover) & {
+    opacity: 1;
+  }
+
+  @media (hover: none) {
+    display: none;
+  }
+}
+
+.bar {
+  width: 4px;
+  height: 18px;
+  border-radius: 2px;
+  background: var(--schemes-primary);
+  transform-origin: bottom;
+  animation: m3-equalizer ease-in-out infinite;
+}
+</style>

@@ -11,7 +11,7 @@ exports[`integrations.vue > renders 1`] = `
           <div class="mt-4 flex items-start gap-2 lg:w-1/2">
             <div class="flex-1">
               <div class="relative"><input aria-label="token" class="block text-base w-full px-3.5 py-2 rounded-sm bg-k-bg-input text-k-fg-input border border-k-fg-10 read-only:bg-gray-400 read-only:text-gray-900 disabled:bg-gray-400 disabled:text-gray-900 disabled:cursor-not-allowed w-full" type="password" data-testid="input" autocomplete="off" name="token" placeholder="ListenBrainz user token" required=""><button class="absolute p-2.5 right-0 top-0 text-k-bg" data-testid="toggle" type="button"><br data-testid="Icon" icon="[object Object]" class="text-k-fg" fixed-width=""></button></div>
-            </div><button data-v-b156ac0d="" class="text-base text-white border border-transparent bg-k-primary px-3.5 py-2 rounded-sm cursor-pointer" type="submit">Connect</button>
+            </div><button data-v-b156ac0d="" class="k-btn m3-state m3-label-large" type="submit">Connect</button>
           </div>
         </form>
       </section>

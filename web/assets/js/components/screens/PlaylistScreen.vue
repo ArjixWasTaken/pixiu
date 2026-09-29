@@ -1,11 +1,15 @@
 <template>
   <ScreenBase v-if="playlistId" :background-image="playlist?.cover || thumbnails[0]">
     <template #header>
-      <ScreenHeader v-if="playlist" :disabled="loading" :layout="allPlayables.length ? headerLayout : 'collapsed'">
+      <ScreenHeader
+        v-if="playlist"
+        :disabled="loading"
+        :layout="allPlayables.length ? headerLayout : 'collapsed'"
+        :overline="playlist.is_smart ? 'Smart playlist' : 'Playlist'"
+      >
         {{ playlist.name }}
-        <p v-if="playlist.description" class="text-base text-k-fg-70 font-light">
-          {{ playlist.description }}
-        </p>
+
+        <template v-if="playlist.description" #description>{{ playlist.description }}</template>
 
         <template #thumbnail>
           <PlaylistThumbnail :playlist>
@@ -26,24 +30,21 @@
             @play-all="playAll"
             @play-selected="playSelected"
           >
-            <Btn variant="ghost" @click="requestContextMenu">
-              <Icon :icon="faEllipsis" fixed-width />
-              <span class="sr-only">More Actions</span>
-            </Btn>
+            <M3IconButton icon="more_vert" label="More actions" @click="requestContextMenu" />
           </PlayableListControls>
         </template>
       </ScreenHeader>
       <ScreenHeaderSkeleton v-else role="status" aria-busy="true" aria-label="Loading" />
     </template>
 
-    <PlayableListSkeleton v-if="loading" class="-m-6" role="status" aria-busy="true" aria-label="Loading" />
+    <PlayableListSkeleton v-if="loading" class="screen-bleed" role="status" aria-busy="true" aria-label="Loading" />
     <template v-else>
-      <MirroredWatchPanel v-if="mirror" :mirror class="mb-10" @include="includeAgain" />
+      <MirroredWatchPanel v-if="mirror" :mirror @include="includeAgain" />
 
       <PlayableList
         v-if="filteredPlayables.length"
         ref="playableList"
-        class="-m-6"
+        class="screen-bleed"
         @reorder="onReorder"
         @sort="sort"
         @press:delete="removeSelected"
@@ -75,7 +76,6 @@
 
 <script lang="ts" setup>
 import { faFile } from '@fortawesome/free-regular-svg-icons'
-import { faEllipsis } from '@fortawesome/free-solid-svg-icons'
 import { differenceBy } from 'lodash-es'
 import { computed, ref, watch } from 'vue'
 import { eventBus } from '@/utils/eventBus'
@@ -97,6 +97,7 @@ import { useLocalStorage } from '@/composables/useLocalStorage'
 import { useContextMenu } from '@/composables/useContextMenu'
 import { useModal } from '@/composables/useModal'
 
+import M3IconButton from '@/components/m3/M3IconButton.vue'
 import ScreenHeader from '@/components/ui/ScreenHeader.vue'
 import ScreenEmptyState from '@/components/ui/ScreenEmptyState.vue'
 import CollaboratorsBadge from '@/components/playlist/PlaylistCollaboratorsBadge.vue'
@@ -104,7 +105,6 @@ import PlaylistThumbnail from '@/components/ui/PlaylistThumbnail.vue'
 import ScreenBase from '@/components/screens/ScreenBase.vue'
 import ScreenHeaderSkeleton from '@/components/ui/ScreenHeaderSkeleton.vue'
 import PlayableListSkeleton from '@/components/playable/playable-list/PlayableListSkeleton.vue'
-import Btn from '@/components/ui/form/Btn.vue'
 import MirroredWatchPanel from '@/components/playlist/MirroredWatchPanel.vue'
 
 const ContextMenu = defineAsyncComponent(() => import('@/components/playlist/PlaylistContextMenu.vue'))

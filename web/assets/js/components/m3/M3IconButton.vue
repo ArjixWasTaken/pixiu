@@ -27,6 +27,8 @@ const props = withDefaults(
     shape?: 'round' | 'square'
     selected?: boolean
     fill?: boolean
+    /** Overrides the icon size that goes with the button size. */
+    iconSize?: number
     disabled?: boolean
   }>(),
   {
@@ -35,11 +37,12 @@ const props = withDefaults(
     shape: 'round',
     selected: undefined,
     fill: undefined,
+    iconSize: undefined,
     disabled: false,
   },
 )
 
-const iconSize = computed(() => ({ xs: 20, s: 24, m: 24, l: 32 })[props.size])
+const iconSize = computed(() => props.iconSize ?? { xs: 20, s: 24, m: 24, l: 32 }[props.size])
 </script>
 
 <style scoped>

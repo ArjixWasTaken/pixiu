@@ -1,199 +1,49 @@
 <template>
-  <div :class="config.sortable ? 'sortable' : 'unsortable'" class="song-list-header flex z-2 bg-k-fg-3 pl-5">
-    <span
-      v-if="shouldShowColumn('track')"
-      class="track-number"
-      data-testid="header-track-number"
-      role="button"
-      title="Sort by track number"
-      @click="sort('track')"
+  <div v-if="config.sortable" ref="container" class="sort-bar">
+    <M3Chip
+      :icon="sortOrder === 'asc' ? 'arrow_upward' : 'arrow_downward'"
+      :title="`Sorted by ${currentLabel}, ${sortOrder === 'asc' ? 'ascending' : 'descending'}`"
+      data-testid="sort-chip"
+      @click="open = !open"
     >
-      #
-      <template v-if="config.sortable">
-        <Icon v-if="sortField === 'track' && sortOrder === 'asc'" :icon="faCaretUp" class="text-k-highlight" />
-        <Icon v-if="sortField === 'track' && sortOrder === 'desc'" :icon="faCaretDown" class="text-k-highlight" />
-      </template>
-    </span>
-    <span class="title-artist" data-testid="header-title" role="button" title="Sort by title" @click="sort('title')">
-      Title
-      <template v-if="config.sortable">
-        <Icon v-if="sortField === 'title' && sortOrder === 'asc'" :icon="faCaretUp" class="text-k-highlight" />
-        <Icon v-if="sortField === 'title' && sortOrder === 'desc'" :icon="faCaretDown" class="text-k-highlight" />
-      </template>
-    </span>
-    <span
-      v-if="shouldShowColumn('album')"
-      :title="`Sort by ${contentType === 'episodes' ? 'podcast' : contentType === 'songs' ? 'album' : 'album/podcast'}`"
-      class="album"
-      data-testid="header-album"
-      role="button"
-      @click="
-        sort(
-          contentType === 'episodes'
-            ? 'podcast_title'
-            : contentType === 'songs'
-              ? 'album_name'
-              : ['album_name', 'podcast_title'],
-        )
-      "
-    >
-      <template v-if="contentType === 'episodes'">Podcast</template>
-      <template v-else-if="contentType === 'songs'">Album</template>
-      <template v-else>Album <span class="opacity-50">/</span> Podcast</template>
+      {{ currentLabel }}
+    </M3Chip>
 
-      <span v-if="config.sortable" class="ml-2">
-        <Icon v-if="sortingByAlbumOrPodcast && sortOrder === 'asc'" :icon="faCaretUp" class="text-k-highlight" />
-        <Icon v-if="sortingByAlbumOrPodcast && sortOrder === 'desc'" :icon="faCaretDown" class="text-k-highlight" />
-      </span>
-    </span>
-    <template v-if="config.collaborative">
-      <span
-        v-if="shouldShowColumn('playlist_collaborator')"
-        class="collaborator"
-        data-testid="header-collaborator"
-        role="button"
-        title="Sort by user"
-        @click="sort('collaboration.user.name')"
+    <M3Menu v-if="open" class="menu" data-testid="sort-menu">
+      <M3MenuItem
+        v-for="option in options"
+        :key="option.label"
+        :selected="isCurrent(option.field)"
+        :label="option.label"
+        tag="div"
+        @click="sort(option.field)"
       >
-        User
-        <template v-if="config.sortable">
-          <Icon
-            v-if="sortField === 'collaboration.user.name' && sortOrder === 'asc'"
-            :icon="faCaretUp"
-            class="text-k-highlight"
-          />
-          <Icon
-            v-if="sortField === 'collaboration.user.name' && sortOrder === 'desc'"
-            :icon="faCaretDown"
-            class="text-k-highlight"
+        <template #trailing>
+          <M3Icon
+            v-if="isCurrent(option.field)"
+            :name="sortOrder === 'asc' ? 'arrow_upward' : 'arrow_downward'"
+            :size="18"
           />
         </template>
-      </span>
-      <span
-        v-if="shouldShowColumn('playlist_added_at')"
-        class="added-at"
-        data-testid="header-contributed-at"
-        role="button"
-        title="Sort by contributed at"
-        @click="sort('collaboration.added_at')"
-      >
-        Contributed
-        <template v-if="config.sortable">
-          <Icon
-            v-if="sortField === 'collaboration.added_at' && sortOrder === 'asc'"
-            :icon="faCaretUp"
-            class="text-k-highlight"
-          />
-          <Icon
-            v-if="sortField === 'collaboration.added_at' && sortOrder === 'desc'"
-            :icon="faCaretDown"
-            class="text-k-highlight"
-          />
-        </template>
-      </span>
-    </template>
-    <span
-      v-if="shouldShowColumn('genre')"
-      class="genre"
-      data-testid="header-genre"
-      role="button"
-      title="Sort by genre"
-      @click="sort('genre')"
-    >
-      Genre
-      <template v-if="config.sortable">
-        <Icon v-if="sortField === 'genre' && sortOrder === 'asc'" :icon="faCaretUp" class="text-k-highlight" />
-        <Icon v-if="sortField === 'genre' && sortOrder === 'desc'" :icon="faCaretDown" class="text-k-highlight" />
-      </template>
-    </span>
-    <span
-      v-if="shouldShowColumn('year')"
-      class="year"
-      data-testid="header-year"
-      role="button"
-      title="Sort by year"
-      @click="sort('year')"
-    >
-      Year
-      <template v-if="config.sortable">
-        <Icon v-if="sortField === 'year' && sortOrder === 'asc'" :icon="faCaretUp" class="text-k-highlight" />
-        <Icon v-if="sortField === 'year' && sortOrder === 'desc'" :icon="faCaretDown" class="text-k-highlight" />
-      </template>
-    </span>
-    <span
-      v-if="shouldShowColumn('rating')"
-      class="rating"
-      data-testid="header-rating"
-      role="button"
-      title="Sort by rating"
-      @click="sort('rating')"
-    >
-      Rating
-      <template v-if="config.sortable">
-        <Icon v-if="sortField === 'rating' && sortOrder === 'asc'" :icon="faCaretUp" class="text-k-highlight" />
-        <Icon v-if="sortField === 'rating' && sortOrder === 'desc'" :icon="faCaretDown" class="text-k-highlight" />
-      </template>
-    </span>
-    <span
-      v-if="shouldShowColumn('duration')"
-      class="time"
-      data-testid="header-length"
-      role="button"
-      title="Sort by duration"
-      @click="sort('length')"
-    >
-      Time
-      <template v-if="config.sortable">
-        <Icon v-if="sortField === 'length' && sortOrder === 'asc'" :icon="faCaretUp" class="text-k-highlight" />
-        <Icon v-if="sortField === 'length' && sortOrder === 'desc'" :icon="faCaretDown" class="text-k-highlight" />
-      </template>
-    </span>
-    <span
-      v-if="shouldShowColumn('favorite')"
-      class="favorite"
-      data-testid="header-favorite"
-      role="button"
-      title="Sort by favorite"
-      @click="sort('favorite')"
-    >
-      <Icon :icon="faHeart" />
-      <template v-if="config.sortable">
-        <Icon v-if="sortField === 'favorite' && sortOrder === 'asc'" :icon="faCaretUp" class="ml-2 text-k-highlight" />
-        <Icon
-          v-if="sortField === 'favorite' && sortOrder === 'desc'"
-          :icon="faCaretDown"
-          class="ml-2 text-k-highlight"
-        />
-      </template>
-    </span>
-    <span v-if="shouldShowActionMenu" class="extra" data-testid="header-extra">
-      <PlayableListHeaderActionMenu
-        :sortable="config.sortable"
-        :field="sortField"
-        :has-custom-order-sort="config.hasCustomOrderSort"
-        :order="sortOrder"
-        :content-type="contentType"
-        :collaborative="config.collaborative"
-        @sort="sort"
-      />
-    </span>
+      </M3MenuItem>
+    </M3Menu>
   </div>
 </template>
 
 <script setup lang="ts">
-import isMobile from 'ismobilejs'
 import type { Ref } from 'vue'
-import { computed } from 'vue'
-import { faCaretDown, faCaretUp, faHeart } from '@fortawesome/free-solid-svg-icons'
+import { computed, ref, useTemplateRef } from 'vue'
+import { onClickOutside } from '@vueuse/core'
 import { arrayify, requireInjection } from '@/utils/helpers'
 import { PlayableListConfigKey, PlayableListSortFieldKey, PlayableListSortOrderKey } from '@/config/symbols'
 import type { getPlayableCollectionContentType } from '@/utils/typeGuards'
-import { useTableColumnVisibility } from '@/composables/useTableColumnVisibility'
-import { playableListColumnConfig } from '@/config/tables'
 
-import PlayableListHeaderActionMenu from '@/components/playable/playable-list/PlayableListHeaderActionMenu.vue'
+import M3Chip from '@/components/m3/M3Chip.vue'
+import M3Icon from '@/components/m3/M3Icon.vue'
+import M3Menu from '@/components/m3/M3Menu.vue'
+import M3MenuItem from '@/components/m3/M3MenuItem.vue'
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     contentType?: ReturnType<typeof getPlayableCollectionContentType>
   }>(),
@@ -206,32 +56,64 @@ const emit = defineEmits<{
   (e: 'sort', field: MaybeArray<PlayableListSortField>, order: SortOrder): void
 }>()
 
-const { shouldShowColumn } = useTableColumnVisibility(playableListColumnConfig)
-
 const [sortField, setSortField] =
   requireInjection<[Ref<MaybeArray<PlayableListSortField>>, Closure]>(PlayableListSortFieldKey)
 const [sortOrder, setSortOrder] = requireInjection<[Ref<SortOrder>, Closure]>(PlayableListSortOrderKey)
 const [config] = requireInjection<[Partial<PlayableListConfig>]>(PlayableListConfigKey, [{}])
 
-const sort = (field: MaybeArray<PlayableListSortField>) => {
-  // there are certain circumstances where sorting is simply disallowed, e.g. in Queue
-  if (!config.sortable) {
-    return
+const open = ref(false)
+const container = useTemplateRef('container')
+onClickOutside(container, () => (open.value = false))
+
+const options = computed<Array<{ label: string; field: MaybeArray<PlayableListSortField> }>>(() => {
+  if (props.contentType === 'episodes') {
+    return [
+      { label: 'Title', field: 'title' },
+      { label: 'Podcast', field: 'podcast_title' },
+      { label: 'Author', field: 'podcast_author' },
+      { label: 'Duration', field: 'length' },
+    ]
   }
 
+  return [
+    { label: 'Title', field: 'title' },
+    { label: 'Artist', field: 'artist_name' },
+    { label: 'Album', field: 'album_name' },
+    { label: 'Track', field: 'track' },
+    { label: 'Year', field: 'year' },
+    { label: 'Genre', field: 'genre' },
+    { label: 'Duration', field: 'length' },
+    { label: 'Date added', field: 'created_at' },
+  ]
+})
+
+const isCurrent = (field: MaybeArray<PlayableListSortField>) =>
+  arrayify(field).join() === arrayify(sortField.value).join()
+
+const currentLabel = computed(() => options.value.find(({ field }) => isCurrent(field))?.label ?? 'Sort')
+
+const sort = (field: MaybeArray<PlayableListSortField>) => {
+  setSortOrder(isCurrent(field) && sortOrder.value === 'asc' ? 'desc' : 'asc')
   setSortField(field)
-  setSortOrder(sortOrder.value === 'asc' ? 'desc' : 'asc')
+  open.value = false
 
   emit('sort', field, sortOrder.value)
 }
-
-const sortingByAlbumOrPodcast = computed(() => {
-  const sortFields = arrayify(sortField.value)
-  return sortFields[0] === 'album_name' || sortFields[0] === 'podcast_title'
-})
-
-// On mobile, the table columns collapse — sorting is the only thing the action
-// menu can do. If the list isn't sortable (e.g. the queue), the button would
-// just open an inert menu, so drop it entirely.
-const shouldShowActionMenu = computed(() => !isMobile.any || config.sortable)
 </script>
+
+<style scoped>
+.sort-bar {
+  position: relative;
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 24px 4px;
+  z-index: 5;
+}
+
+.menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 24px;
+  min-width: 200px;
+}
+</style>

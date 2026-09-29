@@ -4,19 +4,15 @@
       <ScreenHeader layout="collapsed" :disabled="loading">
         Albums
         <template #controls>
-          <div class="flex gap-2">
-            <Btn
-              v-koel-tooltip
-              :title="preferences.albums_favorites_only ? 'Show all' : 'Show favorites only'"
-              variant="ghost"
-              class="border border-k-fg-10"
+          <div class="flex gap-2 items-center">
+            <M3Chip
+              :selected="preferences.albums_favorites_only"
+              class="shrink-0"
+              variant="filter"
               @click.prevent="toggleFavoritesOnly"
             >
-              <Icon
-                :icon="preferences.albums_favorites_only ? faHeart : faEmptyHeart"
-                :class="preferences.albums_favorites_only && 'text-k-love'"
-              />
-            </Btn>
+              Favorites only
+            </M3Chip>
 
             <AlbumListSorter
               v-if="preferences.albums_view_mode !== 'table'"
@@ -25,7 +21,7 @@
               @sort="sort"
             />
 
-            <ViewModeSwitch v-model="preferences.albums_view_mode" secondary="table" />
+            <ViewModeSwitch v-if="!isMobile" v-model="preferences.albums_view_mode" secondary="table" />
           </div>
         </template>
       </ScreenHeader>
@@ -49,7 +45,7 @@
     <template v-else>
       <div
         v-if="showSkeletons && preferences.albums_view_mode === 'table'"
-        class="-m-6 flex flex-col"
+        class="screen-bleed flex flex-col"
         role="status"
         aria-busy="true"
         aria-label="Loading"
@@ -66,7 +62,7 @@
       >
         <AlbumCardSkeleton v-for="i in 10" :key="i" />
       </div>
-      <div class="-m-6 flex-1 flex flex-col min-h-0" v-else>
+      <div class="screen-bleed flex-1 flex flex-col min-h-0" v-else>
         <AlbumTable
           v-if="preferences.albums_view_mode === 'table'"
           :albums="displayedAlbums"
@@ -89,13 +85,13 @@
 </template>
 
 <script lang="ts" setup>
-import { faHeart as faEmptyHeart } from '@fortawesome/free-regular-svg-icons'
-import { faCompactDisc, faHeart } from '@fortawesome/free-solid-svg-icons'
+import { faCompactDisc } from '@fortawesome/free-solid-svg-icons'
 import { computed, nextTick, onMounted, ref, toRef } from 'vue'
 import { albumStore } from '@/stores/albumStore'
 import { commonStore } from '@/stores/commonStore'
 import { preferenceStore as preferences } from '@/stores/preferenceStore'
 import { useErrorHandler } from '@/composables/useErrorHandler'
+import { useViewport } from '@/composables/useViewport'
 
 import AlbumCardSkeleton from '@/components/ui/album-artist/ArtistAlbumCardSkeleton.vue'
 import AlbumGrid from '@/components/album/AlbumGrid.vue'
@@ -106,9 +102,10 @@ import ViewModeSwitch from '@/components/ui/ViewModeSwitch.vue'
 import ScreenEmptyState from '@/components/ui/ScreenEmptyState.vue'
 import ScreenBase from '@/components/screens/ScreenBase.vue'
 import AlbumListSorter from '@/components/album/AlbumListSorter.vue'
-import Btn from '@/components/ui/form/Btn.vue'
+import M3Chip from '@/components/m3/M3Chip.vue'
 import EmptyLibraryHint from '@/components/ui/EmptyLibraryHint.vue'
 
+const { isMobile } = useViewport()
 const grid = ref<InstanceType<typeof AlbumGrid>>()
 const albums = toRef(albumStore.state, 'albums')
 

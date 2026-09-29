@@ -51,7 +51,7 @@ describe('episodeScreen.vue', () => {
     const { episode } = await renderComponent()
 
     await waitFor(async () => {
-      await h.user.click(screen.getByRole('button', { name: 'More Actions' }))
+      await h.user.click(screen.getByRole('button', { name: 'More actions' }))
       await assertOpenContextMenu(openContextMenu as Mock, PlayableContextMenu, { playables: [episode] })
     })
   })

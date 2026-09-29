@@ -10,48 +10,90 @@
 </template>
 
 <style lang="postcss" scoped>
-@reference '@css/app.pcss';
-:deep(.tabs) {
-  @apply flex flex-col overflow-hidden flex-1;
+.tabs {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+}
+
+header {
+  flex-shrink: 0;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--schemes-outline-variant);
+
+  @media (max-width: 768px) {
+    padding: 0 4px;
+  }
 }
 
 :deep(header ul) {
-  @apply flex flex-nowrap bg-k-fg-5 overflow-x-auto overflow-y-hidden shrink-0 border-b-k-fg-5;
+  display: flex;
+  max-width: 560px;
+  overflow-x: auto;
+  scrollbar-width: none;
 
   li {
-    @apply text-base relative uppercase tracking-wider opacity-50 cursor-pointer;
-    @apply transition-opacity duration-200 ease-in-out rounded-none;
-
-    &:hover {
-      @apply opacity-80;
-    }
-
-    &.active,
-    &:hover {
-      @apply opacity-100;
-    }
+    flex: 1 0 auto;
+    list-style: none;
 
     a {
-      @apply text-k-fg relative px-7 py-4 inline-block;
+      position: relative;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 48px;
+      padding: 0 16px;
+      color: var(--schemes-on-surface-variant);
+      font-size: calc(var(--static-title-small-size) * 1px);
+      line-height: calc(var(--static-title-small-line-height) * 1px);
+      letter-spacing: calc(var(--static-title-small-tracking) * 1px);
+      font-weight: 500;
+      white-space: nowrap;
+
+      &:hover {
+        color: var(--schemes-on-surface);
+        background: color-mix(in srgb, var(--schemes-on-surface) 8%, transparent);
+      }
+    }
+
+    &.active a {
+      color: var(--schemes-primary);
+
+      &::after {
+        content: '';
+        position: absolute;
+        left: 16px;
+        right: 16px;
+        bottom: 0;
+        height: 3px;
+        border-radius: 3px 3px 0 0;
+        background: var(--schemes-primary);
+      }
     }
   }
 }
 
-:deep(:is(main, .songs-pane, .albums-pane)) {
-  @apply flex flex-col flex-1 overflow-auto;
+main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: auto;
 }
 
-:deep(.albums-pane) {
-  > ul {
-    @apply p-7 overflow-auto;
-  }
+:deep(:is(.songs-pane, .albums-pane)) {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: auto;
+}
 
-  .none {
-    @apply px-7 py-4;
-  }
+:deep(.albums-pane .none) {
+  padding: 16px 24px;
 }
 
 :deep(.info-pane) {
-  @apply p-7;
+  max-width: 72ch;
+  padding: 20px 24px;
 }
 </style>

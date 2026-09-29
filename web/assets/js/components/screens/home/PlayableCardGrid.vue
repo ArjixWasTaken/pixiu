@@ -1,5 +1,5 @@
 <template>
-  <ol class="grid grid-cols-1 md:grid-cols-2">
+  <ol class="playable-card-grid">
     <PlayableCard v-for="playable in playables" :key="playable.id" :playable />
   </ol>
 </template>
@@ -13,26 +13,15 @@ const props = defineProps<{ playables: Playable[] }>()
 const { playables } = toRefs(props)
 </script>
 
-<style lang="postcss" scoped>
-@reference '@css/app.pcss';
-/* 1-col: divider above every item except the first */
-ol > :deep(:nth-child(n + 2)) {
-  @apply border-t border-k-fg-5;
-}
+<style scoped>
+.playable-card-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0 16px;
+  margin: 0 -12px;
 
-/* 2-col: only the left-column items (odd) in row 2+ draw the divider */
-@media (min-width: 768px) {
-  ol > :deep(:nth-child(n + 2)) {
-    @apply border-t-0;
-  }
-
-  ol > :deep(:nth-child(odd):nth-child(n + 3)) {
-    @apply relative;
-
-    &::before {
-      @apply content-[''] absolute top-0 left-0 h-px bg-k-fg-5;
-      width: 200%;
-    }
+  @media (min-width: 1360px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 </style>

@@ -8,7 +8,7 @@
       <slot name="leading" />
     </div>
     <div class="content">
-      <p v-if="overline" class="m3-label-medium overline">{{ overline }}</p>
+      <p v-if="overline" class="m3-label-medium overline-text">{{ overline }}</p>
       <p class="m3-body-large headline">
         <slot name="headline">{{ headline }}</slot>
       </p>
@@ -81,7 +81,7 @@ withDefaults(
 
 .headline,
 .supporting,
-.overline {
+.overline-text {
   margin: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -89,7 +89,7 @@ withDefaults(
 }
 
 .supporting,
-.overline {
+.overline-text {
   color: var(--schemes-on-surface-variant);
 }
 </style>

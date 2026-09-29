@@ -28,25 +28,17 @@
             @play-all="playAll"
             @play-selected="playSelected"
           >
-            <FavoriteButton
-              v-if="album.favorite"
-              :favorite="album.favorite"
-              class="px-3.5 py-2"
-              @toggle="toggleFavorite"
-            />
+            <FavoriteButton v-if="album.favorite" :favorite="album.favorite" @toggle="toggleFavorite" />
 
             <StarRating :rateable="album" class="px-2" />
 
-            <Btn variant="ghost" @click="requestContextMenu">
-              <Icon :icon="faEllipsis" fixed-width />
-              <span class="sr-only">More Actions</span>
-            </Btn>
+            <M3IconButton icon="more_vert" label="More actions" @click="requestContextMenu" />
           </SongListControls>
         </template>
       </ScreenHeader>
     </template>
 
-    <ScreenTabs v-if="album" class="-m-6" :class="loading && 'pointer-events-none'">
+    <ScreenTabs v-if="album" class="screen-bleed" :class="loading && 'pointer-events-none'">
       <template #header>
         <nav>
           <ul>
@@ -54,7 +46,7 @@
               <a :href="url('albums.show', { id: album.id, tab: 'songs' })">Songs</a>
             </li>
             <li :class="activeTab === 'other-albums' && 'active'">
-              <a :href="url('albums.show', { id: album.id, tab: 'other-albums' })">Other Albums</a>
+              <a :href="url('albums.show', { id: album.id, tab: 'other-albums' })">Other albums</a>
             </li>
             <li v-if="useEncyclopedia" :class="activeTab === 'information' && 'active'">
               <a :href="url('albums.show', { id: album.id, tab: 'information' })">Information</a>
@@ -89,7 +81,6 @@
 </template>
 
 <script lang="ts" setup>
-import { faEllipsis } from '@fortawesome/free-solid-svg-icons'
 import { computed, defineAsyncComponent, ref } from 'vue'
 import { eventBus } from '@/utils/eventBus'
 import { pluralize } from '@/utils/formatters'
@@ -104,6 +95,7 @@ import { useRouter } from '@/composables/useRouter'
 import { useThirdPartyServices } from '@/composables/useThirdPartyServices'
 import { useContextMenu } from '@/composables/useContextMenu'
 
+import M3IconButton from '@/components/m3/M3IconButton.vue'
 import ScreenHeader from '@/components/ui/ScreenHeader.vue'
 import AlbumThumbnail from '@/components/ui/album-artist/AlbumOrArtistThumbnail.vue'
 import ScreenHeaderSkeleton from '@/components/ui/ScreenHeaderSkeleton.vue'
@@ -111,7 +103,6 @@ import SongListSkeleton from '@/components/playable/playable-list/PlayableListSk
 import ScreenTabs from '@/components/ui/ArtistAlbumScreenTabs.vue'
 import ScreenBase from '@/components/screens/ScreenBase.vue'
 import GridListView from '@/components/ui/GridListView.vue'
-import Btn from '@/components/ui/form/Btn.vue'
 
 const validTabs = ['songs', 'other-albums', 'information'] as const
 type Tab = (typeof validTabs)[number]

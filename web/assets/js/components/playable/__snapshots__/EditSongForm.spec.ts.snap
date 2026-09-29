@@ -245,7 +245,7 @@ exports[`editSongForm.vue > edits a single song 1`] = `
       </div>
     </div>
   </div>
-  <footer data-v-cf47e900=""><button data-v-b156ac0d="" data-v-cf47e900="" class="text-base text-white border border-transparent bg-k-primary px-3.5 py-2 rounded-sm cursor-pointer" type="submit">Update</button><button data-v-b156ac0d="" data-v-cf47e900="" data-variant="ghost" class="text-base text-white border border-transparent bg-k-primary px-3.5 py-2 rounded-sm cursor-pointer btn-cancel" type="button">Cancel</button></footer>
+  <footer data-v-cf47e900=""><button data-v-b156ac0d="" data-v-cf47e900="" class="k-btn m3-state m3-label-large" type="submit">Update</button><button data-v-b156ac0d="" data-v-cf47e900="" data-variant="ghost" class="k-btn m3-state m3-label-large btn-cancel" type="button">Cancel</button></footer>
 </form>
 `;
 
@@ -486,6 +486,6 @@ exports[`editSongForm.vue > edits multiple songs 1`] = `
       <!--v-if-->
     </div>
   </div>
-  <footer data-v-cf47e900=""><button data-v-b156ac0d="" data-v-cf47e900="" class="text-base text-white border border-transparent bg-k-primary px-3.5 py-2 rounded-sm cursor-pointer" type="submit">Update</button><button data-v-b156ac0d="" data-v-cf47e900="" data-variant="ghost" class="text-base text-white border border-transparent bg-k-primary px-3.5 py-2 rounded-sm cursor-pointer btn-cancel" type="button">Cancel</button></footer>
+  <footer data-v-cf47e900=""><button data-v-b156ac0d="" data-v-cf47e900="" class="k-btn m3-state m3-label-large" type="submit">Update</button><button data-v-b156ac0d="" data-v-cf47e900="" data-variant="ghost" class="k-btn m3-state m3-label-large btn-cancel" type="button">Cancel</button></footer>
 </form>
 `;

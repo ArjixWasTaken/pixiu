@@ -1,39 +1,39 @@
 <template>
-  <article>
-    <button
-      ref="button"
-      :title="title"
-      class="border px-3 rounded-md h-full border-k-fg-10 w-full focus:text-k-fg hover:text-k-fg active:text-k-fg"
-    >
-      <span class="mr-2">{{ currentLabel }}</span>
-      <Icon :icon="order === 'asc' ? faArrowUp : faArrowDown" />
-    </button>
-    <Popover ref="popover" :anchor="button" placement="bottom-end" class="context-menu normal-case tracking-normal">
-      <menu>
-        <li
-          v-for="item in items"
-          :key="item.label"
-          :class="isCurrentField(item.field) && 'active'"
-          :title="`Sort by ${item.label}`"
-          class="cursor-pointer group flex justify-between hover:bg-k-highlight hover:text-k-highlight-fg"
-          @click="sort(item.field)"
-        >
-          <span>{{ item.label }}</span>
-          <span v-if="isCurrentField(item.field)" class="text-k-fg group-hover:text-k-highlight-fg">
-            <Icon v-if="order === 'asc'" :icon="faArrowUp" />
-            <Icon v-else :icon="faArrowDown" />
-          </span>
-        </li>
-      </menu>
-    </Popover>
+  <article ref="container" class="relative">
+    <M3Chip :icon="order === 'asc' ? 'arrow_upward' : 'arrow_downward'" :title @click="open = !open">
+      {{ currentLabel }}
+    </M3Chip>
+    <M3Menu v-show="open" class="menu">
+      <M3MenuItem
+        v-for="item in items"
+        :key="item.label"
+        :class="{ active: isCurrentField(item.field) }"
+        :label="item.label"
+        :selected="isCurrentField(item.field)"
+        :title="`Sort by ${item.label}`"
+        tag="div"
+        @click="sort(item.field)"
+      >
+        <template #trailing>
+          <M3Icon
+            v-if="isCurrentField(item.field)"
+            :name="order === 'asc' ? 'arrow_upward' : 'arrow_downward'"
+            :size="18"
+          />
+        </template>
+      </M3MenuItem>
+    </M3Menu>
   </article>
 </template>
 
 <script generic="T extends SortField" lang="ts" setup>
-import { faArrowDown, faArrowUp } from '@fortawesome/free-solid-svg-icons'
-import { computed, ref, toRefs } from 'vue'
+import { computed, ref, toRefs, useTemplateRef } from 'vue'
+import { onClickOutside } from '@vueuse/core'
 
-import Popover from '@/components/ui/Popover.vue'
+import M3Chip from '@/components/m3/M3Chip.vue'
+import M3Icon from '@/components/m3/M3Icon.vue'
+import M3Menu from '@/components/m3/M3Menu.vue'
+import M3MenuItem from '@/components/m3/M3MenuItem.vue'
 
 const props = defineProps<{
   items: BasicListSorterDropDownItem<T>[]
@@ -45,8 +45,9 @@ const emit = defineEmits<{ (e: 'sort', field: T, order: SortOrder): void }>()
 
 const { field: currentField, order: currentOrder, items } = toRefs(props)
 
-const button = ref<HTMLButtonElement>()
-const popover = ref<InstanceType<typeof Popover>>()
+const open = ref(false)
+const container = useTemplateRef('container')
+onClickOutside(container, () => (open.value = false))
 
 const currentLabel = computed(() => {
   return items.value.find((item: BasicListSorterDropDownItem<T>) => item.field === currentField.value)?.label
@@ -61,7 +62,7 @@ const sort = (field: T) => {
     emit('sort', field, 'asc')
   }
 
-  popover.value?.hide()
+  open.value = false
 }
 
 const isCurrentField = (field: T) => field === currentField.value
@@ -70,3 +71,13 @@ const title = computed(
   () => `Sorting by ${currentLabel.value}, ${currentOrder.value === 'asc' ? 'ascending' : 'descending'}`,
 )
 </script>
+
+<style scoped>
+.menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 30;
+  min-width: 200px;
+}
+</style>

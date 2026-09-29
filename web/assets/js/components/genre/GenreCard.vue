@@ -1,50 +1,31 @@
 <template>
-  <li
-    class="min-h-auto md:min-h-40"
-    draggable="true"
-    tabindex="0"
-    @dragstart="onDragStart"
-    @contextmenu.prevent="onContextMenu"
-  >
-    <WithGradientBorder
-      :color
-      border-color="color-mix(in srgb, var(--color-fg), transparent 97%)"
-      border-width="1px"
-      class="rounded-lg overflow-hidden relative h-full transition-transform active:transition-none active:scale-100"
+  <li data-vue="GenreCard" draggable="true" tabindex="0" @contextmenu.prevent="onContextMenu" @dragstart="onDragStart">
+    <a
+      :class="`tone-${tone % 4}`"
+      :href="url('genres.show', { id: genre.id })"
+      :title="genre.name || 'No Genre'"
+      class="genre-card m3-state"
     >
-      <a
-        :href="url('genres.show', { id: genre.id })"
-        :title="genre.name || 'No Genre'"
-        class="flex flex-col justify-end h-full p-4 bg-k-fg-3"
-      >
-        <span class="text-2xl truncate font-normal text-k-fg-90" :class="genre.name || 'italic'">
-          {{ genre.name || 'No Genre' }}
-        </span>
-        <span class="text-k-fg-70 text-lg">{{ pluralize(genre.song_count, 'song') }}</span>
-      </a>
-    </WithGradientBorder>
+      <span :class="genre.name || 'italic'" class="m3-title-large truncate name">{{ genre.name || 'No Genre' }}</span>
+      <span class="m3-body-medium count">{{ pluralize(genre.song_count, 'song') }}</span>
+    </a>
   </li>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
-import { pluralize, textToHsl } from '@/utils/formatters'
+import { pluralize } from '@/utils/formatters'
 import { useRouter } from '@/composables/useRouter'
 import { useDraggable } from '@/composables/useDragAndDrop'
 import { useContextMenu } from '@/composables/useContextMenu'
 import { defineAsyncComponent } from '@/utils/helpers'
 
-import WithGradientBorder from '@/components/ui/WithGradientBorder.vue'
-
-const props = defineProps<{ genre: Genre }>()
+const props = withDefaults(defineProps<{ genre: Genre; tone?: number }>(), { tone: 0 })
 
 const ContextMenu = defineAsyncComponent(() => import('@/components/genre/GenreContextMenu.vue'))
 
 const { url } = useRouter()
 const { startDragging } = useDraggable('genre')
 const { openContextMenu } = useContextMenu()
-
-const color = computed(() => textToHsl(props.genre.id))
 
 const onContextMenu = (event: MouseEvent) =>
   openContextMenu<'GENRE'>(ContextMenu, event, {
@@ -53,3 +34,36 @@ const onContextMenu = (event: MouseEvent) =>
 
 const onDragStart = (event: DragEvent) => startDragging(event, props.genre)
 </script>
+
+<style scoped>
+.genre-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 4px;
+  min-height: 128px;
+  padding: 16px;
+  border-radius: 12px;
+  color: var(--schemes-on-surface);
+
+  &.tone-0 {
+    background: var(--schemes-primary-container);
+  }
+
+  &.tone-1 {
+    background: var(--schemes-secondary-container);
+  }
+
+  &.tone-2 {
+    background: var(--schemes-tertiary-container);
+  }
+
+  &.tone-3 {
+    background: var(--schemes-surface-container-highest);
+  }
+}
+
+.count {
+  color: var(--schemes-on-surface-variant);
+}
+</style>

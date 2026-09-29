@@ -39,17 +39,9 @@
               <Icon :icon="faExternalLink" fixed-width />
             </Btn>
 
-            <FavoriteButton
-              v-if="episode.favorite"
-              :favorite="episode.favorite"
-              class="px-3.5 py-2"
-              @toggle="toggleFavorite"
-            />
+            <FavoriteButton v-if="episode.favorite" :favorite="episode.favorite" @toggle="toggleFavorite" />
 
-            <Btn variant="ghost" @click="requestContextMenu">
-              <Icon :icon="faEllipsis" fixed-width />
-              <span class="sr-only">More Actions</span>
-            </Btn>
+            <M3IconButton icon="more_vert" label="More actions" @click="requestContextMenu" />
           </div>
         </template>
       </ScreenHeader>
@@ -63,7 +55,7 @@
 </template>
 
 <script setup lang="ts">
-import { faEllipsis, faExternalLink, faPause, faPlay } from '@fortawesome/free-solid-svg-icons'
+import { faExternalLink, faPause, faPlay } from '@fortawesome/free-solid-svg-icons'
 import DOMPurify from 'dompurify'
 import { orderBy } from 'lodash-es'
 import { computed, ref, watch } from 'vue'
@@ -79,6 +71,7 @@ import { useContextMenu } from '@/composables/useContextMenu'
 
 import ScreenBase from '@/components/screens/ScreenBase.vue'
 import MarqueeText from '@/components/ui/MarqueeText.vue'
+import M3IconButton from '@/components/m3/M3IconButton.vue'
 import ScreenHeader from '@/components/ui/ScreenHeader.vue'
 import Btn from '@/components/ui/form/Btn.vue'
 import ScreenHeaderSkeleton from '@/components/ui/ScreenHeaderSkeleton.vue'

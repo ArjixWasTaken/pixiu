@@ -14,6 +14,6 @@ exports[`playlistCollaborationModal.vue > renders the modal 1`] = `
       <div data-v-6f86ded1="" class="scroll-mask-y collaborators-wrapper overflow-auto"><br data-v-6f86ded1="" data-testid="CollaboratorList" playlist="[object Object]"></div>
     </section>
   </main>
-  <footer data-v-6f86ded1=""><button data-v-b156ac0d="" data-v-6f86ded1="" class="text-base text-white border border-transparent bg-k-primary px-3.5 py-2 rounded-sm cursor-pointer" type="button">Close</button></footer>
+  <footer data-v-6f86ded1=""><button data-v-b156ac0d="" data-v-6f86ded1="" class="k-btn m3-state m3-label-large" type="button">Close</button></footer>
 </div>
 `;

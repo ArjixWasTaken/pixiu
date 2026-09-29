@@ -4,17 +4,14 @@
       <ScreenHeader layout="collapsed">
         {{ greeting }}
         <template #controls>
-          <button
+          <M3IconButton
             v-if="!libraryEmpty"
-            type="button"
-            class="w-9 h-9 rounded-full flex items-center justify-center text-k-fg-70 hover:text-k-fg hover:bg-k-fg-5 transition shrink-0"
-            title="Reorder home blocks"
             data-testid="reorder-home-blocks-btn"
+            icon="swap_vert"
+            label="Reorder home blocks"
+            variant="tonal"
             @click="openReorderModal"
-          >
-            <ListChevronsUpDownIcon class="w-5 h-5" />
-            <span class="sr-only">Reorder home blocks</span>
-          </button>
+          />
         </template>
       </ScreenHeader>
     </template>
@@ -27,7 +24,7 @@
       <EmptyLibraryHint />
     </ScreenEmptyState>
 
-    <div v-else class="home-sections space-y-12 w-full">
+    <div v-else class="home-sections flex flex-col gap-8 pt-2 w-full">
       <component
         v-for="block in orderedBlocks"
         :key="block.id"
@@ -42,7 +39,6 @@
 
 <script lang="ts" setup>
 import { faVolumeOff } from '@fortawesome/free-solid-svg-icons'
-import { ListChevronsUpDownIcon } from 'lucide-vue-next'
 import { sample } from 'lodash-es'
 import type { Component } from 'vue'
 import { computed, defineAsyncComponent, ref } from 'vue'
@@ -68,6 +64,7 @@ import LeastPlayedSongs from '@/components/screens/home/LeastPlayedSongs.vue'
 import RandomSongs from '@/components/screens/home/RandomSongs.vue'
 import SimilarSongs from '@/components/screens/home/SimilarSongs.vue'
 import ScreenHeader from '@/components/ui/ScreenHeader.vue'
+import M3IconButton from '@/components/m3/M3IconButton.vue'
 import ScreenEmptyState from '@/components/ui/ScreenEmptyState.vue'
 import BtnScrollToTop from '@/components/ui/BtnScrollToTop.vue'
 import ScreenBase from '@/components/screens/ScreenBase.vue'

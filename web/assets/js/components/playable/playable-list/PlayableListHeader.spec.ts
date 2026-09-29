@@ -1,49 +1,26 @@
 import { screen } from '@testing-library/vue'
-import isMobile from 'ismobilejs'
 import { ref } from 'vue'
 import { describe, expect, it } from 'vite-plus/test'
 import { createHarness } from '@/__tests__/TestHarness'
-import {
-  PlayableListConfigKey,
-  PlayableListContextKey,
-  PlayableListSortFieldKey,
-  PlayableListSortOrderKey,
-  SelectedPlayablesKey,
-} from '@/config/symbols'
+import { PlayableListConfigKey, PlayableListSortFieldKey, PlayableListSortOrderKey } from '@/config/symbols'
 import PlayableListHeader from './PlayableListHeader.vue'
 
 describe('playableListHeader.vue', () => {
   const h = createHarness()
 
-  const renderComponent = async (
-    config: Partial<PlayableListConfig> = {
-      sortable: true,
-      reorderable: true,
-    },
-    context: PlayableListContext = {
-      type: 'Album',
-    },
-    selectedPlayables: Playable[] = [],
+  const renderComponent = (
+    config: Partial<PlayableListConfig> = { sortable: true },
     sortField: PlayableListSortField = 'title',
     sortOrder: SortOrder = 'asc',
   ) => {
-    const sortFieldRef = ref(sortField)
+    const sortFieldRef = ref<MaybeArray<PlayableListSortField>>(sortField)
     const sortOrderRef = ref(sortOrder)
 
-    h.visit('/songs')
-
-    return h.render(PlayableListHeader, {
-      props: {
-        contentType: 'songs',
-      },
+    const rendered = h.render(PlayableListHeader, {
+      props: { contentType: 'songs' },
       global: {
-        stubs: {
-          ActionMenu: h.stub(),
-        },
         provide: {
-          [<symbol>SelectedPlayablesKey]: [ref(selectedPlayables), (value: Playable[]) => (selectedPlayables = value)],
           [<symbol>PlayableListConfigKey]: [config],
-          [<symbol>PlayableListContextKey]: [context],
           [<symbol>PlayableListSortFieldKey]: [
             sortFieldRef,
             (value: PlayableListSortField) => (sortFieldRef.value = value),
@@ -52,85 +29,36 @@ describe('playableListHeader.vue', () => {
         },
       },
     })
+
+    return { ...rendered, sortFieldRef, sortOrderRef }
   }
 
-  it.each<[PlayableListSortField, string]>([
-    ['track', 'header-track-number'],
-    ['title', 'header-title'],
-    ['album_name', 'header-album'],
-    ['length', 'header-length'],
-  ])('sorts by %s upon %s clicked', async (field, testId) => {
-    const { emitted } = await renderComponent()
-
-    await h.user.click(screen.getByTestId(testId))
-    expect(emitted().sort[0]).toEqual([field, 'desc'])
-
-    await h.user.click(screen.getByTestId(testId))
-    expect(emitted().sort[1]).toEqual([field, 'asc'])
+  it('shows the current sort field', () => {
+    renderComponent({ sortable: true }, 'album_name')
+    expect(screen.getByTestId('sort-chip').textContent).toContain('Album')
   })
 
-  it('shows collaborative columns when collaborative', async () => {
-    await renderComponent({
-      sortable: true,
-      reorderable: true,
-      collaborative: true,
-    })
+  it('sorts by another field, ascending', async () => {
+    const { emitted, sortFieldRef } = renderComponent()
 
-    screen.getByTestId('header-collaborator')
-    screen.getByTestId('header-contributed-at')
+    await h.user.click(screen.getByTestId('sort-chip'))
+    await h.user.click(screen.getByText('Artist'))
+
+    expect(sortFieldRef.value).toBe('artist_name')
+    expect(emitted().sort[0]).toEqual(['artist_name', 'asc'])
   })
 
-  it('does not show collaborative columns when not collaborative', async () => {
-    await renderComponent()
+  it('flips the order when the current field is picked again', async () => {
+    const { emitted } = renderComponent()
 
-    expect(screen.queryByTestId('header-collaborator')).toBeNull()
-    expect(screen.queryByTestId('header-contributed-at')).toBeNull()
+    await h.user.click(screen.getByTestId('sort-chip'))
+    await h.user.click(screen.getByRole('menuitem', { name: /Title/ }))
+
+    expect(emitted().sort[0]).toEqual(['title', 'desc'])
   })
 
-  it.each<[PlayableListSortField, string]>([
-    ['collaboration.user.name', 'header-collaborator'],
-    ['collaboration.added_at', 'header-contributed-at'],
-  ])('sorts collaborative column by %s upon %s clicked', async (field, testId) => {
-    const { emitted } = await renderComponent({
-      sortable: true,
-      reorderable: true,
-      collaborative: true,
-    })
-
-    await h.user.click(screen.getByTestId(testId))
-    expect(emitted().sort[0]).toEqual([field, 'desc'])
-
-    await h.user.click(screen.getByTestId(testId))
-    expect(emitted().sort[1]).toEqual([field, 'asc'])
-  })
-
-  it('cannot be sorted if configured so', async () => {
-    const { emitted } = await renderComponent({
-      sortable: false,
-      reorderable: true,
-    })
-
-    await h.user.click(screen.getByTestId('header-track-number'))
-    expect(emitted().sort).toBeUndefined()
-  })
-
-  it.each<[boolean, boolean]>([
-    [false, true], // desktop + sortable
-    [false, false], // desktop + unsortable: column-toggle is still useful
-    [true, true], // mobile + sortable: sort still works
-  ])('shows action menu — mobile=%s sortable=%s', async (mobile, sortable) => {
-    isMobile.any = mobile
-
-    await renderComponent({ sortable, reorderable: true })
-
-    screen.getByTestId('header-extra')
-  })
-
-  it('hides action menu on mobile when not sortable', async () => {
-    isMobile.any = true
-
-    await renderComponent({ sortable: false, reorderable: true })
-
-    expect(screen.queryByTestId('header-extra')).toBeNull()
+  it('is hidden for lists that cannot be sorted', () => {
+    renderComponent({ sortable: false })
+    expect(screen.queryByTestId('sort-chip')).toBeNull()
   })
 })
