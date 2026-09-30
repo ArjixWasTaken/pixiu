@@ -22,6 +22,14 @@ pub(crate) struct Status {
     password_reset: bool,
     /// Whether anyone may ask for an account.
     registration: bool,
+    /// The single sign-on provider people may sign in with.
+    sso: Option<Sso>,
+}
+
+#[derive(Serialize)]
+pub(crate) struct Sso {
+    /// What the button says: "Sign in with <name>".
+    name: String,
 }
 
 /// `GET /api/auth/status`.
@@ -31,10 +39,14 @@ pub(crate) async fn status(State(state): State<ApiState>) -> ApiResult<Json<Stat
         .exec(&mut state.db.clone())
         .await?
         .is_some();
+    let settings = state.settings.get();
     Ok(Json(Status {
         claimed,
         password_reset: state.mailer.ready(),
-        registration: state.settings.get().registration_available(),
+        registration: settings.registration_available(),
+        sso: settings.sso().map(|oidc| Sso {
+            name: oidc.name.clone(),
+        }),
     }))
 }
 

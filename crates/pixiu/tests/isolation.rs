@@ -17,7 +17,7 @@ use axum::{
 use pixiu_core::{Config, SecretBox};
 use pixiu_db::{
     Annotation, ApiKey, Db, Offering, Playlist, PlaylistFolder, SessionState, SourceSession, Track,
-    TrackClaim, User, Watch, now, toasty,
+    TrackClaim, User, UserIdentity, Watch, now, toasty,
 };
 use pixiu_treasury::{Claim, Provenance, tags};
 use serde_json::{Value, json};
@@ -52,6 +52,8 @@ struct Alices {
     offering: u64,
     batch: String,
     key: u64,
+    /// Her single sign-on link.
+    identity: u64,
 }
 
 impl Alices {
@@ -284,6 +286,16 @@ impl World {
             .unwrap()
             .unwrap()
             .id;
+        theirs.identity = toasty::create!(UserIdentity {
+            user_id: alice,
+            issuer: "https://sso.example.com",
+            subject: "alice",
+            linked_at: now(),
+        })
+        .exec(&mut self.db)
+        .await
+        .unwrap()
+        .id;
         self.theirs = theirs;
     }
 
@@ -376,6 +388,11 @@ impl World {
             .unwrap()
             .len();
         let claims = TrackClaim::all().exec(&mut db).await.unwrap().len();
+        let identities = UserIdentity::filter_by_user_id(alice)
+            .exec(&mut db)
+            .await
+            .unwrap()
+            .len();
         let jobs: Vec<(u64, String)> = self
             .services
             .jobs
@@ -387,7 +404,7 @@ impl World {
             .collect();
         format!(
             "{tracks:?} {annotations:?} {playlists:?} {folders:?} {watches} {offerings} \
-             {claims} {jobs:?}"
+             {claims} {identities} {jobs:?}"
         )
     }
 }
@@ -430,6 +447,9 @@ const API_ROUTES: &[(&str, &str)] = &[
     ("/api/auth/reset", "no ids"),
     ("/api/auth/verify-email", "no ids"),
     ("/api/auth/register", "no ids"),
+    ("/api/auth/oidc/start", "no ids"),
+    ("/api/auth/oidc/callback", "no ids"),
+    ("/api/auth/oidc/exchange", "no ids"),
     ("/api/bootstrap", "list"),
     ("/api/albums", "list"),
     ("/api/artists", "list"),
@@ -475,6 +495,9 @@ const API_ROUTES: &[(&str, &str)] = &[
     ("/api/me/keys/{id}", "by id"),
     ("/api/me/email/resend", "no ids"),
     ("/api/me/alerts", "no ids"),
+    ("/api/me/identities", "list"),
+    ("/api/me/identities/oidc", "no ids"),
+    ("/api/me/identities/{id}", "by id"),
     ("/api/admin/users", "admin"),
     ("/api/admin/users/{id}", "admin"),
     ("/api/admin/users/{id}/password", "admin"),
@@ -488,6 +511,8 @@ const API_ROUTES: &[(&str, &str)] = &[
     ("/api/admin/settings/smtp", "admin"),
     ("/api/admin/settings/smtp/test", "admin"),
     ("/api/admin/settings/registration", "admin"),
+    ("/api/admin/settings/oidc", "admin"),
+    ("/api/admin/settings/oidc/test", "admin"),
     ("/api/sources", "list"),
     ("/api/sources/validate", "no ids"),
     ("/api/sources/refresh", "no ids"),
@@ -618,6 +643,7 @@ async fn lists_show_only_the_callers_library() {
         ("/api/jobs", json!([])),
         ("/api/offerings", json!([])),
         ("/api/playlists", json!([])),
+        ("/api/me/identities", json!([])),
     ] {
         assert_eq!(
             world.api(&key, Method::GET, path, None).await.1,
@@ -814,6 +840,11 @@ async fn nobody_reaches_another_library_by_id() {
             None,
         ),
         (Method::DELETE, format!("/api/me/keys/{}", theirs.key), None),
+        (
+            Method::DELETE,
+            format!("/api/me/identities/{}", theirs.identity),
+            None,
+        ),
     ];
     for (method, path, body) in not_found {
         let (status, response) = world.api(&key, method.clone(), &path, body).await;

@@ -75,8 +75,6 @@ interface KoelGlobals {
     readonly default: string
   }
   mailer_configured: boolean
-  sso_providers: SSOProvider[]
-  sso_oidc_label?: string
   accepted_audio_extensions: string[]
   demo_account?: {
     email: string
@@ -598,6 +596,7 @@ interface ScreenNames {
   'Search.Playables': true
   Settings: true
   Songs: true
+  SsoComplete: true
   Upload: true
   Users: true
   VerifyEmail: true

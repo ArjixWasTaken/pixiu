@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/vue'
+import { screen } from '@testing-library/vue'
 import { afterEach, describe, expect, it } from 'vite-plus/test'
 import { createHarness } from '@/__tests__/TestHarness'
 import { authService } from '@/services/authService'
@@ -8,10 +8,12 @@ describe('auth.vue', () => {
   const h = createHarness({
     authenticated: false,
     beforeEach: () =>
-      h.mock(authService, 'status').mockResolvedValue({ claimed: true, password_reset: false, registration: false }),
+      h
+        .mock(authService, 'status')
+        .mockResolvedValue({ claimed: true, password_reset: false, registration: false, sso: null }),
   })
 
-  afterEach(() => (window.KOEL.sso_providers = []))
+  afterEach(() => history.replaceState(null, '', '/'))
 
   it('renders the credentials form by default', async () => {
     h.render(Component)
@@ -27,7 +29,12 @@ describe('auth.vue', () => {
   })
 
   it('emails a reset link to whoever forgot their password', async () => {
-    h.mock(authService, 'status').mockResolvedValue({ claimed: true, password_reset: true, registration: false })
+    h.mock(authService, 'status').mockResolvedValue({
+      claimed: true,
+      password_reset: true,
+      registration: false,
+      sso: null,
+    })
     const forgot = h.mock(authService, 'forgot').mockResolvedValue(undefined)
     h.render(Component)
 
@@ -43,7 +50,12 @@ describe('auth.vue', () => {
   })
 
   it('lets people ask for an account while registration is open', async () => {
-    h.mock(authService, 'status').mockResolvedValue({ claimed: true, password_reset: true, registration: true })
+    h.mock(authService, 'status').mockResolvedValue({
+      claimed: true,
+      password_reset: true,
+      registration: true,
+      sso: null,
+    })
     const register = h.mock(authService, 'register').mockResolvedValue(undefined)
     h.render(Component)
 
@@ -66,17 +78,31 @@ describe('auth.vue', () => {
     expect(screen.queryByRole('button', { name: 'Ask for an account' })).toBeNull()
   })
 
-  it('shows the SSO login options', async () => {
-    window.KOEL.sso_providers = ['Google']
-
-    h.render(Component, {
-      global: {
-        stubs: {
-          GoogleLoginButton: h.stub('google-login-button'),
-        },
-      },
+  it('offers single sign-on when it is set up', async () => {
+    h.mock(authService, 'status').mockResolvedValue({
+      claimed: true,
+      password_reset: false,
+      registration: false,
+      sso: { name: 'Authelia' },
     })
+    h.render(Component)
 
-    await waitFor(() => screen.getByTestId('google-login-button'))
+    const button = await screen.findByTestId('sso-button')
+    expect(button.textContent).toContain('Sign in with Authelia')
+    expect(button.getAttribute('href')).toMatch(/api\/auth\/oidc\/start$/)
+  })
+
+  it('says why a single sign-on came back, once', async () => {
+    h.mock(authService, 'status').mockResolvedValue({
+      claimed: true,
+      password_reset: false,
+      registration: false,
+      sso: { name: 'Authelia' },
+    })
+    history.replaceState(null, '', '/?sso_error=unlinked')
+    h.render(Component)
+
+    await screen.findByText(/This Authelia account is not linked to a píxiū account/)
+    expect(location.search).toBe('')
   })
 })

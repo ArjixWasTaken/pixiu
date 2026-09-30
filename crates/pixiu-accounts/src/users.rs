@@ -36,6 +36,8 @@ pub enum AccountError {
     RegistrationClosed,
     #[error("That request was handled already.")]
     NotPending,
+    #[error("That account is linked to someone else's already.")]
+    IdentityTaken,
     #[error("database error: {0}")]
     Db(#[from] toasty::Error),
     #[error("background task failed: {0}")]
@@ -456,6 +458,7 @@ pub async fn delete(db: &mut Db, id: u64) -> Result<(), AccountError> {
         "DELETE FROM account_tokens WHERE user_id = ?1",
         "DELETE FROM user_settings WHERE user_id = ?1",
         "DELETE FROM sent_alerts WHERE user_id = ?1",
+        "DELETE FROM user_identities WHERE user_id = ?1",
         "DELETE FROM users WHERE id = ?1",
     ] {
         toasty::sql::query(statement)

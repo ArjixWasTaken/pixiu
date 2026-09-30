@@ -6,8 +6,8 @@
         autocomplete="off"
         label="Server"
         name="host"
-        placeholder="smtp.example.com"
         required
+        supporting-text="Like smtp.example.com."
       />
       <M3TextField v-model="data.port" label="Port" min="1" max="65535" name="port" required type="number" />
     </div>
@@ -42,9 +42,8 @@
       v-model="data.from"
       label="Sender"
       name="from"
-      placeholder="píxiū <no-reply@example.com>"
       required
-      supporting-text="The address emails come from, with a name if you like."
+      supporting-text="The address emails come from, with a name if you like: píxiū <no-reply@example.com>."
     />
 
     <div class="flex flex-wrap justify-end gap-3">

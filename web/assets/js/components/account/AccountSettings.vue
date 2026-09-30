@@ -2,6 +2,7 @@
   <div class="flex flex-col gap-6" data-testid="account-settings">
     <ProfileGroup />
     <PasswordGroup />
+    <LinkedAccountsGroup />
     <AlertsGroup />
     <ApiKeysGroup />
   </div>
@@ -10,6 +11,7 @@
 <script lang="ts" setup>
 import AlertsGroup from '@/components/account/AlertsGroup.vue'
 import ApiKeysGroup from '@/components/account/ApiKeysGroup.vue'
+import LinkedAccountsGroup from '@/components/account/LinkedAccountsGroup.vue'
 import PasswordGroup from '@/components/account/PasswordGroup.vue'
 import ProfileGroup from '@/components/account/ProfileGroup.vue'
 </script>

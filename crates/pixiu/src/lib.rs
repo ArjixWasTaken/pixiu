@@ -6,7 +6,9 @@ use std::{path::Path, sync::Arc};
 
 use anyhow::Context;
 use axum::Router;
-use pixiu_accounts::{MailTransport, Mailer, Settings, SmtpTransport, alerts::MailAlerts};
+use pixiu_accounts::{
+    MailTransport, Mailer, Settings, SmtpTransport, alerts::MailAlerts, oidc::Sso,
+};
 use pixiu_browser::LoginDesks;
 use pixiu_core::{Config, SecretBox, TranscodeFormat, config::PathsConfig, playing::NowPlaying};
 use pixiu_db::{Db, User};
@@ -44,6 +46,8 @@ pub struct Services {
     /// the mail server.
     pub settings: Arc<Settings>,
     pub mailer: Arc<Mailer>,
+    /// The single sign-on provider.
+    pub sso: Arc<Sso>,
     pub throttle: Arc<pixiu_api::Throttle>,
     /// See [`ServerConfig`](pixiu_core::config::ServerConfig).
     pub trust_proxy_headers: bool,
@@ -152,6 +156,7 @@ impl Services {
             jobs,
             desks,
             now_playing: NowPlaying::default(),
+            sso: Sso::new(Arc::clone(&settings)),
             settings,
             mailer,
             throttle: Arc::default(),
@@ -173,6 +178,7 @@ impl Services {
             desks: Arc::clone(&self.desks),
             settings: Arc::clone(&self.settings),
             mailer: Arc::clone(&self.mailer),
+            sso: Arc::clone(&self.sso),
             throttle: Arc::clone(&self.throttle),
             trust_proxy_headers: self.trust_proxy_headers,
         }

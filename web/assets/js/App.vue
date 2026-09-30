@@ -27,6 +27,7 @@
   <Auth v-if="layout === 'auth'" @logged-in="triggerAppInitialization" />
   <Embed v-if="layout === 'embed'" />
   <EmailLink v-if="layout === 'email-link'" />
+  <SsoComplete v-if="layout === 'sso'" />
 
   <AppInitializer v-if="authenticated" @error="onInitError" @success="onInitSuccess" />
 
@@ -78,6 +79,7 @@ const DropZone = defineAsyncComponent(() => import('@/components/ui/upload/DropZ
 const ChangePasswordRequired = defineAsyncComponent(() => import('@/components/account/ChangePasswordRequired.vue'))
 const Embed = defineAsyncComponent(() => import('@/components/embed/widget/EmbedWidget.vue'))
 const EmailLink = defineAsyncComponent(() => import('@/components/auth/EmailLink.vue'))
+const SsoComplete = defineAsyncComponent(() => import('@/components/auth/SsoComplete.vue'))
 
 const overlay = ref<InstanceType<typeof Overlay>>()
 const dialog = ref<InstanceType<typeof DialogBox>>()

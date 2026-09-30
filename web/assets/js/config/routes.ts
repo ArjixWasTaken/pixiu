@@ -10,7 +10,7 @@ const ALBUM_ID = 'al-[0-9]+'
 const ARTIST_ID = 'ar-[0-9]+'
 const PLAYLIST_ID = 'pl-[0-9]+'
 const SONG_ID = 'tr-[0-9]+'
-// The tokens of links píxiū emails: base64url.
+// The tokens of links píxiū emails, and of single sign-ons: base64url.
 const EMAIL_TOKEN = '[A-Za-z0-9_-]+'
 
 export const routes = [
@@ -239,6 +239,18 @@ export const routes = [
     },
     constraints: {
       token: EMAIL_TOKEN,
+    },
+  },
+  {
+    name: 'sso',
+    path: '/sso/:code',
+    screen: 'SsoComplete',
+    meta: {
+      public: true,
+      layout: 'sso',
+    },
+    constraints: {
+      code: EMAIL_TOKEN,
     },
   },
   {

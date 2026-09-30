@@ -8,7 +8,6 @@
       autocomplete="url"
       label="Public address"
       name="public_url"
-      placeholder="https://music.example.com"
       type="url"
     />
     <div class="flex justify-end">

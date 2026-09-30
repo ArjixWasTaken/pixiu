@@ -35,12 +35,26 @@ export interface AlertPreferences {
   alerts: Record<AlertKind, boolean>
 }
 
+export interface LinkedAccount {
+  id: number
+  /** The provider's name, as the admin set it up. */
+  provider: string
+  email: string | null
+  linked_at: string
+  last_login_at: string | null
+}
+
 export const accountService = {
   me: () => http.get<Account>('me'),
   updateProfile: (profile: { username: string; email: string }) => http.put<Account>('me', profile),
   changePassword: (password: string, currentPassword = '') =>
     http.put('me/password', { current_password: currentPassword, password }),
   resendVerification: () => http.post('me/email/resend', {}),
+
+  identities: () => http.get<LinkedAccount[]>('me/identities'),
+  /** Where to send the browser to link an account at the provider. */
+  linkIdentity: async () => (await http.post<{ url: string }>('me/identities/oidc', {})).url,
+  unlinkIdentity: (id: number) => http.delete(`me/identities/${id}`),
 
   alerts: () => http.get<AlertPreferences>('me/alerts'),
   setAlerts: (changes: Partial<Record<AlertKind, boolean>>) => http.put<AlertPreferences>('me/alerts', changes),

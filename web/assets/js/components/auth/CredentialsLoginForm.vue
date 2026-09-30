@@ -49,9 +49,13 @@
       type="password"
     />
 
-    <p v-if="problem" class="m3-body-medium text-center text-(--schemes-error)">{{ problem }}</p>
+    <p v-if="problem || notice" class="m3-body-medium text-center text-(--schemes-error)" role="alert">
+      {{ problem || notice }}
+    </p>
 
     <M3Button class="w-full" data-testid="submit" type="submit">{{ claiming ? 'Create account' : 'Log in' }}</M3Button>
+    <SsoButton v-if="sso && !claiming" :href="authService.ssoStartUrl()" :name="sso.name" />
+
     <div v-if="!claiming && (passwordReset || registration)" class="flex flex-wrap justify-center gap-2">
       <M3Button v-if="passwordReset" variant="text" @click.prevent="$emit('forgot')">Forgot password?</M3Button>
       <M3Button v-if="registration" variant="text" @click.prevent="$emit('register')">Ask for an account</M3Button>
@@ -70,6 +74,7 @@ import M3Button from '@/components/m3/M3Button.vue'
 import M3IconButton from '@/components/m3/M3IconButton.vue'
 import M3TextField from '@/components/m3/M3TextField.vue'
 import AuthFormCard from '@/components/auth/AuthFormCard.vue'
+import SsoButton from '@/components/auth/SsoButton.vue'
 
 const props = defineProps<{
   /** A fresh píxiū has no admin yet: the form creates the account instead. */
@@ -78,6 +83,10 @@ const props = defineProps<{
   passwordReset: boolean
   /** Whether anyone may ask for an account. */
   registration: boolean
+  /** The single sign-on provider, if people may sign in with it. */
+  sso?: { name: string } | null
+  /** Why a single sign-on did not work. */
+  notice?: string
 }>()
 
 const emit = defineEmits<{ (e: 'loggedIn'): void; (e: 'forgot'): void; (e: 'register'): void }>()

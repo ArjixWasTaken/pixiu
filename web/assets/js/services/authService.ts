@@ -15,6 +15,8 @@ export interface AuthStatus {
   password_reset: boolean
   /** Whether anyone may ask for an account. */
   registration: boolean
+  /** The single sign-on provider people may sign in with. */
+  sso: { name: string } | null
 }
 
 export const authService = {
@@ -29,6 +31,14 @@ export const authService = {
   /** Follows a reset link: sets the new password and signs in with it. */
   async resetPassword(token: string, password: string) {
     this.setTokensUsingCompositeToken(await http.post<CompositeToken>('auth/reset', { token, password }))
+  },
+
+  /** Where single sign-on starts: the browser goes there, and on to the provider. */
+  ssoStartUrl: () => `${window.KOEL.base_url}api/auth/oidc/start`,
+
+  /** Trades a single sign-on's one-time code for a token. */
+  async exchangeSsoCode(code: string) {
+    this.setTokensUsingCompositeToken(await http.post<CompositeToken>('auth/oidc/exchange', { code }))
   },
 
   /** Follows a link confirming an email address; says whether that opened the account. */

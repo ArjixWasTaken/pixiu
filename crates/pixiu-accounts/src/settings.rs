@@ -1,5 +1,6 @@
 //! The server's settings that admins change in the player: the address
-//! people reach it at, whether anyone may register, and the mail server.
+//! people reach it at, whether anyone may register, the mail server, and
+//! the single sign-on provider.
 //! They are stored as JSON rows of the `settings` table, secrets sealed
 //! with the instance key, and kept in memory for everyone to read.
 
@@ -16,6 +17,8 @@ use crate::AccountError;
 const SERVER: &str = "server";
 /// The mail server, see [`Smtp`].
 const SMTP: &str = "mail.smtp";
+/// The single sign-on provider, see [`Oidc`].
+const OIDC: &str = "auth.oidc";
 
 /// How the connection to the mail server is secured.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -53,6 +56,29 @@ struct StoredSmtp {
     from: String,
 }
 
+/// The OpenID Connect provider people may sign in with.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Oidc {
+    /// What the sign-in button says: "Sign in with <name>".
+    pub name: String,
+    /// The issuer URL; its discovery document says the rest.
+    pub issuer: String,
+    pub client_id: String,
+    pub client_secret: String,
+    /// Asked for besides `openid`.
+    pub scopes: Vec<String>,
+}
+
+/// [`Oidc`] as stored: the secret sealed.
+#[derive(Serialize, Deserialize)]
+struct StoredOidc {
+    name: String,
+    issuer: String,
+    client_id: String,
+    client_secret: String,
+    scopes: Vec<String>,
+}
+
 #[derive(Serialize, Deserialize, Default)]
 struct StoredServer {
     public_url: Option<String>,
@@ -69,6 +95,7 @@ pub struct ServerSettings {
     /// Whether anyone may ask for an account (admins approve each).
     pub registration_open: bool,
     pub smtp: Option<Smtp>,
+    pub oidc: Option<Oidc>,
 }
 
 impl ServerSettings {
@@ -82,6 +109,19 @@ impl ServerSettings {
     #[must_use]
     pub fn registration_available(&self) -> bool {
         self.registration_open && self.mail_ready()
+    }
+
+    /// Where the single sign-on provider sends people back.
+    #[must_use]
+    pub fn redirect_uri(&self) -> Option<String> {
+        self.link("/api/auth/oidc/callback")
+    }
+
+    /// The provider people may sign in with now: set up, with a public
+    /// address to come back to.
+    #[must_use]
+    pub fn sso(&self) -> Option<&Oidc> {
+        self.oidc.as_ref().filter(|_| self.public_url.is_some())
     }
 
     /// A link to `path` (starting with `/`) on the public address.
@@ -171,10 +211,29 @@ impl Settings {
                 username: stored.username,
                 from: stored.from,
             });
+        let oidc = read(&db, OIDC)
+            .await?
+            .and_then(|value| serde_json::from_str::<StoredOidc>(&value).ok())
+            .and_then(|stored| {
+                let client_secret = secrets
+                    .open_str(&stored.client_secret)
+                    .inspect_err(|error| {
+                        tracing::warn!(%error, "cannot open the stored single sign-on secret");
+                    })
+                    .ok()?;
+                Some(Oidc {
+                    name: stored.name,
+                    issuer: stored.issuer,
+                    client_id: stored.client_id,
+                    client_secret,
+                    scopes: stored.scopes,
+                })
+            });
         let settings = ServerSettings {
             public_url: server.public_url,
             registration_open: server.registration_open,
             smtp,
+            oidc,
         };
         Ok(Arc::new(Self {
             db,
@@ -290,6 +349,72 @@ impl Settings {
         settings.smtp = smtp;
         self.current.send_replace(Arc::new(settings));
         Ok(())
+    }
+}
+
+impl Settings {
+    /// The single sign-on provider; `None` forgets it.
+    ///
+    /// # Errors
+    ///
+    /// Fails when a value is missing or the issuer is no URL, or on
+    /// database errors.
+    pub async fn set_oidc(&self, oidc: Option<Oidc>) -> Result<(), AccountError> {
+        match &oidc {
+            Some(oidc) => {
+                if [&oidc.name, &oidc.client_id, &oidc.client_secret]
+                    .iter()
+                    .any(|value| value.trim().is_empty())
+                {
+                    return Err(AccountError::Invalid(
+                        "Name the provider, and give its client id and secret.".to_owned(),
+                    ));
+                }
+                check_issuer(&oidc.issuer)?;
+                let stored = StoredOidc {
+                    name: oidc.name.trim().to_owned(),
+                    issuer: oidc.issuer.trim().to_owned(),
+                    client_id: oidc.client_id.trim().to_owned(),
+                    client_secret: self.secrets.seal_str(&oidc.client_secret),
+                    scopes: oidc.scopes.clone(),
+                };
+                self.store(
+                    OIDC,
+                    serde_json::to_string(&stored).expect("settings serialize"),
+                )
+                .await?;
+            }
+            None => {
+                Setting::filter_by_key(OIDC)
+                    .delete()
+                    .exec(&mut self.db.clone())
+                    .await?;
+            }
+        }
+        let mut settings = (*self.get()).clone();
+        settings.oidc = oidc.map(|oidc| Oidc {
+            name: oidc.name.trim().to_owned(),
+            issuer: oidc.issuer.trim().to_owned(),
+            client_id: oidc.client_id.trim().to_owned(),
+            ..oidc
+        });
+        self.current.send_replace(Arc::new(settings));
+        Ok(())
+    }
+}
+
+/// Checks an issuer URL: `https://` (or `http://`, for a provider on the
+/// same machine), kept as given, since ID tokens must name it exactly.
+fn check_issuer(issuer: &str) -> Result<(), AccountError> {
+    let issuer = issuer.trim();
+    let rest = issuer
+        .strip_prefix("https://")
+        .or_else(|| issuer.strip_prefix("http://"));
+    match rest {
+        Some(rest) if !rest.is_empty() && !rest.chars().any(char::is_whitespace) => Ok(()),
+        _ => Err(AccountError::Invalid(
+            "The issuer is the provider's URL, like https://sso.example.com.".to_owned(),
+        )),
     }
 }
 

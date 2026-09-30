@@ -23,6 +23,7 @@ mod server_settings;
 mod settings;
 mod songs;
 mod sources;
+mod sso;
 mod throttle;
 mod watches;
 
@@ -37,7 +38,7 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{delete, get, patch, post, put},
 };
-use pixiu_accounts::{Mailer, Settings};
+use pixiu_accounts::{Mailer, Settings, oidc::Sso};
 use pixiu_browser::LoginDesks;
 use pixiu_core::SecretBox;
 use pixiu_db::{ApiKey, Db, Library, Role, User, UserStatus, now, toasty};
@@ -64,6 +65,8 @@ pub struct ApiState {
     /// the mail server.
     pub settings: Arc<Settings>,
     pub mailer: Arc<Mailer>,
+    /// The single sign-on provider.
+    pub sso: Arc<Sso>,
     /// Limits guessing passwords and flooding inboxes.
     pub throttle: Arc<Throttle>,
     /// Whether `X-Forwarded-For` names the client (behind a reverse proxy).
@@ -82,6 +85,9 @@ pub fn router(state: ApiState) -> Router {
         .route("/api/auth/reset", post(auth::reset))
         .route("/api/auth/verify-email", post(auth::verify_email))
         .route("/api/auth/register", post(auth::register))
+        .route("/api/auth/oidc/start", get(sso::start))
+        .route("/api/auth/oidc/callback", get(sso::callback))
+        .route("/api/auth/oidc/exchange", post(sso::exchange))
         .route("/api/bootstrap", get(bootstrap::bootstrap))
         .route("/api/albums", get(library::albums))
         .route("/api/artists", get(library::artists))
@@ -154,6 +160,9 @@ pub fn router(state: ApiState) -> Router {
         .route("/api/me/keys/{id}", delete(me::revoke_key))
         .route("/api/me/email/resend", post(me::resend_verification))
         .route("/api/me/alerts", get(me::alerts).put(me::set_alerts))
+        .route("/api/me/identities", get(sso::list))
+        .route("/api/me/identities/oidc", post(sso::link))
+        .route("/api/me/identities/{id}", delete(sso::unlink))
         .route("/api/admin/users", get(admin::list).post(admin::create))
         .route(
             "/api/admin/users/{id}",
@@ -190,6 +199,14 @@ pub fn router(state: ApiState) -> Router {
         .route(
             "/api/admin/settings/registration",
             put(server_settings::set_registration),
+        )
+        .route(
+            "/api/admin/settings/oidc",
+            put(server_settings::set_oidc).delete(server_settings::remove_oidc),
+        )
+        .route(
+            "/api/admin/settings/oidc/test",
+            post(server_settings::test_oidc),
         )
         .route("/api/sources", get(sources::status))
         .route("/api/sources/validate", post(sources::validate))
@@ -293,7 +310,8 @@ impl From<pixiu_accounts::AccountError> for ApiError {
             | AccountError::EmailTaken
             | AccountError::LastAdmin
             | AccountError::AlreadySetUp
-            | AccountError::NotPending) => Self::new(StatusCode::CONFLICT, error.to_string()),
+            | AccountError::NotPending
+            | AccountError::IdentityTaken) => Self::new(StatusCode::CONFLICT, error.to_string()),
             error @ (AccountError::Db(_) | AccountError::Join(_)) => {
                 Self::internal(error, "changing an account")
             }

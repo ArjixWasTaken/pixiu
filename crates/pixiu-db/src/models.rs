@@ -1000,3 +1000,32 @@ pub struct SentAlert {
 
     pub sent_at: Timestamp,
 }
+
+/// An account at a single sign-on provider, linked to a píxiū account by
+/// its owner. Signing in there signs them in here.
+// Two rules, two indexes: the attributes are not duplicates.
+#[allow(clippy::duplicated_attributes)]
+#[derive(Debug, toasty::Model)]
+#[unique(issuer, subject)]
+#[unique(user_id, issuer)]
+pub struct UserIdentity {
+    #[key]
+    #[auto]
+    pub id: u64,
+
+    #[index]
+    pub user_id: u64,
+
+    /// The provider, by its issuer URL.
+    pub issuer: String,
+
+    /// Who they are there: the ID token's `sub`, stable for the account.
+    pub subject: String,
+
+    /// Their address there, when the provider says; shown, never trusted.
+    pub email: Option<String>,
+
+    pub linked_at: Timestamp,
+
+    pub last_login_at: Option<Timestamp>,
+}

@@ -1,9 +1,11 @@
-//! The server's settings, for admins: the address people reach píxiū at and
-//! the mail server. Secrets are never sent back; the player learns only
-//! whether one is set.
+//! The server's settings, for admins: the address people reach píxiū at,
+//! registration, the mail server and the single sign-on provider. Secrets
+//! are never sent back; the player learns only whether one is set.
 
 use axum::{Json, extract::State, http::StatusCode};
-use pixiu_accounts::{Security, ServerSettings, Smtp, mail::templates, users::check_email};
+use pixiu_accounts::{
+    Oidc, Security, ServerSettings, Smtp, mail::templates, oidc::SsoError, users::check_email,
+};
 use serde::Deserialize;
 use serde_json::{Value as JsonValue, json};
 
@@ -30,6 +32,15 @@ fn describe(settings: &ServerSettings) -> JsonValue {
             "password_set": smtp.password.is_some(),
             "from": smtp.from,
         })),
+        "oidc": settings.oidc.as_ref().map(|oidc| json!({
+            "name": oidc.name,
+            "issuer": oidc.issuer,
+            "client_id": oidc.client_id,
+            "secret_set": true,
+            "scopes": oidc.scopes,
+        })),
+        // What to give the provider as the client's redirect URI.
+        "redirect_uri": settings.redirect_uri(),
     })
 }
 
@@ -177,4 +188,89 @@ pub(crate) async fn set_registration(
         .set_registration_open(registration.open)
         .await?;
     Ok(Json(describe(&state.settings.get())))
+}
+
+#[derive(Deserialize)]
+pub(crate) struct OidcForm {
+    name: String,
+    issuer: String,
+    client_id: String,
+    /// Left out (or empty) keeps the stored one.
+    #[serde(default)]
+    client_secret: Option<String>,
+    #[serde(default)]
+    scopes: Vec<String>,
+}
+
+impl OidcForm {
+    /// The provider the form describes, with the stored secret unless it
+    /// gives another.
+    fn provider(self, state: &ApiState) -> ApiResult<Oidc> {
+        let client_secret = match self.client_secret.filter(|secret| !secret.is_empty()) {
+            Some(secret) => secret,
+            None => state
+                .settings
+                .get()
+                .oidc
+                .as_ref()
+                .map(|oidc| oidc.client_secret.clone())
+                .ok_or_else(|| ApiError::unprocessable("Give the client secret."))?,
+        };
+        Ok(Oidc {
+            name: self.name,
+            issuer: self.issuer,
+            client_id: self.client_id,
+            client_secret,
+            scopes: self
+                .scopes
+                .into_iter()
+                .flat_map(|scope| {
+                    scope
+                        .split_whitespace()
+                        .map(str::to_owned)
+                        .collect::<Vec<_>>()
+                })
+                .collect(),
+        })
+    }
+}
+
+/// `PUT /api/admin/settings/oidc`: the single sign-on provider.
+pub(crate) async fn set_oidc(
+    State(state): State<ApiState>,
+    _: AdminSession,
+    Json(form): Json<OidcForm>,
+) -> ApiResult<Json<JsonValue>> {
+    let oidc = form.provider(&state)?;
+    state.settings.set_oidc(Some(oidc)).await?;
+    Ok(Json(describe(&state.settings.get())))
+}
+
+/// `DELETE /api/admin/settings/oidc`: no more single sign-on. Links stay,
+/// for a provider set up again.
+pub(crate) async fn remove_oidc(
+    State(state): State<ApiState>,
+    _: AdminSession,
+) -> ApiResult<Json<JsonValue>> {
+    state.settings.set_oidc(None).await?;
+    Ok(Json(describe(&state.settings.get())))
+}
+
+/// `POST /api/admin/settings/oidc/test`: checks a provider (as in the
+/// form, saved or not): its discovery document, keys, and PKCE.
+pub(crate) async fn test_oidc(
+    State(state): State<ApiState>,
+    _: AdminSession,
+    Json(form): Json<OidcForm>,
+) -> ApiResult<Json<pixiu_accounts::oidc::Report>> {
+    let oidc = form.provider(&state)?;
+    state
+        .sso
+        .test(&oidc)
+        .await
+        .map(Json)
+        .map_err(|error| match error {
+            SsoError::Provider(message) => ApiError::unprocessable(message).with_code("provider"),
+            error => ApiError::unprocessable(error.to_string()),
+        })
 }
