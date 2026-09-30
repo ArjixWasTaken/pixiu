@@ -1,85 +1,58 @@
 <template>
-  <div class="extra-controls flex justify-end relative md:w-[420px] px-6 md:px-8 py-0">
-    <div class="flex justify-end items-center gap-6">
-      <FooterQueueIcon />
-
-      <FooterBtn
-        class="visualizer-btn hidden md:block!"
-        data-testid="toggle-visualizer-btn"
-        title="Toggle visualizer"
-        @click.prevent="toggleVisualizer"
-      >
-        <Icon :icon="faBolt" fixed-width />
-      </FooterBtn>
-
-      <FooterBtn
-        v-if="useEqualizer"
-        :class="{ active: showEqualizer }"
-        class="equalizer"
-        title="Show equalizer"
-        @click.prevent="showEqualizer"
-      >
-        <AudioLinesIcon :size="16" />
-      </FooterBtn>
-
-      <VolumeSlider />
-
-      <FooterBtn
-        v-if="isFullscreenSupported()"
-        class="hidden md:block!"
-        :title="fullscreenButtonTitle"
-        @click.prevent="toggleFullscreen"
-      >
-        <Icon :icon="isFullscreen ? faCompress : faExpand" fixed-width />
-      </FooterBtn>
-    </div>
+  <div class="extra-controls" data-vue="FooterExtraControls">
+    <M3IconButton v-if="useEqualizer" icon="equalizer" label="Show equalizer" @click.prevent="showEqualizer" />
+    <VolumeSlider />
+    <M3IconButton
+      v-if="isFullscreenSupported()"
+      :icon="isFullscreen ? 'fullscreen_exit' : 'fullscreen'"
+      :label="fullscreenButtonTitle"
+      @click.prevent="toggleFullscreen"
+    />
+    <M3IconButton
+      :icon="nowPlaying.open.value ? 'keyboard_arrow_down' : 'keyboard_arrow_up'"
+      :label="nowPlaying.open.value ? 'Collapse player' : 'Expand player'"
+      :selected="nowPlaying.open.value"
+      data-testid="now-playing-toggle"
+      variant="tonal"
+      @click.prevent="nowPlaying.toggle"
+    />
   </div>
 </template>
 
 <script lang="ts" setup>
-import { faBolt, faCompress, faExpand } from '@fortawesome/free-solid-svg-icons'
-import { AudioLinesIcon } from 'lucide-vue-next'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { eventBus } from '@/utils/eventBus'
 import { isFullscreenSupported, isAudioContextSupported as useEqualizer } from '@/utils/supports'
 import { defineAsyncComponent } from '@/utils/helpers'
-import { useRouter } from '@/composables/useRouter'
 import { useModal } from '@/composables/useModal'
+import { useNowPlaying } from '@/composables/useNowPlaying'
 
+import M3IconButton from '@/components/m3/M3IconButton.vue'
 import VolumeSlider from '@/components/ui/VolumeSlider.vue'
-import FooterBtn from '@/components/layout/app-footer/FooterButton.vue'
-import FooterQueueIcon from '@/components/layout/app-footer/FooterQueueButton.vue'
 
 const Equalizer = defineAsyncComponent(() => import('@/components/ui/equalizer/Equalizer.vue'))
 const { openModal } = useModal()
+const nowPlaying = useNowPlaying()
 
 const isFullscreen = ref(false)
 const fullscreenButtonTitle = computed(() => (isFullscreen.value ? 'Exit fullscreen mode' : 'Enter fullscreen mode'))
 
-const { go, isCurrentScreen, url } = useRouter()
-
 const showEqualizer = () => openModal<'EQUALIZER'>(Equalizer)
 const toggleFullscreen = () => eventBus.emit('FULLSCREEN_TOGGLE')
-const toggleVisualizer = () => go(isCurrentScreen('Visualizer') ? -1 : url('visualizer'))
 
-onMounted(() => {
-  document.addEventListener('fullscreenchange', () => {
-    isFullscreen.value = Boolean(document.fullscreenElement)
-  })
-})
+const onFullscreenChange = () => (isFullscreen.value = Boolean(document.fullscreenElement))
+
+onMounted(() => document.addEventListener('fullscreenchange', onFullscreenChange))
+onBeforeUnmount(() => document.removeEventListener('fullscreenchange', onFullscreenChange))
 </script>
 
-<style lang="postcss" scoped>
-@reference '@css/app.pcss';
+<style scoped>
 .extra-controls {
-  :fullscreen & {
-    @apply pr-0;
-  }
-
-  :fullscreen & {
-    .visualizer-btn {
-      @apply hidden;
-    }
-  }
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  width: 300px;
+  flex-shrink: 0;
 }
 </style>

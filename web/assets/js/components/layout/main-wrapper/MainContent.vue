@@ -1,6 +1,7 @@
 <template>
   <section id="mainContent" class="main-content" data-testid="main-content">
     <TopBar />
+    <NowPlayingPanel v-if="!isMobile" />
     <div class="screens">
       <!--
       Most of the views are render-expensive and have their own UI states (viewport/scroll position), e.g. the playable
@@ -58,8 +59,10 @@ import { defineAsyncComponent } from '@/utils/helpers'
 import { useRouter } from '@/composables/useRouter'
 import { useThirdPartyServices } from '@/composables/useThirdPartyServices'
 import { commonStore } from '@/stores/commonStore'
+import { useViewport } from '@/composables/useViewport'
 
 import TopBar from '@/components/layout/main-wrapper/TopBar.vue'
+import NowPlayingPanel from '@/components/layout/now-playing/NowPlayingPanel.vue'
 
 const AcceptPlaylistCollaborationInvite = defineAsyncComponent(
   () => import('@/components/screens/AcceptPlaylistCollaborationInvite.vue'),
@@ -103,6 +106,7 @@ const YouTubeScreen = defineAsyncComponent(() => import('@/components/screens/Yo
 const addedScreens = applyFilters<Partial<Record<ScreenName, Component>>>(Filter.SCREENS, {})
 
 const { useYouTube } = useThirdPartyServices()
+const { isMobile } = useViewport()
 const { onRouteChanged, getCurrentScreen } = useRouter()
 
 const screen = ref<ScreenName>('Home')

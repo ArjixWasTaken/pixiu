@@ -2,10 +2,10 @@ import { ref } from 'vue'
 
 export class VolumeManager {
   public volume = ref(0)
-  private input!: HTMLInputElement
+  private input: HTMLInputElement | null = null
   private originalVolume = 0
 
-  public init(input: HTMLInputElement, initialVolume: number) {
+  public init(input: HTMLInputElement | null, initialVolume: number) {
     this.input = input
     this.originalVolume = initialVolume
     this.set(initialVolume)
@@ -17,7 +17,7 @@ export class VolumeManager {
 
   public set(volume: number) {
     this.volume.value = volume
-    this.input.value = String(volume)
+    this.input && (this.input.value = String(volume))
   }
 
   public mute() {

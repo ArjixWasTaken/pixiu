@@ -4,6 +4,7 @@ import { createHarness } from '@/__tests__/TestHarness'
 import { CurrentStreamableKey } from '@/config/symbols'
 import { cache } from '@/services/cache'
 import Router from '@/router'
+import { useNowPlaying } from '@/composables/useNowPlaying'
 import Component from './FooterPlayableInfo.vue'
 
 describe('footerPlayableInfo.vue', () => {
@@ -33,17 +34,10 @@ describe('footerPlayableInfo.vue', () => {
     ).toMatchSnapshot()
   })
 
-  it('navigates to queue and sets scroll intent on thumbnail click', async () => {
-    const song = h.factory('song').make({
-      title: 'Test Song',
-      album_cover: 'https://via.placeholder.com/150',
-      playback_state: 'Playing',
-      artist_id: 'test-artist',
-      artist_name: 'Test Artist',
-    })
-
-    const goMock = h.mock(Router, 'go')
-    const setMock = h.mock(cache, 'set')
+  it('toggles the now playing panel on thumbnail click', async () => {
+    const song = h.factory('song').make({ title: 'Test Song', playback_state: 'Playing' })
+    const { open, close } = useNowPlaying()
+    close()
 
     const { container } = h.render(Component, {
       global: {
@@ -53,11 +47,10 @@ describe('footerPlayableInfo.vue', () => {
       },
     })
 
-    const thumb = container.querySelector('.album-thumb') as HTMLElement
-    await h.user.click(thumb)
+    await h.user.click(container.querySelector('.album-thumb') as HTMLElement)
 
-    expect(setMock).toHaveBeenCalledWith('scroll-to-current-in-queue', true)
-    expect(goMock).toHaveBeenCalledWith('/#/queue')
+    expect(open.value).toBe(true)
+    close()
   })
 
   it('does not navigate or set scroll intent when no playable', async () => {

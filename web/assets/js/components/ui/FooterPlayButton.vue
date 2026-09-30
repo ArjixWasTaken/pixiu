@@ -1,16 +1,16 @@
 <template>
-  <FooterButton
-    :title
-    class="w-12! rounded-full border-2 border-solid border-k-fg-70 aspect-square transition-transform! hover:scale-125 text-2xl! has-[.icon-play]:indent-[0.23rem]"
+  <M3IconButton
+    :icon="playing ? 'pause' : 'play_arrow'"
+    :label="title"
+    :shape
+    :size
+    fill
+    variant="filled"
     @click.prevent="toggle"
-  >
-    <Icon v-if="playing" :icon="faPause" />
-    <Icon v-else :icon="faPlay" class="icon-play" />
-  </FooterButton>
+  />
 </template>
 
 <script lang="ts" setup>
-import { faPause, faPlay } from '@fortawesome/free-solid-svg-icons'
 import { computed, ref } from 'vue'
 import { commonStore } from '@/stores/commonStore'
 import { queueStore } from '@/stores/queueStore'
@@ -21,7 +21,9 @@ import { requireInjection } from '@/utils/helpers'
 import { CurrentStreamableKey } from '@/config/symbols'
 import { playback } from '@/services/playbackManager'
 
-import FooterButton from '@/components/layout/app-footer/FooterButton.vue'
+import M3IconButton from '@/components/m3/M3IconButton.vue'
+
+withDefaults(defineProps<{ size?: 's' | 'm'; shape?: 'round' | 'square' }>(), { size: 'm', shape: 'square' })
 
 const { getCurrentScreen, getRouteParam, go, url } = useRouter()
 const streamable = requireInjection(CurrentStreamableKey, ref())
