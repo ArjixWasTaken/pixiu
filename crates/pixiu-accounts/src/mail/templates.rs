@@ -107,6 +107,23 @@ pub fn new_registration(to: &str, applicant: &str, applicant_email: &str, link: 
     )
 }
 
+/// Tells an applicant an admin approved them, with the link confirming
+/// their address, which opens their account.
+#[must_use]
+pub fn registration_approved(to: &str, username: &str, link: &str) -> Email {
+    compose(
+        to,
+        "Your píxiū account is approved",
+        &[
+            format!("Hi {username},"),
+            "An admin approved your píxiū account. Confirm your email address, and you can \
+             sign in. The link works for 7 days."
+                .to_owned(),
+        ],
+        Some(("Confirm my email", link)),
+    )
+}
+
 /// Tells an applicant their registration was declined.
 #[must_use]
 pub fn registration_declined(to: &str, username: &str) -> Email {
@@ -195,6 +212,7 @@ mod tests {
                 verify_email("a@example.com", "alice", link),
                 password_reset("a@example.com", "alice", link),
                 new_registration("admin@example.com", "bob", "bob@example.com", link),
+                registration_approved("b@example.com", "bob", link),
                 registration_declined("b@example.com", "bob"),
                 email_in_use("a@example.com", link),
                 youtube_music_expired("a@example.com", "alice", "signed out", link),

@@ -52,9 +52,10 @@
     <p v-if="problem" class="m3-body-medium text-center text-(--schemes-error)">{{ problem }}</p>
 
     <M3Button class="w-full" data-testid="submit" type="submit">{{ claiming ? 'Create account' : 'Log in' }}</M3Button>
-    <M3Button v-if="passwordReset && !claiming" class="self-center" variant="text" @click.prevent="$emit('forgot')">
-      Forgot password?
-    </M3Button>
+    <div v-if="!claiming && (passwordReset || registration)" class="flex flex-wrap justify-center gap-2">
+      <M3Button v-if="passwordReset" variant="text" @click.prevent="$emit('forgot')">Forgot password?</M3Button>
+      <M3Button v-if="registration" variant="text" @click.prevent="$emit('register')">Ask for an account</M3Button>
+    </div>
   </AuthFormCard>
 </template>
 
@@ -75,9 +76,11 @@ const props = defineProps<{
   claiming: boolean
   /** Whether a forgotten password can be reset by email. */
   passwordReset: boolean
+  /** Whether anyone may ask for an account. */
+  registration: boolean
 }>()
 
-const emit = defineEmits<{ (e: 'loggedIn'): void; (e: 'forgot'): void }>()
+const emit = defineEmits<{ (e: 'loggedIn'): void; (e: 'forgot'): void; (e: 'register'): void }>()
 
 const failed = ref(false)
 const problem = ref('')

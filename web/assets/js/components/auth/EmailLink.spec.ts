@@ -20,13 +20,21 @@ describe('emailLink.vue', () => {
   const h = createHarness()
 
   it('confirms an email address', async () => {
-    const verify = h.mock(authService, 'verifyEmail').mockResolvedValue(undefined)
+    const verify = h.mock(authService, 'verifyEmail').mockResolvedValue(false)
     h.visit('/verify-email/abc_DEF-123')
     h.render(Component)
 
     await screen.findByText('Your email is confirmed')
     expect(verify).toHaveBeenCalledWith('abc_DEF-123')
     screen.getByRole('button', { name: 'Open píxiū' })
+  })
+
+  it('says when confirming opened an approved account', async () => {
+    h.mock(authService, 'verifyEmail').mockResolvedValue(true)
+    h.visit('/verify-email/abc')
+    h.render(Component)
+
+    await screen.findByText('Your account is ready')
   })
 
   it('says when a confirmation link no longer works', async () => {

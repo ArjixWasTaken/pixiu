@@ -81,6 +81,7 @@ pub fn router(state: ApiState) -> Router {
         .route("/api/auth/forgot", post(auth::forgot))
         .route("/api/auth/reset", post(auth::reset))
         .route("/api/auth/verify-email", post(auth::verify_email))
+        .route("/api/auth/register", post(auth::register))
         .route("/api/bootstrap", get(bootstrap::bootstrap))
         .route("/api/albums", get(library::albums))
         .route("/api/artists", get(library::artists))
@@ -163,6 +164,15 @@ pub fn router(state: ApiState) -> Router {
             "/api/admin/users/{id}/password-reset",
             post(admin::send_reset),
         )
+        .route(
+            "/api/admin/users/{id}/verification",
+            post(admin::resend_verification),
+        )
+        .route(
+            "/api/admin/registrations/{id}/approve",
+            post(admin::approve),
+        )
+        .route("/api/admin/registrations/{id}/deny", post(admin::deny))
         .route("/api/admin/storage", get(admin::storage))
         .route("/api/admin/settings", get(server_settings::show))
         .route(
@@ -176,6 +186,10 @@ pub fn router(state: ApiState) -> Router {
         .route(
             "/api/admin/settings/smtp/test",
             post(server_settings::test_smtp),
+        )
+        .route(
+            "/api/admin/settings/registration",
+            put(server_settings::set_registration),
         )
         .route("/api/sources", get(sources::status))
         .route("/api/sources/validate", post(sources::validate))
@@ -272,10 +286,14 @@ impl From<pixiu_accounts::AccountError> for ApiError {
             error @ AccountError::LinkExpired => {
                 Self::new(StatusCode::GONE, error.to_string()).with_code("expired")
             }
+            error @ AccountError::RegistrationClosed => {
+                Self::new(StatusCode::NOT_FOUND, error.to_string())
+            }
             error @ (AccountError::UsernameTaken
             | AccountError::EmailTaken
             | AccountError::LastAdmin
-            | AccountError::AlreadySetUp) => Self::new(StatusCode::CONFLICT, error.to_string()),
+            | AccountError::AlreadySetUp
+            | AccountError::NotPending) => Self::new(StatusCode::CONFLICT, error.to_string()),
             error @ (AccountError::Db(_) | AccountError::Join(_)) => {
                 Self::internal(error, "changing an account")
             }

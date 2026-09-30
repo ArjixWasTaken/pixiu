@@ -98,6 +98,7 @@ const items = computed(() =>
       screens: ['Settings'],
       // Everyone has their account and library settings there.
       visible: () => true,
+      badge: () => (huntingStore.state.registrations ? String(huntingStore.state.registrations) : null),
     },
   ]),
 )

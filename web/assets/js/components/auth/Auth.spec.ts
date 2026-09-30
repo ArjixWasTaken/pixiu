@@ -7,7 +7,8 @@ import Component from './Auth.vue'
 describe('auth.vue', () => {
   const h = createHarness({
     authenticated: false,
-    beforeEach: () => h.mock(authService, 'status').mockResolvedValue({ claimed: true, password_reset: false }),
+    beforeEach: () =>
+      h.mock(authService, 'status').mockResolvedValue({ claimed: true, password_reset: false, registration: false }),
   })
 
   afterEach(() => (window.KOEL.sso_providers = []))
@@ -26,7 +27,7 @@ describe('auth.vue', () => {
   })
 
   it('emails a reset link to whoever forgot their password', async () => {
-    h.mock(authService, 'status').mockResolvedValue({ claimed: true, password_reset: true })
+    h.mock(authService, 'status').mockResolvedValue({ claimed: true, password_reset: true, registration: false })
     const forgot = h.mock(authService, 'forgot').mockResolvedValue(undefined)
     h.render(Component)
 
@@ -39,6 +40,30 @@ describe('auth.vue', () => {
 
     await h.user.click(screen.getByRole('button', { name: 'Back to sign in' }))
     await screen.findByTestId('login-form')
+  })
+
+  it('lets people ask for an account while registration is open', async () => {
+    h.mock(authService, 'status').mockResolvedValue({ claimed: true, password_reset: true, registration: true })
+    const register = h.mock(authService, 'register').mockResolvedValue(undefined)
+    h.render(Component)
+
+    await h.user.click(await screen.findByRole('button', { name: 'Ask for an account' }))
+    await h.type(await screen.findByLabelText('Username'), 'carol')
+    await h.type(screen.getByLabelText('Email'), 'carol@example.com')
+    await h.type(screen.getByLabelText('Password'), 'carol secret')
+    await h.type(screen.getByLabelText('Password again'), 'carol secret')
+    await h.user.click(screen.getByRole('button', { name: 'Ask for an account' }))
+
+    expect(register).toHaveBeenCalledWith({ username: 'carol', email: 'carol@example.com', password: 'carol secret' })
+    await screen.findByText('Thanks for asking')
+    screen.getByText(/píxiū emails carol@example\.com how it went/)
+  })
+
+  it('offers no registration while it is closed', async () => {
+    h.render(Component)
+
+    await screen.findByTestId('login-form')
+    expect(screen.queryByRole('button', { name: 'Ask for an account' })).toBeNull()
   })
 
   it('shows the SSO login options', async () => {

@@ -31,8 +31,7 @@ onMounted(async () => {
   }
 
   try {
-    await authService.verifyEmail(token)
-    state.value = 'confirmed'
+    state.value = (await authService.verifyEmail(token)) ? 'opened' : 'confirmed'
   } catch (error: unknown) {
     logger.error(error)
     state.value = isHttpError(error) && getHttpErrorBody(error)?.code === 'expired' ? 'expired' : 'failed'

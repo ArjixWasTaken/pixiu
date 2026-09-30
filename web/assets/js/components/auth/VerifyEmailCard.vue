@@ -17,7 +17,7 @@ import AuthFormCard from '@/components/auth/AuthFormCard.vue'
 import M3Button from '@/components/m3/M3Button.vue'
 import M3ProgressIndicator from '@/components/m3/M3ProgressIndicator.vue'
 
-export type VerificationState = 'confirming' | 'confirmed' | 'expired' | 'failed'
+export type VerificationState = 'confirming' | 'confirmed' | 'opened' | 'expired' | 'failed'
 
 const props = defineProps<{ state: VerificationState }>()
 defineEmits<{ (e: 'continue'): void }>()
@@ -29,6 +29,10 @@ const copy = computed(
       confirmed: {
         title: 'Your email is confirmed',
         text: 'píxiū can send you password resets and alerts now.',
+      },
+      opened: {
+        title: 'Your account is ready',
+        text: 'Your email is confirmed. Sign in with your username or email, and the password you chose.',
       },
       expired: {
         title: 'This link no longer works',

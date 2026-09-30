@@ -1,6 +1,6 @@
 //! Email through the web API: admins set up the mail server, people reset
-//! forgotten passwords and confirm their addresses, and choose their
-//! alerts. Emails are kept in memory instead of sent.
+//! forgotten passwords, confirm their addresses, choose their alerts and
+//! ask for accounts. Emails are kept in memory instead of sent.
 
 use std::{sync::Arc, time::Duration};
 
@@ -437,10 +437,13 @@ async fn new_addresses_are_confirmed_by_link() {
         .post(None, "/api/auth/verify-email", json!({ "token": first }))
         .await;
     assert_eq!(status, StatusCode::GONE);
-    let (status, _) = server
+    let (status, body) = server
         .post(None, "/api/auth/verify-email", json!({ "token": second }))
         .await;
-    assert_eq!(status, StatusCode::NO_CONTENT);
+    assert_eq!(
+        (status, &body),
+        (StatusCode::OK, &json!({ "opened": false }))
+    );
     let (_, me) = server.call(Some(&bob), Method::GET, "/api/me", None).await;
     assert_eq!(me["email_verified"], true);
     let (status, _) = server
@@ -531,4 +534,245 @@ async fn guessing_and_flooding_are_throttled() {
     }
     tokio::time::sleep(Duration::from_millis(100)).await;
     assert_eq!(server.sent(3).await.len(), 3);
+}
+
+impl Server {
+    /// Opens registration, with Alice (the admin) at a confirmed address.
+    async fn open_registration(&self, admin: &str) {
+        self.mail_ready(admin).await;
+        let (status, _) = self
+            .call(
+                Some(admin),
+                Method::PATCH,
+                "/api/admin/users/1",
+                Some(json!({ "email": "alice@example.com" })),
+            )
+            .await;
+        assert_eq!(status, StatusCode::OK);
+        let (status, body) = self
+            .call(
+                Some(admin),
+                Method::PUT,
+                "/api/admin/settings/registration",
+                Some(json!({ "open": true })),
+            )
+            .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+    }
+
+    async fn register(&self, username: &str, email: &str) -> (StatusCode, Value) {
+        self.post(
+            None,
+            "/api/auth/register",
+            json!({ "username": username, "email": email, "password": "carol's secret" }),
+        )
+        .await
+    }
+
+    /// A Subsonic call with a password; the error code, if any.
+    async fn subsonic_error(&self, user: &str, password: &str) -> Option<i64> {
+        let uri = format!("/rest/ping?u={user}&p={password}&v=1.16.1&c=test&f=json");
+        let (_, body) = self
+            .call(
+                None,
+                Method::GET,
+                &uri.replace(' ', "%20").replace('\'', "%27"),
+                None,
+            )
+            .await;
+        body["subsonic-response"]["error"]["code"].as_i64()
+    }
+}
+
+#[tokio::test]
+async fn registrations_wait_for_an_admin() {
+    let server = Server::new().await;
+    let admin = server.setup().await;
+
+    // Closed until an admin opens it, which needs email.
+    assert_eq!(
+        server.register("carol", "carol@example.com").await.0,
+        StatusCode::NOT_FOUND
+    );
+    let (status, _) = server
+        .call(
+            Some(&admin),
+            Method::PUT,
+            "/api/admin/settings/registration",
+            Some(json!({ "open": true })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    server.open_registration(&admin).await;
+    let (_, status) = server
+        .call(None, Method::GET, "/api/auth/status", None)
+        .await;
+    assert_eq!(status["registration"], true);
+
+    // Carol asks; the admin hears of it.
+    let (status, body) = server.register("carol", "Carol@Example.com").await;
+    assert_eq!(status, StatusCode::ACCEPTED, "{body}");
+    let sent = server.sent(1).await;
+    assert_eq!(sent[0].to, "alice@example.com");
+    assert!(sent[0].subject.contains("carol"), "{}", sent[0].subject);
+    assert!(sent[0].text.contains("/settings?tab=users"));
+    let (_, summary) = server
+        .call(Some(&admin), Method::GET, "/api/hunting", None)
+        .await;
+    assert_eq!(summary["registrations"], 1);
+
+    // She cannot sign in yet, anywhere.
+    let (status, body) = server.login("carol", "carol's secret").await;
+    assert_eq!(
+        (status, &body["code"]),
+        (StatusCode::FORBIDDEN, &json!("pending"))
+    );
+    assert_eq!(
+        server.subsonic_error("carol", "carol's secret").await,
+        Some(50)
+    );
+
+    // Approved, she confirms her address and is in.
+    let (_, users) = server
+        .call(Some(&admin), Method::GET, "/api/admin/users", None)
+        .await;
+    let carol = users
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|user| user["username"] == "carol")
+        .unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    let (status, body) = server
+        .post(
+            Some(&admin),
+            &format!("/api/admin/registrations/{carol}/approve"),
+            json!({}),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["status"], "unverified");
+    let (status, _) = server
+        .post(
+            Some(&admin),
+            &format!("/api/admin/registrations/{carol}/approve"),
+            json!({}),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CONFLICT, "handled already");
+    let approval = server.sent(2).await.pop().unwrap();
+    assert_eq!(approval.to, "carol@example.com");
+    assert!(
+        approval.subject.contains("approved"),
+        "{}",
+        approval.subject
+    );
+    let (status, body) = server.login("carol", "carol's secret").await;
+    assert_eq!(
+        (status, &body["code"]),
+        (StatusCode::FORBIDDEN, &json!("unverified"))
+    );
+
+    let (status, body) = server
+        .post(
+            None,
+            "/api/auth/verify-email",
+            json!({ "token": token_in(&approval) }),
+        )
+        .await;
+    assert_eq!(
+        (status, &body),
+        (StatusCode::OK, &json!({ "opened": true }))
+    );
+    server.token("carol", "carol's secret").await;
+    assert_eq!(server.subsonic_error("carol", "carol's secret").await, None);
+    let (_, summary) = server
+        .call(Some(&admin), Method::GET, "/api/hunting", None)
+        .await;
+    assert_eq!(summary["registrations"], 0);
+}
+
+#[tokio::test]
+async fn denied_registrations_are_gone() {
+    let server = Server::new().await;
+    let admin = server.setup().await;
+    server.open_registration(&admin).await;
+    server.register("dave", "dave@example.com").await;
+    let (_, users) = server
+        .call(Some(&admin), Method::GET, "/api/admin/users", None)
+        .await;
+    let dave = users.as_array().unwrap().last().unwrap()["id"]
+        .as_u64()
+        .unwrap();
+
+    let (status, _) = server
+        .post(
+            Some(&admin),
+            &format!("/api/admin/registrations/{dave}/deny"),
+            json!({}),
+        )
+        .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    let note = server.sent(2).await.pop().unwrap();
+    assert_eq!(note.to, "dave@example.com");
+    assert!(note.text.contains("declined"), "{}", note.text);
+    assert_eq!(
+        server.login("dave", "carol's secret").await.0,
+        StatusCode::UNAUTHORIZED
+    );
+    // Only requests are approved or denied.
+    let (status, _) = server
+        .post(Some(&admin), "/api/admin/registrations/1/deny", json!({}))
+        .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+}
+
+#[tokio::test]
+async fn nobody_learns_whose_address_has_an_account() {
+    let server = Server::new().await;
+    let admin = server.setup().await;
+    server.open_registration(&admin).await;
+    server.bob(&admin).await;
+
+    // Bob's address: the same answer, no account, and a note to Bob.
+    let (status, _) = server.register("mallory", "BOB@example.com").await;
+    assert_eq!(status, StatusCode::ACCEPTED);
+    let note = server.sent(1).await.pop().unwrap();
+    assert_eq!(note.to, "bob@example.com");
+    assert!(note.subject.contains("your email"), "{}", note.subject);
+    let (_, users) = server
+        .call(Some(&admin), Method::GET, "/api/admin/users", None)
+        .await;
+    assert_eq!(users.as_array().unwrap().len(), 2);
+
+    // A taken username says so: people need to pick another.
+    let (status, _) = server.register("bob", "someone@example.com").await;
+    assert_eq!(status, StatusCode::CONFLICT);
+
+    // Five requests an hour from one address.
+    for n in 0..3 {
+        let (status, body) = server
+            .register(&format!("user{n}"), &format!("user{n}@example.com"))
+            .await;
+        assert_eq!(status, StatusCode::ACCEPTED, "{body}");
+    }
+    assert_eq!(
+        server.register("user9", "user9@example.com").await.0,
+        StatusCode::TOO_MANY_REQUESTS
+    );
+
+    // Without email, registration closes by itself.
+    server
+        .call(
+            Some(&admin),
+            Method::DELETE,
+            "/api/admin/settings/smtp",
+            None,
+        )
+        .await;
+    let (_, status) = server
+        .call(None, Method::GET, "/api/auth/status", None)
+        .await;
+    assert_eq!(status["registration"], false);
 }

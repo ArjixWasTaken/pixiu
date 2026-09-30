@@ -32,6 +32,10 @@ pub enum AccountError {
     AlreadySetUp,
     #[error("This link has expired or was already used.")]
     LinkExpired,
+    #[error("Registration is closed.")]
+    RegistrationClosed,
+    #[error("That request was handled already.")]
+    NotPending,
     #[error("database error: {0}")]
     Db(#[from] toasty::Error),
     #[error("background task failed: {0}")]

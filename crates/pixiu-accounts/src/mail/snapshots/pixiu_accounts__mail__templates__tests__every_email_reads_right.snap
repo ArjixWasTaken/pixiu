@@ -1,6 +1,6 @@
 ---
 source: crates/pixiu-accounts/src/mail/templates.rs
-expression: "[test(\"a@example.com\"), verify_email(\"a@example.com\", \"alice\", link),\npassword_reset(\"a@example.com\", \"alice\", link),\nnew_registration(\"admin@example.com\", \"bob\", \"bob@example.com\", link),\nregistration_declined(\"b@example.com\", \"bob\"),\nemail_in_use(\"a@example.com\", link),\nyoutube_music_expired(\"a@example.com\", \"alice\", \"signed out\", link),\nwatch_failing(\"a@example.com\", \"alice\", \"Liked music\", \"timeout\",\nlink),].iter().map(|email|\nformat!(\"To: {}\\nSubject: {}\\n\\n{}\", email.to, email.subject,\nemail.text)).collect::<Vec<_>>().join(\"\\n---\\n\")"
+expression: "[test(\"a@example.com\"), verify_email(\"a@example.com\", \"alice\", link),\npassword_reset(\"a@example.com\", \"alice\", link),\nnew_registration(\"admin@example.com\", \"bob\", \"bob@example.com\", link),\nregistration_approved(\"b@example.com\", \"bob\", link),\nregistration_declined(\"b@example.com\", \"bob\"),\nemail_in_use(\"a@example.com\", link),\nyoutube_music_expired(\"a@example.com\", \"alice\", \"signed out\", link),\nwatch_failing(\"a@example.com\", \"alice\", \"Liked music\", \"timeout\",\nlink),].iter().map(|email|\nformat!(\"To: {}\\nSubject: {}\\n\\n{}\", email.to, email.subject,\nemail.text)).collect::<Vec<_>>().join(\"\\n---\\n\")"
 ---
 To: a@example.com
 Subject: píxiū can send email
@@ -36,6 +36,16 @@ bob (bob@example.com) registered on píxiū.
 Approve them, and they get an email to confirm their address; deny them, and they get a short note.
 
 Review the request: https://music.example.com/somewhere
+
+---
+To: b@example.com
+Subject: Your píxiū account is approved
+
+Hi bob,
+
+An admin approved your píxiū account. Confirm your email address, and you can sign in. The link works for 7 days.
+
+Confirm my email: https://music.example.com/somewhere
 
 ---
 To: b@example.com

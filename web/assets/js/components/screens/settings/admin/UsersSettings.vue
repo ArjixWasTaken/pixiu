@@ -1,5 +1,7 @@
 <template>
   <div class="flex flex-col gap-6" data-testid="users-settings">
+    <PendingRegistrations v-if="requests.length" :requests @approve="approve" @deny="deny" />
+
     <SettingGroup>
       <template #title>Add an account</template>
       <template #subtitle>
@@ -17,12 +19,13 @@
         </p>
       </header>
       <AccountRow
-        v-for="account in accounts"
+        v-for="account in members"
         :key="account.id"
         :account
         :is-you="String(account.id) === String(currentUser.id)"
         :mail-ready
         @remove="remove(account)"
+        @resend-verification="resendVerification(account)"
         @send-reset="sendReset(account)"
         @set-password="setPassword(account, $event)"
         @toggle-role="toggleRole(account)"
@@ -33,7 +36,7 @@
 </template>
 
 <script lang="ts" setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { adminService } from '@/services/adminService'
 import { serverSettingsService } from '@/services/serverSettingsService'
 import type { ManagedAccount, StoreUsage } from '@/services/adminService'
@@ -42,9 +45,11 @@ import { useAuthorization } from '@/composables/useAuthorization'
 import { useDialogBox } from '@/composables/useDialogBox'
 import { useErrorHandler } from '@/composables/useErrorHandler'
 import { useMessageToaster } from '@/composables/useMessageToaster'
+import { huntingStore } from '@/stores/huntingStore'
 
 import AccountRow from '@/components/screens/settings/admin/AccountRow.vue'
 import AddAccountForm from '@/components/screens/settings/admin/AddAccountForm.vue'
+import PendingRegistrations from '@/components/screens/settings/admin/PendingRegistrations.vue'
 import SettingGroup from '@/components/screens/settings/SettingGroup.vue'
 
 const { currentUser } = useAuthorization()
@@ -55,6 +60,10 @@ const { handleHttpError } = useErrorHandler('dialog')
 const accounts = ref<ManagedAccount[]>([])
 const storage = ref<StoreUsage | null>(null)
 const mailReady = ref(false)
+
+/** Those asking for an account, and everyone else. */
+const requests = computed(() => accounts.value.filter(account => account.status === 'pending'))
+const members = computed(() => accounts.value.filter(account => account.status !== 'pending'))
 
 const refresh = async () => {
   try {
@@ -100,6 +109,31 @@ const setPassword = (account: ManagedAccount, password: string) =>
   change(async () => {
     await adminService.setTemporaryPassword(account.id, password)
     toastSuccess(`${account.username} is signed out, and chooses a new password at their next sign-in.`)
+  })
+
+const approve = (account: ManagedAccount) =>
+  change(async () => {
+    await adminService.approveRegistration(account.id)
+    toastSuccess(`${account.username} is approved, and gets an email to confirm their address.`)
+    await huntingStore.refresh()
+  })
+
+const deny = async (account: ManagedAccount) => {
+  if (!(await showConfirmDialog(`Deny ${account.username}’s request? They get a short note, and the request goes.`))) {
+    return
+  }
+
+  await change(async () => {
+    await adminService.denyRegistration(account.id)
+    toastSuccess(`${account.username}’s request is denied.`)
+    await huntingStore.refresh()
+  })
+}
+
+const resendVerification = (account: ManagedAccount) =>
+  change(async () => {
+    await adminService.resendVerification(account.id)
+    toastSuccess(`píxiū emailed ${account.username} a new link to confirm their address.`)
   })
 
 const sendReset = (account: ManagedAccount) =>

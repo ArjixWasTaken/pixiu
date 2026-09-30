@@ -30,6 +30,13 @@
             @click="choose(() => emit('toggleStatus'))"
           />
           <M3MenuItem
+            v-if="mailReady && account.email && !account.email_verified"
+            icon="mark_email_unread"
+            label="Send the confirmation link again"
+            tag="div"
+            @click="choose(() => emit('resendVerification'))"
+          />
+          <M3MenuItem
             v-if="mailReady && account.email"
             icon="forward_to_inbox"
             label="Email a password reset link"
@@ -94,6 +101,7 @@ const emit = defineEmits<{
   (e: 'toggleStatus'): void
   (e: 'setPassword', password: string): void
   (e: 'sendReset'): void
+  (e: 'resendVerification'): void
   (e: 'remove'): void
 }>()
 

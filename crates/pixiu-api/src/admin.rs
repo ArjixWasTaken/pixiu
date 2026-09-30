@@ -10,7 +10,7 @@ use axum::{
     http::StatusCode,
 };
 use jiff::Timestamp;
-use pixiu_accounts::{NewUser, links, users};
+use pixiu_accounts::{NewUser, links, registration, users};
 use pixiu_db::{ApiKey, JobState, Role, User, UserStatus};
 use serde::Deserialize;
 use serde_json::{Value as JsonValue, json};
@@ -216,6 +216,55 @@ pub(crate) async fn send_reset(
         user = id,
         "password reset email sent by an admin"
     );
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// `POST /api/admin/registrations/{id}/approve`: the applicant gets the
+/// link confirming their address, which opens their account.
+pub(crate) async fn approve(
+    State(state): State<ApiState>,
+    AdminSession(admin): AdminSession,
+    Path(id): Path<u64>,
+) -> ApiResult<Json<JsonValue>> {
+    let user = registration::approve(&mut state.db.clone(), &state.mailer, id).await?;
+    tracing::info!(
+        admin = admin.user.id,
+        user = id,
+        "registration approved by an admin"
+    );
+    Ok(Json(me::describe(&user)))
+}
+
+/// `POST /api/admin/registrations/{id}/deny`: the applicant gets a short
+/// note, and the request goes.
+pub(crate) async fn deny(
+    State(state): State<ApiState>,
+    AdminSession(admin): AdminSession,
+    Path(id): Path<u64>,
+) -> ApiResult<StatusCode> {
+    registration::deny(&mut state.db.clone(), &state.mailer, id).await?;
+    tracing::info!(
+        admin = admin.user.id,
+        user = id,
+        "registration denied by an admin"
+    );
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// `POST /api/admin/users/{id}/verification`: sends the link confirming the
+/// user's address again.
+pub(crate) async fn resend_verification(
+    State(state): State<ApiState>,
+    _: AdminSession,
+    Path(id): Path<u64>,
+) -> ApiResult<StatusCode> {
+    let user = load(&state, id).await?;
+    if user.email_verified_at.is_some() {
+        return Err(ApiError::unprocessable(
+            "Their email address is confirmed already.",
+        ));
+    }
+    links::send_verification(&mut state.db.clone(), &state.mailer, &user).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 

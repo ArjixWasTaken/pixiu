@@ -135,7 +135,8 @@ pub(crate) async fn summary(
 }
 
 /// The user's YouTube Music session's state, how many of their orphans
-/// and offering batches await them, and how their jobs are doing.
+/// and offering batches await them, how their jobs are doing, and, for
+/// admins, how many registrations wait.
 pub(crate) async fn summarize(state: &ApiState, session: &Session) -> ApiResult<JsonValue> {
     let owner = session.owner();
     let (mut running, mut waiting, mut failed) = (0, 0, 0);
@@ -154,7 +155,14 @@ pub(crate) async fn summarize(state: &ApiState, session: &Session) -> ApiResult<
         .into_iter()
         .map(|offering| offering.batch)
         .collect();
+    // Admins see the registrations waiting for them.
+    let registrations = if session.user.role == pixiu_db::Role::Admin {
+        pixiu_accounts::registration::waiting(&mut state.db.clone()).await?
+    } else {
+        0
+    };
     Ok(json!({
+        "registrations": registrations,
         "session": crate::sources::state_name(crate::sources::health_of(state, owner).state),
         "orphans": state.treasury.orphan_count(owner).await?,
         "offerings": batches.len(),

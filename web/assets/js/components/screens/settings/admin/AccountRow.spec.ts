@@ -67,6 +67,15 @@ describe('accountRow.vue', () => {
     expect(screen.queryByText('Email a password reset link')).toBeNull()
   })
 
+  it('sends an unconfirmed address its link again', async () => {
+    const { emitted } = h.render(Component, {
+      props: { account: account({ email_verified: false }), isYou: false, mailReady: true },
+    })
+
+    await h.user.click(screen.getByText('Send the confirmation link again'))
+    expect(emitted().resendVerification).toHaveLength(1)
+  })
+
   it('does not offer to turn off or delete your own account', () => {
     h.render(Component, { props: { account: account(), isYou: true, mailReady: false } })
 

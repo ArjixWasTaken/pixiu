@@ -172,6 +172,8 @@ export interface HuntingSummary {
   orphans: number
   offerings: number
   jobs: { running: number; waiting: number; failed: number }
+  /** For admins: how many registrations wait for them. */
+  registrations: number
 }
 
 export const huntingService = {

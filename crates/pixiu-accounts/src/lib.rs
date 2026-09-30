@@ -5,6 +5,7 @@
 pub mod alerts;
 pub mod links;
 pub mod mail;
+pub mod registration;
 pub mod settings;
 pub mod tokens;
 pub mod users;

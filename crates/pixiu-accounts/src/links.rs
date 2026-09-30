@@ -23,7 +23,8 @@ fn address<'a>(mailer: &Mailer, user: &'a User) -> Result<&'a str, AccountError>
         .ok_or_else(|| AccountError::Invalid("The account has no email address.".to_owned()))
 }
 
-/// Emails `user` a link confirming their address.
+/// Emails `user` a link confirming their address; for an account an admin
+/// just approved, the link that opens it.
 ///
 /// # Errors
 ///
@@ -41,7 +42,11 @@ pub async fn send_verification(
         .get()
         .link(&format!("/verify-email/{token}"))
         .unwrap_or_default();
-    mailer.queue(templates::verify_email(to, &user.username, &link));
+    let compose = match user.status {
+        UserStatus::Unverified => templates::registration_approved,
+        _ => templates::verify_email,
+    };
+    mailer.queue(compose(to, &user.username, &link));
     tracing::info!(user = user.id, "confirmation email queued");
     Ok(())
 }
@@ -119,21 +124,32 @@ async fn owner(
     Ok((user, redeemed.email))
 }
 
+/// What following a confirmation link did.
+pub struct Confirmed {
+    pub user: User,
+    /// Whether it opened an account that only waited for it.
+    pub opened: bool,
+}
+
 /// Follows a confirmation link.
 ///
 /// # Errors
 ///
 /// Fails when the link expired, was used, or is for an address the account
 /// no longer has; or on database errors.
-pub async fn verify_email(db: &mut Db, token: &str) -> Result<User, AccountError> {
+pub async fn verify_email(db: &mut Db, token: &str) -> Result<Confirmed, AccountError> {
     let redeemed = tokens::redeem(db, token, TokenPurpose::VerifyEmail).await?;
     let (user, email) = owner(db, redeemed).await?;
     if email.is_none() || user.email != email {
         return Err(AccountError::LinkExpired);
     }
+    let waited = user.status == UserStatus::Unverified;
     let user = confirm(db, user, email.as_deref()).await?;
     tracing::info!(user = user.id, "email confirmed");
-    Ok(user)
+    Ok(Confirmed {
+        opened: waited && user.status == UserStatus::Active,
+        user,
+    })
 }
 
 /// Follows a reset link: `password` becomes the account's, and every web

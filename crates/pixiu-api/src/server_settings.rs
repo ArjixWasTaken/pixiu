@@ -154,3 +154,27 @@ pub(crate) async fn test_smtp(
         })?;
     Ok(StatusCode::NO_CONTENT)
 }
+
+#[derive(Deserialize)]
+pub(crate) struct Registration {
+    open: bool,
+}
+
+/// `PUT /api/admin/settings/registration`: lets anyone ask for an account,
+/// or not. Opening it needs email, which tells applicants how it went.
+pub(crate) async fn set_registration(
+    State(state): State<ApiState>,
+    _: AdminSession,
+    Json(registration): Json<Registration>,
+) -> ApiResult<Json<JsonValue>> {
+    if registration.open && !state.settings.get().mail_ready() {
+        return Err(ApiError::unprocessable(
+            "Registration needs email: set up a mail server and the public address first.",
+        ));
+    }
+    state
+        .settings
+        .set_registration_open(registration.open)
+        .await?;
+    Ok(Json(describe(&state.settings.get())))
+}

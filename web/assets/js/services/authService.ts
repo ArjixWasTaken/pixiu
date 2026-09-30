@@ -13,10 +13,15 @@ export interface AuthStatus {
   claimed: boolean
   /** Whether a forgotten password can be reset by email. */
   password_reset: boolean
+  /** Whether anyone may ask for an account. */
+  registration: boolean
 }
 
 export const authService = {
   status: () => http.get<AuthStatus>('auth/status'),
+
+  /** Asks for an account, which an admin approves or denies. */
+  register: (account: { username: string; email: string; password: string }) => http.post('auth/register', account),
 
   /** Emails a reset link to the account, if there is one. Says nothing either way. */
   forgot: (login: string) => http.post('auth/forgot', { login }),
@@ -26,8 +31,8 @@ export const authService = {
     this.setTokensUsingCompositeToken(await http.post<CompositeToken>('auth/reset', { token, password }))
   },
 
-  /** Follows a link confirming an email address. */
-  verifyEmail: (token: string) => http.post('auth/verify-email', { token }),
+  /** Follows a link confirming an email address; says whether that opened the account. */
+  verifyEmail: async (token: string) => (await http.post<{ opened: boolean }>('auth/verify-email', { token })).opened,
 
   /** Creates the admin account of a fresh píxiū, and signs in as it. */
   async claim(username: string, password: string) {

@@ -27,6 +27,8 @@ pub(crate) enum Action {
     ResetEmail,
     /// Confirmation emails asked for again, per account.
     VerifyEmail,
+    /// Asking for an account, per client.
+    Register,
 }
 
 impl Action {
@@ -37,6 +39,7 @@ impl Action {
             Self::FailedLogin => (20, 15 * MINUTE),
             Self::Forgot => (10, 60 * MINUTE),
             Self::ResetEmail | Self::VerifyEmail => (3, 60 * MINUTE),
+            Self::Register => (5, 60 * MINUTE),
         }
     }
 }

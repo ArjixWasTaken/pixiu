@@ -4,7 +4,7 @@
 //! revokes it. Forgotten passwords and email confirmations are here too.
 
 use axum::{Json, extract::State, http::StatusCode};
-use pixiu_accounts::{links, users};
+use pixiu_accounts::{links, registration, users};
 use pixiu_db::{ApiKey, User, UserStatus, now, toasty};
 use serde::{Deserialize, Serialize};
 
@@ -20,6 +20,8 @@ pub(crate) struct Status {
     claimed: bool,
     /// Whether a forgotten password can be reset by email.
     password_reset: bool,
+    /// Whether anyone may ask for an account.
+    registration: bool,
 }
 
 /// `GET /api/auth/status`.
@@ -32,6 +34,7 @@ pub(crate) async fn status(State(state): State<ApiState>) -> ApiResult<Json<Stat
     Ok(Json(Status {
         claimed,
         password_reset: state.mailer.ready(),
+        registration: state.settings.get().registration_available(),
     }))
 }
 
@@ -95,7 +98,8 @@ pub(crate) fn inactive(status: UserStatus) -> Option<ApiError> {
         ),
         UserStatus::Unverified => (
             "unverified",
-            "Confirm your email address first: follow the link píxiū sent you.",
+            "Confirm your email address first: follow the link píxiū sent you. Lost it? \
+             “Forgot password?” sends one that confirms it too.",
         ),
         UserStatus::Disabled => ("disabled", "Your account is turned off."),
     };
@@ -244,11 +248,45 @@ pub(crate) struct Verification {
     token: String,
 }
 
-/// `POST /api/auth/verify-email`: follows a confirmation link.
+/// `POST /api/auth/verify-email`: follows a confirmation link. Says
+/// whether that opened the account (an approved registration).
 pub(crate) async fn verify_email(
     State(state): State<ApiState>,
     Json(verification): Json<Verification>,
+) -> ApiResult<Json<serde_json::Value>> {
+    let confirmed = links::verify_email(&mut state.db.clone(), &verification.token).await?;
+    Ok(Json(serde_json::json!({ "opened": confirmed.opened })))
+}
+
+#[derive(Deserialize)]
+pub(crate) struct Registration {
+    username: String,
+    email: String,
+    password: String,
+}
+
+/// `POST /api/auth/register`: asks for an account, which an admin approves
+/// or denies. An address that has an account already gets the same answer
+/// (its owner gets a note), so the answer tells nobody who has one.
+pub(crate) async fn register(
+    State(state): State<ApiState>,
+    ClientIp(ip): ClientIp,
+    Json(form): Json<Registration>,
 ) -> ApiResult<StatusCode> {
-    links::verify_email(&mut state.db.clone(), &verification.token).await?;
-    Ok(StatusCode::NO_CONTENT)
+    if !state.settings.get().registration_available() {
+        return Err(pixiu_accounts::AccountError::RegistrationClosed.into());
+    }
+    state.throttle.check(Action::Register, &ip)?;
+    registration::request(
+        &mut state.db.clone(),
+        &state.secrets,
+        &state.mailer,
+        registration::Request {
+            username: form.username,
+            email: form.email,
+            password: form.password,
+        },
+    )
+    .await?;
+    Ok(StatusCode::ACCEPTED)
 }

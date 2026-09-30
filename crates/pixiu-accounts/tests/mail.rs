@@ -304,7 +304,8 @@ async fn following_links_confirms_addresses_and_resets_passwords() {
     );
     let bob = links::verify_email(&mut db, &token_in(&email))
         .await
-        .unwrap();
+        .unwrap()
+        .user;
     assert!(bob.email_verified_at.is_some());
     assert!(links::may_reset(&bob));
     assert!(matches!(

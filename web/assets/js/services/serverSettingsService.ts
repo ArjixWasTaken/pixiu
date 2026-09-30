@@ -39,6 +39,7 @@ export const serverSettingsService = {
     http.put<ServerSettings>('admin/settings/server', { public_url: publicUrl }),
   setMailServer: (form: MailServerForm) => http.put<ServerSettings>('admin/settings/smtp', form),
   removeMailServer: () => http.delete<ServerSettings>('admin/settings/smtp'),
+  setRegistrationOpen: (open: boolean) => http.put<ServerSettings>('admin/settings/registration', { open }),
   /** Sends a test email now; fails with the mail server's answer. */
   testMailServer: (to?: string) => http.post('admin/settings/smtp/test', to ? { to } : {}),
 }
