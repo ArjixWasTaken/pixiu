@@ -126,12 +126,13 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+/* Padded like the dialog's header, which follows with the presets. */
 .title-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 16px;
+  padding: 24px 24px 0;
   color: var(--schemes-on-surface);
 }
 
