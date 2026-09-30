@@ -6,13 +6,13 @@ use std::{path::Path, sync::Arc};
 
 use anyhow::Context;
 use axum::Router;
-use pixiu_browser::{BrowserOptions, LoginDesk};
-use pixiu_core::{Config, SecretBox, TranscodeFormat, playing::NowPlaying};
-use pixiu_db::Db;
-use pixiu_hunt::{Hunter, YtMusic};
+use pixiu_browser::LoginDesks;
+use pixiu_core::{Config, SecretBox, TranscodeFormat, config::PathsConfig, playing::NowPlaying};
+use pixiu_db::{Db, User};
+use pixiu_hunt::{Hunter, YtMusicPool};
 use pixiu_jobs::{
-    Jobs, Warden,
-    adapters::{BrowserRefresher, HuntExecutor, YtMusicPlatform},
+    Jobs, Wardens,
+    adapters::{HuntExecutor, Sessions},
     watch,
 };
 use pixiu_subsonic::{Codec, SubsonicState};
@@ -32,9 +32,11 @@ pub struct Services {
     pub treasury: Treasury,
     pub offerings: Offerings,
     pub hunter: Arc<Hunter>,
-    pub warden: Arc<Warden>,
+    /// Every user's YouTube Music session warden.
+    pub wardens: Arc<Wardens>,
     pub jobs: Arc<Jobs>,
-    pub login_desk: Arc<LoginDesk>,
+    /// Every user's login browser.
+    pub desks: Arc<LoginDesks>,
     /// Fed by the Subsonic API, shown by the web player.
     pub now_playing: NowPlaying,
 }
@@ -66,45 +68,44 @@ impl Services {
             .relocate_legacy()
             .await
             .context("failed to move uploads to their owners' directories")?;
-        let ytmusic = YtMusic::new(
-            &paths.youtube_music_dir(),
-            secrets.clone(),
-            config.hunt.botguard.clone(),
-        )
-        .context("failed to set up the YouTube Music client")?;
+        move_legacy_profile(&db, paths).await?;
+        let pool = Arc::new(
+            YtMusicPool::new(
+                &paths.youtube_music_dir(),
+                paths.users_dir(),
+                secrets.clone(),
+                config.hunt.botguard.clone(),
+            )
+            .context("failed to set up the YouTube Music client")?,
+        );
+        // Its cache may still hold the login of before every user had a
+        // client; each user's warden restores their own.
+        pool.logout_public().await;
         let hunter = Arc::new(
-            Hunter::new(ytmusic, treasury.clone(), paths.staging_dir())
+            Hunter::new(Arc::clone(&pool), treasury.clone(), paths.staging_dir())
                 .context("failed to set up the hunter")?,
         );
-        let login_desk = LoginDesk::new(BrowserOptions {
-            executable: config.browser.executable.clone(),
-            profile_dir: paths.browser_profile_dir(),
-            no_sandbox: config.browser.no_sandbox,
-        });
-        // One YouTube Music session for now: the first account's.
-        let first_user = pixiu_db::User::all()
-            .exec(&mut db.clone())
-            .await?
-            .iter()
-            .map(|user| user.id)
-            .min()
-            .unwrap_or(1);
-        let warden = Warden::new(
+        let desks = LoginDesks::new(
+            config.browser.executable.clone(),
+            config.browser.no_sandbox,
+            paths.users_dir(),
+            config.browser.max_open,
+        );
+        let wardens = Wardens::new(
             db.clone(),
             secrets.clone(),
-            first_user,
-            Box::new(YtMusicPlatform(Arc::clone(&hunter))),
-            Box::new(BrowserRefresher(Arc::clone(&login_desk))),
-        )
-        .await
-        .context("failed to load the YouTube Music session")?;
+            Box::new(Sessions {
+                pool,
+                desks: Arc::clone(&desks),
+            }),
+        );
         let sources = pixiu_enrich::Online::new(config.enrich.contact.as_deref())
             .context("failed to set up MusicBrainz and friends")?;
         let jobs = Jobs::new(
             db.clone(),
             Box::new(HuntExecutor {
                 hunter: Arc::clone(&hunter),
-                warden: Arc::clone(&warden),
+                wardens: Arc::clone(&wardens),
                 sources: Arc::new(sources),
             }),
         );
@@ -114,9 +115,9 @@ impl Services {
             treasury,
             offerings,
             hunter,
-            warden,
+            wardens,
             jobs,
-            login_desk,
+            desks,
             now_playing: NowPlaying::default(),
         })
     }
@@ -130,20 +131,25 @@ impl Services {
             treasury: self.treasury.clone(),
             offerings: self.offerings.clone(),
             hunter: Arc::clone(&self.hunter),
-            warden: Arc::clone(&self.warden),
+            wardens: Arc::clone(&self.wardens),
             jobs: Arc::clone(&self.jobs),
-            login_desk: Arc::clone(&self.login_desk),
+            desks: Arc::clone(&self.desks),
         }
     }
 
-    /// Starts the background workers: the session warden, the job queue
-    /// (which resumes unfinished jobs), the watch scheduler, and resuming
-    /// paused jobs whenever the login works again.
+    /// Starts the background workers: every user's session warden (each
+    /// resuming its owner's paused jobs whenever their login works again),
+    /// the job queue (which resumes unfinished jobs), and the watch
+    /// scheduler.
     pub fn start(&self) {
-        self.warden.start();
         self.jobs.start();
         watch::schedule(self.db.clone(), Arc::clone(&self.jobs));
-        watch::resume_on_login(&self.warden, Arc::clone(&self.jobs));
+        let (wardens, jobs) = (Arc::clone(&self.wardens), Arc::clone(&self.jobs));
+        tokio::spawn(async move {
+            if let Err(error) = wardens.start(jobs).await {
+                tracing::error!(%error, "cannot start the session wardens");
+            }
+        });
         let (mut db, jobs) = (self.db.clone(), Arc::clone(&self.jobs));
         tokio::spawn(async move {
             if let Err(error) = pixiu_jobs::enrich::repair_album_artists(&mut db, &jobs).await {
@@ -151,6 +157,40 @@ impl Services {
             }
         });
     }
+}
+
+/// Moves the login browser profile of before every user had their own to
+/// the first account's, whose session it holds.
+async fn move_legacy_profile(db: &Db, paths: &PathsConfig) -> anyhow::Result<()> {
+    let legacy = paths.legacy_browser_profile_dir();
+    if !tokio::fs::try_exists(&legacy).await? {
+        return Ok(());
+    }
+    let Some(first) = User::all()
+        .exec(&mut db.clone())
+        .await?
+        .iter()
+        .map(|user| user.id)
+        .min()
+    else {
+        return Ok(());
+    };
+    let target = paths
+        .users_dir()
+        .join(first.to_string())
+        .join("browser-profile");
+    if tokio::fs::try_exists(&target).await? {
+        return Ok(());
+    }
+    tokio::fs::create_dir_all(target.parent().expect("profiles have a parent")).await?;
+    tokio::fs::rename(&legacy, &target)
+        .await
+        .context("failed to move the login browser profile")?;
+    tracing::info!(
+        user = first,
+        "the login browser profile is now the first account's"
+    );
+    Ok(())
 }
 
 /// Builds the HTTP application: the Subsonic API under `/rest`, the web

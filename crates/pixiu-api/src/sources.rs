@@ -13,10 +13,10 @@ use axum::{
     http::{HeaderMap, StatusCode, header},
     response::Response,
 };
-use pixiu_browser::{Field, Frame, Input, LoginDesk, Viewer, cookie_header};
+use pixiu_browser::{BrowserError, Field, Frame, Input, LoginDesk, Viewer, cookie_header};
 use pixiu_db::SessionState;
 use pixiu_jobs::{
-    Health,
+    Health, Warden,
     adapters::{COOKIE_DOMAIN, LOGIN_URL, is_logged_in},
 };
 use serde_json::{Value as JsonValue, json};
@@ -34,25 +34,19 @@ pub(crate) fn state_name(state: Option<SessionState>) -> &'static str {
     }
 }
 
-/// `owner`'s session health: none unless the warden keeps their session.
+/// `owner`'s session health; nothing when they never connected one.
 pub(crate) fn health_of(state: &ApiState, owner: u64) -> Health {
-    if state.warden.owner() == owner {
-        state.warden.health()
-    } else {
-        Health::default()
-    }
+    state.wardens.health(owner)
 }
 
-/// Refuses users whose YouTube Music session the warden does not keep.
-fn own_session(state: &ApiState, session: &Session) -> ApiResult<()> {
-    if state.warden.owner() == session.owner() {
-        Ok(())
-    } else {
-        Err(ApiError::new(
-            StatusCode::CONFLICT,
-            "Only the first account can connect YouTube Music for now.",
-        ))
-    }
+/// The signed-in user's warden.
+async fn warden(state: &ApiState, session: &Session) -> ApiResult<Arc<Warden>> {
+    Ok(state.wardens.get(session.owner()).await?)
+}
+
+/// The signed-in user's login browser.
+fn desk(state: &ApiState, session: &Session) -> Arc<LoginDesk> {
+    state.desks.desk(session.owner())
 }
 
 fn describe(health: &Health) -> JsonValue {
@@ -71,25 +65,23 @@ pub(crate) async fn status(
     State(state): State<ApiState>,
     session: Session,
 ) -> ApiResult<Json<JsonValue>> {
-    let mine = own_session(&state, &session).is_ok();
-    let events: Vec<JsonValue> = if mine {
-        state.warden.events(8).await?
-    } else {
-        Vec::new()
-    }
-    .iter()
-    .map(|event| {
-        json!({
-            "message": event.message,
-            "problem": event.kind.is_problem(),
-            "created_at": event.created_at,
+    let warden = warden(&state, &session).await?;
+    let events: Vec<JsonValue> = warden
+        .events(8)
+        .await?
+        .iter()
+        .map(|event| {
+            json!({
+                "message": event.message,
+                "problem": event.kind.is_problem(),
+                "created_at": event.created_at,
+            })
         })
-    })
-    .collect();
+        .collect();
     Ok(Json(json!({
-        "health": describe(&health_of(&state, session.owner())),
+        "health": describe(&warden.health()),
         "events": events,
-        "login_open": mine && state.login_desk.is_open().await,
+        "login_open": desk(&state, &session).is_open().await,
     })))
 }
 
@@ -98,8 +90,9 @@ pub(crate) async fn validate(
     State(state): State<ApiState>,
     session: Session,
 ) -> ApiResult<Json<JsonValue>> {
-    own_session(&state, &session)?;
-    Ok(Json(describe(&state.warden.validate().await)))
+    Ok(Json(describe(
+        &warden(&state, &session).await?.validate().await,
+    )))
 }
 
 /// `POST /api/sources/refresh`: renews the session's cookies now.
@@ -107,8 +100,9 @@ pub(crate) async fn refresh(
     State(state): State<ApiState>,
     session: Session,
 ) -> ApiResult<Json<JsonValue>> {
-    own_session(&state, &session)?;
-    Ok(Json(describe(&state.warden.refresh().await)))
+    Ok(Json(describe(
+        &warden(&state, &session).await?.refresh().await,
+    )))
 }
 
 /// `POST /api/sources/disconnect`: forgets the session.
@@ -116,8 +110,7 @@ pub(crate) async fn disconnect(
     State(state): State<ApiState>,
     session: Session,
 ) -> ApiResult<StatusCode> {
-    own_session(&state, &session)?;
-    state.warden.disconnect().await;
+    warden(&state, &session).await?.disconnect().await;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -126,14 +119,22 @@ pub(crate) async fn open_login(
     State(state): State<ApiState>,
     session: Session,
 ) -> ApiResult<StatusCode> {
-    own_session(&state, &session)?;
-    state.login_desk.open(LOGIN_URL).await.map_err(|error| {
-        tracing::error!(%error, "cannot open the login browser");
-        ApiError::new(
-            StatusCode::SERVICE_UNAVAILABLE,
-            format!("The login browser could not start: {error}"),
-        )
-    })?;
+    desk(&state, &session)
+        .open(LOGIN_URL)
+        .await
+        .map_err(|error| match error {
+            BrowserError::Busy => ApiError::new(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "Another sign-in is running on the server; try again in a few minutes.",
+            ),
+            error => {
+                tracing::error!(%error, "cannot open the login browser");
+                ApiError::new(
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    format!("The login browser could not start: {error}"),
+                )
+            }
+        })?;
     Ok(StatusCode::CREATED)
 }
 
@@ -142,8 +143,7 @@ pub(crate) async fn cancel_login(
     State(state): State<ApiState>,
     session: Session,
 ) -> ApiResult<StatusCode> {
-    own_session(&state, &session)?;
-    state.login_desk.close().await;
+    desk(&state, &session).close().await;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -153,8 +153,7 @@ pub(crate) async fn login_status(
     State(state): State<ApiState>,
     session: Session,
 ) -> ApiResult<Json<JsonValue>> {
-    own_session(&state, &session)?;
-    let desk = &state.login_desk;
+    let desk = desk(&state, &session);
     let open = desk.is_open().await;
     let logged_in = open && is_logged_in(&desk.cookies(COOKIE_DOMAIN).await.unwrap_or_default());
     Ok(Json(
@@ -167,15 +166,18 @@ pub(crate) async fn finish_login(
     State(state): State<ApiState>,
     session: Session,
 ) -> ApiResult<Json<JsonValue>> {
-    own_session(&state, &session)?;
-    let desk = &state.login_desk;
+    let desk = desk(&state, &session);
     let cookies = desk.cookies(COOKIE_DOMAIN).await.unwrap_or_default();
     if !is_logged_in(&cookies) {
         return Err(ApiError::unprocessable(
             "The login browser is not signed in yet.",
         ));
     }
-    match state.warden.connect(cookie_header(&cookies)).await {
+    match warden(&state, &session)
+        .await?
+        .connect(cookie_header(&cookies))
+        .await
+    {
         Ok(health) => {
             desk.close().await;
             Ok(Json(describe(&health)))
@@ -219,8 +221,7 @@ pub(crate) async fn screen(
     if !same_origin(&headers) {
         return Err(ApiError::new(StatusCode::FORBIDDEN, "wrong origin"));
     }
-    own_session(&state, &session)?;
-    let desk = Arc::clone(&state.login_desk);
+    let desk = desk(&state, &session);
     Ok(upgrade.on_upgrade(move |socket| relay(desk, socket)))
 }
 

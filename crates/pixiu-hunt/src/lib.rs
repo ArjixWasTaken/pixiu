@@ -21,7 +21,7 @@ pub use model::{
     AlbumKind, AlbumRef, Discography, RemoteAlbum, RemoteArtist, RemotePlaylist, RemoteTrack,
     SearchResults, SessionCheck, image_url_at,
 };
-pub use ytmusic::{AudioSource, LIKED_MUSIC, YtMusic};
+pub use ytmusic::{AudioSource, LIKED_MUSIC, YtMusic, YtMusicPool};
 
 #[derive(Debug, thiserror::Error)]
 pub enum HuntError {
@@ -100,7 +100,7 @@ pub struct DownloadRequest {
 
 /// Downloads music into the treasure.
 pub struct Hunter {
-    ytm: YtMusic,
+    ytm: Arc<YtMusicPool>,
     treasury: Treasury,
     staging: PathBuf,
     http: reqwest::Client,
@@ -114,7 +114,11 @@ impl Hunter {
     /// # Errors
     ///
     /// Fails when the staging directory cannot be created.
-    pub fn new(ytm: YtMusic, treasury: Treasury, staging: PathBuf) -> Result<Self, HuntError> {
+    pub fn new(
+        ytm: Arc<YtMusicPool>,
+        treasury: Treasury,
+        staging: PathBuf,
+    ) -> Result<Self, HuntError> {
         std::fs::create_dir_all(&staging)?;
         Ok(Self {
             ytm,
@@ -129,8 +133,16 @@ impl Hunter {
         })
     }
 
+    /// The client without a login, for what everyone shares: searches,
+    /// albums, artists, lyrics.
     #[must_use]
-    pub fn ytmusic(&self) -> &YtMusic {
+    pub fn ytmusic(&self) -> Arc<YtMusic> {
+        self.ytm.public()
+    }
+
+    /// Every user's client.
+    #[must_use]
+    pub fn clients(&self) -> &Arc<YtMusicPool> {
         &self.ytm
     }
 
@@ -150,7 +162,7 @@ impl Hunter {
         {
             return Ok(album.clone());
         }
-        let album = self.ytm.album(browse_id).await?;
+        let album = self.ytm.public().album(browse_id).await?;
         let mut cache = self.albums.lock().unwrap();
         cache.retain(|_, (fetched, _)| fetched.elapsed() < ALBUM_CACHE_TTL);
         cache.insert(browse_id.to_owned(), (Instant::now(), album.clone()));
@@ -209,7 +221,7 @@ impl Hunter {
         }
 
         progress(1);
-        let track = self.ytm.track(video_id).await?;
+        let track = self.ytm.public().track(video_id).await?;
         let album = match &track.album {
             Some(reference) => match self.album(&reference.id).await {
                 Ok(album) => Some(album),
@@ -403,7 +415,9 @@ impl Hunter {
         };
 
         let direct = async {
-            let source = self.ytm.audio(video_id).await?;
+            // The owner's login, when they have one, lets streams that need
+            // one through.
+            let source = self.ytm.client(request.owner).audio(video_id).await?;
             let path = staging.join(format!("{video_id}.{}", source.extension));
             download::fetch(&self.http, &source, &path, &report).await?;
             Ok::<_, HuntError>(path)

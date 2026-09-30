@@ -37,8 +37,12 @@ pub(crate) async fn stream(
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
     let owner = session.owner();
     let jobs = state.jobs.subscribe();
-    // Only the session's owner hears about it.
-    let health = (state.warden.owner() == owner).then(|| state.warden.subscribe());
+    let health = state
+        .wardens
+        .get(owner)
+        .await
+        .ok()
+        .map(|warden| warden.subscribe());
     let events = stream::unfold((jobs, health), move |(mut jobs, mut health)| async move {
         let session_changed = async {
             match health.as_mut() {

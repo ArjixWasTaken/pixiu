@@ -326,3 +326,73 @@ async fn logging_in_resumes_paused_jobs() {
     warden.connect("SID=abc".to_owned()).await.unwrap();
     reaches(JobState::Done).await;
 }
+
+/// Each user's warden works with their own scripted platform.
+struct FakeSessions {
+    scripts: std::collections::HashMap<u64, Arc<Script>>,
+    forgotten: Arc<Mutex<Vec<u64>>>,
+}
+
+impl pixiu_jobs::SessionFactory for FakeSessions {
+    fn platform(&self, owner: u64) -> Box<dyn Platform> {
+        Box::new(FakePlatform(Arc::clone(&self.scripts[&owner])))
+    }
+
+    fn refresher(&self, owner: u64) -> Box<dyn Refresher> {
+        Box::new(FakeRefresher(Arc::clone(&self.scripts[&owner])))
+    }
+
+    fn forget(&self, owner: u64) -> BoxFuture<'_, ()> {
+        self.forgotten.lock().unwrap().push(owner);
+        Box::pin(async {})
+    }
+}
+
+#[tokio::test]
+async fn every_user_has_a_warden_of_their_own() {
+    const OTHER: u64 = 2;
+    let setup = Setup::new().await;
+    let (mine, theirs) = (Arc::new(Script::default()), Arc::new(Script::default()));
+    let forgotten = Arc::default();
+    let wardens = pixiu_jobs::Wardens::new(
+        setup.db.clone(),
+        setup.secrets.clone(),
+        Box::new(FakeSessions {
+            scripts: [(OWNER, Arc::clone(&mine)), (OTHER, Arc::clone(&theirs))].into(),
+            forgotten: Arc::clone(&forgotten),
+        }),
+    );
+
+    mine.apply_answers([SessionCheck::Valid]);
+    wardens
+        .get(OWNER)
+        .await
+        .unwrap()
+        .connect("SAPISID=mine".to_owned())
+        .await
+        .unwrap();
+    assert_eq!(wardens.health(OWNER).state, Some(SessionState::Valid));
+    // The other user never connected: nothing to show, and no cookies.
+    assert_eq!(wardens.health(OTHER).state, None);
+    assert_eq!(wardens.cookies(OTHER).await, None);
+    assert_eq!(
+        wardens.cookies(OWNER).await.as_deref(),
+        Some("SAPISID=mine")
+    );
+
+    // Their session expiring leaves mine alone.
+    theirs.apply_answers([SessionCheck::Valid]);
+    let other = wardens.get(OTHER).await.unwrap();
+    other.connect("SAPISID=theirs".to_owned()).await.unwrap();
+    theirs.check_answers([SessionCheck::Invalid("signed out".to_owned())]);
+    theirs.refresh_answers([Err("the profile is logged out".to_owned())]);
+    other.validate().await;
+    assert_eq!(wardens.health(OTHER).state, Some(SessionState::Expired));
+    assert_eq!(wardens.health(OWNER).state, Some(SessionState::Valid));
+    assert_eq!(*mine.applied.lock().unwrap(), ["SAPISID=mine"]);
+
+    // Stopping one lets go of their client and browser only.
+    wardens.stop(OTHER).await;
+    assert_eq!(*forgotten.lock().unwrap(), [OTHER]);
+    assert_eq!(wardens.health(OWNER).state, Some(SessionState::Valid));
+}

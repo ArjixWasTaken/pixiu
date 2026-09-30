@@ -3,10 +3,13 @@
 
 use std::sync::Arc;
 
-use pixiu_browser::{Cookie, LoginDesk, cookie_header};
+use pixiu_browser::{Cookie, LoginDesks, cookie_header};
 use pixiu_db::{Album, Job, JobKind, JobState, ReleaseReason, SessionState, Track, Watch};
 use pixiu_enrich::Sources;
-use pixiu_hunt::{Discography, DownloadRequest, HuntError, Hunter, RemotePlaylist, SessionCheck};
+use pixiu_hunt::{
+    Discography, DownloadRequest, HuntError, Hunter, RemotePlaylist, SessionCheck, YtMusic,
+    YtMusicPool,
+};
 use pixiu_treasury::Release;
 
 use crate::{
@@ -14,7 +17,8 @@ use crate::{
     queue::{
         self, AlbumJob, EnrichJob, Executor, NewJob, Outcome, SyncJob, TrackJob, enriched_album,
     },
-    warden::{BoxFuture, Platform, Refresher, Warden},
+    warden::{BoxFuture, Platform, Refresher},
+    wardens::{SessionFactory, Wardens},
     watch::{self, Catalog, CatalogError, Synced},
 };
 
@@ -33,31 +37,60 @@ pub fn is_logged_in(cookies: &[Cookie]) -> bool {
         .any(|cookie| matches!(cookie.name.as_str(), "SAPISID" | "__Secure-3PAPISID"))
 }
 
-/// YouTube Music, as the warden's platform.
-pub struct YtMusicPlatform(pub Arc<Hunter>);
+/// A user's YouTube Music client, as their warden's platform.
+pub struct YtMusicPlatform {
+    pub pool: Arc<YtMusicPool>,
+    pub owner: u64,
+}
 
-impl Platform for YtMusicPlatform {
-    fn apply<'a>(&'a self, cookies: &'a str) -> BoxFuture<'a, SessionCheck> {
-        Box::pin(self.0.ytmusic().apply_cookies(cookies))
-    }
-
-    fn check(&self) -> BoxFuture<'_, SessionCheck> {
-        Box::pin(self.0.ytmusic().check_session())
-    }
-
-    fn forget(&self) -> BoxFuture<'_, ()> {
-        Box::pin(self.0.ytmusic().forget_cookies())
+impl YtMusicPlatform {
+    fn client(&self) -> Result<Arc<YtMusic>, SessionCheck> {
+        self.pool
+            .for_user(self.owner)
+            .map_err(|error| SessionCheck::Unreachable(error.to_string()))
     }
 }
 
-/// Fresh cookies from the login browser's persistent profile.
-pub struct BrowserRefresher(pub Arc<LoginDesk>);
+impl Platform for YtMusicPlatform {
+    fn apply<'a>(&'a self, cookies: &'a str) -> BoxFuture<'a, SessionCheck> {
+        Box::pin(async move {
+            match self.client() {
+                Ok(client) => client.apply_cookies(cookies).await,
+                Err(unreachable) => unreachable,
+            }
+        })
+    }
+
+    fn check(&self) -> BoxFuture<'_, SessionCheck> {
+        Box::pin(async move {
+            match self.client() {
+                Ok(client) => client.check_session().await,
+                Err(unreachable) => unreachable,
+            }
+        })
+    }
+
+    fn forget(&self) -> BoxFuture<'_, ()> {
+        Box::pin(async move {
+            if let Ok(client) = self.client() {
+                client.forget_cookies().await;
+            }
+        })
+    }
+}
+
+/// Fresh cookies from a user's login browser profile.
+pub struct BrowserRefresher {
+    pub desks: Arc<LoginDesks>,
+    pub owner: u64,
+}
 
 impl Refresher for BrowserRefresher {
     fn refresh(&self) -> BoxFuture<'_, Result<String, String>> {
         Box::pin(async move {
             let cookies = self
-                .0
+                .desks
+                .desk(self.owner)
                 .harvest(YOUTUBE_MUSIC_URL, COOKIE_DOMAIN)
                 .await
                 .map_err(|error| error.to_string())?;
@@ -69,10 +102,40 @@ impl Refresher for BrowserRefresher {
     }
 }
 
+/// Users' wardens work with their own YouTube Music client and login
+/// browser.
+pub struct Sessions {
+    pub pool: Arc<YtMusicPool>,
+    pub desks: Arc<LoginDesks>,
+}
+
+impl SessionFactory for Sessions {
+    fn platform(&self, owner: u64) -> Box<dyn Platform> {
+        Box::new(YtMusicPlatform {
+            pool: Arc::clone(&self.pool),
+            owner,
+        })
+    }
+
+    fn refresher(&self, owner: u64) -> Box<dyn Refresher> {
+        Box::new(BrowserRefresher {
+            desks: Arc::clone(&self.desks),
+            owner,
+        })
+    }
+
+    fn forget(&self, owner: u64) -> BoxFuture<'_, ()> {
+        Box::pin(async move {
+            self.desks.remove(owner).await;
+            self.pool.remove(owner);
+        })
+    }
+}
+
 /// Runs jobs with the hunter.
 pub struct HuntExecutor {
     pub hunter: Arc<Hunter>,
-    pub warden: Arc<Warden>,
+    pub wardens: Arc<Wardens>,
     /// MusicBrainz and friends, for enriching albums.
     pub sources: Arc<dyn Sources>,
 }
@@ -126,7 +189,7 @@ impl HuntExecutor {
             job_id: job.id,
             video_id: payload.video_id.clone(),
             claim: claim.clone(),
-            cookies: self.warden.cookies().await,
+            cookies: self.wardens.cookies(owner).await,
         };
         let treasury = self.hunter.treasury();
         // Excluded from its playlist while this was queued or running.
@@ -317,7 +380,8 @@ impl HuntExecutor {
         };
         let catalog = YtMusicCatalog {
             hunter: Arc::clone(&self.hunter),
-            warden: Arc::clone(&self.warden),
+            wardens: Arc::clone(&self.wardens),
+            owner: job.user_id,
         };
         match watch::sync(self.hunter.treasury(), &catalog, payload.watch_id).await {
             Ok(Synced::Done(jobs)) => Outcome::Expand(jobs),
@@ -337,10 +401,13 @@ async fn watch_exists(hunter: &Hunter, watch_id: u64) -> bool {
     )
 }
 
-/// YouTube Music, as the catalog of watches.
+/// YouTube Music, as the catalog of a user's watches.
 pub struct YtMusicCatalog {
     pub hunter: Arc<Hunter>,
-    pub warden: Arc<Warden>,
+    pub wardens: Arc<Wardens>,
+    /// Whose watches: their login sees their liked music and private
+    /// playlists.
+    pub owner: u64,
 }
 
 fn catalog_error(error: &HuntError) -> CatalogError {
@@ -355,7 +422,8 @@ impl Catalog for YtMusicCatalog {
     fn playlist<'a>(&'a self, id: &'a str) -> BoxFuture<'a, Result<RemotePlaylist, CatalogError>> {
         Box::pin(async move {
             self.hunter
-                .ytmusic()
+                .clients()
+                .client(self.owner)
                 .playlist(id)
                 .await
                 .map_err(|error| catalog_error(&error))
@@ -377,7 +445,7 @@ impl Catalog for YtMusicCatalog {
 
     fn logged_in(&self) -> bool {
         matches!(
-            self.warden.health().state,
+            self.wardens.health(self.owner).state,
             Some(SessionState::Valid | SessionState::Degraded)
         )
     }

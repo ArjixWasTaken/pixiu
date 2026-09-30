@@ -16,8 +16,8 @@ use axum::{
 };
 use pixiu_core::{Config, SecretBox};
 use pixiu_db::{
-    Annotation, ApiKey, Db, Offering, Playlist, PlaylistFolder, Track, TrackClaim, User, Watch,
-    now, toasty,
+    Annotation, ApiKey, Db, Offering, Playlist, PlaylistFolder, SessionState, SourceSession, Track,
+    TrackClaim, User, Watch, now, toasty,
 };
 use pixiu_treasury::{Claim, Provenance, tags};
 use serde_json::{Value, json};
@@ -110,6 +110,17 @@ impl World {
         let secrets = SecretBox::ephemeral();
         let alice = person(&mut db, "alice", &secrets).await;
         let bob = person(&mut db, "bob", &secrets).await;
+        // Alice has a YouTube Music session; Bob has none.
+        toasty::create!(SourceSession {
+            user_id: alice.id,
+            source: "youtube_music",
+            cookies: secrets.seal_str("SAPISID=alice"),
+            state: SessionState::Valid,
+            connected_at: now(),
+        })
+        .exec(&mut db)
+        .await
+        .unwrap();
         let services = pixiu::Services::new(db.clone(), &config, secrets)
             .await
             .unwrap();
@@ -597,6 +608,14 @@ async fn lists_show_only_the_callers_library() {
     assert_eq!(hunting["offerings"], 0);
     let (_, genres) = world.api(&key, Method::GET, "/api/genres", None).await;
     assert_eq!(genres[0]["song_count"], 1, "{genres}");
+    // Each has their own YouTube Music session: Bob none, Alice hers.
+    let (_, sources) = world.api(&key, Method::GET, "/api/sources", None).await;
+    assert_eq!(sources["health"]["state"], "none", "{sources}");
+    assert_eq!(hunting["session"], "none");
+    let (_, sources) = world
+        .api(&world.alice.key, Method::GET, "/api/sources", None)
+        .await;
+    assert_eq!(sources["health"]["state"], "valid", "{sources}");
 
     let own_artist = Track::filter_by_user_id(world.bob.id)
         .first()

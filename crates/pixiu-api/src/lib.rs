@@ -31,11 +31,11 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{delete, get, post, put},
 };
-use pixiu_browser::LoginDesk;
+use pixiu_browser::LoginDesks;
 use pixiu_core::SecretBox;
 use pixiu_db::{ApiKey, Db, Library, User, now, toasty};
 use pixiu_hunt::Hunter;
-use pixiu_jobs::{Jobs, Warden};
+use pixiu_jobs::{Jobs, Wardens};
 use pixiu_treasury::{Offerings, Treasury};
 use serde::Serialize;
 
@@ -48,9 +48,11 @@ pub struct ApiState {
     pub treasury: Treasury,
     pub offerings: Offerings,
     pub hunter: Arc<Hunter>,
-    pub warden: Arc<Warden>,
+    /// Every user's YouTube Music session warden.
+    pub wardens: Arc<Wardens>,
     pub jobs: Arc<Jobs>,
-    pub login_desk: Arc<LoginDesk>,
+    /// Every user's login browser.
+    pub desks: Arc<LoginDesks>,
 }
 
 /// Builds the API router. Paths are absolute (`/api/...`), so mount it

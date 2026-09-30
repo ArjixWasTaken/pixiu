@@ -6,7 +6,7 @@
 
 use pixiu_core::SecretBox;
 use pixiu_db::Track;
-use pixiu_hunt::{DownloadRequest, Hunter, YtMusic};
+use pixiu_hunt::{DownloadRequest, Hunter, YtMusic, YtMusicPool};
 use pixiu_treasury::{Claim, Treasury, tags};
 
 const QUERY: &str = "Kevin MacLeod Monkeys Spinning Monkeys";
@@ -38,8 +38,19 @@ async fn downloads_a_track_into_the_treasure() {
         dir.path().join("treasure"),
         dir.path().join("cache"),
     );
-    let ytm = YtMusic::new(&dir.path().join("ytm"), SecretBox::ephemeral(), botguard()).unwrap();
-    let hunter = Hunter::new(ytm, treasury.clone(), dir.path().join("staging")).unwrap();
+    let ytm = YtMusicPool::new(
+        &dir.path().join("ytm"),
+        dir.path().join("users"),
+        SecretBox::ephemeral(),
+        botguard(),
+    )
+    .unwrap();
+    let hunter = Hunter::new(
+        std::sync::Arc::new(ytm),
+        treasury.clone(),
+        dir.path().join("staging"),
+    )
+    .unwrap();
 
     let found = hunter.ytmusic().search(QUERY).await.unwrap();
     let video_id = found.tracks.first().expect("a track").id.clone();

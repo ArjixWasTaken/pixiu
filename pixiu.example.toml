@@ -20,6 +20,9 @@ treasure_dir = "treasure"
 # executable = "/usr/bin/chromium"
 # Needed in most containers (the Docker image sets it).
 no_sandbox = false
+# How many browsers may run at once, for every user's YouTube Music sign-in
+# and cookie refresh together. Each takes a few hundred megabytes.
+max_open = 2
 
 [hunt]
 # rustypipe-botguard answers YouTube's proof-of-origin challenges, which lets
