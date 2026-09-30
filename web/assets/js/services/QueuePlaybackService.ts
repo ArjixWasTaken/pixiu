@@ -287,6 +287,8 @@ export class QueuePlaybackService extends BasePlaybackService {
 
     queueStore.current!.playback_state = 'Paused'
     navigator.mediaSession && (navigator.mediaSession.playbackState = 'paused')
+    // The tab names the song only while it plays.
+    document.title = useBranding().name
 
     socketService.broadcast('SOCKET_STREAMABLE', queueStore.current)
   }
@@ -312,6 +314,7 @@ export class QueuePlaybackService extends BasePlaybackService {
 
     queueStore.current!.playback_state = 'Playing'
     navigator.mediaSession && (navigator.mediaSession.playbackState = 'playing')
+    document.title = `${playable.title} ♫ ${useBranding().name}`
 
     socketService.broadcast('SOCKET_STREAMABLE', playable)
   }

@@ -11,6 +11,7 @@ describe('subsonic', () => {
       title: 'Funky Chunk',
       duration: 239,
       playCount: 2,
+      played: '2026-09-30T08:00:00Z',
       userRating: 4,
       starred: '2026-09-29T16:30:34Z',
       albumId: 'al-3',
@@ -30,6 +31,7 @@ describe('subsonic', () => {
       id: 'tr-3',
       length: 239,
       play_count: 2,
+      played_at: '2026-09-30T08:00:00Z',
       rating: 4,
       favorite: true,
       album_id: 'al-3',
@@ -39,6 +41,14 @@ describe('subsonic', () => {
     })
     expect(song.album_cover).toContain('/rest/getCoverArt?')
     expect(song.album_cover).toContain('id=al-3')
+  })
+
+  it('counts an artist’s albums', () => {
+    expect(subsonic.toArtist({ id: 'ar-1', name: 'Kevin MacLeod', albumCount: 3 })).toMatchObject({
+      id: 'ar-1',
+      name: 'Kevin MacLeod',
+      album_count: 3,
+    })
   })
 
   it('tells mirrors of watched playlists from smart playlists', () => {

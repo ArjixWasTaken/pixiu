@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vite-plus/test'
-import { waitFor } from '@testing-library/vue'
+import { screen, waitFor } from '@testing-library/vue'
 import { createHarness } from '@/__tests__/TestHarness'
 import { eventBus } from '@/utils/eventBus'
 import { searchStore } from '@/stores/searchStore'
@@ -15,5 +15,15 @@ describe('searchExcerptsScreen.vue', () => {
     eventBus.emit('SEARCH_KEYWORDS_CHANGED', 'search me')
 
     await waitFor(() => expect(mock).toHaveBeenCalledWith('search me'))
+  })
+
+  it('offers to search YouTube Music for the same words', async () => {
+    h.mock(searchStore, 'excerptSearch')
+    h.render(Component)
+
+    eventBus.emit('SEARCH_KEYWORDS_CHANGED', 'lo & behold')
+
+    const link = await screen.findByRole('link', { name: /Search YouTube Music for “lo & behold”/ })
+    expect(link.getAttribute('href')).toMatch(/discover\?q=lo%20%26%20behold$/)
   })
 })

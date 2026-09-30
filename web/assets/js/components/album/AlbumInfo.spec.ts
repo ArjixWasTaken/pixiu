@@ -53,4 +53,16 @@ describe('albumInfo.vue', () => {
 
     expect(screen.getByTestId('album-info').classList.contains(mode)).toBe(true)
   })
+
+  it('says when Wikipedia has nothing, without a source', async () => {
+    commonStore.state.uses_last_fm = true
+    h.mock(encyclopediaService, 'fetchForAlbum').mockResolvedValue(null)
+    h.render(Component, {
+      props: { album: h.factory('album').make({ name: 'IV' }), mode: 'full' },
+      global: { stubs: { TrackList: h.stub(), AlbumThumbnail: h.stub('thumbnail') } },
+    })
+
+    await screen.findByText('píxiū found nothing about IV on Wikipedia.')
+    expect(screen.queryByRole('link', { name: 'Source' })).toBeNull()
+  })
 })

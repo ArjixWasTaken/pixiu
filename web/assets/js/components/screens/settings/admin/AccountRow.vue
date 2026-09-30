@@ -9,6 +9,7 @@
           <span v-if="account.role === 'admin'" class="pill m3-label-small">Admin</span>
           <span v-if="account.status !== 'active'" class="pill warn m3-label-small">{{ statusLabel }}</span>
           <span v-if="account.password_change_required" class="pill m3-label-small">Temporary password</span>
+          <span v-if="account.sso" class="pill m3-label-small" title="Signs in with single sign-on too">SSO</span>
         </div>
         <p class="m3-body-medium text-(--schemes-on-surface-variant) truncate">{{ details }}</p>
       </div>

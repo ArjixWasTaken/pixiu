@@ -4,7 +4,7 @@
       <ScreenHeader layout="collapsed">
         Uploads
         <template #meta>
-          <span>{{ batches.length === 1 ? '1 batch' : `${batches.length} batches` }} to review</span>
+          <span>{{ batches.length ? `${pluralize(batches, 'upload')} to review` : 'Nothing to review' }}</span>
         </template>
       </ScreenHeader>
     </template>

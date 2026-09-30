@@ -23,4 +23,13 @@ describe('themePreferences.vue', () => {
 
     expect(setDarkModeMock).toHaveBeenCalledWith(false)
   })
+
+  it('follows the system', async () => {
+    const setDarkModeMock = h.mock(themeStore, 'setDarkMode')
+    h.render(Component)
+
+    await h.user.click(screen.getByRole('button', { name: 'System' }))
+
+    expect(setDarkModeMock).toHaveBeenCalledWith(null)
+  })
 })

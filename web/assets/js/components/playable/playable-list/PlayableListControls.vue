@@ -1,49 +1,31 @@
 <template>
   <div class="relative" data-testid="song-list-controls">
     <div class="flex gap-2 flex-wrap items-center">
-      <template v-if="altPressed">
+      <!-- Play in order, or shuffled: the selection when there is one. -->
+      <template v-if="selectedPlayables.length > 1">
+        <M3Button class="btn-play-selected" icon="play_arrow" @click.prevent="playSelected">Play selected</M3Button>
         <M3Button
-          v-if="selectedPlayables.length < 2 && filteredPlayables.length"
-          class="btn-play-all"
-          icon="play_arrow"
-          title="Play all. Press Alt/⌥ to change mode."
-          @click.prevent="playAll"
-        >
-          Play all
-        </M3Button>
-
-        <M3Button
-          v-if="selectedPlayables.length > 1"
-          class="btn-play-selected"
-          icon="play_arrow"
-          title="Play selected. Press Alt/⌥ to change mode."
-          @click.prevent="playSelected"
-        >
-          Play selected
-        </M3Button>
-      </template>
-
-      <template v-else>
-        <M3Button
-          v-if="selectedPlayables.length < 2 && filteredPlayables.length"
-          class="btn-shuffle-all"
-          data-testid="btn-shuffle-all"
-          icon="shuffle"
-          title="Shuffle all. Press Alt/⌥ to change mode."
-          @click.prevent="shuffle"
-        >
-          Shuffle all
-        </M3Button>
-
-        <M3Button
-          v-if="selectedPlayables.length > 1"
           class="btn-shuffle-selected"
           data-testid="btn-shuffle-selected"
           icon="shuffle"
-          title="Shuffle selected. Press Alt/⌥ to change mode."
+          variant="tonal"
           @click.prevent="shuffleSelected"
         >
-          Shuffle selected
+          Shuffle
+        </M3Button>
+      </template>
+      <template v-else-if="filteredPlayables.length">
+        <M3Button class="btn-play-all" data-testid="btn-play-all" icon="play_arrow" @click.prevent="playAll">
+          Play
+        </M3Button>
+        <M3Button
+          class="btn-shuffle-all"
+          data-testid="btn-shuffle-all"
+          icon="shuffle"
+          variant="tonal"
+          @click.prevent="shuffle"
+        >
+          Shuffle
         </M3Button>
       </template>
 
@@ -84,7 +66,7 @@
 
 <script lang="ts" setup>
 import type { Ref } from 'vue'
-import { computed, onBeforeUnmount, onMounted, ref, toRef, watch } from 'vue'
+import { computed, ref, toRef, watch } from 'vue'
 import { FilteredPlayablesKey, PlayablesKey, SelectedPlayablesKey } from '@/config/symbols'
 import { requireInjection } from '@/utils/helpers'
 
@@ -111,7 +93,6 @@ const [selectedPlayables] = requireInjection<[Ref<Playable[]>]>(SelectedPlayable
 const addToButton = ref<HTMLElement>()
 const popover = ref<InstanceType<typeof Popover>>()
 const showingAddToMenu = ref(false)
-const altPressed = ref(false)
 
 const showAddToButton = computed(() => Boolean(selectedPlayables.value.length))
 
@@ -131,16 +112,4 @@ const playAll = () => emit('play-all', false)
 const playSelected = () => emit('play-selected', false)
 const clearQueue = () => emit('clear-queue')
 const refresh = () => emit('refresh')
-const registerKeydown = (event: KeyboardEvent) => event.key === 'Alt' && (altPressed.value = true)
-const registerKeyup = (event: KeyboardEvent) => event.key === 'Alt' && (altPressed.value = false)
-
-onMounted(() => {
-  window.addEventListener('keydown', registerKeydown)
-  window.addEventListener('keyup', registerKeyup)
-})
-
-onBeforeUnmount(() => {
-  window.removeEventListener('keydown', registerKeydown)
-  window.removeEventListener('keyup', registerKeyup)
-})
 </script>

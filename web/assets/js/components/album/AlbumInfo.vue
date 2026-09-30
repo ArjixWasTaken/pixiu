@@ -13,6 +13,9 @@
 
       <TrackList v-if="info.tracks?.length" :album :tracks="info.tracks" class="mt-8" data-testid="album-info-tracks" />
     </template>
+    <p v-else-if="!loading" class="nothing" data-testid="album-info-empty">
+      píxiū found nothing about {{ album.name }} on Wikipedia.
+    </p>
 
     <template v-if="!loading && info?.url" #footer>
       <a :href="info.url" rel="noopener" target="_blank">Source</a>

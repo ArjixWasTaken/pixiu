@@ -10,10 +10,12 @@ use axum::{
     http::StatusCode,
 };
 use jiff::Timestamp;
-use pixiu_db::{JobState, Library, Playlist, PlaylistEntry, SessionState, Watch, WatchKind};
+use pixiu_db::{
+    Job, JobKind, JobState, Library, Playlist, PlaylistEntry, SessionState, Watch, WatchKind,
+};
 use pixiu_hunt::link::{self, Link};
 use pixiu_jobs::{
-    queue::wanted,
+    queue::{TrackJob, wanted},
     watch::{self, NewWatch, WAITING_FOR_LOGIN, WatchError},
 };
 use pixiu_subsonic::ids;
@@ -329,6 +331,24 @@ pub(crate) async fn include(
     Ok(StatusCode::NO_CONTENT)
 }
 
+/// The latest download job of each video the user asked for, among the
+/// unfinished and the recent.
+async fn latest_downloads(state: &ApiState, owner: u64) -> ApiResult<HashMap<String, Job>> {
+    let mut jobs = state.jobs.unfinished(owner).await?;
+    jobs.extend(state.jobs.recent(owner, 500).await?);
+    jobs.sort_by_key(|job| job.id);
+    let mut latest = HashMap::new();
+    for job in jobs {
+        if job.kind != JobKind::DownloadTrack {
+            continue;
+        }
+        if let Ok(payload) = serde_json::from_str::<TrackJob>(&job.payload) {
+            latest.insert(payload.video_id, job);
+        }
+    }
+    Ok(latest)
+}
+
 /// `GET /api/playlists/{id}/watch`: for a playlist mirroring a watch, the
 /// watch, the songs still coming and the songs excluded; `null` for other
 /// playlists.
@@ -360,13 +380,22 @@ pub(crate) async fn of_playlist(
         .filter_map(|entry| entry.ytm_video_id.clone())
         .collect();
     let hoarded = videos_held(&lib, &videos).await?;
+    let downloads = latest_downloads(&state, session.owner()).await?;
     let coming: Vec<JsonValue> = entries
         .into_iter()
         .filter(|entry| entry.track_id.is_none())
         .filter_map(|entry| {
             let video = entry.ytm_video_id?;
-            (!hoarded.contains(&video))
-                .then(|| json!({ "video_id": video, "title": entry.title, "artist": entry.artist }))
+            (!hoarded.contains(&video)).then(|| {
+                // How its download is doing, when there is one.
+                let job = downloads.get(&video).map(|job| {
+                    json!({
+                        "state": crate::jobs::state_name(job.state),
+                        "error": job.error,
+                    })
+                });
+                json!({ "video_id": video, "title": entry.title, "artist": entry.artist, "job": job })
+            })
         })
         .collect();
     Ok(Json(json!({

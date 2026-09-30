@@ -37,12 +37,15 @@ const stubRect = (el: HTMLElement, top: number, height = 40) => {
 }
 
 const rowIds = (container: Element) =>
-  Array.from(container.querySelectorAll<HTMLElement>('[draggable="true"]')).map(el => el.textContent?.trim() ?? '')
+  Array.from(container.querySelectorAll<HTMLElement>('[draggable="true"] > .flex-1')).map(
+    el => el.textContent?.trim() ?? '',
+  )
 
 describe('ReorderBlocksModal', () => {
   const h = createHarness({
     beforeEach: () => {
       preferenceStore.temporary.home_blocks_order = []
+      preferenceStore.temporary.home_blocks_hidden = []
     },
   })
 
@@ -121,6 +124,17 @@ describe('ReorderBlocksModal', () => {
     await nextTick()
 
     expect(updateSpy).not.toHaveBeenCalled()
+  })
+
+  it('hides a block when it is unticked, and shows it again', async () => {
+    h.render(Component, { props: { blocks } })
+
+    await h.user.click(screen.getByRole('checkbox', { name: 'Show Top Albums' }))
+    expect(preferenceStore.home_blocks_hidden).toEqual(['most-played-albums'])
+    expect(screen.getByRole<HTMLInputElement>('checkbox', { name: 'Show Top Albums' }).checked).toBe(false)
+
+    await h.user.click(screen.getByRole('checkbox', { name: 'Show Top Albums' }))
+    expect(preferenceStore.home_blocks_hidden).toEqual([])
   })
 
   it('emits close when the Close button is clicked', async () => {

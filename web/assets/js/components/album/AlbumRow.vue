@@ -30,15 +30,12 @@
       <FavoriteButton :favorite="album.favorite" @toggle="emit('toggle-favorite', album)" />
     </span>
     <span class="extra">
-      <button class="text-k-fg-50 hover:text-k-fg p-1" title="More actions" @click="onContextMenu">
-        <Icon :icon="faEllipsis" />
-      </button>
+      <M3IconButton icon="more_vert" label="More actions" @click="onContextMenu" />
     </span>
   </article>
 </template>
 
 <script lang="ts" setup>
-import { faEllipsis } from '@fortawesome/free-solid-svg-icons'
 import { artistStore } from '@/stores/artistStore'
 import { useDraggable } from '@/composables/useDragAndDrop'
 import { useRouter } from '@/composables/useRouter'
@@ -48,6 +45,7 @@ import { albumTableColumnConfig } from '@/config/tables'
 import { secondsToHis } from '@/utils/formatters'
 import { defineAsyncComponent } from '@/utils/helpers'
 
+import M3IconButton from '@/components/m3/M3IconButton.vue'
 import StarRating from '@/components/ui/StarRating.vue'
 import FavoriteButton from '@/components/ui/FavoriteButton.vue'
 import AlbumOrArtistThumbnail from '@/components/ui/album-artist/AlbumOrArtistThumbnail.vue'

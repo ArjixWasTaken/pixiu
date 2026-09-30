@@ -11,6 +11,8 @@ export interface ManagedAccount extends Account {
   /** What deleting the account frees: files no other library plays. */
   exclusive_bytes: number
   youtube_music: 'none' | 'valid' | 'degraded' | 'expired'
+  /** Whether an account at the single sign-on provider is linked. */
+  sso?: boolean
 }
 
 export interface StoreUsage {

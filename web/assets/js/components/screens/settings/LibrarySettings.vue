@@ -1,5 +1,5 @@
 <template>
-  <div v-if="settings" class="flex flex-col gap-10 md:w-2/3">
+  <div v-if="settings" class="flex flex-col gap-6">
     <MusicBrainzSettingGroup :unlooked="settings.albums_not_looked_up" @changed="fetchSettings" />
   </div>
 </template>

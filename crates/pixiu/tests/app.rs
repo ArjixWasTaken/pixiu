@@ -8,8 +8,8 @@ use futures_util::StreamExt;
 use md5::Digest;
 use pixiu_core::{Config, SecretBox};
 use pixiu_db::{
-    Album, Artist, ClaimKind, Db, Playlist, PlaylistEntry, Track, TrackClaim, TrackOrigin, Watch,
-    WatchKind, now, toasty,
+    Album, Artist, ClaimKind, Db, Job, JobKind, JobState, Playlist, PlaylistEntry, Track,
+    TrackClaim, TrackOrigin, Watch, WatchKind, now, toasty,
 };
 use reqwest::{StatusCode, header};
 use serde_json::{Value, json};
@@ -411,6 +411,21 @@ async fn songs_are_excluded_from_watched_playlists() {
             .await
             .unwrap();
         }
+        // The coming song's download failed.
+        toasty::create!(Job {
+            user_id: 1_u64,
+            kind: JobKind::DownloadTrack,
+            payload: json!({ "video_id": "vidB" }).to_string(),
+            title: "Somebody — Coming Song",
+            state: JobState::Failed,
+            progress: 0_u8,
+            attempts: 3_u32,
+            error: Some("This video is unavailable".to_owned()),
+            created_at: now(),
+        })
+        .exec(db)
+        .await
+        .unwrap();
         *seeded.lock().unwrap() = (watch.id, playlist.id, track.id);
     })
     .await;
@@ -421,6 +436,10 @@ async fn songs_are_excluded_from_watched_playlists() {
         .await;
     assert_eq!(mirror["watch"]["name"], "Road trip");
     assert_eq!(mirror["coming"][0]["title"], "Coming Song");
+    assert_eq!(
+        mirror["coming"][0]["job"],
+        json!({ "state": "failed", "error": "This video is unavailable" })
+    );
     assert_eq!(mirror["excluded"], json!([]));
 
     // The song sheet offers to exclude it from the watch that keeps it.

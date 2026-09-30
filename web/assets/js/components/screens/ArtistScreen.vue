@@ -19,7 +19,7 @@
         <template #controls>
           <SongListControls
             v-if="songs.length"
-            :config
+            :config="songsControls"
             @filter="applyFilter"
             @play-all="playAll"
             @play-selected="playSelected"
@@ -128,6 +128,9 @@ const { openContextMenu } = useContextMenu()
 const { get: lsGet, set: lsSet } = useLocalStorage()
 
 const activeTab = ref<Tab>('songs')
+
+// Filtering lists songs, so only the Songs tab offers it.
+const songsControls = computed(() => (activeTab.value === 'songs' ? config : { ...config, filter: false }))
 const artist = ref<Artist>()
 const songs = ref<Song[]>([])
 const loading = ref(false)

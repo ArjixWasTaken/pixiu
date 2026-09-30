@@ -19,12 +19,19 @@ import ThemeList from '@/components/profile-preferences/theme/ThemeList.vue'
 const themes = toRef(themeStore.state, 'themes')
 
 const modes = [
+  { id: 'system', label: 'System', icon: 'contrast' },
   { id: 'dark', label: 'Dark', icon: 'dark_mode' },
   { id: 'light', label: 'Light', icon: 'light_mode' },
 ]
 
 const mode = computed({
-  get: () => ((preferenceStore.state.dark_mode ?? true) ? 'dark' : 'light'),
-  set: value => themeStore.setDarkMode(value === 'dark'),
+  get: () => {
+    const dark = preferenceStore.state.dark_mode
+    if (dark === null) {
+      return 'system'
+    }
+    return (dark ?? true) ? 'dark' : 'light'
+  },
+  set: value => themeStore.setDarkMode(value === 'system' ? null : value === 'dark'),
 })
 </script>

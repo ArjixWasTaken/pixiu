@@ -6,9 +6,12 @@
 
     <main class="body">
       <span v-if="layout === 'expanded' && label" class="m3-label-large overline-text">{{ label }}</span>
-      <h1 :class="titleClass" class="name">
-        <slot />
-      </h1>
+      <div class="title-row">
+        <h1 :class="titleClass" class="name">
+          <slot />
+        </h1>
+        <slot name="trailing" />
+      </div>
       <p v-if="$slots.description && layout === 'expanded'" class="description m3-body-large">
         <slot name="description" />
       </p>
@@ -89,7 +92,7 @@ const titleClass = computed(() => {
       gap: 12px 16px;
     }
 
-    .name {
+    .title-row {
       flex: 1;
       min-width: 200px;
     }
@@ -121,7 +124,6 @@ const titleClass = computed(() => {
       padding: 4px 16px 12px;
 
       .name {
-        min-width: 100%;
         white-space: normal;
       }
     }
@@ -166,7 +168,17 @@ const titleClass = computed(() => {
   color: var(--schemes-primary);
 }
 
+.title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
 .name {
+  /* Its own width, so anything trailing sits right after it. */
+  flex: 0 1 auto;
+  min-width: 0;
   margin: 0;
   color: var(--schemes-on-surface);
   white-space: nowrap;

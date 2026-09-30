@@ -18,7 +18,7 @@
       </ScreenHeader>
     </template>
 
-    <p class="m3-body-large text-(--schemes-on-surface-variant) pt-1 mb-3 max-w-[64ch]">
+    <p v-if="orphans.length" class="m3-body-large text-(--schemes-on-surface-variant) pt-1 mb-3 max-w-[64ch]">
       Nothing keeps these any more: they left a watched playlist, were excluded, or their watch was removed. píxiū never
       deletes music on its own. Keep them for good, or delete them from disk.
     </p>

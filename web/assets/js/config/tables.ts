@@ -1,7 +1,7 @@
 export const albumTableColumnConfig = {
   storageKey: 'album-table-columns',
   validColumns: ['name', 'artist', 'time', 'year', 'rating', 'favorite'] as const,
-  defaultColumns: ['name', 'artist', 'rating', 'favorite'] as const,
+  defaultColumns: ['name', 'artist', 'year', 'rating', 'favorite'] as const,
   alwaysVisible: ['name'] as const,
 } satisfies {
   storageKey: string

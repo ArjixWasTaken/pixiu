@@ -151,6 +151,8 @@ interface Artist {
   is_external: boolean
   favorite: boolean
   rating: number
+  /** How many albums of theirs the library has, when the list says. */
+  album_count?: number
   permissions: {
     edit: boolean
   }
@@ -220,6 +222,8 @@ interface Song extends BasePlayable {
   file_size?: number | null
   basename?: string
   deleted?: boolean
+  /** When the user last played it. */
+  played_at?: string | null
   collaboration?: {
     user: PlaylistCollaborator
     added_at: string | null
@@ -440,7 +444,8 @@ interface UserPreferences extends Record<string, any> {
   show_album_art_overlay: boolean
   lyrics_zoom_level: number | null
   theme?: Theme['id'] | null
-  dark_mode?: boolean
+  /** `null`: follow the system's light or dark mode. */
+  dark_mode?: boolean | null
   visualizer?: Visualizer['id'] | null
   active_extra_panel_tab: SideSheetTab | null
   make_uploads_public: boolean
@@ -450,6 +455,10 @@ interface UserPreferences extends Record<string, any> {
   lastfm_session_key?: string
   listenbrainz_token?: string
   home_blocks_order: string[]
+  /** Home blocks switched off. */
+  home_blocks_hidden: string[]
+  /** Off: audio plays past the equalizer, its settings kept for later. */
+  equalizer_enabled: boolean
 }
 
 type Ability = 'manage settings' | 'manage users' | 'manage songs' | 'manage podcasts' | 'manage radio stations'

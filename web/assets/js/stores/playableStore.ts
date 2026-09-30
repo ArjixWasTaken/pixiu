@@ -159,6 +159,10 @@ export const playableStore = {
     await subsonic.scrobble(playable.id, true, playable.play_start_time ? playable.play_start_time * 1000 : undefined)
 
     playable.play_count++
+
+    if (isSong(playable)) {
+      playable.played_at = new Date().toISOString()
+    }
   },
 
   // Koel scrobbles to Last.fm here; píxiū counted the play in registerPlay.

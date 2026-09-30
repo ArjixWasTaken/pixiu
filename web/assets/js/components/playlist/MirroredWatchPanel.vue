@@ -33,8 +33,11 @@
         v-for="song in mirror.coming"
         :key="song.video_id"
         :headline="song.title ?? song.video_id"
-        :supporting="song.artist ?? undefined"
+        :supporting="[song.artist, standing(song.job)].filter(Boolean).join(' · ')"
       />
+      <li class="px-4 pt-2 m3-body-medium list-none">
+        <a :href="url('jobs')" class="text-(--schemes-primary)">See the downloads on Jobs</a>
+      </li>
     </M3List>
 
     <M3List v-if="shown === 'excluded'" class="py-0!">
@@ -56,6 +59,7 @@
 import { ref } from 'vue'
 import type { ExcludedSong, PlaylistWatch } from '@/services/huntingService'
 import { pluralize, timeAgo } from '@/utils/formatters'
+import { useRouter } from '@/composables/useRouter'
 
 import M3Button from '@/components/m3/M3Button.vue'
 import M3Card from '@/components/m3/M3Card.vue'
@@ -65,6 +69,28 @@ import M3ListItem from '@/components/m3/M3ListItem.vue'
 
 defineProps<{ mirror: PlaylistWatch }>()
 const emit = defineEmits<{ (e: 'include', song: ExcludedSong): void }>()
+
+const { url } = useRouter()
+
+type Coming = PlaylistWatch['coming'][number]
+
+/** How a coming song's download is doing, for people. */
+const standing = (job: Coming['job']) => {
+  switch (job?.state) {
+    case undefined:
+      return 'waiting for the next sync'
+    case 'queued':
+    case 'paused':
+      return 'waiting to download'
+    case 'running':
+      return 'downloading'
+    case 'failed':
+      return `failed: ${job.error ?? 'unknown error'}`
+    case 'done':
+      // Downloaded, yet not in the library: it matched a song you have.
+      return 'downloaded; waiting for the next sync'
+  }
+}
 
 const shown = ref<'coming' | 'excluded' | null>(null)
 const toggle = (section: 'coming' | 'excluded') => (shown.value = shown.value === section ? null : section)

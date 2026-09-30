@@ -2,7 +2,10 @@
 //! take up, making accounts, roles, turning accounts off, temporary
 //! passwords, and deleting an account with its library.
 
-use std::{collections::HashMap, time::Duration};
+use std::{
+    collections::{HashMap, HashSet},
+    time::Duration,
+};
 
 use axum::{
     Json,
@@ -11,7 +14,7 @@ use axum::{
 };
 use jiff::Timestamp;
 use pixiu_accounts::{NewUser, links, registration, users};
-use pixiu_db::{ApiKey, JobState, Role, User, UserStatus};
+use pixiu_db::{ApiKey, JobState, Role, User, UserIdentity, UserStatus};
 use serde::Deserialize;
 use serde_json::{Value as JsonValue, json};
 
@@ -46,6 +49,12 @@ pub(crate) async fn list(
     let mut accounts = User::all().exec(&mut db).await?;
     accounts.sort_by_key(|user| user.id);
     let usage = users::usage(&mut db).await?;
+    let linked: HashSet<u64> = UserIdentity::all()
+        .exec(&mut db)
+        .await?
+        .iter()
+        .map(|identity| identity.user_id)
+        .collect();
     let mut last_seen: HashMap<u64, Timestamp> = HashMap::new();
     for key in ApiKey::all().exec(&mut db).await? {
         if let Some(used) = key.last_used_at {
@@ -64,6 +73,7 @@ pub(crate) async fn list(
                 row["bytes"] = json!(usage.bytes);
                 row["exclusive_bytes"] = json!(usage.exclusive_bytes);
                 row["youtube_music"] = json!(state_name(state.wardens.health(user.id).state));
+                row["sso"] = json!(linked.contains(&user.id));
                 row
             })
             .collect::<Vec<_>>()

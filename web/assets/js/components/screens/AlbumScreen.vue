@@ -23,7 +23,7 @@
         <template #controls>
           <SongListControls
             v-if="songs.length"
-            :config
+            :config="songsControls"
             @filter="applyFilter"
             @play-all="playAll"
             @play-selected="playSelected"
@@ -122,6 +122,9 @@ const { useLastfm, useMusicBrainz } = useThirdPartyServices()
 const { openContextMenu } = useContextMenu()
 
 const activeTab = ref<Tab>('songs')
+
+// Filtering lists songs, so only the Songs tab offers it.
+const songsControls = computed(() => (activeTab.value === 'songs' ? config : { ...config, filter: false }))
 const album = ref<Album | undefined>()
 const songs = ref<Song[]>([])
 const loading = ref(false)

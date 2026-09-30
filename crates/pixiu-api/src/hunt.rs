@@ -1,6 +1,6 @@
 //! Search YouTube Music and grab what the signed-in user's library lacks.
 
-use std::collections::HashSet;
+use std::collections::HashMap;
 
 use axum::{
     Json,
@@ -10,6 +10,7 @@ use axum::{
 use pixiu_db::Library;
 use pixiu_hunt::{AlbumKind, RemoteAlbum, RemoteTrack, SearchResults, image_url_at};
 use pixiu_jobs::NewJob;
+use pixiu_subsonic::ids;
 use serde::{Deserialize, Serialize};
 
 use crate::{ApiError, ApiResult, ApiState, Session};
@@ -41,6 +42,8 @@ pub(crate) struct TrackResult {
     cover: Option<String>,
     is_video: bool,
     standing: Standing,
+    /// The album of the library's copy, when the library holds it.
+    library_album: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -53,6 +56,8 @@ pub(crate) struct AlbumResult {
     kind: &'static str,
     cover: Option<String>,
     standing: Standing,
+    /// The library's copy, when the library holds it.
+    library_album: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -70,11 +75,12 @@ fn kind_label(kind: AlbumKind) -> &'static str {
     }
 }
 
-/// The video and browse ids of the results that the library holds.
+/// The results the library holds: video ids and browse ids, with the album
+/// holding each (as a Subsonic id).
 async fn hoarded(
     lib: &Library,
     results: &SearchResults,
-) -> ApiResult<(HashSet<String>, HashSet<String>)> {
+) -> ApiResult<(HashMap<String, String>, HashMap<String, String>)> {
     let videos: Vec<String> = results
         .tracks
         .iter()
@@ -89,13 +95,13 @@ async fn hoarded(
         .tracks_of_videos(&videos)
         .await?
         .into_iter()
-        .filter_map(|track| track.ytm_video_id)
+        .filter_map(|track| Some((track.ytm_video_id?, ids::album(track.album_id))))
         .collect();
     let albums = lib
         .albums_of_browse_ids(&browses)
         .await?
         .into_iter()
-        .filter_map(|album| album.ytm_browse_id)
+        .filter_map(|album| Some((album.ytm_browse_id?, ids::album(album.id))))
         .collect();
     Ok((tracks, albums))
 }
@@ -128,7 +134,7 @@ pub(crate) async fn search(
     let pending = pixiu_jobs::pending(&mut state.db.clone(), session.owner()).await?;
 
     let track = |track: &RemoteTrack| TrackResult {
-        standing: if hoarded_tracks.contains(&track.id) {
+        standing: if hoarded_tracks.contains_key(&track.id) {
             Standing::Hoarded
         } else if pending.tracks.contains(&track.id) {
             Standing::Pending
@@ -142,9 +148,10 @@ pub(crate) async fn search(
         length: track.duration_secs,
         cover: cover(track.cover_url.as_deref()),
         is_video: track.is_video,
+        library_album: hoarded_tracks.get(&track.id).cloned(),
     };
     let album = |album: &RemoteAlbum| AlbumResult {
-        standing: if hoarded_albums.contains(&album.id) {
+        standing: if hoarded_albums.contains_key(&album.id) {
             Standing::Hoarded
         } else if pending.has_album(&album.id) {
             Standing::Pending
@@ -157,6 +164,7 @@ pub(crate) async fn search(
         year: album.year,
         kind: kind_label(album.kind),
         cover: cover(album.cover_url.as_deref()),
+        library_album: hoarded_albums.get(&album.id).cloned(),
     };
     Ok(Json(Results {
         tracks: results.tracks.iter().map(track).collect(),

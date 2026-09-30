@@ -28,7 +28,7 @@ pub(crate) fn kind_name(kind: JobKind) -> &'static str {
     }
 }
 
-fn state_name(state: JobState) -> &'static str {
+pub(crate) fn state_name(state: JobState) -> &'static str {
     match state {
         JobState::Queued => "queued",
         JobState::Running => "running",

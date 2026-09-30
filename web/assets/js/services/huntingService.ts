@@ -16,6 +16,8 @@ export interface HuntTrack {
   cover: string | null
   is_video: boolean
   standing: Standing
+  /** The album holding the library's copy. */
+  library_album?: string | null
 }
 
 export interface HuntAlbum {
@@ -26,6 +28,8 @@ export interface HuntAlbum {
   kind: string
   cover: string | null
   standing: Standing
+  /** The library's copy. */
+  library_album?: string | null
 }
 
 export type WatchKind = 'playlist' | 'liked_music' | 'artist'
@@ -60,7 +64,13 @@ export interface ExcludedSong {
 
 export interface PlaylistWatch {
   watch: { id: number; kind: WatchKind; name: string; link: string; last_synced_at: string | null }
-  coming: Array<{ video_id: string; title: string | null; artist: string | null }>
+  coming: Array<{
+    video_id: string
+    title: string | null
+    artist: string | null
+    /** Its download, when there is one. */
+    job: { state: 'queued' | 'running' | 'paused' | 'failed' | 'done'; error: string | null } | null
+  }>
   excluded: ExcludedSong[]
 }
 

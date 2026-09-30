@@ -2,14 +2,6 @@
   <div class="flex flex-col gap-6" data-testid="users-settings">
     <PendingRegistrations v-if="requests.length" :requests @approve="approve" @deny="deny" />
 
-    <SettingGroup>
-      <template #title>Add an account</template>
-      <template #subtitle>
-        Everyone has a library of their own. A song two libraries both hold is stored once.
-      </template>
-      <AddAccountForm @created="refresh" />
-    </SettingGroup>
-
     <section class="flex flex-col gap-3">
       <header class="flex items-baseline justify-between gap-4">
         <h3 class="m3-title-large">Accounts</h3>
@@ -32,6 +24,17 @@
         @toggle-status="toggleStatus(account)"
       />
     </section>
+
+    <SettingGroup v-if="adding">
+      <template #title>Add an account</template>
+      <template #subtitle>
+        Everyone has a library of their own. A song two libraries both hold is stored once.
+      </template>
+      <AddAccountForm @cancel="adding = false" @created="onCreated" />
+    </SettingGroup>
+    <M3Button v-else class="self-start" icon="person_add" variant="tonal" @click="adding = true">
+      Add an account
+    </M3Button>
   </div>
 </template>
 
@@ -51,6 +54,7 @@ import AccountRow from '@/components/screens/settings/admin/AccountRow.vue'
 import AddAccountForm from '@/components/screens/settings/admin/AddAccountForm.vue'
 import PendingRegistrations from '@/components/screens/settings/admin/PendingRegistrations.vue'
 import SettingGroup from '@/components/screens/settings/SettingGroup.vue'
+import M3Button from '@/components/m3/M3Button.vue'
 
 const { currentUser } = useAuthorization()
 const { showConfirmDialog } = useDialogBox()
@@ -60,10 +64,16 @@ const { handleHttpError } = useErrorHandler('dialog')
 const accounts = ref<ManagedAccount[]>([])
 const storage = ref<StoreUsage | null>(null)
 const mailReady = ref(false)
+const adding = ref(false)
 
 /** Those asking for an account, and everyone else. */
 const requests = computed(() => accounts.value.filter(account => account.status === 'pending'))
 const members = computed(() => accounts.value.filter(account => account.status !== 'pending'))
+
+const onCreated = async () => {
+  adding.value = false
+  await refresh()
+}
 
 const refresh = async () => {
   try {

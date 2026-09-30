@@ -3,13 +3,12 @@
     <template #header>
       <ScreenHeader layout="collapsed">
         {{ greeting }}
-        <template #controls>
+        <template #trailing>
           <M3IconButton
             v-if="!libraryEmpty"
             data-testid="reorder-home-blocks-btn"
-            icon="swap_vert"
-            label="Reorder home blocks"
-            variant="tonal"
+            icon="tune"
+            label="Choose and order home blocks"
             @click="openReorderModal"
           />
         </template>
@@ -25,13 +24,7 @@
     </ScreenEmptyState>
 
     <div v-else class="home-sections flex flex-col gap-8 pt-2 w-full">
-      <component
-        v-for="block in orderedBlocks"
-        :key="block.id"
-        :is="block.component"
-        :loading
-        :data-testid="block.id"
-      />
+      <component v-for="block in shownBlocks" :key="block.id" :is="block.component" :loading :data-testid="block.id" />
       <BtnScrollToTop />
     </div>
   </ScreenBase>
@@ -125,6 +118,11 @@ const orderedBlocks = computed<Block[]>(() => {
 
   return [...blocks].sort((a, b) => positionOf(a.id) - positionOf(b.id))
 })
+
+/** The blocks shown: in order, less those switched off. */
+const shownBlocks = computed(() =>
+  orderedBlocks.value.filter(({ id }) => !(preferenceStore.home_blocks_hidden ?? []).includes(id)),
+)
 
 const openReorderModal = () =>
   openModal<'REORDER_HOME_BLOCKS'>(ReorderBlocksModal, {

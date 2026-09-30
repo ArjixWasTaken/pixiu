@@ -1,18 +1,21 @@
 <template>
   <div class="top-bar">
     <M3IconButton v-if="isMobile" icon="menu" label="Open navigation" @click="openDrawer" />
-    <SearchForm class="search">
+    <!-- Discover has its own search, of YouTube Music: one field is enough. -->
+    <SearchForm v-if="!onDiscover" class="search">
       <template v-if="isMobile" #trailing>
         <ProfileDropdown :size="30" />
       </template>
     </SearchForm>
     <span class="spacer" />
-    <ProfileDropdown v-if="!isMobile" />
+    <ProfileDropdown v-if="!isMobile || onDiscover" :size="isMobile ? 30 : 40" />
   </div>
 </template>
 
 <script lang="ts" setup>
+import { computed } from 'vue'
 import { eventBus } from '@/utils/eventBus'
+import { useRouter } from '@/composables/useRouter'
 import { useViewport } from '@/composables/useViewport'
 
 import M3IconButton from '@/components/m3/M3IconButton.vue'
@@ -20,6 +23,9 @@ import ProfileDropdown from '@/components/layout/main-wrapper/side-sheet/Profile
 import SearchForm from '@/components/ui/SearchForm.vue'
 
 const { isMobile } = useViewport()
+const { isCurrentScreen } = useRouter()
+
+const onDiscover = computed(() => isCurrentScreen('Hunt'))
 
 const openDrawer = () => eventBus.emit('TOGGLE_SIDEBAR')
 </script>
