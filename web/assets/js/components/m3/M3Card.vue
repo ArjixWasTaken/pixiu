@@ -14,7 +14,6 @@ withDefaults(defineProps<{ variant?: 'filled' | 'elevated' | 'outlined'; interac
 
 <style scoped>
 .m3-card {
-  display: block;
   border-radius: 12px;
   color: var(--schemes-on-surface);
   text-align: start;

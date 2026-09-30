@@ -4,25 +4,26 @@
       <ScreenHeader layout="collapsed">
         Uploads
         <template #meta>
-          <span>{{ pluralize(batches, 'batch') }} to review</span>
+          <span>{{ batches.length === 1 ? '1 batch' : `${batches.length} batches` }} to review</span>
         </template>
       </ScreenHeader>
     </template>
 
     <div
       :class="{ droppable }"
-      class="flex flex-col gap-8"
+      class="flex flex-col gap-6 pt-1"
+      data-vue="UploadScreen"
       @dragenter.prevent="onDragEnter"
       @dragleave.prevent="onDragLeave"
       @drop.prevent="onDrop"
       @dragover.prevent
     >
       <label class="drop-prompt">
-        <Icon :icon="faUpload" size="2x" />
-        <span>{{ canDropFolders ? 'Drop files, folders or zip archives' : 'Drop files or zip archives' }}</span>
-        <span class="text-k-fg-50 text-sm"
-          >or click to choose. They wait here for review before joining your library.</span
-        >
+        <M3Icon :size="36" name="upload" />
+        <span class="m3-title-medium text-(--schemes-on-surface)">
+          {{ canDropFolders ? 'Drop files, folders or zip archives' : 'Drop files or zip archives' }}
+        </span>
+        <span class="m3-body-medium">Or click to choose. They wait here for review before joining your library.</span>
         <input
           :accept="acceptAttribute"
           class="sr-only"
@@ -33,7 +34,7 @@
         />
       </label>
 
-      <section v-if="files.length" class="flex flex-col gap-3">
+      <section v-if="files.length" class="flex flex-col gap-2">
         <UploadSummary />
         <ul class="flex flex-col gap-1.5 max-h-80 overflow-y-auto">
           <li v-for="file in files" :key="file.id" class="h-9">
@@ -41,8 +42,10 @@
           </li>
         </ul>
         <footer v-if="hasFailures" class="flex justify-end gap-2">
-          <Btn size="small" variant="success" @click.prevent="retryAll">Retry failed</Btn>
-          <Btn size="small" variant="destructive" @click.prevent="removeFailed">Remove failed</Btn>
+          <M3Button icon="refresh" variant="tonal" @click.prevent="retryAll">Retry failed</M3Button>
+          <M3Button class="text-(--schemes-error)!" variant="text" @click.prevent="removeFailed"
+            >Remove failed</M3Button
+          >
         </footer>
       </section>
 
@@ -61,7 +64,6 @@
 </template>
 
 <script lang="ts" setup>
-import { faUpload } from '@fortawesome/free-solid-svg-icons'
 import { computed, onBeforeUnmount, onMounted, ref, toRef } from 'vue'
 import { isDirectoryReadingSupported as canDropFolders } from '@/utils/supports'
 import { acceptedExtensions } from '@/utils/mediaHelper'
@@ -76,7 +78,8 @@ import { useDialogBox } from '@/composables/useDialogBox'
 import { useMessageToaster } from '@/composables/useMessageToaster'
 import { useErrorHandler } from '@/composables/useErrorHandler'
 
-import Btn from '@/components/ui/form/Btn.vue'
+import M3Button from '@/components/m3/M3Button.vue'
+import M3Icon from '@/components/m3/M3Icon.vue'
 import ScreenBase from '@/components/screens/ScreenBase.vue'
 import ScreenHeader from '@/components/ui/ScreenHeader.vue'
 import UploadItem from '@/components/ui/upload/UploadItem.vue'
@@ -181,11 +184,28 @@ onBeforeUnmount(() => eventBus.off('OFFERINGS_UPLOADED', changed))
 @reference '@css/app.pcss';
 
 .drop-prompt {
-  @apply flex flex-col items-center gap-2 p-10 rounded-3xl border-2 border-dashed border-k-fg-10 text-k-fg-70 cursor-pointer
-    hover:border-k-fg-50 hover:text-k-fg transition;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 40px 24px;
+  border: 2px dashed var(--schemes-outline-variant);
+  border-radius: 28px;
+  background: var(--schemes-surface-container-low);
+  color: var(--schemes-on-surface-variant);
+  text-align: center;
+  cursor: pointer;
+  transition:
+    border-color 150ms linear,
+    background-color 150ms linear;
+
+  &:hover {
+    border-color: var(--schemes-outline);
+  }
 }
 
 .droppable .drop-prompt {
-  @apply border-k-highlight bg-black/20 text-k-fg;
+  border-color: var(--schemes-primary);
+  background: var(--schemes-secondary-container);
 }
 </style>

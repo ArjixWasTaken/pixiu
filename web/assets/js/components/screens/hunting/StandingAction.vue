@@ -1,31 +1,29 @@
 <template>
-  <span v-if="standing === 'hoarded'" class="standing hoarded"> <Icon :icon="faCheck" /> In your library </span>
-  <span v-else-if="standing === 'pending'" class="standing pending"> <Icon :icon="faSpinner" spin /> On its way </span>
-  <Btn v-else size="small" @click.prevent="emit('grab')">Download</Btn>
+  <M3Chip v-if="standing === 'hoarded'" class="self-start" icon="check">In your library</M3Chip>
+  <span v-else-if="standing === 'pending'" class="pending m3-label-large">
+    <M3ProgressIndicator :size="20" variant="circular" />
+    On its way
+  </span>
+  <M3Button v-else class="self-start" icon="download" variant="tonal" @click.prevent="emit('grab')">Download</M3Button>
 </template>
 
 <script lang="ts" setup>
-import { faCheck, faSpinner } from '@fortawesome/free-solid-svg-icons'
 import type { Standing } from '@/services/huntingService'
 
-import Btn from '@/components/ui/form/Btn.vue'
+import M3Button from '@/components/m3/M3Button.vue'
+import M3Chip from '@/components/m3/M3Chip.vue'
+import M3ProgressIndicator from '@/components/m3/M3ProgressIndicator.vue'
 
 defineProps<{ standing: Standing }>()
 const emit = defineEmits<{ (e: 'grab'): void }>()
 </script>
 
-<style lang="postcss" scoped>
-@reference '@css/app.pcss';
-
-.standing {
-  @apply inline-flex items-center gap-2 text-sm;
-}
-
-.hoarded {
-  @apply text-k-success;
-}
-
+<style scoped>
 .pending {
-  @apply text-k-fg-70;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  color: var(--schemes-on-surface-variant);
 }
 </style>

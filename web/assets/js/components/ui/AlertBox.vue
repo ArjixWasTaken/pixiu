@@ -1,65 +1,51 @@
 <template>
-  <div
-    :class="`alert-box-${props.type}`"
-    class="alert-box flex items-center gap-4 border border-k-fg-10 mb-6 p-4 rounded-md text-k-fg"
-  >
-    <Icon v-if="props.type === 'info' || props.type === 'default'" :icon="faInfoCircle" />
-    <Icon v-if="props.type === 'danger'" :icon="faExclamationCircle" />
-    <Icon v-if="props.type === 'success'" :icon="faCheckCircle" />
-    <Icon v-if="props.type === 'warning'" :icon="faExclamationTriangle" />
-
-    <div class="flex-1">
+  <div :class="`alert-box-${props.type}`" class="alert-box">
+    <M3Icon :name="icon" fill />
+    <div class="flex-1 min-w-0">
       <slot />
     </div>
   </div>
 </template>
 
 <script lang="ts" setup>
-import {
-  faCheckCircle,
-  faExclamationCircle,
-  faExclamationTriangle,
-  faInfoCircle,
-} from '@fortawesome/free-solid-svg-icons'
+import { computed } from 'vue'
+
+import M3Icon from '@/components/m3/M3Icon.vue'
 
 const props = withDefaults(defineProps<{ type?: 'default' | 'info' | 'danger' | 'success' | 'warning' }>(), {
   type: 'default',
 })
+
+const icon = computed(
+  () => ({ default: 'info', info: 'info', danger: 'error', success: 'check_circle', warning: 'warning' })[props.type],
+)
 </script>
 
-<style lang="postcss" scoped>
-@reference '@css/app.pcss';
+<style scoped>
+/* A status banner: tonal containers by kind. */
 .alert-box {
-  &-info {
-    @apply border-k-primary;
-
-    > svg {
-      @apply text-k-primary;
-    }
-  }
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  border-radius: 16px;
+  background: var(--schemes-surface-container-high);
+  color: var(--schemes-on-surface);
 
   &-success {
-    @apply border-k-success;
-
-    > svg {
-      @apply text-k-success;
-    }
+    background: var(--schemes-secondary-container);
+    color: var(--schemes-on-secondary-container);
   }
 
   &-warning {
-    @apply border-k-warning;
-
-    > svg {
-      @apply text-k-warning;
-    }
+    background: var(--schemes-tertiary-container);
+    color: var(--schemes-on-tertiary-container);
   }
 
   &-danger {
-    @apply border-k-danger;
-
-    > svg {
-      @apply text-k-danger;
-    }
+    background: var(--schemes-error-container);
+    color: var(--schemes-on-error-container);
   }
 }
 </style>

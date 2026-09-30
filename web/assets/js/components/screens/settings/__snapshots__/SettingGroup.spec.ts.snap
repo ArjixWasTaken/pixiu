@@ -1,12 +1,12 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
 exports[`settingGroup.vue > renders slots 1`] = `
-<article class="flex flex-col gap-4">
-  <header>
-    <h3 class="text-lg font-semibold text-k-fg">Media Path</h3>
+<div data-v-5dc6e4c8="" data-v-f928cae7="" class="outlined m3-card setting-group">
+  <header data-v-f928cae7="">
+    <h3 data-v-f928cae7="" class="m3-title-large text-(--schemes-on-surface)">Media Path</h3>
     <!--v-if-->
   </header>
-  <div>Main content</div>
-  <footer>Save button</footer>
-</article>
+  <div data-v-f928cae7="" class="m3-body-medium">Main content</div>
+  <footer data-v-f928cae7="">Save button</footer>
+</div>
 `;

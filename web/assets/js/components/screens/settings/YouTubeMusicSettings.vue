@@ -1,7 +1,7 @@
 <template>
   <LoginBrowser v-if="signingIn" @cancel="signingIn = false" @done="onSignedIn" />
 
-  <div v-else-if="sources" class="flex flex-col gap-8 md:w-2/3">
+  <div v-else-if="sources" class="flex flex-col gap-6">
     <SettingGroup>
       <template #title>YouTube Music account</template>
       <template #subtitle>
@@ -9,34 +9,36 @@
       </template>
 
       <AlertBox :type="look.alert">
-        <strong>{{ look.title }}</strong>
-        <p class="text-sm">{{ look.text }}</p>
+        <p class="m3-title-small">{{ look.title }}</p>
+        <p class="m3-body-small">{{ look.text }}</p>
       </AlertBox>
 
-      <dl v-if="sources.health.state !== 'none'" class="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-1 text-sm">
-        <dt class="text-k-fg-70">Connected</dt>
+      <dl v-if="sources.health.state !== 'none'" class="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-1.5">
+        <dt class="text-(--schemes-on-surface-variant)">Connected</dt>
         <dd>{{ when(sources.health.connected_at) }}</dd>
-        <dt class="text-k-fg-70">Last checked</dt>
+        <dt class="text-(--schemes-on-surface-variant)">Last checked</dt>
         <dd>{{ when(sources.health.last_verified) }}</dd>
-        <dt class="text-k-fg-70">Last refreshed</dt>
+        <dt class="text-(--schemes-on-surface-variant)">Last refreshed</dt>
         <dd>{{ when(sources.health.last_refreshed) }}</dd>
         <template v-if="sources.health.expired_at">
-          <dt class="text-k-fg-70">Expired</dt>
+          <dt class="text-(--schemes-on-surface-variant)">Expired</dt>
           <dd>{{ when(sources.health.expired_at) }}</dd>
         </template>
         <template v-if="sources.health.last_error">
-          <dt class="text-k-fg-70">Last error</dt>
+          <dt class="text-(--schemes-on-surface-variant)">Last error</dt>
           <dd class="break-words">{{ sources.health.last_error }}</dd>
         </template>
       </dl>
 
       <template #footer>
         <div class="flex flex-wrap gap-2">
-          <Btn @click.prevent="signIn">{{ sources.health.state === 'none' ? 'Connect' : 'Log in again' }}</Btn>
+          <M3Button @click.prevent="signIn">{{
+            sources.health.state === 'none' ? 'Connect' : 'Log in again'
+          }}</M3Button>
           <template v-if="sources.health.state !== 'none'">
-            <Btn variant="ghost" @click.prevent="check">Check now</Btn>
-            <Btn variant="ghost" @click.prevent="refreshCookies">Refresh</Btn>
-            <Btn variant="destructive" @click.prevent="disconnect">Disconnect</Btn>
+            <M3Button variant="outlined" @click.prevent="check">Check now</M3Button>
+            <M3Button variant="text" @click.prevent="refreshCookies">Refresh</M3Button>
+            <M3Button class="text-(--schemes-error)!" variant="text" @click.prevent="disconnect">Disconnect</M3Button>
           </template>
         </div>
       </template>
@@ -49,7 +51,9 @@
           <span :class="{ problem: event.problem }" class="dot" />
           <div>
             <p>{{ event.message }}</p>
-            <p :title="event.created_at" class="text-xs text-k-fg-50">{{ timeAgo(event.created_at) }}</p>
+            <p :title="event.created_at" class="m3-body-small text-(--schemes-on-surface-variant)">
+              {{ timeAgo(event.created_at) }}
+            </p>
           </div>
         </li>
       </ul>
@@ -68,7 +72,7 @@ import { useMessageToaster } from '@/composables/useMessageToaster'
 import { useErrorHandler } from '@/composables/useErrorHandler'
 
 import AlertBox from '@/components/ui/AlertBox.vue'
-import Btn from '@/components/ui/form/Btn.vue'
+import M3Button from '@/components/m3/M3Button.vue'
 import SettingGroup from '@/components/screens/settings/SettingGroup.vue'
 import LoginBrowser from '@/components/screens/settings/LoginBrowser.vue'
 
@@ -163,14 +167,17 @@ const onSignedIn = async () => {
 onMounted(fetchSources)
 </script>
 
-<style lang="postcss" scoped>
-@reference '@css/app.pcss';
-
+<style scoped>
 .dot {
-  @apply mt-1.5 size-2.5 shrink-0 rounded-full bg-k-fg-30;
+  width: 10px;
+  height: 10px;
+  margin-top: 6px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--schemes-outline);
 
   &.problem {
-    @apply bg-k-danger;
+    background: var(--schemes-error);
   }
 }
 </style>

@@ -4,57 +4,63 @@
       <ScreenHeader layout="collapsed">Discover</ScreenHeader>
     </template>
 
-    <form class="flex gap-2 max-w-[720px] mb-8" @submit.prevent="handleSubmit">
-      <TextInput
-        v-model="data.q"
-        v-koel-focus
-        class="flex-1"
-        name="q"
-        placeholder="Artist, album or song on YouTube Music"
-        required
-        type="search"
-      />
-      <Btn :disabled="searching" type="submit">Search</Btn>
-    </form>
+    <div class="flex flex-col gap-6 pt-1" data-vue="HuntScreen">
+      <form class="flex gap-3 items-center max-w-[720px]" @submit.prevent="handleSubmit">
+        <M3TextField
+          v-model="data.q"
+          autofocus
+          class="flex-1"
+          label="Search YouTube Music"
+          leading-icon="search"
+          name="q"
+          placeholder="Artist, album or song"
+          required
+          type="search"
+        />
+        <M3Button :disabled="searching" type="submit">Search</M3Button>
+      </form>
 
-    <p v-if="searching" class="text-k-fg-70">Searching YouTube Music…</p>
+      <div v-if="searching" class="flex items-center gap-3 text-(--schemes-on-surface-variant)">
+        <M3ProgressIndicator :size="24" variant="circular" />
+        <span class="m3-body-large">Searching YouTube Music…</span>
+      </div>
 
-    <template v-else-if="results">
-      <ScreenEmptyState v-if="!results.albums.length && !results.tracks.length">
-        <template #icon>
-          <Icon :icon="faSearch" />
-        </template>
-        Nothing found for “{{ lastQuery }}”
-        <span class="secondary block">Try the artist’s name alone, or check the spelling.</span>
-      </ScreenEmptyState>
+      <template v-else-if="results">
+        <ScreenEmptyState v-if="!results.albums.length && !results.tracks.length">
+          <template #icon>
+            <M3Icon :size="64" name="search_off" />
+          </template>
+          Nothing found for “{{ lastQuery }}”
+          <span class="secondary block">Try the artist’s name alone, or check the spelling.</span>
+        </ScreenEmptyState>
 
-      <section v-if="results.albums.length" class="mb-10">
-        <h2 class="text-xl mb-4">Albums</h2>
-        <div class="grid gap-5 grid-cols-[repeat(auto-fill,minmax(180px,1fr))]">
-          <HuntAlbumCard v-for="album in results.albums" :key="album.id" :album @grab="grabAlbum(album)" />
-        </div>
-      </section>
+        <section v-if="results.albums.length">
+          <h2 class="m3-title-large mb-3">Albums</h2>
+          <div class="grid gap-4 grid-cols-[repeat(auto-fill,minmax(170px,1fr))]">
+            <HuntAlbumCard v-for="album in results.albums" :key="album.id" :album @grab="grabAlbum(album)" />
+          </div>
+        </section>
 
-      <section v-if="results.tracks.length">
-        <h2 class="text-xl mb-4">Songs</h2>
-        <ul class="divide-y divide-k-fg-5">
-          <HuntTrackRow v-for="track in results.tracks" :key="track.id" :track @grab="grabTrack(track)" />
-        </ul>
-      </section>
-    </template>
-
-    <ScreenEmptyState v-else>
-      <template #icon>
-        <Icon :icon="faSearch" />
+        <section v-if="results.tracks.length">
+          <h2 class="m3-title-large mb-1">Songs</h2>
+          <M3List class="-mx-3 py-0!">
+            <HuntTrackRow v-for="track in results.tracks" :key="track.id" :track @grab="grabTrack(track)" />
+          </M3List>
+        </section>
       </template>
-      Find music on YouTube Music
-      <span class="secondary block">Downloads show up on Jobs, then in your library.</span>
-    </ScreenEmptyState>
+
+      <ScreenEmptyState v-else>
+        <template #icon>
+          <M3Icon :size="64" name="travel_explore" />
+        </template>
+        Find music on YouTube Music
+        <span class="secondary block">Downloads show up on Jobs, then in your library.</span>
+      </ScreenEmptyState>
+    </div>
   </ScreenBase>
 </template>
 
 <script lang="ts" setup>
-import { faSearch } from '@fortawesome/free-solid-svg-icons'
 import { ref } from 'vue'
 import { huntingService } from '@/services/huntingService'
 import type { HuntAlbum, HuntTrack } from '@/services/huntingService'
@@ -62,8 +68,11 @@ import { useForm } from '@/composables/useForm'
 import { useMessageToaster } from '@/composables/useMessageToaster'
 import { useErrorHandler } from '@/composables/useErrorHandler'
 
-import Btn from '@/components/ui/form/Btn.vue'
-import TextInput from '@/components/ui/form/TextInput.vue'
+import M3Button from '@/components/m3/M3Button.vue'
+import M3Icon from '@/components/m3/M3Icon.vue'
+import M3List from '@/components/m3/M3List.vue'
+import M3ProgressIndicator from '@/components/m3/M3ProgressIndicator.vue'
+import M3TextField from '@/components/m3/M3TextField.vue'
 import ScreenBase from '@/components/screens/ScreenBase.vue'
 import ScreenHeader from '@/components/ui/ScreenHeader.vue'
 import ScreenEmptyState from '@/components/ui/ScreenEmptyState.vue'

@@ -4,29 +4,28 @@
       <ScreenHeader layout="collapsed">Watches</ScreenHeader>
     </template>
 
-    <p class="text-k-fg-70 mb-4 max-w-[64ch]">
+    <p class="m3-body-large text-(--schemes-on-surface-variant) pt-1 mb-5 max-w-[64ch]">
       píxiū downloads what watched playlists, your liked music and artists’ new releases add, and mirrors watched
       playlists as read-only playlists.
     </p>
 
-    <AddWatchForm class="mb-8" @added="fetchWatches" />
+    <AddWatchForm class="mb-5" @added="fetchWatches" />
 
     <ScreenEmptyState v-if="loaded && !watches.length">
       <template #icon>
-        <Icon :icon="faEye" />
+        <M3Icon :size="64" name="visibility" />
       </template>
       Nothing watched yet
       <span class="secondary block">Paste a playlist or artist link from music.youtube.com above.</span>
     </ScreenEmptyState>
 
-    <ul v-else class="flex flex-col gap-3">
+    <ul v-else class="flex flex-col gap-3" data-vue="WatchesScreen">
       <WatchRow v-for="watch in watches" :key="watch.id" :watch @remove="remove(watch)" @sync="sync(watch)" />
     </ul>
   </ScreenBase>
 </template>
 
 <script lang="ts" setup>
-import { faEye } from '@fortawesome/free-solid-svg-icons'
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { huntingService } from '@/services/huntingService'
 import type { Watch } from '@/services/huntingService'
@@ -35,6 +34,7 @@ import { useDialogBox } from '@/composables/useDialogBox'
 import { useMessageToaster } from '@/composables/useMessageToaster'
 import { useErrorHandler } from '@/composables/useErrorHandler'
 
+import M3Icon from '@/components/m3/M3Icon.vue'
 import ScreenBase from '@/components/screens/ScreenBase.vue'
 import ScreenHeader from '@/components/ui/ScreenHeader.vue'
 import ScreenEmptyState from '@/components/ui/ScreenEmptyState.vue'

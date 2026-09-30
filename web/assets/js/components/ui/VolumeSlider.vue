@@ -42,7 +42,8 @@ const volume = computed({
   flex-shrink: 0;
 }
 
-.slider {
-  flex: 0 0 112px;
+.volume > .slider {
+  flex: 0 0 auto;
+  width: 112px;
 }
 </style>

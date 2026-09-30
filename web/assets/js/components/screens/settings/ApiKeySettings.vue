@@ -1,5 +1,5 @@
 <template>
-  <div class="flex flex-col gap-8 md:w-2/3">
+  <div class="flex flex-col gap-6">
     <SettingGroup>
       <template #title>API keys</template>
       <template #subtitle>
@@ -7,15 +7,16 @@
         Each browser signed in to this player has a key named “Web session”.
       </template>
 
-      <form class="flex gap-2 mb-6" @submit.prevent="handleSubmit">
-        <TextInput
+      <form class="flex gap-3 items-center mb-4" @submit.prevent="handleSubmit">
+        <M3TextField
           v-model="data.name"
           class="flex-1"
+          label="What will use it?"
           name="name"
-          placeholder="What will use it, e.g. “Phone”"
+          placeholder="e.g. Phone"
           required
         />
-        <Btn type="submit">Create</Btn>
+        <M3Button type="submit">Create</M3Button>
       </form>
 
       <AlertBox v-if="created" type="success">
@@ -24,26 +25,29 @@
           >. Copy it now: píxiū shows it only this once.
         </p>
         <div class="flex items-center gap-2 mt-2">
-          <code class="flex-1 font-mono text-sm break-all">{{ created.key }}</code>
-          <Btn size="small" variant="ghost" @click.prevent="copy">Copy</Btn>
+          <code class="flex-1 font-mono text-[13px] break-all">{{ created.key }}</code>
+          <M3Button variant="text" @click.prevent="copy">Copy</M3Button>
         </div>
       </AlertBox>
 
-      <ul class="divide-y divide-k-fg-5">
-        <li v-for="key in keys" :key="key.id" class="flex items-center gap-4 py-2">
-          <div class="flex-1 min-w-0">
-            <p class="truncate">
-              {{ key.name }}
-              <span v-if="key.current" class="text-xs text-k-fg-50 uppercase ml-1">This browser</span>
-            </p>
-            <p class="text-xs text-k-fg-50">
-              Created {{ timeAgo(key.created_at) }} ·
-              {{ key.last_used_at ? `used ${timeAgo(key.last_used_at)}` : 'never used' }}
-            </p>
-          </div>
-          <Btn v-if="!key.current" size="small" variant="destructive" @click.prevent="revoke(key)">Revoke</Btn>
-        </li>
-      </ul>
+      <M3List class="-mx-3 py-0!">
+        <M3ListItem
+          v-for="key in keys"
+          :key="key.id"
+          :supporting="`Created ${timeAgo(key.created_at)} · ${key.last_used_at ? `used ${timeAgo(key.last_used_at)}` : 'never used'}`"
+        >
+          <template #leading>
+            <M3Icon name="key" />
+          </template>
+          <template #headline>
+            {{ key.name }}
+            <span v-if="key.current" class="m3-label-small this-browser">This browser</span>
+          </template>
+          <template v-if="!key.current" #trailing>
+            <M3Button class="text-(--schemes-error)!" variant="text" @click.prevent="revoke(key)">Revoke</M3Button>
+          </template>
+        </M3ListItem>
+      </M3List>
     </SettingGroup>
   </div>
 </template>
@@ -59,8 +63,11 @@ import { useMessageToaster } from '@/composables/useMessageToaster'
 import { useErrorHandler } from '@/composables/useErrorHandler'
 
 import AlertBox from '@/components/ui/AlertBox.vue'
-import Btn from '@/components/ui/form/Btn.vue'
-import TextInput from '@/components/ui/form/TextInput.vue'
+import M3Button from '@/components/m3/M3Button.vue'
+import M3Icon from '@/components/m3/M3Icon.vue'
+import M3List from '@/components/m3/M3List.vue'
+import M3ListItem from '@/components/m3/M3ListItem.vue'
+import M3TextField from '@/components/m3/M3TextField.vue'
 import SettingGroup from '@/components/screens/settings/SettingGroup.vue'
 
 const { showConfirmDialog } = useDialogBox()
@@ -109,3 +116,13 @@ const revoke = async (key: ApiKeyInfo) => {
 
 onMounted(fetchKeys)
 </script>
+
+<style scoped>
+.this-browser {
+  margin-left: 6px;
+  padding: 2px 8px;
+  border-radius: 8px;
+  background: var(--schemes-secondary-container);
+  color: var(--schemes-on-secondary-container);
+}
+</style>

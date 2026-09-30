@@ -5,11 +5,11 @@
       píxiū looks every new album up on MusicBrainz, fixing its tags and finding its cover and lyrics.
     </template>
 
-    <p v-if="unlooked">{{ pluralize(unlooked, 'album') }} were never looked up.</p>
-    <p v-else class="text-k-fg-70">Every album has been looked up.</p>
+    <p v-if="unlooked" class="m3-body-large">{{ pluralize(unlooked, 'album') }} were never looked up.</p>
+    <p v-else class="m3-body-large text-(--schemes-on-surface-variant)">Every album has been looked up.</p>
 
     <template v-if="unlooked" #footer>
-      <Btn @click.prevent="lookUpAll">Look them up</Btn>
+      <M3Button variant="tonal" @click.prevent="lookUpAll">Look them up</M3Button>
     </template>
   </SettingGroup>
 </template>
@@ -20,7 +20,7 @@ import { pluralize } from '@/utils/formatters'
 import { useMessageToaster } from '@/composables/useMessageToaster'
 import { useErrorHandler } from '@/composables/useErrorHandler'
 
-import Btn from '@/components/ui/form/Btn.vue'
+import M3Button from '@/components/m3/M3Button.vue'
 import SettingGroup from '@/components/screens/settings/SettingGroup.vue'
 
 defineProps<{ unlooked: number }>()
