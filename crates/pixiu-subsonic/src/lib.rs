@@ -258,8 +258,8 @@ async fn dispatch(
     Ok(match name {
         "ping" => Payload::default().into(),
         "getLicense" => system::license().into(),
-        "getUser" => system::user(&user, params)?.into(),
-        "getUsers" => system::users(&user).into(),
+        "getUser" => system::user(cx, params).await?.into(),
+        "getUsers" => system::users(cx).await?.into(),
         "tokenInfo" => system::token_info(&user).into(),
         "getScanStatus" | "startScan" => system::scan_status(cx).await?.into(),
         "getMusicFolders" => browse::music_folders().into(),

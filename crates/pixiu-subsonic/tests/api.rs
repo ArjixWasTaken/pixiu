@@ -80,6 +80,9 @@ impl Api {
         );
 
         let user = toasty::create!(User {
+            role: pixiu_db::Role::Admin,
+            status: pixiu_db::UserStatus::Active,
+            password_change_required: false,
             username: "keeper",
             password_hash: pixiu_core::password::hash(PASSWORD),
             subsonic_secret: Some(secrets.seal_str(PASSWORD)),
@@ -624,10 +627,13 @@ async fn system_endpoints() {
     let json = api.call("getUser", "username=keeper").await.ok();
     assert_eq!(json["user"]["adminRole"], true);
     assert_eq!(json["user"]["folder"], serde_json::json!([1]));
+    // An admin asking after nobody: not found.
     assert_eq!(
         api.call("getUser", "username=someone").await.error_code(),
-        50
+        70
     );
+    let json = api.call("getUsers", "").await.ok();
+    assert_eq!(json["users"]["user"][0]["username"], "keeper");
 
     let unknown = api.call("getEverything", "").await;
     assert_eq!(unknown.status, StatusCode::NOT_FOUND);

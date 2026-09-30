@@ -128,6 +128,7 @@ struct Setup {
 async fn setup() -> Setup {
     let dir = tempfile::tempdir().unwrap();
     let db = pixiu_db::open(&dir.path().join("pixiu.db")).await.unwrap();
+    account(&db).await;
     let treasury = Treasury::new(
         db.clone(),
         dir.path().join("treasure"),
@@ -721,4 +722,19 @@ async fn excluded_songs_are_orphaned_and_skipped() {
             .unwrap()
             .is_empty()
     );
+}
+
+/// The queue runs jobs of active accounts; this is the tests' owner.
+async fn account(db: &pixiu_db::Db) {
+    toasty::create!(pixiu_db::User {
+        username: "owner",
+        role: pixiu_db::Role::Admin,
+        status: pixiu_db::UserStatus::Active,
+        password_change_required: false,
+        password_hash: "x",
+        created_at: pixiu_db::now(),
+    })
+    .exec(&mut db.clone())
+    .await
+    .unwrap();
 }

@@ -13,7 +13,14 @@
       </p>
     </template>
 
-    <M3TextField v-model="data.username" autocomplete="username" autofocus label="Username" name="username" required />
+    <M3TextField
+      v-model="data.username"
+      :label="claiming ? 'Username' : 'Username or email'"
+      autocomplete="username"
+      autofocus
+      name="username"
+      required
+    />
 
     <M3TextField
       v-model="data.password"
@@ -60,11 +67,7 @@ import M3IconButton from '@/components/m3/M3IconButton.vue'
 import M3TextField from '@/components/m3/M3TextField.vue'
 import AuthFormCard from '@/components/auth/AuthFormCard.vue'
 
-const emit = defineEmits<{
-  (e: 'loggedIn'): void
-  (e: 'twoFactorRequired', loginToken: string): void
-  (e: 'forgotPassword'): void
-}>()
+const emit = defineEmits<{ (e: 'loggedIn'): void }>()
 
 const failed = ref(false)
 /** A fresh píxiū has no admin yet: the form creates the account instead. */
@@ -103,27 +106,22 @@ const { data, handleSubmit } = useForm<{ username: string; password: string; con
     }
 
     await authService.claim(username, password)
-    return null
   },
-  onSuccess: challenge => {
+  onSuccess: () => {
     failed.value = false
     data.password = ''
     data.confirm = ''
-
-    if (challenge) {
-      emit('twoFactorRequired', challenge.login_token)
-      return
-    }
-
     emit('loggedIn')
   },
   onError: (error: unknown) => {
     failed.value = true
     logger.error(error)
 
-    // A claim explains what is wrong; a failed login just shakes.
-    if (claiming.value) {
-      const body = isHttpError(error) ? getHttpErrorBody(error) : undefined
+    // Say what is wrong: a claim's problem, or why an account whose
+    // password is right cannot sign in (awaiting approval, turned off).
+    // A wrong password just shakes.
+    const body = isHttpError(error) ? getHttpErrorBody(error) : undefined
+    if (claiming.value || body?.code) {
       problem.value = body?.message ?? (error instanceof Error ? error.message : 'That did not work.')
     }
 

@@ -1,6 +1,6 @@
 //! System endpoints: license, extensions, scanning and users.
 
-use pixiu_db::{User, owned::as_u64};
+use pixiu_db::{Role, User, owned::as_u64};
 
 use crate::{
     Cx, Failure, Params,
@@ -51,20 +51,33 @@ pub(crate) async fn scan_status(cx: &Cx<'_>) -> Result<Payload, Failure> {
         .into())
 }
 
-/// `getUser`. Only the admin exists.
-pub(crate) fn user(user: &User, params: &Params) -> Result<Payload, Failure> {
+/// `getUser`: admins see anyone; others, themselves.
+pub(crate) async fn user(cx: &Cx<'_>, params: &Params) -> Result<Payload, Failure> {
     let username = params.require("username")?;
-    if username != user.username {
+    if username == cx.user.username {
+        return Ok(user_element(cx.user).into());
+    }
+    if cx.user.role != Role::Admin {
         return Err(ApiError::new(ErrorCode::NotAuthorized, "no such user").into());
     }
-    Ok(user_element(user).into())
+    let other = User::filter_by_username(username)
+        .first()
+        .exec(&mut cx.lib.db())
+        .await?
+        .ok_or_else(|| ApiError::new(ErrorCode::NotFound, "no such user"))?;
+    Ok(user_element(&other).into())
 }
 
-/// `getUsers`: píxiū has one.
-pub(crate) fn users(user: &User) -> Payload {
-    Element::new("users")
-        .list("user", [user_element(user)])
-        .into()
+/// `getUsers`: every account, for admins.
+pub(crate) async fn users(cx: &Cx<'_>) -> Result<Payload, Failure> {
+    if cx.user.role != Role::Admin {
+        return Err(ApiError::new(ErrorCode::NotAuthorized, "only admins list users").into());
+    }
+    let mut accounts = User::all().exec(&mut cx.lib.db()).await?;
+    accounts.sort_by_key(|user| user.id);
+    Ok(Element::new("users")
+        .list("user", accounts.iter().map(user_element))
+        .into())
 }
 
 /// `tokenInfo` (OpenSubsonic API keys): whose key it is.
@@ -77,8 +90,9 @@ pub(crate) fn token_info(user: &User) -> Payload {
 fn user_element(user: &User) -> Element {
     Element::new("user")
         .attr("username", user.username.as_str())
+        .attr_opt("email", user.email.as_deref())
         .attr("scrobblingEnabled", false)
-        .attr("adminRole", true)
+        .attr("adminRole", user.role == Role::Admin)
         .attr("settingsRole", true)
         .attr("downloadRole", true)
         .attr("uploadRole", false)

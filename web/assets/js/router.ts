@@ -54,6 +54,11 @@ export default class Router {
   private readonly homeRoute: Route
   private readonly notFoundRoute: Route
   private routeChangedHandlers: RouteChangedHandler[] = []
+  /**
+   * Whether route guards run: once the signed-in user is known. Until then
+   * the app checks the first route itself, after start-up.
+   */
+  private guarding = false
 
   compileRoute(route: Route): CompiledRoute {
     const paramNames: string[] = []
@@ -199,7 +204,7 @@ export default class Router {
     const matchedRoute = this.tryMatchRoute(path)
     const [route, params] = matchedRoute ? [matchedRoute.originalRoute, matchedRoute.params] : [null, null]
 
-    if (!route) {
+    if (!route || (this.guarding && route.meta?.guard?.() === false)) {
       this.triggerNotFound()
       return null
     }
@@ -217,6 +222,7 @@ export default class Router {
   }
 
   public triggerNotFound = () => this.activateRoute(this.notFoundRoute)
+  public startGuarding = () => (this.guarding = true)
   public onRouteChanged = (handler: RouteChangedHandler) => this.routeChangedHandlers.push(handler)
 
   public activateRoute(route: Route, params: RouteParams = {}) {

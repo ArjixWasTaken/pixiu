@@ -64,6 +64,23 @@ impl Executor for Shared {
     }
 }
 
+/// The queue runs jobs of active accounts; these are the tests' owners.
+async fn accounts(db: &pixiu_db::Db) {
+    for name in ["owner", "other"] {
+        toasty::create!(pixiu_db::User {
+            username: name,
+            role: pixiu_db::Role::User,
+            status: pixiu_db::UserStatus::Active,
+            password_change_required: false,
+            password_hash: "x",
+            created_at: now(),
+        })
+        .exec(&mut db.clone())
+        .await
+        .unwrap();
+    }
+}
+
 async fn wait_for(jobs: &Jobs, done: impl Fn(&[Job]) -> bool) -> Vec<Job> {
     for _ in 0..200 {
         let recent = jobs.recent(OWNER, 50).await.unwrap();
@@ -87,6 +104,7 @@ fn settled(jobs: &[Job]) -> bool {
 async fn jobs_run_expand_fail_and_retry() {
     let dir = tempfile::tempdir().unwrap();
     let db = pixiu_db::open(&dir.path().join("pixiu.db")).await.unwrap();
+    accounts(&db).await;
     let executor = Arc::new(FakeExecutor::default());
     *executor.failures_left.lock().unwrap() = 1;
     let jobs = Jobs::new(db, Box::new(Shared(Arc::clone(&executor))));
@@ -171,6 +189,7 @@ async fn jobs_run_expand_fail_and_retry() {
 async fn album_grabs_stay_whole_until_their_tracks_finish() {
     let dir = tempfile::tempdir().unwrap();
     let db = pixiu_db::open(&dir.path().join("pixiu.db")).await.unwrap();
+    accounts(&db).await;
     let jobs = Jobs::new(
         db.clone(),
         Box::new(Shared(Arc::new(FakeExecutor::default()))),
@@ -214,6 +233,7 @@ async fn album_grabs_stay_whole_until_their_tracks_finish() {
 async fn interrupted_jobs_run_again_after_a_restart() {
     let dir = tempfile::tempdir().unwrap();
     let mut db = pixiu_db::open(&dir.path().join("pixiu.db")).await.unwrap();
+    accounts(&db).await;
     // A job that was running when píxiū stopped, saved before payloads
     // said who wanted them.
     let payload = r#"{"video_id":"ok","reference":null}"#;
@@ -249,6 +269,7 @@ async fn users_take_turns() {
     const OTHER: u64 = 2;
     let dir = tempfile::tempdir().unwrap();
     let db = pixiu_db::open(&dir.path().join("pixiu.db")).await.unwrap();
+    accounts(&db).await;
     let executor = Arc::new(FakeExecutor::default());
     let jobs = Jobs::new(db.clone(), Box::new(Shared(Arc::clone(&executor))));
     for n in 1..=3 {

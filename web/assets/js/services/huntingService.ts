@@ -125,17 +125,8 @@ export interface Sources {
   login_open: boolean
 }
 
-export interface ApiKeyInfo {
-  id: number
-  name: string
-  created_at: string
-  last_used_at: string | null
-  current: boolean
-}
-
 export interface Settings {
   albums_not_looked_up: number
-  keys: ApiKeyInfo[]
 }
 
 export interface SongInfo {
@@ -244,8 +235,6 @@ export const huntingService = {
 
   settings: () => http.get<Settings>('settings'),
   lookUpAll: () => http.post<{ queued: number }>('settings/lookup-all'),
-  createKey: (name: string) => http.post<{ id: number; name: string; key: string }>('keys', { name }),
-  revokeKey: (id: number) => http.delete(`keys/${id}`),
 
   songInfo: (song: Song) => http.get<SongInfo>(`songs/${song.id}/info`),
   albumDetails: (album: Album) => http.get<AlbumDetails>(`albums/${album.id}/details`),

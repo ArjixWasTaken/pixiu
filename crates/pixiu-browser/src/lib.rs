@@ -664,12 +664,17 @@ impl LoginDesks {
         })
     }
 
+    /// What the server keeps of `owner`'s: their browser profile, and their
+    /// YouTube Music client's cache.
+    #[must_use]
+    pub fn user_dir(&self, owner: u64) -> PathBuf {
+        self.users_dir.join(owner.to_string())
+    }
+
     /// Where `owner`'s browser keeps its profile.
     #[must_use]
     pub fn profile_dir(&self, owner: u64) -> PathBuf {
-        self.users_dir
-            .join(owner.to_string())
-            .join("browser-profile")
+        self.user_dir(owner).join("browser-profile")
     }
 
     /// `owner`'s desk, made on first use.

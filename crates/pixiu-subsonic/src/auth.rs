@@ -3,15 +3,25 @@
 //! hex-encoded as `enc:...`).
 
 use md5::{Digest, Md5};
-use pixiu_db::{ApiKey, User, now, toasty};
+use pixiu_db::{ApiKey, User, UserStatus, now, toasty};
 
 use crate::{
     Failure, Params, SubsonicState,
     response::{ApiError, ErrorCode},
 };
 
-/// Resolves the user a request authenticates as.
+/// Resolves the user a request authenticates as. Accounts that are not
+/// active (turned off, or not yet approved or confirmed) are refused once
+/// their credentials check out.
 pub(crate) async fn authenticate(state: &SubsonicState, params: &Params) -> Result<User, Failure> {
+    let user = resolve(state, params).await?;
+    if user.status != UserStatus::Active {
+        return Err(ApiError::new(ErrorCode::NotAuthorized, "this account is not active").into());
+    }
+    Ok(user)
+}
+
+async fn resolve(state: &SubsonicState, params: &Params) -> Result<User, Failure> {
     let mut db = state.db.clone();
     match (params.get("apiKey"), params.get("u")) {
         (Some(_), Some(_)) => Err(ApiError::new(

@@ -79,6 +79,9 @@ struct World {
 
 async fn person(db: &mut Db, name: &str, secrets: &SecretBox) -> Person {
     let user = toasty::create!(User {
+        role: pixiu_db::Role::Admin,
+        status: pixiu_db::UserStatus::Active,
+        password_change_required: false,
         username: name,
         password_hash: pixiu_core::password::hash(PASSWORD),
         subsonic_secret: Some(secrets.seal_str(PASSWORD)),
@@ -462,8 +465,14 @@ const API_ROUTES: &[(&str, &str)] = &[
     ("/api/offerings/{id}", "by id"),
     ("/api/settings", "list"),
     ("/api/settings/lookup-all", "no ids"),
-    ("/api/keys", "no ids"),
-    ("/api/keys/{id}", "by id"),
+    ("/api/me", "no ids"),
+    ("/api/me/password", "no ids"),
+    ("/api/me/keys", "list"),
+    ("/api/me/keys/{id}", "by id"),
+    ("/api/admin/users", "admin"),
+    ("/api/admin/users/{id}", "admin"),
+    ("/api/admin/users/{id}/password", "admin"),
+    ("/api/admin/storage", "admin"),
     ("/api/sources", "list"),
     ("/api/sources/validate", "no ids"),
     ("/api/sources/refresh", "no ids"),
@@ -789,7 +798,7 @@ async fn nobody_reaches_another_library_by_id() {
             format!("/api/offerings/{}", theirs.offering),
             None,
         ),
-        (Method::DELETE, format!("/api/keys/{}", theirs.key), None),
+        (Method::DELETE, format!("/api/me/keys/{}", theirs.key), None),
     ];
     for (method, path, body) in not_found {
         let (status, response) = world.api(&key, method.clone(), &path, body).await;

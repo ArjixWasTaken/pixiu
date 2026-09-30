@@ -666,9 +666,12 @@ impl Jobs {
     /// next user in turn who has queued work.
     async fn claim_next(&self) -> Result<Option<Job>, toasty::Error> {
         let mut db = self.db.clone();
+        // Jobs of accounts turned off (or being deleted) wait.
         let heads: Vec<(u64, u64)> = toasty::sql::query(
-            "SELECT user_id, MIN(id) FROM jobs WHERE state = 'queued' \
-             GROUP BY user_id ORDER BY user_id",
+            "SELECT jobs.user_id, MIN(jobs.id) FROM jobs \
+             JOIN users ON users.id = jobs.user_id \
+             WHERE jobs.state = 'queued' AND users.status = 'active' \
+             GROUP BY jobs.user_id ORDER BY jobs.user_id",
         )
         .exec(&mut db)
         .await?

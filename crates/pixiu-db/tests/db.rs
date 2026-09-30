@@ -14,6 +14,9 @@ async fn open_applies_migrations_once() {
     let db = pixiu_db::open(&path).await.unwrap();
     let mut conn = db.clone();
     let user = toasty::create!(User {
+        role: pixiu_db::Role::Admin,
+        status: pixiu_db::UserStatus::Active,
+        password_change_required: false,
         username: "admin",
         password_hash: "$argon2id$not-a-real-hash",
         created_at: now(),
@@ -35,6 +38,9 @@ async fn sessions_belong_to_users() {
     let mut db = pixiu_db::open(&dir.path().join("pixiu.db")).await.unwrap();
 
     let user = toasty::create!(User {
+        role: pixiu_db::Role::Admin,
+        status: pixiu_db::UserStatus::Active,
+        password_change_required: false,
         username: "admin",
         password_hash: "hash",
         created_at: now(),

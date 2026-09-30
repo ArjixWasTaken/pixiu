@@ -653,18 +653,18 @@ async fn songs_and_albums_tell_more_than_subsonic() {
 }
 
 #[tokio::test]
-async fn settings_manage_keys() {
+async fn accounts_manage_their_keys() {
     let api = Api::new().await;
     let token = api.claim().await;
 
-    let settings = api.get(&token, "/api/settings").await;
-    assert_eq!(settings["keys"][0]["current"], true);
+    let keys = api.get(&token, "/api/me/keys").await;
+    assert_eq!(keys[0]["current"], true);
 
     let created = api
         .send(
             &token,
             Method::POST,
-            "/api/keys",
+            "/api/me/keys",
             json!({ "name": "Phone" }),
             StatusCode::OK,
         )
@@ -676,7 +676,7 @@ async fn settings_manage_keys() {
     let (status, _) = api
         .request(
             Method::DELETE,
-            &format!("/api/keys/{}", created["id"]),
+            &format!("/api/me/keys/{}", created["id"]),
             Some(&token),
             None,
         )

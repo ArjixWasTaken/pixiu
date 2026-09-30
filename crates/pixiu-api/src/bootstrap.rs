@@ -3,7 +3,7 @@
 //! Features píxiū does not have are switched off here, which hides them.
 
 use axum::{Json, extract::State};
-use pixiu_db::{Library, owned::as_u64};
+use pixiu_db::{Library, Role, owned::as_u64};
 use serde_json::{Value as JsonValue, json};
 
 use crate::{ApiResult, ApiState, Session};
@@ -34,18 +34,26 @@ pub(crate) async fn bootstrap(
     let lib = session.library(&state);
     let (song_count, song_length) = totals(&lib).await?;
     let user = &session.user;
+    let admin = user.role == Role::Admin;
+    let abilities: &[&str] = if admin {
+        &["manage settings", "manage songs", "manage users"]
+    } else {
+        &["manage songs"]
+    };
     Ok(Json(json!({
         "current_user": {
             "type": "users",
             "id": user.id.to_string(),
             "name": user.username,
-            "email": "",
+            "email": user.email.as_deref().unwrap_or_default(),
+            "email_verified": user.email_verified_at.is_some(),
             "is_prospect": false,
             "avatar": "",
-            "role": "admin",
+            "role": if admin { "admin" } else { "user" },
             "sso_provider": null,
             "sso_id": null,
-            "abilities": ["manage settings", "manage songs"],
+            "abilities": abilities,
+            "password_change_required": user.password_change_required,
             // Preferences live in the browser.
             "preferences": {},
         },

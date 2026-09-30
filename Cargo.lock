@@ -3121,6 +3121,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "pixiu-accounts"
+version = "0.1.0"
+dependencies = [
+ "jiff",
+ "pixiu-core",
+ "pixiu-db",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "pixiu-api"
 version = "0.1.0"
 dependencies = [
@@ -3129,6 +3142,7 @@ dependencies = [
  "futures-util",
  "hex",
  "jiff",
+ "pixiu-accounts",
  "pixiu-browser",
  "pixiu-core",
  "pixiu-db",

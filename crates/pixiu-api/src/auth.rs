@@ -1,24 +1,19 @@
-//! Signing in and out. A successful sign-in (or claiming a fresh hoard)
+//! Signing in and out. A successful sign-in (or setting up a fresh server)
 //! mints an API key named "Web session", which the player keeps and sends
 //! as a bearer token here and as `apiKey` to the Subsonic API. Signing out
 //! revokes it.
 
 use axum::{Json, extract::State, http::StatusCode};
-use pixiu_db::{ApiKey, User, now, toasty};
+use pixiu_accounts::users;
+use pixiu_db::{ApiKey, User, UserStatus, now, toasty};
 use serde::{Deserialize, Serialize};
 
 use crate::{ApiError, ApiResult, ApiState, Session};
 
-/// What the key minted at sign-in is called in the API key list.
-const SESSION_KEY_NAME: &str = "Web session";
-
-/// The shortest password a hoard may be claimed with.
-const MIN_PASSWORD_LEN: usize = 8;
-
 #[derive(Serialize)]
 pub(crate) struct Status {
-    /// Whether the admin account exists; until it does, the player offers
-    /// to claim the hoard instead of signing in.
+    /// Whether an account exists; until one does, the player offers to set
+    /// píxiū up instead of signing in.
     claimed: bool,
 }
 
@@ -41,7 +36,7 @@ pub(crate) struct Tokens {
 }
 
 impl Tokens {
-    fn of(key: String) -> Self {
+    pub(crate) fn of(key: String) -> Self {
         Self {
             audio_token: key.clone(),
             token: key,
@@ -54,12 +49,12 @@ pub(crate) fn new_key() -> String {
     format!("pixiu_{}", hex::encode(rand::random::<[u8; 24]>()))
 }
 
-/// Makes a new API key for `user`; returns it in the clear, once.
-async fn mint_key(state: &ApiState, user: &User) -> ApiResult<String> {
+/// Makes a new web session key for `user`; returns it in the clear, once.
+pub(crate) async fn mint_key(state: &ApiState, user: &User) -> ApiResult<String> {
     let key = new_key();
     toasty::create!(ApiKey {
         user_id: user.id,
-        name: SESSION_KEY_NAME,
+        name: users::WEB_SESSION,
         key_hash: ApiKey::hash(&key),
         created_at: now(),
     })
@@ -77,8 +72,26 @@ async fn verify(password: String, hash: Option<String>) -> ApiResult<bool> {
 
 #[derive(Deserialize)]
 pub(crate) struct Credentials {
+    /// A username or an email address.
     username: String,
     password: String,
+}
+
+/// Why an account whose password is right cannot sign in, for the player.
+pub(crate) fn inactive(status: UserStatus) -> Option<ApiError> {
+    let (code, message) = match status {
+        UserStatus::Active => return None,
+        UserStatus::Pending => (
+            "pending",
+            "An admin has yet to approve your account; you will get an email when they do.",
+        ),
+        UserStatus::Unverified => (
+            "unverified",
+            "Confirm your email address first: follow the link píxiū sent you.",
+        ),
+        UserStatus::Disabled => ("disabled", "Your account is turned off."),
+    };
+    Some(ApiError::forbidden(message).with_code(code))
 }
 
 /// `POST /api/auth/login`.
@@ -86,22 +99,22 @@ pub(crate) async fn login(
     State(state): State<ApiState>,
     Json(credentials): Json<Credentials>,
 ) -> ApiResult<Json<Tokens>> {
-    let username = credentials.username.trim();
+    let login = credentials.username.trim();
     let mut db = state.db.clone();
-    let user = User::filter_by_username(username)
-        .first()
-        .exec(&mut db)
-        .await?;
+    let user = users::find_by_login(&mut db, login).await?;
     // Always verify, even for unknown users, so timing reveals nothing.
     let hash = user.as_ref().map(|user| user.password_hash.clone());
     let verified = verify(credentials.password.clone(), hash).await?;
     let Some(mut user) = user.filter(|_| verified) else {
-        tracing::warn!(username, "failed sign-in");
+        tracing::warn!(login, "failed sign-in");
         return Err(ApiError::new(
             StatusCode::UNAUTHORIZED,
             "Wrong username or password.",
         ));
     };
+    if let Some(refusal) = inactive(user.status) {
+        return Err(refusal);
+    }
     // Token authentication in Subsonic apps needs the password, sealed.
     if user.subsonic_secret.is_none() {
         let sealed = state.secrets.seal_str(&credentials.password);
@@ -120,48 +133,19 @@ pub(crate) struct Claim {
     password: String,
 }
 
-/// `POST /api/auth/setup`: creates the admin account while there is none.
+/// `POST /api/auth/setup`: makes the first account, an admin, while there
+/// is none.
 pub(crate) async fn setup(
     State(state): State<ApiState>,
     Json(claim): Json<Claim>,
 ) -> ApiResult<Json<Tokens>> {
-    let username = claim.username.trim().to_owned();
-    if username.is_empty() {
-        return Err(ApiError::new(
-            StatusCode::UNPROCESSABLE_ENTITY,
-            "Choose a username.",
-        ));
-    }
-    if claim.password.chars().count() < MIN_PASSWORD_LEN {
-        return Err(ApiError::new(
-            StatusCode::UNPROCESSABLE_ENTITY,
-            "Use at least 8 characters for the password.",
-        ));
-    }
-    let subsonic_secret = state.secrets.seal_str(&claim.password);
-    let password = claim.password;
-    let password_hash =
-        tokio::task::spawn_blocking(move || pixiu_core::password::hash(&password)).await?;
-
-    // The check and the insert share a transaction, so two racing claims
-    // cannot both create an admin.
-    let mut db = state.db.clone();
-    let mut tx = db.transaction().await?;
-    if User::all().first().exec(&mut tx).await?.is_some() {
-        return Err(ApiError::new(
-            StatusCode::CONFLICT,
-            "píxiū already has an admin account.",
-        ));
-    }
-    let user = toasty::create!(User {
-        username,
-        password_hash,
-        subsonic_secret: Some(subsonic_secret),
-        created_at: now(),
-    })
-    .exec(&mut tx)
+    let user = users::create_first(
+        &mut state.db.clone(),
+        &state.secrets,
+        &claim.username,
+        &claim.password,
+    )
     .await?;
-    tx.commit().await?;
     tracing::info!(username = %user.username, "admin account created");
     Ok(Json(Tokens::of(mint_key(&state, &user).await?)))
 }

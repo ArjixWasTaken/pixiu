@@ -19,6 +19,7 @@ vi.mock('@/utils/helpers', async importOriginal => ({
     onRouteChanged: onRouteChangedMock,
     resolve: resolveMock,
     triggerNotFound: triggerNotFoundMock,
+    startGuarding: vi.fn(),
   }),
 }))
 

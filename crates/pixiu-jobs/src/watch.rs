@@ -17,7 +17,7 @@ use std::{
 use jiff::{SignedDuration, Timestamp};
 use pixiu_db::{
     ClaimKind, Db, Job, JobKind, JobState, Playlist, PlaylistEntry, ReleaseReason, SessionState,
-    Track, TrackClaim, Watch, WatchExclusion, WatchKind, now, toasty,
+    Track, TrackClaim, User, UserStatus, Watch, WatchExclusion, WatchKind, now, toasty,
 };
 use pixiu_hunt::{AlbumKind, Discography, LIKED_MUSIC, RemotePlaylist, RemoteTrack};
 use pixiu_treasury::{Release, Treasury};
@@ -805,8 +805,16 @@ pub fn schedule(db: Db, jobs: Arc<Jobs>) -> tokio::task::JoinHandle<()> {
 async fn queue_due(db: &Db, jobs: &Jobs) -> Result<(), toasty::Error> {
     let mut db = db.clone();
     let now = now();
+    let active: HashSet<u64> = User::all()
+        .exec(&mut db)
+        .await?
+        .into_iter()
+        .filter(|user| user.status == UserStatus::Active)
+        .map(|user| user.id)
+        .collect();
     for mut watch in Watch::all().exec(&mut db).await? {
-        if watch.next_sync_at > now {
+        // Watches of accounts turned off wait for them to be back on.
+        if watch.next_sync_at > now || !active.contains(&watch.user_id) {
             continue;
         }
         queue_sync(jobs, &watch).await?;

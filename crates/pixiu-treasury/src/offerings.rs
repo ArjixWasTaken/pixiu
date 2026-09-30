@@ -96,6 +96,17 @@ impl Offerings {
         }
     }
 
+    /// Removes everything `owner` uploaded and left unreviewed, on disk
+    /// (their rows go with their account).
+    pub async fn remove_owner(&self, owner: u64) {
+        let dir = self.dir.join(owner.to_string());
+        if let Err(error) = tokio::fs::remove_dir_all(&dir).await
+            && error.kind() != io::ErrorKind::NotFound
+        {
+            tracing::warn!(%error, path = %dir.display(), "cannot remove a user's uploads");
+        }
+    }
+
     /// Moves batches staged before uploads had owners (`<offerings>/<batch>`)
     /// into their owner's directory.
     ///

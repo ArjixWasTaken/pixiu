@@ -23,7 +23,7 @@
 
 ## Vue Component Decomposition
 
-- Always try to break Vue components into smaller, self-managed-state subcomponents. A component that hosts multiple stages, multiple modes, or multiple distinct UI shapes should split each into its own focused child. The parent becomes a thin orchestrator (state machine + API calls + composition); each child owns one shape with clear props in and events out, no service dependencies of its own, and is testable in isolation with minimal mocks. Reference shape: `TwoFactorAuthSettings.vue` (orchestrator) → `TwoFactorEnrollment.vue` / `TwoFactorRecoveryCodes.vue` / `TwoFactorManageActions.vue` (focused children).
+- Always try to break Vue components into smaller, self-managed-state subcomponents. A component that hosts multiple stages, multiple modes, or multiple distinct UI shapes should split each into its own focused child. The parent becomes a thin orchestrator (state machine + API calls + composition); each child owns one shape with clear props in and events out, no service dependencies of its own, and is testable in isolation with minimal mocks. Reference shape: `screens/settings/admin/UsersSettings.vue` (orchestrator: the API calls and confirmations) → `AccountRow.vue` (one account: props in, events out).
 
 ## Vue Component Styling
 

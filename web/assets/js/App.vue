@@ -6,8 +6,10 @@
   <OfflineNotification v-if="!online" />
   <UpdateNotification />
 
+  <ChangePasswordRequired v-if="layout === 'default' && initialized && mustChangePassword" />
+
   <main
-    v-if="layout === 'default' && initialized"
+    v-if="layout === 'default' && initialized && !mustChangePassword"
     class="relative h-dvh w-full flex flex-col"
     @dragend="onDragEnd"
     @dragleave="onDragLeave"
@@ -24,9 +26,6 @@
 
   <Auth v-if="layout === 'auth'" @logged-in="triggerAppInitialization" />
   <Embed v-if="layout === 'embed'" />
-
-  <AcceptInvitation v-if="layout === 'invitation'" />
-  <ResetPasswordForm v-if="layout === 'reset-password'" />
 
   <AppInitializer v-if="authenticated" @error="onInitError" @success="onInitSuccess" />
 
@@ -51,6 +50,7 @@ import {
 import { useRouter } from '@/composables/useRouter'
 import { useViewport } from '@/composables/useViewport'
 import { commonStore } from '@/stores/commonStore'
+import { userStore } from '@/stores/userStore'
 import type { Route } from '@/router'
 
 import DialogBox from '@/components/ui/DialogBox.vue'
@@ -74,8 +74,7 @@ const Auth = defineAsyncComponent(() => import('@/components/auth/Auth.vue'))
 const MainWrapper = defineAsyncComponent(() => import('@/components/layout/main-wrapper/index.vue'))
 const AiAssistantScreen = defineAsyncComponent(() => import('@/components/ai/AiAssistantScreen.vue'))
 const DropZone = defineAsyncComponent(() => import('@/components/ui/upload/DropZone.vue'))
-const AcceptInvitation = defineAsyncComponent(() => import('@/components/invitation/AcceptInvitation.vue'))
-const ResetPasswordForm = defineAsyncComponent(() => import('@/components/auth/ResetPasswordForm.vue'))
+const ChangePasswordRequired = defineAsyncComponent(() => import('@/components/account/ChangePasswordRequired.vue'))
 const Embed = defineAsyncComponent(() => import('@/components/embed/widget/EmbedWidget.vue'))
 
 const overlay = ref<InstanceType<typeof Overlay>>()
@@ -84,7 +83,7 @@ const toaster = ref<InstanceType<typeof MessageToaster>>()
 const currentStreamable = ref<Streamable>()
 const showDropZone = ref(false)
 
-const { isCurrentScreen, resolveRoute, triggerNotFound, onRouteChanged } = useRouter()
+const { isCurrentScreen, resolveRoute, triggerNotFound, onRouteChanged, startGuarding } = useRouter()
 const { online } = useNetworkStatus()
 const { isMobile } = useViewport()
 
@@ -97,11 +96,15 @@ const onInitError = () => (authenticated.value = false)
 
 const onInitSuccess = async () => {
   initialized.value = true
+  startGuarding()
 
   if (currentRoute.value && currentRoute.value.meta?.guard?.() === false) {
     triggerNotFound()
   }
 }
+
+/** Signed in with a temporary password: they pick their own first. */
+const mustChangePassword = computed(() => Boolean(userStore.state.current?.password_change_required))
 
 const layout = computed(() => {
   if (currentRoute.value?.meta?.layout) {

@@ -96,7 +96,8 @@ const items = computed(() =>
       icon: 'settings',
       route: 'settings',
       screens: ['Settings'],
-      visible: () => currentUserCan.manageSettings(),
+      // Everyone has their account and library settings there.
+      visible: () => true,
     },
   ]),
 )

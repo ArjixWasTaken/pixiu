@@ -29,7 +29,7 @@ import { computed, onBeforeUnmount, ref } from 'vue'
 import { CopyIcon, ClipboardCheckIcon } from 'lucide-vue-next'
 import { copyText } from '@/utils/helpers'
 
-import UserAvatar from '@/components/user/UserAvatar.vue'
+import UserAvatar from '@/components/ui/UserAvatar.vue'
 
 const props = defineProps<{
   message: AiChatMessage

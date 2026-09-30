@@ -499,6 +499,9 @@ type CurrentUser = User & {
   abilities: Ability[]
   subsonic_api_key: string
   two_factor: boolean
+  /** Signed in with a temporary password: must pick their own first. */
+  password_change_required?: boolean
+  email_verified?: boolean
 }
 
 type AiProvider = 'openai' | 'anthropic' | 'gemini' | 'deepseek' | 'groq' | 'mistral' | 'openrouter' | 'xai'

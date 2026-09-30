@@ -74,6 +74,7 @@ impl Setup {
     async fn new() -> Self {
         let dir = tempfile::tempdir().unwrap();
         let db = pixiu_db::open(&dir.path().join("pixiu.db")).await.unwrap();
+        account(&db).await;
         Self {
             _dir: dir,
             db,
@@ -395,4 +396,19 @@ async fn every_user_has_a_warden_of_their_own() {
     wardens.stop(OTHER).await;
     assert_eq!(*forgotten.lock().unwrap(), [OTHER]);
     assert_eq!(wardens.health(OWNER).state, Some(SessionState::Valid));
+}
+
+/// The queue runs jobs of active accounts; this is the tests' owner.
+async fn account(db: &pixiu_db::Db) {
+    pixiu_db::toasty::create!(pixiu_db::User {
+        username: "owner",
+        role: pixiu_db::Role::Admin,
+        status: pixiu_db::UserStatus::Active,
+        password_change_required: false,
+        password_hash: "x",
+        created_at: pixiu_db::now(),
+    })
+    .exec(&mut db.clone())
+    .await
+    .unwrap();
 }

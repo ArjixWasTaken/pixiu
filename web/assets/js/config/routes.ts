@@ -102,17 +102,6 @@ export const routes = [
     name: 'settings',
     path: '/settings',
     screen: 'Settings',
-    meta: {
-      guard: () => usePolicies().currentUserCan.manageSettings(),
-    },
-  },
-  {
-    name: 'users.index',
-    path: '/users',
-    screen: 'Users',
-    meta: {
-      guard: () => usePolicies().currentUserCan.manageUsers(),
-    },
   },
   {
     name: 'youtube',
@@ -211,30 +200,6 @@ export const routes = [
     meta: {
       redirect: () => 'queue',
       onResolved: params => cache.set('playable-to-queue', params.id),
-    },
-  },
-  {
-    name: 'invitation.accept',
-    path: '/invitation/accept/:token',
-    screen: 'Invitation.Accept',
-    meta: {
-      layout: 'invitation',
-      public: true,
-    },
-    constraints: {
-      token: UUID_REGEX,
-    },
-  },
-  {
-    name: 'password.reset',
-    path: '/reset-password/:payload',
-    screen: 'Password.Reset',
-    meta: {
-      public: true,
-      layout: 'reset-password',
-    },
-    constraints: {
-      payload: '[a-zA-Z0-9\\+/=]+',
     },
   },
   {

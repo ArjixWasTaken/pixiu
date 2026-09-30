@@ -7,6 +7,7 @@
 //! but signing in needs an API key as a bearer token; signing in hands one
 //! out.
 
+mod admin;
 mod albums;
 mod auth;
 mod bootstrap;
@@ -14,6 +15,7 @@ mod events;
 mod hunt;
 mod jobs;
 mod library;
+mod me;
 mod offerings;
 mod orphans;
 mod playlists;
@@ -29,11 +31,11 @@ use axum::{
     extract::{DefaultBodyLimit, FromRequestParts},
     http::{StatusCode, header, request::Parts},
     response::{IntoResponse, Response},
-    routing::{delete, get, post, put},
+    routing::{delete, get, patch, post, put},
 };
 use pixiu_browser::LoginDesks;
 use pixiu_core::SecretBox;
-use pixiu_db::{ApiKey, Db, Library, User, now, toasty};
+use pixiu_db::{ApiKey, Db, Library, Role, User, UserStatus, now, toasty};
 use pixiu_hunt::Hunter;
 use pixiu_jobs::{Jobs, Wardens};
 use pixiu_treasury::{Offerings, Treasury};
@@ -129,8 +131,17 @@ pub fn router(state: ApiState) -> Router {
         .route("/api/offerings/{id}", delete(offerings::discard))
         .route("/api/settings", get(settings::show))
         .route("/api/settings/lookup-all", post(settings::lookup_all))
-        .route("/api/keys", post(settings::create_key))
-        .route("/api/keys/{id}", delete(settings::revoke_key))
+        .route("/api/me", get(me::show).put(me::update))
+        .route("/api/me/password", put(me::change_password))
+        .route("/api/me/keys", get(me::keys).post(me::create_key))
+        .route("/api/me/keys/{id}", delete(me::revoke_key))
+        .route("/api/admin/users", get(admin::list).post(admin::create))
+        .route(
+            "/api/admin/users/{id}",
+            patch(admin::update).delete(admin::delete),
+        )
+        .route("/api/admin/users/{id}/password", post(admin::set_password))
+        .route("/api/admin/storage", get(admin::storage))
         .route("/api/sources", get(sources::status))
         .route("/api/sources/validate", post(sources::validate))
         .route("/api/sources/refresh", post(sources::refresh))
@@ -145,11 +156,13 @@ pub fn router(state: ApiState) -> Router {
         .with_state(state)
 }
 
-/// A failed request, answered as `{"message": ...}` as koel expects.
+/// A failed request, answered as `{"message": ...}` as koel expects, with
+/// a `code` the player can act on when there is one.
 #[derive(Debug)]
 pub struct ApiError {
     status: StatusCode,
     message: String,
+    code: Option<&'static str>,
 }
 
 impl ApiError {
@@ -157,7 +170,17 @@ impl ApiError {
         Self {
             status,
             message: message.into(),
+            code: None,
         }
+    }
+
+    fn with_code(mut self, code: &'static str) -> Self {
+        self.code = Some(code);
+        self
+    }
+
+    fn forbidden(message: impl Into<String>) -> Self {
+        Self::new(StatusCode::FORBIDDEN, message)
     }
 
     fn unauthorized() -> Self {
@@ -184,11 +207,14 @@ impl IntoResponse for ApiError {
         #[derive(Serialize)]
         struct Body {
             message: String,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            code: Option<&'static str>,
         }
         (
             self.status,
             Json(Body {
                 message: self.message,
+                code: self.code,
             }),
         )
             .into_response()
@@ -199,6 +225,23 @@ impl From<toasty::Error> for ApiError {
     fn from(error: toasty::Error) -> Self {
         tracing::error!(%error, "database error in the web API");
         Self::new(StatusCode::INTERNAL_SERVER_ERROR, "internal error")
+    }
+}
+
+impl From<pixiu_accounts::AccountError> for ApiError {
+    fn from(error: pixiu_accounts::AccountError) -> Self {
+        use pixiu_accounts::AccountError;
+        match error {
+            AccountError::Invalid(message) => Self::unprocessable(message),
+            AccountError::NotFound => Self::not_found("user"),
+            error @ (AccountError::UsernameTaken
+            | AccountError::EmailTaken
+            | AccountError::LastAdmin
+            | AccountError::AlreadySetUp) => Self::new(StatusCode::CONFLICT, error.to_string()),
+            error @ (AccountError::Db(_) | AccountError::Join(_)) => {
+                Self::internal(error, "changing an account")
+            }
+        }
     }
 }
 
@@ -279,11 +322,32 @@ impl FromRequestParts<ApiState> for Session {
             return Err(ApiError::unauthorized());
         };
         let user = User::get_by_id(&mut db, &key.user_id).await?;
+        // Disabled accounts (and ones not yet approved or confirmed) are
+        // signed out wherever they were signed in.
+        if user.status != UserStatus::Active {
+            return Err(ApiError::unauthorized());
+        }
         toasty::update!(key {
             last_used_at: Some(now()),
         })
         .exec(&mut db)
         .await?;
         Ok(Self { user, key })
+    }
+}
+
+/// A signed-in admin.
+pub(crate) struct AdminSession(pub Session);
+
+impl FromRequestParts<ApiState> for AdminSession {
+    type Rejection = ApiError;
+
+    async fn from_request_parts(parts: &mut Parts, state: &ApiState) -> ApiResult<Self> {
+        let session = Session::from_request_parts(parts, state).await?;
+        if session.user.role == Role::Admin {
+            Ok(Self(session))
+        } else {
+            Err(ApiError::forbidden("Only admins can do that."))
+        }
     }
 }

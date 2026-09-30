@@ -6,7 +6,10 @@ import { eventBus } from '@/utils/eventBus'
 
 export { HTTPError }
 
-export type HttpErrorBody = Partial<ServerValidationError>
+export type HttpErrorBody = Partial<ServerValidationError> & {
+  /** What the player can act on, e.g. why an account cannot sign in. */
+  code?: string
+}
 
 export const isHttpError = (error: unknown): error is HTTPError<HttpErrorBody> => error instanceof HTTPError
 
@@ -62,9 +65,9 @@ class Http {
                 url = error.request?.url || ''
               }
 
-              const isAuthEntryPoint =
-                method === 'post' &&
-                (url.endsWith('/me') || url.endsWith('/me/two-factor-challenge') || url.endsWith('/me/otp'))
+              // Signing in, up or out answers for itself: a wrong password is
+              // no reason to sign out.
+              const isAuthEntryPoint = url.includes('/api/auth/') || (method === 'post' && url.endsWith('/auth'))
 
               if (!isAuthEntryPoint) {
                 authService.setRedirect()

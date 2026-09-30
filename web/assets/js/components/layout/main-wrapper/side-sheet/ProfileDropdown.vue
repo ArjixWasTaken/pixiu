@@ -56,6 +56,7 @@ const openAbout = () => openModal<'ABOUT_KOEL'>(AboutKoelModal)
 
 const items = computed(() =>
   applyFilters<ContextMenuAction[]>(Filter.PROFILE_MENU_ITEMS, [
+    { id: 'account', label: () => 'Account', action: () => go(`${url('settings')}?tab=account`) },
     { id: 'profile', label: () => 'Preferences', action: () => go(url('profile')) },
     { id: 'logout', label: () => 'Log Out', action: () => eventBus.emit('LOG_OUT') },
     {

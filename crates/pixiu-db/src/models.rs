@@ -4,8 +4,30 @@
 
 use jiff::Timestamp;
 
-/// The admin account. píxiū is single-user, so exactly one row exists once
-/// the first-run setup has completed.
+/// What a user may do.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, toasty::Embed)]
+pub enum Role {
+    /// Manages users and the server's settings, besides their own library.
+    Admin,
+    /// Has a library of their own.
+    User,
+}
+
+/// Where an account stands.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, toasty::Embed)]
+pub enum UserStatus {
+    /// Registered; an admin has yet to approve it.
+    Pending,
+    /// Approved; the email address has yet to be confirmed.
+    Unverified,
+    /// Signs in and plays.
+    Active,
+    /// Turned off by an admin; the library stays.
+    Disabled,
+}
+
+/// An account: a person with a library of their own. The first one, made
+/// by the first-run setup, is an admin.
 #[derive(Debug, toasty::Model)]
 pub struct User {
     #[key]
@@ -15,12 +37,28 @@ pub struct User {
     #[unique]
     pub username: String,
 
+    /// Lowercase; for signing in, password resets and alerts. Unique among
+    /// those set.
+    #[unique]
+    pub email: Option<String>,
+
+    /// When the email address was confirmed.
+    pub email_verified_at: Option<Timestamp>,
+
+    pub role: Role,
+
+    pub status: UserStatus,
+
+    /// Set by an admin handing out a temporary password: the user picks
+    /// their own at their next sign-in.
+    pub password_change_required: bool,
+
     /// PHC-formatted argon2id hash of the password.
     pub password_hash: String,
 
     /// The password sealed with the instance key. Subsonic token
     /// authentication (`md5(password + salt)`) cannot work from a hash, so
-    /// the password is captured whenever the admin sets or types it.
+    /// the password is captured whenever the user sets or types it.
     pub subsonic_secret: Option<String>,
 
     pub created_at: Timestamp,
