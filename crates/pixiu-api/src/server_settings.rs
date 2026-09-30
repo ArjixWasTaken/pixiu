@@ -206,7 +206,12 @@ impl OidcForm {
     /// The provider the form describes, with the stored secret unless it
     /// gives another.
     fn provider(self, state: &ApiState) -> ApiResult<Oidc> {
-        let client_secret = match self.client_secret.filter(|secret| !secret.is_empty()) {
+        // Secrets are pasted, often with a space or a line break around them.
+        let client_secret = match self
+            .client_secret
+            .map(|secret| secret.trim().to_owned())
+            .filter(|secret| !secret.is_empty())
+        {
             Some(secret) => secret,
             None => state
                 .settings

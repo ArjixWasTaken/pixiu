@@ -363,7 +363,8 @@ impl Server {
                     "name": "Mock",
                     "issuer": self.provider.issuer,
                     "client_id": CLIENT_ID,
-                    "client_secret": CLIENT_SECRET,
+                    // Pasted, with what came along.
+                    "client_secret": format!(" {CLIENT_SECRET}\n"),
                 })),
             )
             .await;
