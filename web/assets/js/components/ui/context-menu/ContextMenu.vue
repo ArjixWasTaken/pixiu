@@ -2,7 +2,7 @@
   <div
     ref="el"
     v-koel-focus
-    :class="extraClass"
+    :class="[extraClass, { sheet: isMobile }]"
     class="menu context-menu select-none shadow-sm overflow-visible fixed inset-auto m-0"
     popover="manual"
     role="menu"
@@ -11,6 +11,7 @@
     @contextmenu.prevent
     @keydown="onKeyDown"
   >
+    <span v-if="isMobile" class="sheet-handle" />
     <component :is="options.component" v-if="options.component" v-bind="options.props" />
   </div>
 </template>
@@ -21,18 +22,21 @@ import { computePosition, flip, shift } from '@floating-ui/dom'
 import { logger } from '@/utils/logger'
 import { requireInjection } from '@/utils/helpers'
 import { ContextMenuKey } from '@/config/symbols'
+import { useViewport } from '@/composables/useViewport'
 
 const props = defineProps<{ extraClass?: string }>()
 const { extraClass } = toRefs(props)
 
 const options = requireInjection(ContextMenuKey)
+const { isMobile } = useViewport()
 
 const el = ref<HTMLElement>()
 const isOpen = ref(false)
 let deferredListenerTimer: ReturnType<typeof setTimeout> | undefined
 
 const positionAt = async (clientX: number, clientY: number) => {
-  if (!el.value) {
+  // On phones, the menu is a bottom sheet placed by CSS.
+  if (!el.value || isMobile.value) {
     return
   }
   const virtualAnchor = {
@@ -57,6 +61,10 @@ const positionAt = async (clientX: number, clientY: number) => {
 }
 
 const positionSubmenu = async (parent: HTMLElement, submenu: HTMLElement) => {
+  if (isMobile.value) {
+    return
+  }
+
   const { x, y } = await computePosition(parent, submenu, {
     placement: 'right-start',
     middleware: [flip(), shift({ padding: 8 })],

@@ -1,21 +1,59 @@
+/* Context menus as Material 3 menus; on phones, as bottom sheets. */
 .context-menu {
-  @apply py-1 px-0 w-max min-w-[144px] bg-k-bg-context-menu fixed border border-k-fg-10 rounded-md z-1001 shadow-md;
+  @apply fixed w-max z-1001;
+
+  min-width: 200px;
+  max-width: 320px;
+  padding: 8px 0;
+  border: 0;
+  border-radius: 4px;
+  background: var(--schemes-surface-container);
+  color: var(--schemes-on-surface);
+  box-shadow: var(--m3-elevation-2);
+
+  &:focus,
+  &:focus-visible {
+    outline: none !important;
+  }
 
   .arrow {
-    @apply bg-k-bg-context-menu absolute w-[8px] aspect-square rotate-45;
+    @apply absolute w-[8px] aspect-square rotate-45;
+
+    background: var(--schemes-surface-container);
   }
 
   li {
-    @apply relative px-4 py-1.5 text-k-fg leading-7 cursor-default;
-    @apply whitespace-nowrap;
+    @apply relative whitespace-nowrap cursor-pointer;
 
-    &.with-icon,
-    &.has-sub {
-      @apply flex items-center gap-2 w-full;
+    min-height: 48px;
+    padding: 0 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: var(--schemes-on-surface);
+    font-size: calc(var(--static-label-large-size) * 1px);
+    line-height: calc(var(--static-label-large-line-height) * 1px);
+    letter-spacing: calc(var(--static-label-large-tracking) * 1px);
+    font-weight: 500;
+    outline: none;
+
+    &:hover,
+    &:focus {
+      background: color-mix(in srgb, var(--schemes-on-surface) 8%, transparent);
+    }
+
+    &:has(> .submenu[data-open]) {
+      background: color-mix(in srgb, var(--schemes-on-surface) 8%, transparent);
     }
 
     &.separator {
-      @apply pointer-events-none p-0 border-b border-b-k-fg-10;
+      @apply pointer-events-none;
+
+      min-height: 0;
+      height: 1px;
+      margin: 8px 0;
+      padding: 0;
+      background: var(--schemes-outline-variant);
     }
   }
 
@@ -24,6 +62,70 @@
 
     &[data-open] {
       @apply block;
+    }
+  }
+
+  &.sheet {
+    /* Over the root's inset-auto utility and the popover's defaults. */
+    left: 0 !important;
+    right: 0 !important;
+    top: auto !important;
+    bottom: 0 !important;
+    width: auto !important;
+    max-width: none;
+    max-height: min(80vh, 640px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 28px 0 16px;
+    border-radius: 28px 28px 0 0;
+    background: var(--schemes-surface-container-low);
+    box-shadow: none;
+
+    &::backdrop {
+      background: color-mix(in srgb, var(--schemes-scrim) 32%, transparent);
+    }
+
+    .sheet-handle {
+      position: absolute;
+      top: 12px;
+      left: calc(50% - 16px);
+      width: 32px;
+      height: 4px;
+      border-radius: 2px;
+      background: var(--schemes-on-surface-variant);
+      opacity: 0.4;
+    }
+
+    li {
+      min-height: 56px;
+      padding: 0 24px;
+      gap: 16px;
+      font-size: calc(var(--static-body-large-size) * 1px);
+      line-height: calc(var(--static-body-large-line-height) * 1px);
+      font-weight: 400;
+      white-space: normal;
+    }
+
+    li.separator {
+      min-height: 0;
+      padding: 0;
+    }
+
+    li.has-sub {
+      flex-wrap: wrap;
+
+      > .submenu {
+        order: 1;
+      }
+    }
+
+    .submenu {
+      position: static !important;
+      width: 100%;
+      max-width: none;
+      box-shadow: none;
+      background: transparent;
+      padding: 0 0 0 16px;
     }
   }
 }

@@ -1,7 +1,7 @@
 <template>
   <dialog
     ref="dialog"
-    class="m-auto text-k-fg min-w-full md:min-w-[480px] border-0 p-0 md:rounded-md overflow-visible bg-k-bg backdrop:bg-black/70"
+    class="modal-wrapper m-auto min-w-full md:min-w-[480px] border-0 p-0 overflow-visible"
     @close.prevent
     @keydown.esc.prevent
   >
@@ -40,27 +40,67 @@ watch(
 </script>
 
 <style lang="postcss" scoped>
-@reference '@css/app.pcss';
-dialog {
+/* koel's forms (header, main, footer) inside an M3 dialog. */
+.modal-wrapper {
+  max-width: min(640px, calc(100vw - 48px));
+  max-height: calc(100dvh - 48px);
+  border-radius: 28px;
+  background: var(--schemes-surface-container-high);
+  color: var(--schemes-on-surface-variant);
+  box-shadow: var(--m3-elevation-3);
+
+  &::backdrop {
+    background: color-mix(in srgb, var(--schemes-scrim) 32%, transparent);
+  }
+
+  @media (max-width: 768px) {
+    max-width: 100vw;
+    max-height: 100dvh;
+    border-radius: 0;
+  }
+
+  &:focus-visible,
+  :deep(> *:focus),
+  :deep(> *:focus-visible) {
+    outline: none !important;
+  }
+
   :deep(> *) {
-    @apply relative;
+    position: relative;
 
     > header,
     > main,
     > footer {
-      @apply px-6 py-5;
+      padding: 0 24px;
     }
 
     > header {
-      @apply flex bg-k-fg-5;
+      display: flex;
+      padding-top: 24px;
+      padding-bottom: 16px;
 
       h1 {
-        @apply text-3xl leading-normal truncate;
+        margin: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: var(--schemes-on-surface);
+        font-size: calc(var(--static-headline-small-size) * 1px);
+        line-height: calc(var(--static-headline-small-line-height) * 1px);
+        font-weight: 400;
       }
     }
 
+    > main {
+      padding-bottom: 8px;
+    }
+
     > footer {
-      @apply mt-0 bg-black/10 border-t border-k-fg-5 space-x-2 rounded-b-md;
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      padding-top: 16px;
+      padding-bottom: 24px;
     }
   }
 }

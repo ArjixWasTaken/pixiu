@@ -1,19 +1,19 @@
 <template>
   <div class="max-w-[560px]" tabindex="0" @keydown.esc="close">
     <header class="gap-4">
-      <img :src="song.album_cover || defaultCover" alt="" class="w-[84px] aspect-square object-cover rounded-md" />
+      <img :src="song.album_cover || defaultCover" alt="" class="w-[84px] aspect-square object-cover rounded-xl" />
       <div class="flex-1 flex flex-col justify-center overflow-hidden">
         <h1 class="truncate">{{ song.title }}</h1>
-        <h2 class="truncate">{{ song.artist_name }}</h2>
-        <h2 class="truncate">{{ song.album_name }}</h2>
+        <h2 class="m3-body-medium truncate text-(--schemes-on-surface-variant)">{{ song.artist_name }}</h2>
+        <h2 class="m3-body-medium truncate text-(--schemes-on-surface-variant)">{{ song.album_name }}</h2>
       </div>
     </header>
 
     <main class="flex flex-col gap-6">
-      <p v-if="!info" class="text-k-fg-70">Loading…</p>
+      <M3ProgressIndicator v-if="!info" />
 
       <template v-else>
-        <dl class="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-1.5 text-sm">
+        <dl class="m3-body-medium grid grid-cols-[max-content_1fr] gap-x-6 gap-y-1.5">
           <dt>Format</dt>
           <dd>{{ info.format }} · {{ formatBytes(info.size) }}</dd>
           <dt>File</dt>
@@ -38,8 +38,8 @@
         </dl>
 
         <section>
-          <h3 class="text-sm uppercase tracking-widest text-k-fg-70 mb-2">Why píxiū keeps it</h3>
-          <p v-if="!info.kept.length" class="text-k-warning">Nothing keeps it: it is an orphan.</p>
+          <h3 class="m3-title-small text-(--schemes-primary) mb-2">Why píxiū keeps it</h3>
+          <p v-if="!info.kept.length" class="text-(--schemes-error)">Nothing keeps it: it is an orphan.</p>
           <ul class="flex flex-col gap-2">
             <li v-for="(reason, index) in info.kept" :key="index" class="flex items-center gap-3">
               <span class="flex-1">{{ reason.why }}</span>
@@ -77,6 +77,7 @@ import { useMessageToaster } from '@/composables/useMessageToaster'
 import { useErrorHandler } from '@/composables/useErrorHandler'
 
 import Btn from '@/components/ui/form/Btn.vue'
+import M3ProgressIndicator from '@/components/m3/M3ProgressIndicator.vue'
 
 const props = defineProps<{ song: Song }>()
 const emit = defineEmits<{ (e: 'close'): void }>()

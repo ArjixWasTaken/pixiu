@@ -1,14 +1,14 @@
 <template>
   <div v-if="cols === 1" class="flex flex-col gap-2">
-    <label class="text-k-fg">
-      <span v-if="$slots.label" class="block mb-1.5">
+    <label class="text-(--schemes-on-surface)">
+      <span v-if="$slots.label" class="m3-label-large block mb-1.5 text-(--schemes-on-surface-variant)">
         <slot name="label" />
       </span>
 
       <slot />
     </label>
 
-    <small v-if="$slots.help" class="text-[.95rem] text-k-fg-70 mt-0.5">
+    <small v-if="$slots.help" class="m3-body-small text-(--schemes-on-surface-variant) mt-0.5">
       <slot v-if="$slots.help" name="help" />
     </small>
   </div>

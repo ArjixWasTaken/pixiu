@@ -1,10 +1,5 @@
 <template>
-  <textarea
-    ref="el"
-    v-model="value"
-    :aria-label="ariaLabel"
-    class="px-4 w-full h-48 text-base py-2.5 rounded-sm text-k-fg-input bg-k-bg-input border border-k-fg-10"
-  />
+  <textarea ref="el" v-model="value" :aria-label="ariaLabel" class="k-field w-full h-48 py-3" />
 </template>
 
 <script lang="ts" setup>

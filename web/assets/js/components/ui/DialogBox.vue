@@ -1,38 +1,23 @@
 <template>
-  <dialog
-    ref="dialog"
-    :class="`${type}`"
-    class="m-auto rounded-md bg-k-bg text-k-fg-70 shadow-xl border-0 p-0 min-w-[320px] max-w-[calc(100vw - 40px)] backdrop:bg-black/70"
-  >
-    <div class="flex gap-5 py-6 px-7">
-      <aside>
-        <i class="text-lg w-[2.3rem] aspect-square flex justify-center items-center rounded-full">
-          <Icon v-if="type === 'info'" :icon="faInfo" />
-          <Icon v-if="type === 'success'" :icon="faCheck" />
-          <Icon v-if="type === 'warning'" :icon="faTriangleExclamation" />
-          <Icon v-if="type === 'danger'" :icon="faExclamation" />
-          <Icon v-if="type === 'confirm'" :icon="faQuestion" />
-        </i>
-      </aside>
-
-      <main>
-        <h3 v-if="title" class="text-2xl mb-4">{{ title }}</h3>
-        <div class="mt-2">{{ message }}</div>
-      </main>
+  <dialog ref="dialog" :class="`${type}`" class="dialog-box">
+    <div class="body">
+      <M3Icon :name="icon" class="icon" />
+      <h3 class="m3-headline-small headline">{{ title || defaultTitle }}</h3>
+      <div class="m3-body-medium message">{{ message }}</div>
     </div>
 
-    <footer class="flex justify-end gap-2 px-6 py-4 bg-k-fg-3">
-      <Btn variant="ghost" v-if="showCancelButton" name="cancel" @click.prevent="cancel">Cancel</Btn>
-      <Btn name="ok">OK</Btn>
+    <footer class="actions">
+      <M3Button v-if="showCancelButton" name="cancel" variant="text" @click.prevent="cancel">Cancel</M3Button>
+      <M3Button name="ok" variant="text">OK</M3Button>
     </footer>
   </dialog>
 </template>
 
 <script lang="ts" setup>
 import { computed, ref } from 'vue'
-import { faCheck, faExclamation, faInfo, faQuestion, faTriangleExclamation } from '@fortawesome/free-solid-svg-icons'
 
-import Btn from '@/components/ui/form/Btn.vue'
+import M3Button from '@/components/m3/M3Button.vue'
+import M3Icon from '@/components/m3/M3Icon.vue'
 
 type DialogType = 'info' | 'success' | 'warning' | 'danger' | 'confirm'
 
@@ -42,6 +27,17 @@ const title = ref('')
 const message = ref('')
 
 const showCancelButton = computed(() => type.value === 'confirm')
+
+const icon = computed(
+  () => ({ info: 'info', success: 'check_circle', warning: 'warning', danger: 'error', confirm: 'help' })[type.value],
+)
+
+const defaultTitle = computed(
+  () =>
+    ({ info: '', success: '', warning: 'Heads up', danger: 'Something went wrong', confirm: 'Are you sure?' })[
+      type.value
+    ],
+)
 
 // @ts-ignore
 const close = () => dialog.value?.close()
@@ -88,27 +84,56 @@ const confirm = async (message: string, title: string = '') => show('confirm', m
 defineExpose({ success, info, warning, error, confirm })
 </script>
 
-<style lang="postcss" scoped>
-@reference '@css/app.pcss';
-dialog {
-  &.info aside i {
-    @apply bg-blue-100 text-blue-600;
-  }
+<style scoped>
+.dialog-box {
+  margin: auto;
+  min-width: min(280px, calc(100vw - 48px));
+  max-width: min(560px, calc(100vw - 48px));
+  padding: 24px;
+  border: 0;
+  border-radius: 28px;
+  background: var(--schemes-surface-container-high);
+  color: var(--schemes-on-surface-variant);
+  box-shadow: var(--m3-elevation-3);
 
-  &.success aside i {
-    @apply bg-green-100 text-green-600;
+  &::backdrop {
+    background: color-mix(in srgb, var(--schemes-scrim) 32%, transparent);
   }
+}
 
-  &.confirm aside i {
-    @apply bg-purple-100 text-purple-700;
-  }
+.body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  text-align: center;
+}
 
-  &.warning aside i {
-    @apply bg-orange-100 text-orange-600;
-  }
+.icon {
+  color: var(--schemes-secondary);
 
-  &.danger aside i {
-    @apply bg-red-300 text-red-800;
+  .danger & {
+    color: var(--schemes-error);
   }
+}
+
+.headline {
+  color: var(--schemes-on-surface);
+
+  &:empty {
+    display: none;
+  }
+}
+
+.message {
+  align-self: stretch;
+  text-align: start;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 24px;
 }
 </style>
