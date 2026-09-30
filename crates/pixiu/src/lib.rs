@@ -45,15 +45,22 @@ impl Services {
     ///
     /// # Errors
     ///
-    /// Fails when a data directory cannot be created or the stored
-    /// YouTube Music session cannot be read.
+    /// Fails when a data directory cannot be created, the library's files
+    /// cannot be moved into the store, or the stored YouTube Music session
+    /// cannot be read.
     pub async fn new(db: Db, config: &Config, secrets: SecretBox) -> anyhow::Result<Self> {
         let paths = &config.paths;
         let treasury = Treasury::new(db.clone(), &paths.treasure_dir, paths.cache_dir());
+        // Before anything else touches the library: files filed before the
+        // store existed move into it, and what a crash left behind goes.
         treasury
-            .load_layout()
+            .adopt_legacy()
             .await
-            .context("failed to read the file layout")?;
+            .context("failed to move the library's files into the store")?;
+        treasury
+            .collect_garbage()
+            .await
+            .context("failed to clean up the store")?;
         let offerings = Offerings::new(paths.offerings_dir(), treasury.clone());
         let ytmusic = YtMusic::new(
             &paths.youtube_music_dir(),

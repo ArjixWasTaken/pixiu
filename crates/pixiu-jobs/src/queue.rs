@@ -293,16 +293,6 @@ impl NewJob {
         };
         Self::new(JobKind::Enrich, &payload, title)
     }
-
-    /// Moving every file to the current layout.
-    #[must_use]
-    pub fn refile() -> Self {
-        Self::new(
-            JobKind::Refile,
-            &serde_json::Map::new(),
-            "Move files to the new layout",
-        )
-    }
 }
 
 /// How a job ended.

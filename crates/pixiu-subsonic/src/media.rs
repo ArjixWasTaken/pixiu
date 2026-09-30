@@ -189,10 +189,12 @@ async fn original(
                 .insert(header::CONTENT_TYPE, content_type);
         }
         if download {
-            let name = path
-                .file_name()
-                .map(|name| name.to_string_lossy().into_owned())
-                .unwrap_or_default();
+            // Stored files are named by their content; name the download
+            // after the song.
+            let name = pixiu_treasury::layout::sanitize(
+                &format!("{} - {}.{}", track.artist_credit, track.title, track.suffix),
+                "download",
+            );
             if let Ok(disposition) = HeaderValue::from_str(&attachment(&name)) {
                 response
                     .headers_mut()
@@ -249,7 +251,7 @@ pub(crate) async fn cover_art(
             .and_then(|artist| artist.image)
     {
         let path = pixiu_treasury::covers::sized(
-            &state.treasury.cache_dir().join(image),
+            &state.treasury.resolve(&image),
             state.treasury.cache_dir(),
             size,
         )

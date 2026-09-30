@@ -197,13 +197,15 @@ async fn tracks(db: &mut Db, album_id: u64) -> Vec<Track> {
 }
 
 #[tokio::test]
-async fn a_certain_match_retags_and_refiles_the_album() {
+async fn a_certain_match_rewrites_the_album() {
     let mut hoard = hoard().await;
-    let durations: Vec<u64> = tracks(&mut hoard.db, hoard.album_id)
+    let before = tracks(&mut hoard.db, hoard.album_id).await;
+    let durations: Vec<u64> = before.iter().map(|track| track.duration_ms).collect();
+    let old_cover = Album::get_by_id(&mut hoard.db, &hoard.album_id)
         .await
-        .iter()
-        .map(|track| track.duration_ms)
-        .collect();
+        .unwrap()
+        .cover
+        .unwrap();
     let sources = FakeSources {
         candidates: vec![candidate("rel-test")],
         releases: HashMap::from([(
@@ -241,40 +243,23 @@ async fn a_certain_match_retags_and_refiles_the_album() {
     assert_eq!(album.enrichment, Some(Enrichment::Matched));
     assert_eq!(album.mbid.as_deref(), Some("rel-test"));
     assert_eq!(album.rg_mbid.as_deref(), Some("rg-rel-test"));
-    // The Cover Art Archive's cover is larger, so it replaced the file's.
+    // The Cover Art Archive's cover is larger, so it replaced the file's,
+    // which nothing shows any more.
     let cover = album.cover.as_deref().unwrap();
-    assert_eq!(cover, "Test Artist/2024 - Test Album_ Remastered/cover.jpg");
+    assert!(cover.starts_with(".store/images/") && cover.ends_with(".jpg"));
     assert!(hoard.treasury.resolve(cover).is_file());
+    assert!(!hoard.treasury.resolve(&old_cover).exists());
 
     let tracks = tracks(&mut hoard.db, hoard.album_id).await;
-    assert_eq!(
-        tracks
-            .iter()
-            .map(|track| track.path.as_str())
-            .collect::<Vec<_>>(),
-        [
-            "Test Artist/2024 - Test Album_ Remastered/01-01 First Light.flac",
-            "Test Artist/2024 - Test Album_ Remastered/01-02 Second Wind.mp3",
-        ]
-    );
     assert_eq!(tracks[1].mbid.as_deref(), Some("rec-Second Wind"));
     assert_eq!(tracks[1].artist_credit, "Test Artist feat. Guest");
-    // The old directory is gone, the files say what the database says.
-    assert!(
-        !hoard
-            .treasury
-            .resolve("Test Artist/2024 - Test Album")
-            .exists()
-    );
-    let written = tags::read(&hoard.treasury.resolve(&tracks[0].path)).unwrap();
-    assert_eq!(written.album.as_deref(), Some("Test Album: Remastered"));
-    assert_eq!(written.mbid.as_deref(), Some("rec-First Light"));
-    assert_eq!(written.album_mbid.as_deref(), Some("rel-test"));
-    assert!(
-        written
-            .cover
-            .is_some_and(|cover| cover.mime == "image/jpeg")
-    );
+    // Only the database changed: the stored files are as they arrived.
+    for (track, old) in tracks.iter().zip(&before) {
+        assert_eq!(track.path, old.path);
+    }
+    let kept = tags::read(&hoard.treasury.resolve(&tracks[0].path)).unwrap();
+    assert_eq!(kept.album.as_deref(), Some("Test Album"));
+    assert_eq!(kept.mbid, None);
 
     // The artist learned their id, a biography and a picture.
     let artist = Artist::get_by_id(&mut hoard.db, &album.artist_id)
@@ -305,11 +290,8 @@ async fn a_certain_match_retags_and_refiles_the_album() {
 #[tokio::test]
 async fn doubtful_matches_wait_for_the_admin() {
     let mut hoard = hoard().await;
-    let durations: Vec<u64> = tracks(&mut hoard.db, hoard.album_id)
-        .await
-        .iter()
-        .map(|track| track.duration_ms)
-        .collect();
+    let before = tracks(&mut hoard.db, hoard.album_id).await;
+    let durations: Vec<u64> = before.iter().map(|track| track.duration_ms).collect();
     // Only one of the two tracks is on this release.
     let sources = FakeSources {
         candidates: vec![candidate("rel-partial")],
@@ -486,11 +468,8 @@ fn shared_release(durations: &[u64]) -> Release {
 #[tokio::test]
 async fn shared_credits_file_albums_under_the_first_artist() {
     let mut hoard = hoard().await;
-    let durations: Vec<u64> = tracks(&mut hoard.db, hoard.album_id)
-        .await
-        .iter()
-        .map(|track| track.duration_ms)
-        .collect();
+    let before = tracks(&mut hoard.db, hoard.album_id).await;
+    let durations: Vec<u64> = before.iter().map(|track| track.duration_ms).collect();
     let sources = FakeSources {
         releases: HashMap::from([("rel-duo".to_owned(), shared_release(&durations))]),
         ..FakeSources::default()
@@ -538,11 +517,8 @@ impl Executor for Idle {
 #[tokio::test]
 async fn albums_under_a_shared_credit_are_repaired_once() {
     let mut hoard = hoard().await;
-    let durations: Vec<u64> = tracks(&mut hoard.db, hoard.album_id)
-        .await
-        .iter()
-        .map(|track| track.duration_ms)
-        .collect();
+    let before = tracks(&mut hoard.db, hoard.album_id).await;
+    let durations: Vec<u64> = before.iter().map(|track| track.duration_ms).collect();
     // What an earlier píxiū made of a match: the credit as an artist.
     let credit_artist = toasty::create!(Artist {
         name: "Test Artist & Guest",
@@ -581,7 +557,8 @@ async fn albums_under_a_shared_credit_are_repaired_once() {
         0
     );
 
-    // Running that lookup moves the album; the credit's artist goes.
+    // Running that lookup moves the album to its artist; the credit's
+    // artist goes.
     let sources = FakeSources {
         releases: HashMap::from([("rel-duo".to_owned(), shared_release(&durations))]),
         ..FakeSources::default()
@@ -609,6 +586,7 @@ async fn albums_under_a_shared_credit_are_repaired_once() {
             .unwrap()
             .is_none()
     );
+    // The file stays in the store, as it was.
     let path = &tracks(&mut hoard.db, hoard.album_id).await[0].path;
-    assert!(path.starts_with("Test Artist/"), "{path}");
+    assert!(path.starts_with(".store/audio/"), "{path}");
 }

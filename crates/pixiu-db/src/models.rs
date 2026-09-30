@@ -116,7 +116,8 @@ pub struct Artist {
     /// Where the biography comes from, for attribution.
     pub bio_url: Option<String>,
 
-    /// A picture of the artist, relative to the cache directory.
+    /// A picture of the artist, relative to the treasure directory
+    /// (`.store/images/…`).
     pub image: Option<String>,
 
     /// When the biography and picture were last looked for.
@@ -172,7 +173,8 @@ pub struct Album {
     #[index]
     pub ytm_browse_id: Option<String>,
 
-    /// The cover image, relative to the treasure directory.
+    /// The cover image, relative to the treasure directory
+    /// (`.store/images/…`). Albums with the same picture share the file.
     pub cover: Option<String>,
 
     pub created_at: Timestamp,
@@ -244,8 +246,13 @@ pub struct Track {
 
     pub bit_depth: Option<u8>,
 
-    /// The audio file, relative to the treasure directory.
-    #[unique]
+    /// The audio file the track plays: its [`AudioFile`], or 0 for a track
+    /// filed before files were shared, until it is adopted at startup.
+    #[index]
+    pub file_id: u64,
+
+    /// The audio file, relative to the treasure directory; a copy of the
+    /// [`AudioFile`]'s path. Several tracks may share it.
     pub path: String,
 
     pub size: u64,
@@ -279,6 +286,49 @@ pub struct Track {
 
     #[has_many]
     pub released_claims: toasty::Deferred<Vec<ReleasedClaim>>,
+}
+
+/// Audio bytes, stored once under their SHA-256 and shared by every track
+/// made from them. Files never change once stored: edits live in the
+/// database. A file goes when no track points at it any more.
+#[derive(Debug, toasty::Model)]
+pub struct AudioFile {
+    #[key]
+    #[auto]
+    pub id: u64,
+
+    /// Hex-encoded SHA-256 of the content.
+    #[unique]
+    pub sha256: String,
+
+    /// Relative to the treasure directory:
+    /// `.store/audio/<first two hex digits>/<sha256>.<suffix>`.
+    pub path: String,
+
+    pub size: u64,
+
+    /// File extension, e.g. `flac`.
+    pub suffix: String,
+
+    pub content_type: String,
+
+    pub duration_ms: u64,
+
+    /// Kilobits per second.
+    pub bitrate: Option<u32>,
+
+    pub sample_rate: Option<u32>,
+
+    pub channels: Option<u8>,
+
+    pub bit_depth: Option<u8>,
+
+    /// The YouTube Music video the file was downloaded from, so the video
+    /// is not downloaded again.
+    #[index]
+    pub ytm_video_id: Option<String>,
+
+    pub created_at: Timestamp,
 }
 
 /// Why a track is kept. A track without claims is an orphan: kept on disk,
@@ -544,7 +594,9 @@ pub enum JobKind {
     /// Look an album up on MusicBrainz, fetch its cover, lyrics and artist
     /// information.
     Enrich,
-    /// Move every file where the file layout wants it.
+    /// Retired: moved files to follow the file layout, before files were
+    /// shared and stopped moving. None are queued any more; the variant
+    /// stays because the schema cannot drop it.
     Refile,
 }
 

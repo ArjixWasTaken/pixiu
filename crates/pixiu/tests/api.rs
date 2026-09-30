@@ -648,30 +648,12 @@ async fn songs_and_albums_tell_more_than_subsonic() {
 }
 
 #[tokio::test]
-async fn settings_manage_the_layout_and_keys() {
+async fn settings_manage_keys() {
     let api = Api::new().await;
     let token = api.claim().await;
 
     let settings = api.get(&token, "/api/settings").await;
-    assert_eq!(
-        settings["layout"]["template"],
-        settings["layout"]["default"]
-    );
     assert_eq!(settings["keys"][0]["current"], true);
-
-    let preview = api
-        .get(&token, "/api/settings/layout/preview?template=%7Btitle%7D")
-        .await;
-    assert_eq!(preview["path"], "Vibing Over Venus.opus");
-    let (status, _) = api
-        .request(
-            Method::GET,
-            "/api/settings/layout/preview?template=%7Bnope%7D",
-            Some(&token),
-            None,
-        )
-        .await;
-    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
 
     let created = api
         .send(

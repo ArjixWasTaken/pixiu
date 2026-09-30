@@ -16,8 +16,6 @@
         <dl class="m3-body-medium grid grid-cols-[max-content_1fr] gap-x-6 gap-y-1.5">
           <dt>Format</dt>
           <dd>{{ info.format }} · {{ formatBytes(info.size) }}</dd>
-          <dt>File</dt>
-          <dd class="font-mono break-all">{{ info.path }}</dd>
           <dt>Came from</dt>
           <dd>
             <a v-if="info.youtube_url" :href="info.youtube_url" rel="noopener" target="_blank">YouTube Music</a>

@@ -135,3 +135,62 @@ async fn migrations_keep_their_indexes() {
         "indexes lost by migrations: {missing:?}"
     );
 }
+
+/// Copies a database fixture made with the models of an older schema, so a
+/// test can open (and upgrade) it.
+fn fixture_db(name: &str, dir: &Path) -> std::path::PathBuf {
+    let path = dir.join("pixiu.db");
+    std::fs::copy(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures")
+            .join(name),
+        &path,
+    )
+    .unwrap();
+    path
+}
+
+/// A library from before files were shared (schema 0008) upgrades with
+/// nothing lost: its tracks wait for their files to be adopted into the
+/// store, and what belonged to the file layout goes.
+#[tokio::test]
+async fn upgrade_from_0008() {
+    use pixiu_db::{Annotation, AudioFile, Job, JobKind, Playlist, Setting, Track, Watch};
+
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = pixiu_db::open(&fixture_db("v0008.db", dir.path()))
+        .await
+        .unwrap();
+
+    let mut tracks = Track::all().exec(&mut db).await.unwrap();
+    tracks.sort_by_key(|track| track.id);
+    assert_eq!(tracks.len(), 2);
+    assert!(tracks.iter().all(|track| track.file_id == 0));
+    assert_eq!(
+        tracks[0].path,
+        "Test Artist/2024 - Test Album/01-01 First Light.flac"
+    );
+    assert!(AudioFile::all().exec(&mut db).await.unwrap().is_empty());
+
+    let mut kinds: Vec<_> = Job::all()
+        .exec(&mut db)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|job| job.kind)
+        .collect();
+    kinds.sort_by_key(|kind| format!("{kind:?}"));
+    assert_eq!(kinds, [JobKind::DownloadTrack, JobKind::Enrich]);
+    let keys: Vec<_> = Setting::all()
+        .exec(&mut db)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|setting| setting.key)
+        .collect();
+    assert_eq!(keys, ["repair.album-artists"]);
+
+    assert_eq!(Annotation::all().exec(&mut db).await.unwrap().len(), 2);
+    assert_eq!(Playlist::all().exec(&mut db).await.unwrap().len(), 3);
+    assert_eq!(Watch::all().exec(&mut db).await.unwrap().len(), 1);
+}

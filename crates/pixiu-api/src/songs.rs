@@ -120,7 +120,6 @@ pub(crate) async fn info(
     Ok(Json(json!({
         "format": format(&track),
         "size": track.size,
-        "path": track.path,
         "origin": match track.origin {
             TrackOrigin::Offering => "offering",
             TrackOrigin::Download => "download",

@@ -4,14 +4,11 @@
 use std::{io, path::Path};
 
 use pixiu_db::{
-    Album, Annotation, Artist, ClaimKind, Db, PlaylistEntry, ReleaseReason, ReleasedClaim, Track,
-    TrackClaim, now, toasty,
+    Album, Annotation, Artist, ClaimKind, Db, Lyrics, PlaylistEntry, ReleaseReason, ReleasedClaim,
+    Track, TrackClaim, now, toasty,
 };
 
-use crate::{
-    covers,
-    ingest::{Claim, IngestError, Treasury},
-};
+use crate::ingest::{Claim, IngestError, Treasury};
 
 /// Why claims are being released, remembered for the orphans they leave.
 #[derive(Debug, Clone, Copy)]
@@ -100,8 +97,8 @@ impl Treasury {
         Ok(released)
     }
 
-    /// Tracks nothing claims, newest first. They stay on disk until the
-    /// admin deletes them.
+    /// Tracks nothing claims, newest first. They stay until the admin
+    /// deletes them.
     ///
     /// # Errors
     ///
@@ -156,9 +153,9 @@ impl Treasury {
         Ok(orphan_ids(&mut self.db.clone()).await?.len())
     }
 
-    /// Deletes the orphans among `ids`: their files, their rows, and the
-    /// albums and artists they leave empty. Claimed tracks are left alone.
-    /// Returns how many tracks were deleted.
+    /// Deletes the orphans among `ids`: their rows, the albums and artists
+    /// they leave empty, and stored files nothing else plays. Claimed
+    /// tracks are left alone. Returns how many tracks were deleted.
     ///
     /// # Errors
     ///
@@ -180,10 +177,7 @@ impl Treasury {
     }
 
     async fn delete_track(&self, db: &mut Db, track: Track) -> Result<(), IngestError> {
-        let file = self.resolve(&track.path);
-        remove_file(&file).await?;
-        tracing::info!(track = track.id, path = %track.path, "orphan deleted");
-
+        tracing::info!(track = track.id, "orphan deleted");
         forget_annotation(db, &format!("tr-{}", track.id)).await?;
         PlaylistEntry::filter_by_track_id(Some(track.id))
             .delete()
@@ -193,8 +187,10 @@ impl Treasury {
             .delete()
             .exec(db)
             .await?;
-        let (album_id, artist_id) = (track.album_id, track.artist_id);
+        Lyrics::filter_by_track_id(track.id).delete().exec(db).await?;
+        let (album_id, artist_id, file_id) = (track.album_id, track.artist_id, track.file_id);
         track.delete().exec(db).await?;
+        self.release_file(db, file_id).await?;
 
         if Track::filter_by_album_id(album_id)
             .first()
@@ -203,27 +199,15 @@ impl Treasury {
             .is_none()
             && let Some(album) = Album::filter_by_id(album_id).first().exec(db).await?
         {
-            let album_artist = album.artist_id;
-            if let Some(cover) = &album.cover {
-                let cover = self.resolve(cover);
-                remove_file(&cover).await?;
-                covers::forget(&cover, &self.cache_dir).await?;
-            }
+            let (album_artist, cover) = (album.artist_id, album.cover.clone());
             forget_annotation(db, &format!("al-{}", album.id)).await?;
             album.delete().exec(db).await?;
+            if let Some(cover) = cover {
+                self.release_image(db, &cover).await?;
+            }
             self.forget_artist_if_empty(db, album_artist).await?;
         }
         self.forget_artist_if_empty(db, artist_id).await?;
-
-        // Directories the deletion left empty go too.
-        let mut dir = file.parent();
-        while let Some(current) = dir.filter(|dir| dir.starts_with(&self.root) && *dir != self.root)
-        {
-            if tokio::fs::remove_dir(current).await.is_err() {
-                break;
-            }
-            dir = current.parent();
-        }
         Ok(())
     }
 
@@ -243,8 +227,12 @@ impl Treasury {
                 .await?
                 .is_some();
         if !used && let Some(artist) = Artist::filter_by_id(artist_id).first().exec(db).await? {
+            let image = artist.image.clone();
             forget_annotation(db, &format!("ar-{}", artist.id)).await?;
             artist.delete().exec(db).await?;
+            if let Some(image) = image {
+                self.release_image(db, &image).await?;
+            }
         }
         Ok(())
     }
@@ -256,8 +244,12 @@ async fn orphan_ids(db: &mut Db) -> Result<Vec<u64>, toasty::Error> {
     )
     .exec(db)
     .await?;
-    Ok(rows
-        .into_iter()
+    Ok(ids(rows))
+}
+
+/// The first column of each row, as ids.
+pub(crate) fn ids(rows: impl IntoIterator<Item = toasty::stmt::Value>) -> Vec<u64> {
+    rows.into_iter()
         .filter_map(|row| match row {
             toasty::stmt::Value::Record(record) => match record[0] {
                 toasty::stmt::Value::I64(id) => u64::try_from(id).ok(),
@@ -265,7 +257,7 @@ async fn orphan_ids(db: &mut Db) -> Result<Vec<u64>, toasty::Error> {
             },
             _ => None,
         })
-        .collect())
+        .collect()
 }
 
 async fn forget_annotation(db: &mut Db, item: &str) -> Result<(), toasty::Error> {

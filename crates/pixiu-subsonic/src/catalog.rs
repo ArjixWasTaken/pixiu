@@ -211,6 +211,26 @@ pub(crate) async fn songs(
         .collect())
 }
 
+/// Where the song would sit in a folder tree, for apps that show paths:
+/// files live in the content-addressed store, named by their content.
+fn display_path(track: &Track, album: Option<&Album>, album_artist: Option<&Artist>) -> String {
+    pixiu_treasury::layout::track_path(pixiu_treasury::layout::TrackLocation {
+        album_artist: album_artist.map_or(track.artist_credit.as_str(), |artist| {
+            artist.name.as_str()
+        }),
+        artist: &track.artist_credit,
+        album: album.map_or("Unknown Album", |album| album.title.as_str()),
+        year: track.year.or(album.and_then(|album| album.year)),
+        genre: track.genre.as_deref(),
+        disc: track.disc_number,
+        track: track.track_number,
+        title: &track.title,
+        suffix: &track.suffix,
+    })
+    .to_string_lossy()
+    .into_owned()
+}
+
 /// A song (the Subsonic `Child` type).
 pub(crate) fn song(
     name: &'static str,
@@ -243,7 +263,7 @@ pub(crate) fn song(
         .attr_opt("bitDepth", track.bit_depth)
         .attr_opt("samplingRate", track.sample_rate)
         .attr_opt("channelCount", track.channels)
-        .attr("path", track.path.as_str())
+        .attr("path", display_path(track, album, album_artist))
         .attr_opt("discNumber", track.disc_number)
         .attr("created", track.added_at.to_string())
         .attr("albumId", ids::album(track.album_id))

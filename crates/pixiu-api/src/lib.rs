@@ -126,12 +126,6 @@ pub fn router(state: ApiState) -> Router {
         )
         .route("/api/offerings/{id}", delete(offerings::discard))
         .route("/api/settings", get(settings::show))
-        .route("/api/settings/layout", put(settings::save_layout))
-        .route(
-            "/api/settings/layout/preview",
-            get(settings::preview_layout),
-        )
-        .route("/api/settings/refile", post(settings::refile))
         .route("/api/settings/lookup-all", post(settings::lookup_all))
         .route("/api/keys", post(settings::create_key))
         .route("/api/keys/{id}", delete(settings::revoke_key))

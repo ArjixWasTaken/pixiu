@@ -1,17 +1,20 @@
-//! Filing tracks into the treasure.
+//! Adding tracks to the library.
 
 use std::{
     io,
     path::{Path, PathBuf},
-    sync::{Arc, RwLock},
+    sync::Arc,
 };
 
-use pixiu_db::{Album, Artist, ClaimKind, Db, Track, TrackClaim, TrackOrigin, now, toasty};
+use pixiu_db::{
+    Album, Artist, AudioFile, ClaimKind, Db, Track, TrackClaim, TrackOrigin, now, toasty,
+};
 use tokio::sync::Mutex;
 
 use crate::{
-    layout::{self, Template, TrackLocation},
+    claims::remove_file,
     name_key,
+    store::{self, Entry},
     tags::{AudioInfo, Cover},
 };
 
@@ -104,11 +107,9 @@ pub struct Treasury {
     pub(crate) root: PathBuf,
     pub(crate) cache_dir: PathBuf,
     /// Changes to the library are serialized, so concurrent ones cannot
-    /// create the same artist or album twice, race for a file name, or
-    /// delete an album another is filing into.
+    /// create the same artist or album twice, or delete a stored file
+    /// another is about to use.
     pub(crate) lock: Arc<Mutex<()>>,
-    /// Where tracks are filed.
-    pub(crate) layout: Arc<RwLock<Template>>,
 }
 
 impl Treasury {
@@ -119,7 +120,6 @@ impl Treasury {
             root: root.into(),
             cache_dir: cache_dir.into(),
             lock: Arc::default(),
-            layout: Arc::default(),
         }
     }
 
@@ -144,14 +144,16 @@ impl Treasury {
         self.root.join(relative)
     }
 
-    /// Moves the audio file at `source` into the treasure and records it.
+    /// Puts the audio file at `source` into the store and records a track
+    /// playing it. When the store holds the same content already, the
+    /// track shares that file and `source` is removed.
     ///
     /// `fallback_cover` is used for the album when the file has no embedded
     /// cover. On failure the file is left at `source`.
     ///
     /// # Errors
     ///
-    /// Fails when the album already holds the same track, or on I/O and
+    /// Fails when the library already holds the same track, or on I/O and
     /// database errors.
     pub async fn ingest(
         &self,
@@ -166,6 +168,22 @@ impl Treasury {
 
         if let Some(video_id) = &provenance.ytm_video_id
             && let Some(existing) = Track::filter_by_ytm_video_id(video_id)
+                .first()
+                .exec(&mut db)
+                .await?
+        {
+            return Err(IngestError::Duplicate {
+                track_id: existing.id,
+            });
+        }
+
+        let sha256 = store::hash_file(source).await?;
+        let stored = AudioFile::filter_by_sha256(&sha256)
+            .first()
+            .exec(&mut db)
+            .await?;
+        if let Some(file) = &stored
+            && let Some(existing) = Track::filter_by_file_id(file.id)
                 .first()
                 .exec(&mut db)
                 .await?
@@ -218,44 +236,47 @@ impl Treasury {
             });
         }
 
-        let relative = self
-            .free_path(self.layout().track_path(TrackLocation {
-                album_artist: &album_artist.name,
-                artist: credit,
-                album: &album.title,
-                year: album.year,
-                genre: info.genre.as_deref(),
-                disc: info.disc_number,
-                track: info.track_number,
-                title,
-                suffix: &info.suffix,
-            }))
-            .await;
-        let destination = self.root.join(&relative);
-        tokio::fs::create_dir_all(destination.parent().expect("track paths have a parent")).await?;
-        move_file(source, &destination).await?;
-
+        let file = match stored {
+            Some(file) => StoredFile::Shared(file),
+            None => {
+                let relative = store::audio_path(&sha256, &info.suffix);
+                self.put(source, &relative, Entry::Move).await?;
+                StoredFile::New { sha256, relative }
+            }
+        };
+        let placed = match &file {
+            StoredFile::New { relative, .. } => Some(self.resolve(relative)),
+            StoredFile::Shared(_) => None,
+        };
         let recorded = self
             .record(
                 &mut db,
                 album,
                 artist_id,
-                &relative,
-                &destination,
+                file,
                 info,
                 fallback_cover,
                 provenance,
                 claim,
             )
             .await;
-        if recorded.is_err()
-            && let Err(error) = move_file(&destination, source).await
-        {
-            tracing::error!(
-                %error,
-                path = %destination.display(),
-                "failed to restore a file after a failed ingest"
-            );
+        match (&recorded, placed) {
+            // The store had the content: the new copy is not needed.
+            (Ok(_), None) => {
+                if let Err(error) = remove_file(source).await {
+                    tracing::warn!(%error, path = %source.display(), "cannot remove a stored copy");
+                }
+            }
+            (Err(_), Some(placed)) => {
+                if let Err(error) = move_file(&placed, source).await {
+                    tracing::error!(
+                        %error,
+                        path = %placed.display(),
+                        "failed to restore a file after a failed ingest"
+                    );
+                }
+            }
+            _ => {}
         }
         recorded
     }
@@ -266,17 +287,14 @@ impl Treasury {
         db: &mut Db,
         mut album: Album,
         artist_id: u64,
-        relative: &Path,
-        destination: &Path,
+        file: StoredFile,
         info: &AudioInfo,
         fallback_cover: Option<&Cover>,
         provenance: Provenance,
         claim: Claim,
     ) -> Result<Track, IngestError> {
-        let size = tokio::fs::metadata(destination).await?.len();
-        let album_dir = relative.parent().expect("track paths have a parent");
         let cover = match (&album.cover, info.cover.as_ref().or(fallback_cover)) {
-            (None, Some(cover)) => Some(self.write_cover(album_dir, cover).await?),
+            (None, Some(cover)) => Some(self.place_image(cover).await?),
             _ => None,
         };
 
@@ -286,6 +304,28 @@ impl Treasury {
                 .exec(&mut tx)
                 .await?;
         }
+        let file = match file {
+            StoredFile::Shared(file) => file,
+            StoredFile::New { sha256, relative } => {
+                let size = tokio::fs::metadata(self.resolve(&relative)).await?.len();
+                toasty::create!(AudioFile {
+                    sha256,
+                    path: relative,
+                    size,
+                    suffix: info.suffix.to_ascii_lowercase(),
+                    content_type: &info.content_type,
+                    duration_ms: info.duration_ms,
+                    bitrate: info.bitrate,
+                    sample_rate: info.sample_rate,
+                    channels: info.channels,
+                    bit_depth: info.bit_depth,
+                    ytm_video_id: provenance.ytm_video_id.clone(),
+                    created_at: now(),
+                })
+                .exec(&mut tx)
+                .await?
+            }
+        };
         let track = toasty::create!(Track {
             album_id: album.id,
             artist_id,
@@ -300,10 +340,11 @@ impl Treasury {
             sample_rate: info.sample_rate,
             channels: info.channels,
             bit_depth: info.bit_depth,
-            path: path_string(relative),
-            size,
-            suffix: &info.suffix,
-            content_type: &info.content_type,
+            file_id: file.id,
+            path: file.path.clone(),
+            size: file.size,
+            suffix: file.suffix.clone(),
+            content_type: file.content_type.clone(),
             mbid: info.mbid.clone(),
             isrc: info.isrc.clone(),
             ytm_video_id: provenance.ytm_video_id,
@@ -324,33 +365,17 @@ impl Treasury {
         .await?;
         tx.commit().await?;
 
-        tracing::info!(track = track.id, path = %track.path, "track added to the hoard");
+        tracing::info!(track = track.id, file = file.id, "track added to the library");
         Ok(track)
     }
+}
 
-    /// Writes `cover` into the album directory, returning its relative path.
-    async fn write_cover(&self, album_dir: &Path, cover: &Cover) -> io::Result<String> {
-        let relative = self
-            .free_path(album_dir.join(format!("cover.{}", cover.extension())))
-            .await;
-        tokio::fs::write(self.root.join(&relative), &cover.data).await?;
-        Ok(path_string(&relative))
-    }
-
-    /// `relative`, or a numbered variant of it that is not taken on disk.
-    pub(crate) async fn free_path(&self, relative: PathBuf) -> PathBuf {
-        let mut candidate = relative.clone();
-        for n in 2.. {
-            if !tokio::fs::try_exists(self.root.join(&candidate))
-                .await
-                .unwrap_or(true)
-            {
-                break;
-            }
-            candidate = layout::numbered(&relative, n);
-        }
-        candidate
-    }
+/// The file a new track plays.
+enum StoredFile {
+    /// Content the store holds already.
+    Shared(AudioFile),
+    /// Just put into the store; its row is written with the track's.
+    New { sha256: String, relative: String },
 }
 
 /// The artist with YouTube Music channel `channel`, else the one named

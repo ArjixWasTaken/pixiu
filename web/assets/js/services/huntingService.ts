@@ -68,7 +68,7 @@ export type JobState = 'queued' | 'running' | 'done' | 'failed' | 'paused'
 
 export interface HuntJob {
   id: number
-  kind: 'download' | 'album' | 'watch_sync' | 'lookup' | 'refile'
+  kind: 'download' | 'album' | 'watch_sync' | 'lookup'
   state: JobState
   title: string
   error: string | null
@@ -134,13 +134,6 @@ export interface ApiKeyInfo {
 }
 
 export interface Settings {
-  layout: {
-    template: string
-    default: string
-    misplaced: number
-    refiling: boolean
-    example: { title: string; album: string; track: number | null }
-  }
   albums_not_looked_up: number
   keys: ApiKeyInfo[]
 }
@@ -148,7 +141,6 @@ export interface Settings {
 export interface SongInfo {
   format: string
   size: number
-  path: string
   origin: 'offering' | 'download'
   source_name: string | null
   source_archive: string | null
@@ -251,10 +243,6 @@ export const huntingService = {
   finishLogin: () => http.post<SessionHealth>('sources/login/finish'),
 
   settings: () => http.get<Settings>('settings'),
-  previewLayout: (template: string) =>
-    http.silently.get<{ path: string }>(`settings/layout/preview?template=${encodeURIComponent(template)}`),
-  saveLayout: (template: string) => http.put<{ misplaced: number }>('settings/layout', { template }),
-  refile: () => http.post('settings/refile'),
   lookUpAll: () => http.post<{ queued: number }>('settings/lookup-all'),
   createKey: (name: string) => http.post<{ id: number; name: string; key: string }>('keys', { name }),
   revokeKey: (id: number) => http.delete(`keys/${id}`),

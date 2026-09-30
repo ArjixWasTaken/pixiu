@@ -345,6 +345,7 @@ async fn songs_are_excluded_from_watched_playlists() {
             title: "Unwanted Song",
             artist_credit: "Somebody",
             duration_ms: 1_000_u64,
+            file_id: 0_u64,
             path: "Somebody/Road Songs/Unwanted Song.opus",
             size: 1_u64,
             suffix: "opus",

@@ -1,26 +1,16 @@
-//! Settings: the file layout, MusicBrainz lookups, and API keys.
+//! Settings: MusicBrainz lookups, and API keys.
 
 use axum::{
     Json,
-    extract::{Path, Query, State},
+    extract::{Path, State},
     http::StatusCode,
 };
-use pixiu_db::{Album, ApiKey, JobKind, now, toasty};
+use pixiu_db::{Album, ApiKey, now, toasty};
 use pixiu_jobs::NewJob;
-use pixiu_treasury::{Template, layout::TrackLocation};
 use serde::Deserialize;
 use serde_json::{Value as JsonValue, json};
 
 use crate::{ApiError, ApiResult, ApiState, Session, auth};
-
-async fn refiling(state: &ApiState) -> ApiResult<bool> {
-    Ok(state
-        .jobs
-        .unfinished()
-        .await?
-        .iter()
-        .any(|job| job.kind == JobKind::Refile))
-}
 
 /// `GET /api/settings`.
 pub(crate) async fn show(
@@ -38,19 +28,7 @@ pub(crate) async fn show(
         .iter()
         .filter(|album| album.enrichment.is_none())
         .count();
-    let example = TrackLocation::EXAMPLE;
     Ok(Json(json!({
-        "layout": {
-            "template": state.treasury.layout().as_str(),
-            "default": Template::DEFAULT,
-            "misplaced": state.treasury.misplaced().await?,
-            "refiling": refiling(&state).await?,
-            "example": {
-                "title": example.title,
-                "album": example.album,
-                "track": example.track,
-            },
-        },
         "albums_not_looked_up": unlooked,
         "keys": keys.iter().map(|key| json!({
             "id": key.id,
@@ -60,48 +38,6 @@ pub(crate) async fn show(
             "current": key.id == session.key.id,
         })).collect::<Vec<_>>(),
     })))
-}
-
-#[derive(Deserialize)]
-pub(crate) struct Layout {
-    template: String,
-}
-
-/// `GET /api/settings/layout/preview?template=`: where the template would
-/// file the example track.
-pub(crate) async fn preview_layout(
-    _: Session,
-    Query(layout): Query<Layout>,
-) -> ApiResult<Json<JsonValue>> {
-    match Template::preview(&layout.template) {
-        Ok(path) => Ok(Json(json!({ "path": path.display().to_string() }))),
-        Err(error) => Err(ApiError::unprocessable(error.to_string())),
-    }
-}
-
-/// `PUT /api/settings/layout`: new tracks follow it at once; the others
-/// move when the admin asks (`POST /api/settings/refile`).
-pub(crate) async fn save_layout(
-    State(state): State<ApiState>,
-    _: Session,
-    Json(layout): Json<Layout>,
-) -> ApiResult<Json<JsonValue>> {
-    let template = Template::parse(&layout.template)
-        .map_err(|error| ApiError::unprocessable(error.to_string()))?;
-    tracing::info!(%template, "file layout changed");
-    state.treasury.set_layout(template).await?;
-    Ok(Json(
-        json!({ "misplaced": state.treasury.misplaced().await? }),
-    ))
-}
-
-/// `POST /api/settings/refile`: moves every file to the layout, unless
-/// that is under way.
-pub(crate) async fn refile(State(state): State<ApiState>, _: Session) -> ApiResult<StatusCode> {
-    if !refiling(&state).await? {
-        state.jobs.enqueue(NewJob::refile()).await?;
-    }
-    Ok(StatusCode::ACCEPTED)
 }
 
 /// `POST /api/settings/lookup-all`: looks up every album never looked up.

@@ -1,6 +1,5 @@
 <template>
   <div v-if="settings" class="flex flex-col gap-10 md:w-2/3">
-    <LayoutSettingGroup :layout="settings.layout" @changed="fetchSettings" />
     <MusicBrainzSettingGroup :unlooked="settings.albums_not_looked_up" @changed="fetchSettings" />
   </div>
 </template>
@@ -11,7 +10,6 @@ import { huntingService } from '@/services/huntingService'
 import type { Settings } from '@/services/huntingService'
 import { useErrorHandler } from '@/composables/useErrorHandler'
 
-import LayoutSettingGroup from '@/components/screens/settings/LayoutSettingGroup.vue'
 import MusicBrainzSettingGroup from '@/components/screens/settings/MusicBrainzSettingGroup.vue'
 
 const { handleHttpError } = useErrorHandler('dialog')

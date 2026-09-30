@@ -165,6 +165,7 @@ async fn hoard(db: &mut Db, video_id: &str) -> u64 {
         title: format!("Song {video_id}"),
         artist_credit: "Somebody",
         duration_ms: 180_000_u64,
+        file_id: 0_u64,
         path: format!("Somebody/{video_id}.opus"),
         size: 1_u64,
         suffix: "opus",
