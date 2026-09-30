@@ -2,9 +2,7 @@
   <ScreenBase>
     <template #header>
       <ScreenHeader layout="collapsed">
-        <span v-if="q"
-          >Searching for <span class="font-thin">{{ q }}</span></span
-        >
+        <span v-if="q">Searching for {{ q }}</span>
         <span v-else>Search</span>
       </ScreenHeader>
     </template>
@@ -34,16 +32,15 @@
 
     <ScreenEmptyState v-else>
       <template #icon>
-        <Icon :icon="faSearch" />
+        <M3Icon :size="64" name="search" />
       </template>
-      Find songs, artists, and albums,
-      <span class="secondary block">all in one place.</span>
+      Find songs, artists and albums
+      <span class="secondary block">All in one place.</span>
     </ScreenEmptyState>
   </ScreenBase>
 </template>
 
 <script lang="ts" setup>
-import { faSearch } from '@fortawesome/free-solid-svg-icons'
 import { intersectionBy } from 'lodash-es'
 import { ref, toRef } from 'vue'
 import { eventBus } from '@/utils/eventBus'
@@ -52,6 +49,7 @@ import { searchStore } from '@/stores/searchStore'
 
 import ScreenHeader from '@/components/ui/ScreenHeader.vue'
 import ScreenEmptyState from '@/components/ui/ScreenEmptyState.vue'
+import M3Icon from '@/components/m3/M3Icon.vue'
 import ScreenBase from '@/components/screens/ScreenBase.vue'
 import PlayableExcerptResultsBlock from '@/components/screens/search/PlayableExcerptResultsBlock.vue'
 import ArtistResultsBlock from '@/components/screens/search/ArtistExcerptResultsBlock.vue'
