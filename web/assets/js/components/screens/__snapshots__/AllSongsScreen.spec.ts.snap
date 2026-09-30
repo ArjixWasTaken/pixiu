@@ -4,7 +4,9 @@ exports[`allSongsScreen.vue > renders 1`] = `
 <section data-v-0fb797a2="" data-v-ddbdca5c="" class="max-h-full min-h-full w-full flex flex-col transform-gpu overflow-hidden">
   <!--v-if-->
   <header data-v-0623237c="" data-v-ddbdca5c="" data-v-0fb797a2-s="" class="expanded screen-header">
-    <!--v-if-->
+    <aside data-v-0623237c="" class="thumbnail">
+      <!---->
+    </aside>
     <main data-v-0623237c="" class="body"><span data-v-0623237c="" class="m3-label-large overline-text">Library</span>
       <h1 data-v-0623237c="" class="m3-headline-medium name"> All Songs </h1>
       <!--v-if-->

@@ -1,6 +1,6 @@
 <template>
   <header :class="[layout, { disabled, round: isArtist }]" class="screen-header">
-    <aside v-if="$slots.thumbnail && layout === 'expanded' && !isMobile" class="thumbnail">
+    <aside v-if="$slots.thumbnail && layout === 'expanded'" class="thumbnail">
       <slot name="thumbnail" />
     </aside>
 
@@ -138,6 +138,13 @@ const titleClass = computed(() => {
 
   .round & {
     border-radius: 50%;
+  }
+
+  /* On phones, smaller: enough to recognize the album or artist by. */
+  @media (max-width: 768px) {
+    width: 96px;
+    height: 96px;
+    border-radius: 16px;
   }
 
   :deep(> *) {

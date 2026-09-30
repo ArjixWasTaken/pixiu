@@ -1,5 +1,7 @@
 import { screen, waitFor } from '@testing-library/vue'
-import { describe, expect, it } from 'vite-plus/test'
+import { describe, expect, it, vi } from 'vite-plus/test'
+import { defineComponent, ref } from 'vue'
+import { CurrentStreamableKey } from '@/config/symbols'
 import { createHarness } from '@/__tests__/TestHarness'
 import { commonStore } from '@/stores/commonStore'
 import { queueStore } from '@/stores/queueStore'
@@ -60,5 +62,25 @@ describe('queueScreen.vue', () => {
 
     await h.user.click(screen.getByTitle('Shuffle all. Press Alt/⌥ to change mode.'))
     await waitFor(() => expect(playMock).toHaveBeenCalledWith(songs, true))
+  })
+
+  it('opens where it is playing, not at its top', async () => {
+    const songs = h.factory('song').make(30)
+    const scrollToPlayable = vi.fn()
+    queueStore.state.playables = songs
+
+    h.render(Component, {
+      global: {
+        provide: { [CurrentStreamableKey as symbol]: ref(songs[20]) },
+        stubs: {
+          PlayableList: defineComponent({
+            setup: (_, { expose }) => expose({ scrollToPlayable }),
+            template: '<div data-testid="song-list" />',
+          }),
+        },
+      },
+    })
+
+    await waitFor(() => expect(scrollToPlayable).toHaveBeenCalledWith(songs[20]))
   })
 })

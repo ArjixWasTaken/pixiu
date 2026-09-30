@@ -68,7 +68,8 @@ const upNext = computed(() => playables.value.slice(current.value ? 1 : 0))
 
 const meta = computed(() => {
   const seconds = upNext.value.reduce((total, { length }) => total + length, 0)
-  return `${pluralize(upNext.value, 'song')} · ${secondsToHumanReadable(seconds)}`
+  // What is left after the current song, not the whole queue.
+  return `${pluralize(upNext.value, 'song')} left · ${secondsToHumanReadable(seconds)}`
 })
 
 const artistOf = (playable: Playable) => getPlayableProp(playable, 'artist_name', 'podcast_author')

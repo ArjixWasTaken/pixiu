@@ -5,7 +5,7 @@
     </template>
 
     <Tabs v-if="tabs.length" class="settings-tabs" data-vue="SettingsScreen">
-      <TabList>
+      <TabList sticky>
         <TabButton
           v-for="tab in tabs"
           :id="`settingsTab-${tab.id}`"
@@ -20,7 +20,7 @@
         </TabButton>
       </TabList>
 
-      <TabPanelContainer class="max-w-[808px]">
+      <TabPanelContainer :scroll="false" class="max-w-[808px]">
         <TabPanel
           v-for="tab in tabs"
           v-show="currentTabId === tab.id"
@@ -116,6 +116,11 @@ onScreenActivated('Settings', () => {
   }
 })
 
+// Another tab starts at its top, not where the last one was scrolled to.
+watch(currentTabId, () =>
+  document.querySelector('[data-vue="SettingsScreen"]')?.closest('.screen-body')?.scrollTo?.({ top: 0 }),
+)
+
 watch(tabs, visible => {
   if (!visible.some(tab => tab.id === currentTabId.value)) {
     currentTabId.value = visible[0]?.id
@@ -127,6 +132,8 @@ watch(tabs, visible => {
 /* The tabs run to the screen's edges. */
 .settings-tabs {
   margin: 0 -24px;
+  /* As tall as the settings, so the tab bar stays stuck all the way down. */
+  flex-shrink: 0;
 
   @media (max-width: 768px) {
     margin: 0 -16px;

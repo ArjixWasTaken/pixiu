@@ -29,7 +29,7 @@ import M3SearchBar from '@/components/m3/M3SearchBar.vue'
 
 const emit = defineEmits<{ (e: 'focus-change', focused: boolean): void }>()
 
-const { go, url } = useRouter()
+const { go, url, onRouteChanged } = useRouter()
 const { isMobile } = useViewport()
 
 const placeholder = computed(() => (isMobile.value ? 'Search' : 'Search songs, artists and albums'))
@@ -56,4 +56,11 @@ const onFocus = () => {
 const onBlur = () => emit('focus-change', false)
 
 eventBus.on('FOCUS_SEARCH_FIELD', () => bar.value?.focus())
+
+// Leaving the results leaves the search behind too.
+onRouteChanged(route => {
+  if (!route.screen.startsWith('Search.')) {
+    q.value = ''
+  }
+})
 </script>

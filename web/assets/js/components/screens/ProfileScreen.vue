@@ -4,8 +4,8 @@
       <ScreenHeader>Preferences</ScreenHeader>
     </template>
 
-    <Tabs class="-mx-6">
-      <TabList>
+    <Tabs class="-mx-6 shrink-0" data-vue="ProfileScreen">
+      <TabList sticky>
         <TabButton
           :selected="currentTab === 'preferences'"
           aria-controls="profilePanePreferences"
@@ -18,7 +18,7 @@
         </TabButton>
       </TabList>
 
-      <TabPanelContainer class="scroll-mask-y">
+      <TabPanelContainer :scroll="false">
         <TabPanel
           v-if="currentTab === 'preferences'"
           id="profilePanePreferences"
@@ -60,5 +60,9 @@ if (!['preferences', 'themes'].includes(currentTab.value!)) {
   currentTab.value = 'preferences'
 }
 
-watch(currentTab, tab => set('profileScreenTab', tab))
+watch(currentTab, tab => {
+  set('profileScreenTab', tab)
+  // Another tab starts at its top, not where the last one was scrolled to.
+  document.querySelector('[data-vue="ProfileScreen"]')?.closest('.screen-body')?.scrollTo?.({ top: 0 })
+})
 </script>

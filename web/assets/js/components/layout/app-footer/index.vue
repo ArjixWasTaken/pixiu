@@ -11,6 +11,15 @@
 
     <div class="fullscreen-backdrop hidden" />
 
+    <!-- Fullscreen: what is playing, large, above the controls. -->
+    <div v-if="isFullscreen && stage" class="fullscreen-stage" data-testid="fullscreen-stage">
+      <img :src="stage.cover" alt="" class="fullscreen-cover" />
+      <div class="fullscreen-caption">
+        <p class="m3-display-small truncate">{{ stage.title }}</p>
+        <p v-if="stage.subtitle" class="m3-title-large truncate fullscreen-subtitle">{{ stage.subtitle }}</p>
+      </div>
+    </div>
+
     <MiniPlayer v-if="isMobile" />
 
     <div v-else class="wrapper">
@@ -36,6 +45,8 @@ import { eventBus } from '@/utils/eventBus'
 import { isEpisode, isRadioStation, isSong } from '@/utils/typeGuards'
 import { isAudioContextSupported } from '@/utils/supports'
 import { defineAsyncComponent, requireInjection } from '@/utils/helpers'
+import { logger } from '@/utils/logger'
+import { useBranding } from '@/composables/useBranding'
 import { CurrentStreamableKey } from '@/config/symbols'
 import { artistStore } from '@/stores/artistStore'
 import { preferenceStore } from '@/stores/preferenceStore'
@@ -95,6 +106,32 @@ watch(currentStreamable, async streamable => {
   if (isSong(streamable)) {
     artist.value = await artistStore.resolve(streamable.artist_id)
   }
+})
+
+const { cover: defaultCover } = useBranding()
+
+/** What fullscreen shows large: the cover, the title, who and from what. */
+const stage = computed(() => {
+  const streamable = currentStreamable.value
+  if (!streamable) {
+    return null
+  }
+  if (isSong(streamable)) {
+    return {
+      cover: streamable.album_cover || defaultCover,
+      title: streamable.title,
+      subtitle: [streamable.artist_name, streamable.album_name].filter(Boolean).join(' · '),
+    }
+  }
+  if (isEpisode(streamable)) {
+    return {
+      cover: streamable.episode_image || defaultCover,
+      title: streamable.title,
+      subtitle: streamable.podcast_title,
+    }
+  }
+  const station = streamable as RadioStation
+  return { cover: station.logo || defaultCover, title: station.name, subtitle: 'Radio' }
 })
 
 const appBackgroundImage = computed(() => {
@@ -179,7 +216,10 @@ watch(isFullscreen, fullscreen => {
   }
 })
 
-eventBus.on('FULLSCREEN_TOGGLE', () => toggleFullscreen()).on('UP_NEXT', next => (nextPlayable.value = next))
+// The browser may refuse (no user gesture, a policy): nothing to do then.
+eventBus
+  .on('FULLSCREEN_TOGGLE', () => toggleFullscreen().catch(logger.warn))
+  .on('UP_NEXT', next => (nextPlayable.value = next))
 </script>
 
 <style lang="postcss" scoped>
@@ -224,48 +264,70 @@ footer {
   }
 
   &:fullscreen {
-    padding: calc(100vh - 9rem) 5vw 0;
-    @apply bg-none;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    gap: 32px;
+    margin: 0;
+    padding: 5vh 5vw 32px;
+    border-radius: 0;
+    background: #000;
+    color: #fff;
 
-    &.hide-controls :not(.fullscreen-backdrop, .up-next, .up-next *) {
+    &.hide-controls :not(.fullscreen-backdrop, .fullscreen-stage, .fullscreen-stage *, .up-next, .up-next *) {
       transition: opacity 2s ease-in-out !important; /* overriding all children's custom transition, if any */
-      @apply opacity-0;
-    }
-
-    &.hide-controls::after {
-      transition: opacity 2s ease-in-out !important;
       @apply opacity-0;
     }
 
     .wrapper {
       @apply z-[3];
+
+      border-radius: 28px;
+      background: color-mix(in srgb, #000 45%, transparent);
+      backdrop-filter: blur(12px);
     }
 
-    &::before {
-      @apply bg-black bg-repeat absolute top-0 left-0 opacity-50 z-1 pointer-events-none -m-[20rem];
-      content: '';
-      background-image:
-        linear-gradient(135deg, #111 25%, transparent 25%), linear-gradient(225deg, #111 25%, transparent 25%),
-        linear-gradient(45deg, #111 25%, transparent 25%), linear-gradient(315deg, #111 25%, rgba(255, 255, 255, 0) 25%);
-      background-position:
-        6px 0,
-        6px 0,
-        0 0,
-        0 0;
-      background-size: 6px 6px;
-      width: calc(100% + 40rem);
-      height: calc(100% + 40rem);
-      transform: rotate(10deg);
-    }
-
+    /* Keeps the controls readable over any backdrop. */
     &::after {
-      background-image: linear-gradient(0deg, var(--color-bg) 0%, rgba(255, 255, 255, 0) 30vh);
+      background-image: linear-gradient(0deg, rgb(0 0 0 / 70%) 0%, transparent 40vh);
       content: '';
       @apply absolute w-full h-full top-0 left-0 z-1 pointer-events-none;
     }
 
     .fullscreen-backdrop {
-      @apply saturate-[0.2] block absolute top-0 left-0 w-full h-full z-0 bg-cover bg-no-repeat bg-top;
+      @apply block absolute top-0 left-0 w-full h-full z-0 bg-cover bg-no-repeat bg-center;
+
+      filter: blur(48px) brightness(0.45) saturate(1.2);
+      transform: scale(1.15);
+    }
+
+    .fullscreen-stage {
+      position: relative;
+      z-index: 2;
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 32px;
+    }
+
+    .fullscreen-cover {
+      width: min(52vh, 80vw);
+      aspect-ratio: 1 / 1;
+      object-fit: cover;
+      border-radius: 28px;
+      box-shadow: 0 24px 64px rgb(0 0 0 / 50%);
+    }
+
+    .fullscreen-caption {
+      max-width: min(80vw, 960px);
+      text-align: center;
+    }
+
+    .fullscreen-subtitle {
+      opacity: 0.75;
     }
   }
 }

@@ -11,7 +11,7 @@ exports[`editSongForm.vue > edits a single song 1`] = `
   </header>
   <div data-v-cf47e900="" class="min-h-full flex flex-col relative mt-4">
     <nav data-v-a41b5aa5="" data-v-cf47e900="" class="tab-list flex overflow-x-auto px-6 min-h-[48px]" role="tablist"><button data-v-aff7a094="" data-v-cf47e900="" aria-selected="true" class="tab-button m3-state m3-title-small" role="tab" type="button" id="editSongTabDetails" aria-controls="editSongPanelDetails"><span data-v-aff7a094="" class="inner"> Details </span></button><button data-v-aff7a094="" data-v-cf47e900="" aria-selected="false" class="tab-button m3-state m3-title-small" role="tab" type="button" id="editSongTabLyrics" aria-controls="editSongPanelLyrics" data-testid="edit-song-lyrics-tab"><span data-v-aff7a094="" class="inner"> Lyrics </span></button></nav>
-    <div data-v-cf47e900="" class="p-6 overflow-auto">
+    <div data-v-80d459e5="" data-v-cf47e900="" class="scrolls p-6">
       <div data-v-cf47e900="" role="tabpanel" tabindex="0" id="editSongPanelDetails" aria-labelledby="editSongTabDetails" class="space-y-5">
         <div data-v-cf47e900="" class="flex flex-col gap-2"><label class="text-(--schemes-on-surface)"><span class="m3-label-large block mb-1.5 text-(--schemes-on-surface-variant)">Title</span><input data-v-cf47e900="" aria-label="Title" class="k-field block w-full" type="text" data-testid="title-input" name="title" title="Title"></label>
           <!--v-if-->
@@ -260,7 +260,7 @@ exports[`editSongForm.vue > edits multiple songs 1`] = `
   </header>
   <div data-v-cf47e900="" class="min-h-full flex flex-col relative mt-4">
     <!--v-if-->
-    <div data-v-cf47e900="" class="p-6 overflow-auto">
+    <div data-v-80d459e5="" data-v-cf47e900="" class="scrolls p-6">
       <div data-v-cf47e900="" role="tabpanel" tabindex="0" id="editSongPanelDetails" aria-labelledby="editSongTabDetails" class="space-y-5">
         <!--v-if-->
         <div data-v-cf47e900="" class="md:grid-cols-2 grid gap-3">
