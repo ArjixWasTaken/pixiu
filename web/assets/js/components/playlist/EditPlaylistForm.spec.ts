@@ -35,8 +35,8 @@ describe('editPlaylistForm.vue', () => {
       }),
     )
 
-    await h.type(screen.getByRole('textbox', { name: 'name' }), 'Your playlist')
-    await h.type(screen.getByRole('textbox', { name: 'description' }), 'Updated description')
+    await h.type(screen.getByRole('textbox', { name: 'Name' }), 'Your playlist')
+    await h.type(screen.getByRole('textbox', { name: 'Description' }), 'Updated description')
     await h.user.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() => {

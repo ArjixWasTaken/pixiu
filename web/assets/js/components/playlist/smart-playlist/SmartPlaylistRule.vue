@@ -1,129 +1,152 @@
 <template>
-  <FormRow>
-    <div class="w-full flex gap-2 relative">
-      <SelectBox v-model="selectedModel" name="model[]">
-        <option v-for="m in models" :key="m.name" :value="m">{{ m.label }}</option>
-      </SelectBox>
+  <div class="rule-container" data-testid="smart-playlist-rule">
+    <div class="rule">
+      <M3Select :model-value="rule.model.name" class="model" label="Field" @update:model-value="setModel">
+        <option v-for="option in models" :key="option.name" :value="option.name">{{ option.label }}</option>
+      </M3Select>
 
-      <SelectBox v-model="selectedOperator" class="flex-1 max-w-44" name="operator[]">
-        <option v-for="option in availableOperators" :key="option.operator" :value="option">{{ option.label }}</option>
-      </SelectBox>
+      <M3Select :model-value="operator.operator" class="condition" label="Condition" @update:model-value="setOperator">
+        <option v-for="option in operators" :key="option.operator" :value="option.operator">{{ option.label }}</option>
+      </M3Select>
 
-      <span class="inline-flex flex-1 items-center gap-3">
-        <RuleInput
-          v-for="input in availableInputs"
-          :key="input.id"
-          v-model="input.value"
-          :type="(selectedOperator?.type || selectedModel?.type)!"
-          :value="input.value"
-          class="flex-1!"
-          @update:model-value="onInput"
-        />
+      <div class="values">
+        <M3TextField
+          v-for="(value, index) in values"
+          :key="index"
+          :label="index === 0 ? 'Value' : 'And'"
+          :model-value="value"
+          :type="inputType"
+          class="value"
+          name="value[]"
+          required
+          @update:model-value="setValue(index, $event)"
+        >
+          <template v-if="unit" #trailing>
+            <span class="unit m3-body-medium">{{ unit }}</span>
+          </template>
+        </M3TextField>
+      </div>
 
-        <span v-if="valueSuffix" class="suffix mr-5 text-sm">{{ valueSuffix }}</span>
-      </span>
-
-      <Btn
-        size="small"
-        variant="destructive"
-        class="absolute right-[-14px] aspect-square top-1 scale-[60%] hover:scale-75 active:scale-[60%]"
-        rounded
-        title="Remove this rule"
-        @click.prevent="removeRule"
-      >
-        <Icon :icon="faMinus" />
-      </Btn>
+      <M3IconButton class="remove" icon="close" label="Remove this rule" @click="emit('remove')" />
     </div>
-  </FormRow>
+  </div>
 </template>
 
 <script lang="ts" setup>
-import { faMinus } from '@fortawesome/free-solid-svg-icons'
-import { computed, defineAsyncComponent, ref, toRefs, watch } from 'vue'
+import { computed } from 'vue'
 import models from '@/config/smart-playlist/models'
 import inputTypes from '@/config/smart-playlist/inputTypes'
 
-import FormRow from '@/components/ui/form/FormRow.vue'
-import SelectBox from '@/components/ui/form/SelectBox.vue'
-import Btn from '@/components/ui/form/Btn.vue'
+import M3IconButton from '@/components/m3/M3IconButton.vue'
+import M3Select from '@/components/m3/M3Select.vue'
+import M3TextField from '@/components/m3/M3TextField.vue'
 
 const props = defineProps<{ rule: SmartPlaylistRule }>()
 
 const emit = defineEmits<{
-  (e: 'input', rule: SmartPlaylistRule): void
+  (e: 'update:rule', rule: SmartPlaylistRule): void
   (e: 'remove'): void
 }>()
 
-const RuleInput = defineAsyncComponent(() => import('@/components/playlist/smart-playlist/SmartPlaylistRuleInput.vue'))
+const operatorsFor = (model: SmartPlaylistModel) => inputTypes[model.type]
 
-const { rule } = toRefs(props)
+const operators = computed(() => operatorsFor(props.rule.model))
 
-const mutatedRule = Object.assign({}, rule.value) as SmartPlaylistRule
+/** The rule's operator; the first there is when the model has no such one. */
+const operator = computed(
+  () => operators.value.find(({ operator }) => operator === props.rule.operator) ?? operators.value[0],
+)
 
-const selectedModel = ref<SmartPlaylistModel>()
-const selectedOperator = ref<SmartPlaylistOperator>()
+const inputCount = (operator: SmartPlaylistOperator) => operator.inputs ?? 1
+const typeOf = (model: SmartPlaylistModel, operator: SmartPlaylistOperator) => operator.type ?? model.type
 
-const model = models.find(({ name }) => name === mutatedRule.model.name)
+const inputType = computed(() => typeOf(props.rule.model, operator.value))
+const unit = computed(() => operator.value.unit ?? props.rule.model.unit)
 
-if (!model) {
-  throw new Error(`Invalid smart playlist model: ${mutatedRule.model.name}`)
+const values = computed(() =>
+  Array.from({ length: inputCount(operator.value) }, (_, index) => props.rule.value[index] ?? ''),
+)
+
+const update = (changes: Partial<SmartPlaylistRule>) => emit('update:rule', { ...props.rule, ...changes })
+
+/** Another field keeps the condition and value when they still fit it. */
+const setModel = (name: SmartPlaylistModel['name']) => {
+  const model = models.find(option => option.name === name)!
+  if (model.type === props.rule.model.type) {
+    update({ model })
+    return
+  }
+  const first = operatorsFor(model)[0]
+  update({ model, operator: first.operator, value: Array.from({ length: inputCount(first) }, () => '') })
 }
 
-mutatedRule.model = selectedModel.value = model
-
-const availableOperators = computed<SmartPlaylistOperator[]>(() => {
-  return selectedModel.value ? inputTypes[selectedModel.value.type] : []
-})
-
-const operator = availableOperators.value.find(({ operator }) => operator === mutatedRule.operator)
-
-if (!operator) {
-  throw new Error(`Invalid smart playlist operator: ${mutatedRule.operator}`)
-}
-
-selectedOperator.value = operator
-
-const isOriginalOperatorSelected = computed(() => {
-  return (
-    selectedModel.value?.name === mutatedRule.model.name && selectedOperator.value?.operator === mutatedRule.operator
-  )
-})
-
-const availableInputs = computed<{ id: string; value: any }[]>(() => {
-  if (!selectedOperator.value) {
-    return []
-  }
-
-  const inputs: Array<{ id: string; value: string }> = []
-
-  for (let i = 0, inputCount = selectedOperator.value.inputs || 1; i < inputCount; ++i) {
-    inputs.push({
-      id: `${mutatedRule.model.name}_${selectedOperator.value.operator}_${i}`,
-      value: isOriginalOperatorSelected.value ? mutatedRule.value[i] : '',
-    })
-  }
-
-  return inputs
-})
-
-watch(availableOperators, () => {
-  if (selectedModel.value?.name === mutatedRule.model.name) {
-    selectedOperator.value = availableOperators.value.find(({ operator }) => operator === mutatedRule.operator)!
-  } else {
-    selectedOperator.value = availableOperators.value[0]
-  }
-})
-
-const valueSuffix = computed(() => selectedOperator.value?.unit || selectedModel.value?.unit)
-
-const onInput = () => {
-  emit('input', {
-    id: mutatedRule.id,
-    model: selectedModel.value!,
-    operator: selectedOperator.value!.operator,
-    value: availableInputs.value.map(input => input.value),
+/** Another condition keeps the value when it takes the same kind. */
+const setOperator = (name: SmartPlaylistOperator['operator']) => {
+  const next = operators.value.find(({ operator }) => operator === name)!
+  const keeps =
+    inputCount(next) === inputCount(operator.value) &&
+    typeOf(props.rule.model, next) === typeOf(props.rule.model, operator.value)
+  update({
+    operator: next.operator,
+    value: keeps ? [...values.value] : Array.from({ length: inputCount(next) }, () => ''),
   })
 }
 
-const removeRule = () => emit('remove')
+const setValue = (index: number, value: string | number | null) => {
+  const next = [...values.value]
+  next[index] = value ?? ''
+  update({ value: next })
+}
 </script>
+
+<style scoped>
+.rule-container {
+  container-type: inline-size;
+}
+
+.rule {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.5fr) auto;
+  grid-template-areas: 'model condition values remove';
+  align-items: start;
+  gap: 8px;
+}
+
+/* Narrow: the values go under the field and condition. */
+@container (max-width: 520px) {
+  .rule {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+    grid-template-areas:
+      'model condition remove'
+      'values values .';
+  }
+}
+
+.model {
+  grid-area: model;
+}
+
+.condition {
+  grid-area: condition;
+}
+
+.values {
+  grid-area: values;
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+
+.value {
+  flex: 1 1 0;
+}
+
+.unit {
+  color: var(--schemes-on-surface-variant);
+}
+
+.remove {
+  grid-area: remove;
+  margin-top: 8px;
+}
+</style>

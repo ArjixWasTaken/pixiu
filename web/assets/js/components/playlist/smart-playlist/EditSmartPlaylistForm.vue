@@ -1,96 +1,36 @@
 <template>
-  <form class="md:w-[560px]" @submit.prevent="handleSubmit" @keydown.esc="maybeClose">
+  <form
+    class="smart-playlist-form"
+    @invalid.capture="onInvalid"
+    @keydown.esc="maybeClose"
+    @submit.prevent="handleSubmit"
+  >
     <header>
       <h1>Edit Smart Playlist</h1>
     </header>
 
-    <main class="space-y-5">
-      <Tabs class="mt-1 -m-6">
-        <TabList>
-          <TabButton
-            id="createSmartPlaylistTabDetails"
-            :selected="isTabActive('details')"
-            aria-controls="createSmartPlaylistDetails"
-            @click="activateTab('details')"
-          >
-            Details
-          </TabButton>
-          <TabButton
-            id="createSmartPlaylistTabRules"
-            :selected="isTabActive('rules')"
-            aria-controls="createSmartPlaylistRules"
-            @click="activateTab('rules')"
-          >
-            Rules
-          </TabButton>
-        </TabList>
-
-        <TabPanelContainer>
-          <TabPanel
-            v-show="isTabActive('details')"
-            id="createSmartPlaylistDetails"
-            aria-labelledby="createSmartPlaylistTabDetails"
-            class="space-y-5"
-          >
-            <div class="grid grid-cols-2 gap-4">
-              <FormRow>
-                <template #label>Name *</template>
-                <TextInput v-model="data.name" v-koel-focus name="name" placeholder="Playlist name" required />
-              </FormRow>
-              <FormRow>
-                <template #label>Folder</template>
-                <FolderSelect v-model:folder-id="data.folder_id" v-model:folder-name="data.folder_name" />
-              </FormRow>
-              <FormRow class="col-span-2">
-                <template #label>Description</template>
-                <TextArea v-model="data.description" class="h-28" name="description" />
-              </FormRow>
-            </div>
-          </TabPanel>
-
-          <TabPanel
-            v-show="isTabActive('rules')"
-            id="createSmartPlaylistRules"
-            aria-labelledby="createSmartPlaylistTabRules"
-            class="space-y-5"
-          >
-            <div class="scroll-mask-y group-container space-y-5 overflow-auto max-h-[480px]">
-              <RuleGroup
-                v-for="(group, index) in collectedRuleGroups"
-                :key="group.id"
-                :group="group"
-                :is-first-group="index === 0"
-                @input="onGroupChanged"
-              />
-              <Btn
-                size="small"
-                variant="success"
-                class="btn-add-group"
-                title="Add a new group"
-                uppercase
-                @click.prevent="addGroup"
-              >
-                <Icon :icon="faPlus" />
-                Group
-              </Btn>
-            </div>
-          </TabPanel>
-        </TabPanelContainer>
-      </Tabs>
+    <main>
+      <SmartPlaylistEditor
+        v-model:description="data.description"
+        v-model:folder-id="data.folder_id"
+        v-model:folder-name="data.folder_name"
+        v-model:name="data.name"
+        v-model:rule-groups="ruleGroups"
+        v-model:tab="currentTab"
+        :tabs
+      />
     </main>
 
     <footer>
-      <Btn type="submit">Save</Btn>
-      <Btn variant="ghost" class="btn-cancel" @click.prevent="maybeClose">Cancel</Btn>
+      <M3Button type="button" variant="text" @click.prevent="maybeClose">Cancel</M3Button>
+      <M3Button :disabled="loading" type="submit">Save</M3Button>
     </footer>
   </form>
 </template>
 
 <script lang="ts" setup>
-import { faPlus } from '@fortawesome/free-solid-svg-icons'
 import { isEqual, pick } from 'lodash-es'
 import { toRaw } from 'vue'
-
 import type { UpdatePlaylistData } from '@/stores/playlistStore'
 import { playlistStore } from '@/stores/playlistStore'
 import { eventBus } from '@/utils/eventBus'
@@ -99,15 +39,8 @@ import { useMessageToaster } from '@/composables/useMessageToaster'
 import { useSmartPlaylistForm } from '@/composables/useSmartPlaylistForm'
 import { useForm } from '@/composables/useForm'
 
-import TextInput from '@/components/ui/form/TextInput.vue'
-import FormRow from '@/components/ui/form/FormRow.vue'
-import FolderSelect from '@/components/ui/form/FolderSelect.vue'
-import TextArea from '@/components/ui/form/TextArea.vue'
-import TabButton from '@/components/ui/tabs/TabButton.vue'
-import Tabs from '@/components/ui/tabs/Tabs.vue'
-import TabPanelContainer from '@/components/ui/tabs/TabPanelContainer.vue'
-import TabList from '@/components/ui/tabs/TabList.vue'
-import TabPanel from '@/components/ui/tabs/TabPanel.vue'
+import M3Button from '@/components/m3/M3Button.vue'
+import SmartPlaylistEditor from '@/components/playlist/smart-playlist/SmartPlaylistEditor.vue'
 
 const props = defineProps<{ playlist: Playlist }>()
 const emit = defineEmits<{ (e: 'close'): void }>()
@@ -117,18 +50,17 @@ const { playlist } = props
 const { toastSuccess } = useMessageToaster()
 const { showConfirmDialog } = useDialogBox()
 
-const { Btn, RuleGroup, activateTab, isTabActive, collectedRuleGroups, addGroup, onGroupChanged } =
-  useSmartPlaylistForm(structuredClone(toRaw(playlist.rules)))
+const { tabs, currentTab, ruleGroups, rulesChanged, onInvalid } = useSmartPlaylistForm(playlist.rules)
 
 const close = () => emit('close')
 
-const { data, isPristine, handleSubmit } = useForm<UpdatePlaylistData>({
+const { data, loading, isPristine, handleSubmit } = useForm<UpdatePlaylistData>({
   initialValues: { ...pick(playlist, 'name', 'folder_id', 'description', 'cover'), folder_name: null },
-  isPristine: (original, current) => isEqual(original, current) && isEqual(collectedRuleGroups.value, playlist.rules),
+  isPristine: (original, current) => isEqual(original, current) && !rulesChanged(),
   onSubmit: async data => {
     const formData = {
       ...structuredClone(toRaw(data)),
-      rules: collectedRuleGroups.value,
+      rules: ruleGroups.value,
     }
 
     if (formData.cover === playlist.cover) {
@@ -151,12 +83,8 @@ const maybeClose = async () => {
 }
 </script>
 
-<style lang="postcss" scoped>
-.group-container {
-  scrollbar-gutter: stable;
-}
-
-form {
-  max-height: calc(100vh - 4rem);
+<style scoped>
+.smart-playlist-form {
+  width: min(640px, 100vw);
 }
 </style>

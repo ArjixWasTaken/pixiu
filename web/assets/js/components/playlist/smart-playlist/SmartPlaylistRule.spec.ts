@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vite-plus/test'
-import { screen, waitFor } from '@testing-library/vue'
+import { screen } from '@testing-library/vue'
 import { createHarness } from '@/__tests__/TestHarness'
 import models from '@/config/smart-playlist/models'
 import Component from './SmartPlaylistRule.vue'
@@ -7,104 +7,96 @@ import Component from './SmartPlaylistRule.vue'
 describe('smartPlaylistRule', () => {
   const h = createHarness()
 
-  const titleModel = models.find(m => m.name === 'title')!
-  const yearModel = models.find(m => m.name === 'year')!
-  const lastPlayedModel = models.find(m => m.name === 'interactions.last_played_at')!
-  const lengthModel = models.find(m => m.name === 'length')!
+  const model = (name: SmartPlaylistModel['name']) => models.find(m => m.name === name)!
 
   const createRule = (overrides: Partial<SmartPlaylistRule> = {}): SmartPlaylistRule => ({
-    id: crypto.randomUUID(),
-    model: titleModel,
+    id: 'rule-1',
+    model: model('title'),
     operator: 'is',
     value: [''],
     ...overrides,
   })
 
-  const renderComponent = (rule?: SmartPlaylistRule) => {
-    return h.render(Component, {
-      props: {
-        rule: rule ?? createRule(),
-      },
-    })
-  }
+  const renderComponent = (rule = createRule()) => h.render(Component, { props: { rule } })
 
-  it('renders model and operator dropdowns', () => {
+  const options = (label: string) =>
+    Array.from(screen.getByRole('combobox', { name: label }).querySelectorAll('option')).map(
+      option => option.textContent,
+    )
+
+  /** What the rule became, from its last update. */
+  const updated = (emitted: Record<string, unknown[][]>) => emitted['update:rule'].at(-1)![0] as SmartPlaylistRule
+
+  it('labels its field, condition and value', () => {
     renderComponent()
 
-    // Model select should contain all model labels
-    screen.getByRole('option', { name: 'Title' })
-    screen.getByRole('option', { name: 'Album' })
-    screen.getByRole('option', { name: 'Artist' })
-
-    // Operator select should show text operators for Title (text type)
-    screen.getByRole('option', { name: 'is' })
-    screen.getByRole('option', { name: 'contains' })
-    screen.getByRole('option', { name: 'begins with' })
+    expect(options('Field')).toEqual(models.map(m => m.label))
+    screen.getByRole('textbox', { name: 'Value' })
   })
 
-  it('shows text operators for a text model', () => {
-    renderComponent(createRule({ model: titleModel, operator: 'is' }))
+  it.each<[SmartPlaylistModel['name'], string[]]>([
+    ['title', ['is', 'is not', 'contains', 'does not contain', 'begins with', 'ends with']],
+    ['year', ['is', 'is not', 'is greater than', 'is less than', 'is between']],
+    ['interactions.last_played_at', ['is', 'is not', 'in the last', 'not in the last', 'is between']],
+  ])('offers the conditions of %s', (name, conditions) => {
+    renderComponent(createRule({ model: model(name) }))
 
-    screen.getByRole('option', { name: 'is' })
-    screen.getByRole('option', { name: 'is not' })
-    screen.getByRole('option', { name: 'contains' })
-    screen.getByRole('option', { name: 'does not contain' })
-    screen.getByRole('option', { name: 'begins with' })
-    screen.getByRole('option', { name: 'ends with' })
+    expect(options('Condition')).toEqual(conditions)
   })
 
-  it('shows number operators for a number model', () => {
-    renderComponent(createRule({ model: yearModel, operator: 'is' }))
+  it('takes two values for “is between”', () => {
+    renderComponent(createRule({ model: model('year'), operator: 'isBetween', value: ['2000', '2020'] }))
 
-    screen.getByRole('option', { name: 'is' })
-    screen.getByRole('option', { name: 'is not' })
-    screen.getByRole('option', { name: 'is greater than' })
-    screen.getByRole('option', { name: 'is less than' })
-    screen.getByRole('option', { name: 'is between' })
+    expect(screen.getAllByRole('spinbutton').map(input => (input as HTMLInputElement).value)).toEqual(['2000', '2020'])
+    screen.getByRole('spinbutton', { name: 'And' })
   })
 
-  it('shows date operators for a date model', () => {
-    renderComponent(createRule({ model: lastPlayedModel, operator: 'is' }))
+  it.each<[SmartPlaylistRule['operator'], SmartPlaylistModel['name'], string]>([
+    ['inLast', 'interactions.last_played_at', 'days'],
+    ['is', 'length', 'seconds'],
+  ])('names the unit for %s %s', (operator, name, unit) => {
+    renderComponent(createRule({ model: model(name), operator, value: ['7'] }))
 
-    screen.getByRole('option', { name: 'is' })
-    screen.getByRole('option', { name: 'is not' })
-    screen.getByRole('option', { name: 'in the last' })
-    screen.getByRole('option', { name: 'not in the last' })
-    screen.getByRole('option', { name: 'is between' })
+    screen.getByText(unit)
   })
 
-  it('shows two inputs for the isBetween operator', async () => {
-    renderComponent(createRule({ model: yearModel, operator: 'isBetween', value: ['2000', '2020'] }))
-
-    await waitFor(() => {
-      expect(screen.getAllByRole('spinbutton')).toHaveLength(2)
-    })
-  })
-
-  it('shows "days" suffix for inLast operator', () => {
-    renderComponent(createRule({ model: lastPlayedModel, operator: 'inLast', value: ['7'] }))
-    screen.getByText('days')
-  })
-
-  it('shows "seconds" suffix for the length model', () => {
-    renderComponent(createRule({ model: lengthModel, operator: 'is', value: ['300'] }))
-    screen.getByText('seconds')
-  })
-
-  it('emits remove when remove button is clicked', async () => {
+  it('updates with what is typed', async () => {
     const { emitted } = renderComponent()
 
-    await h.user.click(screen.getByTitle('Remove this rule'))
+    await h.user.type(screen.getByRole('textbox', { name: 'Value' }), 'x')
 
-    expect(emitted().remove).toBeTruthy()
+    expect(updated(emitted())).toMatchObject({ id: 'rule-1', operator: 'is', value: ['x'] })
   })
 
-  it('emits input on value change', async () => {
-    const { emitted } = renderComponent(createRule({ model: titleModel, operator: 'is', value: [''] }))
+  it('keeps the condition and value for a field of the same kind', async () => {
+    const { emitted } = renderComponent(createRule({ operator: 'contains', value: ['love'] }))
 
-    await waitFor(() => screen.getByRole('textbox'))
-    await h.type(screen.getByRole('textbox'), 'foo')
+    await h.user.selectOptions(screen.getByRole('combobox', { name: 'Field' }), 'album.name')
 
-    expect(emitted().input).toBeTruthy()
+    expect(updated(emitted())).toMatchObject({ model: model('album.name'), operator: 'contains', value: ['love'] })
+  })
+
+  it('starts over for a field of another kind', async () => {
+    const { emitted } = renderComponent(createRule({ operator: 'contains', value: ['love'] }))
+
+    await h.user.selectOptions(screen.getByRole('combobox', { name: 'Field' }), 'year')
+
+    expect(updated(emitted())).toMatchObject({ model: model('year'), operator: 'is', value: [''] })
+  })
+
+  it('makes room for a second value for “is between”', async () => {
+    const { emitted } = renderComponent(createRule({ model: model('year'), value: ['1999'] }))
+
+    await h.user.selectOptions(screen.getByRole('combobox', { name: 'Condition' }), 'isBetween')
+
+    expect(updated(emitted())).toMatchObject({ operator: 'isBetween', value: ['', ''] })
+  })
+
+  it('is removed on request', async () => {
+    const { emitted } = renderComponent()
+
+    await h.user.click(screen.getByRole('button', { name: 'Remove this rule' }))
+
+    expect(emitted().remove).toBeTruthy()
   })
 })

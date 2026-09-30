@@ -24,9 +24,9 @@ describe('folderSelect', () => {
     renderComponent()
 
     const options = screen.getAllByRole('option')
-    // empty option + 3 folders + "+ New Folder"
+    // no folder + 3 folders + a new one
     expect(options).toHaveLength(5)
-    expect(options[options.length - 1].textContent).toContain('+ New Folder')
+    expect(options[options.length - 1].textContent).toContain('New folder…')
   })
 
   it('renders existing folders with their full paths', () => {
@@ -45,17 +45,17 @@ describe('folderSelect', () => {
       },
     })
 
-    expect(screen.getAllByRole('option').map(option => option.textContent)).toEqual([
-      '',
+    expect(screen.getAllByRole('option').map(option => option.textContent?.trim())).toEqual([
+      'None',
       'Archive',
       'Music',
       'Music / Live',
       'Music / Live / 2026',
-      '+ New Folder',
+      'New folder…',
     ])
   })
 
-  it('switches to input mode when "+ New Folder" is selected', async () => {
+  it('switches to input mode when a new folder is chosen', async () => {
     renderComponent()
 
     await h.user.selectOptions(screen.getByRole('combobox'), '__new__')

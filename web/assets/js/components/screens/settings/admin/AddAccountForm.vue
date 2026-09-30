@@ -6,7 +6,7 @@
     @keydown.esc="maybeClose"
   >
     <div class="grid md:grid-cols-2 gap-4">
-      <M3TextField v-model="data.username" autofocus autocomplete="off" label="Username" name="username" required />
+      <M3TextField v-model="data.username" v-koel-focus autocomplete="off" label="Username" name="username" required />
       <M3TextField v-model="data.email" autocomplete="off" label="Email (optional)" name="email" type="email" />
     </div>
     <M3TextField

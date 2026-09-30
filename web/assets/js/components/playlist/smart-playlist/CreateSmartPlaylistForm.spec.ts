@@ -18,76 +18,66 @@ describe('createSmartPlaylistForm', () => {
     })
   }
 
-  it('renders the Details tab by default', () => {
+  it('opens on the Details tab', () => {
     renderComponent()
 
     screen.getByText('New Smart Playlist')
-    screen.getByRole('textbox', { name: 'name' })
-    screen.getByRole('textbox', { name: 'description' })
+    expect(screen.getByRole('tab', { name: 'Details' }).getAttribute('aria-selected')).toBe('true')
+    screen.getByRole('textbox', { name: 'Name' })
+    screen.getByRole('textbox', { name: 'Description' })
   })
 
-  it('switches to Rules tab on click', async () => {
+  it('starts with one rule to fill in', async () => {
     renderComponent()
 
-    await h.user.click(screen.getByText('Rules'))
+    await h.user.click(screen.getByRole('tab', { name: 'Rules' }))
 
-    screen.getByTitle('Add a new group')
+    screen.getByRole('heading', { name: 'Songs that match all of these' })
+    expect(screen.getAllByTestId('smart-playlist-rule')).toHaveLength(1)
   })
 
-  it('adds a rule group when "Group" button is clicked', async () => {
-    renderComponent()
-
-    await h.user.click(screen.getByText('Rules'))
-    await h.user.click(screen.getByTitle('Add a new group'))
-
-    await waitFor(() => {
-      screen.getByText(/Include songs that match/)
-    })
-  })
-
-  it('submits form data with empty rules when no groups added', async () => {
+  it('saves the details and rules', async () => {
     const playlist = h.factory('playlist').make()
     const storeMock = h.mock(playlistStore, 'store').mockResolvedValue(playlist)
     renderComponent()
 
-    await h.type(screen.getByRole('textbox', { name: 'name' }), 'My Smart Playlist')
+    await h.type(screen.getByRole('textbox', { name: 'Name' }), 'Rock Playlist')
+    await h.user.click(screen.getByRole('tab', { name: 'Rules' }))
+    await h.user.selectOptions(screen.getByRole('combobox', { name: 'Field' }), 'genre')
+    await h.user.selectOptions(screen.getByRole('combobox', { name: 'Condition' }), 'contains')
+    await h.user.type(screen.getByRole('textbox', { name: 'Value' }), 'rock')
     await h.user.click(screen.getByRole('button', { name: 'Save' }))
 
-    await waitFor(() => {
-      expect(storeMock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          name: 'My Smart Playlist',
-          rules: [],
-        }),
-      )
-    })
+    await waitFor(() => expect(storeMock).toHaveBeenCalled())
+    const submitted = storeMock.mock.calls[0][0]
+    expect(submitted.name).toBe('Rock Playlist')
+    expect(submitted.rules).toHaveLength(1)
+    expect(submitted.rules[0].rules[0]).toMatchObject({ operator: 'contains', value: ['rock'] })
+    expect(submitted.rules[0].rules[0].model.name).toBe('genre')
   })
 
-  it('submits form data with rule groups when groups are added', async () => {
+  it('shows a rule left blank instead of saving', async () => {
+    const storeMock = h.mock(playlistStore, 'store')
+    renderComponent()
+
+    await h.type(screen.getByRole('textbox', { name: 'Name' }), 'Rock Playlist')
+    await h.user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(screen.getByRole('tab', { name: 'Rules' }).getAttribute('aria-selected')).toBe('true'))
+    expect(storeMock).not.toHaveBeenCalled()
+  })
+
+  it('saves without rules once they are removed', async () => {
     const playlist = h.factory('playlist').make()
     const storeMock = h.mock(playlistStore, 'store').mockResolvedValue(playlist)
     renderComponent()
 
-    // Add a rule group via the Rules tab
-    await h.user.click(screen.getByText('Rules'))
-    await h.user.click(screen.getByTitle('Add a new group'))
-
-    await waitFor(() => {
-      screen.getByText(/Include songs that match/)
-    })
-
-    // Switch back to Details to fill in the name
-    await h.user.click(screen.getByText('Details'))
-    await h.type(screen.getByRole('textbox', { name: 'name' }), 'Rock Playlist')
+    await h.type(screen.getByRole('textbox', { name: 'Name' }), 'Empty for now')
+    await h.user.click(screen.getByRole('tab', { name: 'Rules' }))
+    await h.user.click(screen.getByRole('button', { name: 'Remove this rule' }))
     await h.user.click(screen.getByRole('button', { name: 'Save' }))
 
-    await waitFor(() => {
-      expect(storeMock).toHaveBeenCalled()
-      const submittedData = storeMock.mock.calls[0][0]
-      expect(submittedData.name).toBe('Rock Playlist')
-      expect(submittedData.rules).toHaveLength(1)
-      expect(submittedData.rules[0].rules).toHaveLength(1)
-    })
+    await waitFor(() => expect(storeMock).toHaveBeenCalledWith(expect.objectContaining({ rules: [] })))
   })
 
   it('pre-selects folder when folder prop is provided', () => {
