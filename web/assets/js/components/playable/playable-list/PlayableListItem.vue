@@ -1,89 +1,57 @@
 <template>
-  <div>
-    <h4 v-if="isSong(playable) && showDisc && playable.disc" class="title text-k-fg flex! gap-2 p-2 uppercase pl-5">
-      Disc {{ playable.disc }}
-    </h4>
+  <div class="px-3">
+    <h4 v-if="isSong(playable) && showDisc && playable.disc" class="disc m3-title-small">Disc {{ playable.disc }}</h4>
 
     <article
       :class="{ playing, selected: item.selected }"
-      class="song-item group pl-2 playable-list-item"
+      class="song-item m3-state"
       data-testid="song-item"
       tabindex="0"
       @dblclick.prevent.stop="play"
     >
-      <span v-if="shouldShowColumn('track')" class="track-number">
-        <SoundBars v-if="playable.playback_state === 'Playing'" />
-        <span v-else>
-          <template v-if="isSong(playable)">{{ playable.track || '' }}</template>
-          <Icon v-else :icon="faPodcast" />
-        </span>
-      </span>
-      <span class="thumbnail leading-none">
-        <PlayableThumbnail :playable @clicked="play" />
-      </span>
-      <span class="title-artist flex flex-col gap-1 overflow-hidden">
-        <span class="title text-k-fg flex! gap-2 items-center">
-          <ExternalMark v-if="external" />
-          <Icon
+      <PlayableThumbnail :playable @clicked="play" />
+
+      <span class="content">
+        <span class="title m3-body-large">
+          <M3Icon
             v-if="cachingOffline"
-            :icon="faSpinner"
-            class="opacity-50!"
-            spin
+            :size="16"
+            class="spin opacity-60"
+            name="progress_activity"
             title="Caching for offline playback"
-            aria-label="Caching for offline playback"
           />
-          <Icon
+          <M3Icon
             v-else-if="cachingFailed"
-            :icon="faExclamationTriangle"
-            class="text-k-danger opacity-75!"
+            :size="16"
             :title="`Error: ${cachingErrorMessage}`"
+            class="text-(--schemes-error)"
+            name="error"
           />
           <OfflineMark v-else-if="cachedOffline" />
-          <span class="flex-1">{{ playable.title }}</span>
+          <span class="truncate">{{ playable.title }}</span>
         </span>
-        <span class="artist text-[0.9rem] text-k-fg-50">{{ artist }}</span>
+        <span class="supporting m3-body-medium">{{ supporting }}</span>
       </span>
-      <span v-if="shouldShowColumn('album')" class="album">{{ album }}</span>
-      <template v-if="config.collaborative && isSong(playable) && playable.collaboration">
-        <span v-if="shouldShowColumn('playlist_collaborator')" class="collaborator">
-          <UserAvatar :user="collaborator" width="24" />
+
+      <span class="trailing">
+        <span v-if="shouldShowColumn('rating') && isSong(playable)" class="rating">
+          <StarRating :rateable="playable" size="xs" />
         </span>
-        <span
-          v-if="shouldShowColumn('playlist_added_at')"
-          :title="String(playable.collaboration.added_at)"
-          class="added-at"
-        >
-          {{ playable.collaboration.fmt_added_at }}
-        </span>
-      </template>
-      <template v-if="isSong(playable)">
-        <span v-if="shouldShowColumn('genre')" class="genre">{{ playable.genre || '—' }}</span>
-        <span v-if="shouldShowColumn('year')" class="year">{{ playable.year || '—' }}</span>
-      </template>
-      <span v-if="shouldShowColumn('rating')" class="rating">
-        <StarRating v-if="isSong(playable)" :rateable="playable" size="xs" />
-      </span>
-      <span v-if="shouldShowColumn('duration')" class="time text-[0.9rem] text-k-fg-50 tabular-nums">
-        {{ fmtLength }}
-      </span>
-      <span v-if="shouldShowColumn('favorite')" class="favorite">
-        <FavoriteButton :favorite="playable.favorite" @toggle="toggleFavorite" />
-      </span>
-      <span class="extra">
-        <button
-          class="text-k-fg-50 hover:text-k-fg p-1"
-          title="More actions"
+        <span v-if="shouldShowColumn('duration')" class="time m3-label-medium">{{ fmtLength }}</span>
+        <FavoriteButton v-if="shouldShowColumn('favorite')" :favorite="playable.favorite" @toggle="toggleFavorite" />
+        <M3IconButton
+          :icon-size="20"
+          class="more"
+          icon="more_vert"
+          label="More actions"
           @click.stop="emit('request-context-menu', $event)"
-        >
-          <Icon :icon="faEllipsis" />
-        </button>
+        />
       </span>
     </article>
   </div>
 </template>
 
 <script lang="ts" setup>
-import { faEllipsis, faExclamationTriangle, faPodcast, faSpinner } from '@fortawesome/free-solid-svg-icons'
 import { computed, toRefs } from 'vue'
 import { getPlayableProp, requireInjection } from '@/utils/helpers'
 import { isSong } from '@/utils/typeGuards'
@@ -93,11 +61,11 @@ import { useOfflinePlayback } from '@/composables/useOfflinePlayback'
 import { PlayableListConfigKey } from '@/config/symbols'
 import { playableListColumnConfig } from '@/config/tables'
 import { playableStore } from '@/stores/playableStore'
+import { useViewport } from '@/composables/useViewport'
 
-import SoundBars from '@/components/ui/SoundBars.vue'
 import PlayableThumbnail from '@/components/playable/PlayableThumbnail.vue'
-import UserAvatar from '@/components/user/UserAvatar.vue'
-import ExternalMark from '@/components/ui/ExternalMark.vue'
+import M3Icon from '@/components/m3/M3Icon.vue'
+import M3IconButton from '@/components/m3/M3IconButton.vue'
 import OfflineMark from '@/components/ui/OfflineMark.vue'
 import FavoriteButton from '@/components/ui/FavoriteButton.vue'
 import StarRating from '@/components/ui/StarRating.vue'
@@ -119,7 +87,6 @@ const { item } = toRefs(props)
 
 const playable = computed<Playable>(() => item.value.playable)
 const playing = computed(() => ['Playing', 'Paused'].includes(playable.value.playback_state!))
-const external = computed(() => isSong(playable.value) && playable.value.is_external)
 const { isCached, isCaching, hasCachingError, getCachingError } = useOfflinePlayback()
 const cachedOffline = computed(() => isSong(playable.value) && isCached(playable.value))
 const cachingOffline = computed(() => isSong(playable.value) && isCaching(playable.value))
@@ -130,7 +97,14 @@ const fmtLength = secondsToHis(playable.value.length)
 const artist = computed(() => getPlayableProp(playable.value, 'artist_name', 'podcast_author'))
 const album = computed(() => getPlayableProp(playable.value, 'album_name', 'podcast_title'))
 
-const collaborator = computed<Pick<User, 'name' | 'avatar'>>(() => (playable.value as Song).collaboration!.user)
+const { isMobile } = useViewport()
+
+/** "Artist · album" on wide screens; phones show the length instead of the album. */
+const supporting = computed(() =>
+  [artist.value, isMobile.value ? fmtLength : shouldShowColumn('album') ? album.value : null]
+    .filter(Boolean)
+    .join(' · '),
+)
 
 const play = () => emit('play', playable.value)
 
@@ -138,32 +112,110 @@ const toggleFavorite = () => playableStore.toggleFavorite(playable.value)
 </script>
 
 <style lang="postcss" scoped>
-@reference '@css/app.pcss';
-article {
+.disc {
+  padding: 16px 16px 8px;
+  color: var(--schemes-on-surface-variant);
+}
+
+.song-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  height: 72px;
+  padding: 8px 8px 8px 16px;
+  border-radius: 16px;
+  color: var(--schemes-on-surface);
+  outline: none;
+
+  &.selected {
+    background: var(--schemes-secondary-container);
+    color: var(--schemes-on-secondary-container);
+  }
+
+  &.playing .title {
+    color: var(--schemes-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--schemes-secondary);
+    outline-offset: -2px;
+  }
+
   &.droppable {
-    @apply relative transition-none after:absolute after:inset-x-0 after:h-[3px] after:rounded-sm after:bg-k-success after:top-0;
+    position: relative;
+    transition: none;
 
-    &.dragover-bottom {
-      @apply after:top-auto after:bottom-0;
+    &::after {
+      content: '';
+      position: absolute;
+      left: 16px;
+      right: 16px;
+      top: 0;
+      height: 3px;
+      border-radius: 2px;
+      background: var(--schemes-primary);
+    }
+
+    &.dragover-bottom::after {
+      top: auto;
+      bottom: 0;
     }
   }
+}
 
-  &.playing {
-    .title,
-    .track-number,
-    .favorite {
-      @apply text-k-highlight;
-    }
-  }
+.content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
 
-  .title-artist {
-    span {
-      @apply truncate block;
-    }
-  }
+.title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
 
-  button {
-    @apply text-current;
+.supporting {
+  color: var(--schemes-on-surface-variant);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  .selected & {
+    color: inherit;
   }
+}
+
+.trailing {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  color: var(--schemes-on-surface-variant);
+}
+
+.time {
+  min-width: 44px;
+  margin-right: 4px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+
+  @media (max-width: 768px) {
+    display: none;
+  }
+}
+
+.rating {
+  margin-right: 8px;
+
+  @media (max-width: 768px) {
+    display: none;
+  }
+}
+
+.spin {
+  animation: m3-spin 1s linear infinite;
 }
 </style>

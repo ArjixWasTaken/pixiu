@@ -4,19 +4,15 @@
       <ScreenHeader layout="collapsed" :disabled="loading">
         Artists
         <template #controls>
-          <div class="flex gap-2">
-            <Btn
-              v-koel-tooltip
-              :title="preferences.artists_favorites_only ? 'Show all' : 'Show favorites only'"
-              variant="ghost"
-              class="border border-k-fg-10"
+          <div class="flex gap-2 items-center">
+            <M3Chip
+              :selected="preferences.artists_favorites_only"
+              class="shrink-0"
+              variant="filter"
               @click.prevent="toggleFavoritesOnly"
             >
-              <Icon
-                :icon="preferences.artists_favorites_only ? faHeart : faEmptyHeart"
-                :class="preferences.artists_favorites_only && 'text-k-love'"
-              />
-            </Btn>
+              Favorites only
+            </M3Chip>
 
             <ArtistListSorter
               v-if="preferences.artists_view_mode !== 'table'"
@@ -25,7 +21,7 @@
               @sort="sort"
             />
 
-            <ViewModeSwitch v-model="preferences.artists_view_mode" secondary="table" />
+            <ViewModeSwitch v-if="!isMobile" v-model="preferences.artists_view_mode" secondary="table" />
           </div>
         </template>
       </ScreenHeader>
@@ -49,7 +45,7 @@
     <template v-else>
       <div
         v-if="showSkeletons && preferences.artists_view_mode === 'table'"
-        class="-m-6 flex flex-col"
+        class="screen-bleed flex flex-col"
         role="status"
         aria-busy="true"
         aria-label="Loading"
@@ -66,7 +62,7 @@
       >
         <ArtistCardSkeleton v-for="i in 10" :key="i" />
       </div>
-      <div class="-m-6 flex-1 flex flex-col min-h-0" v-else>
+      <div class="screen-bleed flex-1 flex flex-col min-h-0" v-else>
         <ArtistTable
           v-if="preferences.artists_view_mode === 'table'"
           :artists="displayedArtists"
@@ -83,13 +79,13 @@
 </template>
 
 <script lang="ts" setup>
-import { faMicrophoneSlash, faHeart } from '@fortawesome/free-solid-svg-icons'
-import { faHeart as faEmptyHeart } from '@fortawesome/free-regular-svg-icons'
+import { faMicrophoneSlash } from '@fortawesome/free-solid-svg-icons'
 import { computed, nextTick, onMounted, ref, toRef } from 'vue'
 import { artistStore } from '@/stores/artistStore'
 import { commonStore } from '@/stores/commonStore'
 import { preferenceStore as preferences } from '@/stores/preferenceStore'
 import { useErrorHandler } from '@/composables/useErrorHandler'
+import { useViewport } from '@/composables/useViewport'
 
 import ArtistCardSkeleton from '@/components/ui/album-artist/ArtistAlbumCardSkeleton.vue'
 import ArtistGrid from '@/components/artist/ArtistGrid.vue'
@@ -100,9 +96,10 @@ import ViewModeSwitch from '@/components/ui/ViewModeSwitch.vue'
 import ScreenEmptyState from '@/components/ui/ScreenEmptyState.vue'
 import ScreenBase from '@/components/screens/ScreenBase.vue'
 import ArtistListSorter from '@/components/artist/ArtistListSorter.vue'
-import Btn from '@/components/ui/form/Btn.vue'
+import M3Chip from '@/components/m3/M3Chip.vue'
 import EmptyLibraryHint from '@/components/ui/EmptyLibraryHint.vue'
 
+const { isMobile } = useViewport()
 const grid = ref<InstanceType<typeof ArtistGrid>>()
 const artists = toRef(artistStore.state, 'artists')
 

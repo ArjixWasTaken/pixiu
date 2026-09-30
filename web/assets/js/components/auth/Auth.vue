@@ -1,5 +1,5 @@
 <template>
-  <div class="flex items-center justify-center min-h-screen my-0 mx-auto flex-col gap-5">
+  <div class="flex items-center justify-center min-h-dvh p-6 flex-col gap-5 bg-(--schemes-surface-container)">
     <TwoFactorChallengeForm
       v-if="twoFactorLoginToken"
       :login-token="twoFactorLoginToken"

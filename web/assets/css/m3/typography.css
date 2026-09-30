@@ -1,0 +1,127 @@
+/* M3 typescale utility classes, driven by the Typescale variable tokens.
+   Sizes/line-heights/tracking are unitless float tokens → multiplied by 1px here.
+   Weights: Regular=400, Medium=500 (per --static-*-weight roles). */
+
+.m3-display-large,
+.m3-display-medium,
+.m3-display-small,
+.m3-headline-large,
+.m3-headline-medium,
+.m3-headline-small,
+.m3-title-large,
+.m3-title-medium,
+.m3-title-small,
+.m3-body-large,
+.m3-body-medium,
+.m3-body-small,
+.m3-label-large,
+.m3-label-medium,
+.m3-label-small {
+  margin: 0;
+}
+
+.m3-display-large {
+  font-family: var(--static-display-large-font);
+  font-size: calc(var(--static-display-large-size) * 1px);
+  line-height: calc(var(--static-display-large-line-height) * 1px);
+  letter-spacing: calc(var(--static-display-large-tracking) * 1px);
+  font-weight: 400;
+}
+.m3-display-medium {
+  font-family: var(--static-display-medium-font);
+  font-size: calc(var(--static-display-medium-size) * 1px);
+  line-height: calc(var(--static-display-medium-line-height) * 1px);
+  letter-spacing: calc(var(--static-display-medium-tracking) * 1px);
+  font-weight: 400;
+}
+.m3-display-small {
+  font-family: var(--static-display-small-font);
+  font-size: calc(var(--static-display-small-size) * 1px);
+  line-height: calc(var(--static-display-small-line-height) * 1px);
+  letter-spacing: calc(var(--static-display-small-tracking) * 1px);
+  font-weight: 400;
+}
+.m3-headline-large {
+  font-family: var(--static-headline-large-font);
+  font-size: calc(var(--static-headline-large-size) * 1px);
+  line-height: calc(var(--static-headline-large-line-height) * 1px);
+  letter-spacing: calc(var(--static-headline-large-tracking) * 1px);
+  font-weight: 400;
+}
+.m3-headline-medium {
+  font-family: var(--static-headline-medium-font);
+  font-size: calc(var(--static-headline-medium-size) * 1px);
+  line-height: calc(var(--static-headline-medium-line-height) * 1px);
+  letter-spacing: calc(var(--static-headline-medium-tracking) * 1px);
+  font-weight: 400;
+}
+.m3-headline-small {
+  font-family: var(--static-headline-small-font);
+  font-size: calc(var(--static-headline-small-size) * 1px);
+  line-height: calc(var(--static-headline-small-line-height) * 1px);
+  letter-spacing: calc(var(--static-headline-small-tracking) * 1px);
+  font-weight: 400;
+}
+.m3-title-large {
+  font-family: var(--static-title-large-font);
+  font-size: calc(var(--static-title-large-size) * 1px);
+  line-height: calc(var(--static-title-large-line-height) * 1px);
+  letter-spacing: calc(var(--static-title-large-tracking) * 1px);
+  font-weight: 400;
+}
+.m3-title-medium {
+  font-family: var(--static-title-medium-font);
+  font-size: calc(var(--static-title-medium-size) * 1px);
+  line-height: calc(var(--static-title-medium-line-height) * 1px);
+  letter-spacing: calc(var(--static-title-medium-tracking) * 1px);
+  font-weight: 500;
+}
+.m3-title-small {
+  font-family: var(--static-title-small-font);
+  font-size: calc(var(--static-title-small-size) * 1px);
+  line-height: calc(var(--static-title-small-line-height) * 1px);
+  letter-spacing: calc(var(--static-title-small-tracking) * 1px);
+  font-weight: 500;
+}
+.m3-body-large {
+  font-family: var(--static-body-large-font);
+  font-size: calc(var(--static-body-large-size) * 1px);
+  line-height: calc(var(--static-body-large-line-height) * 1px);
+  letter-spacing: calc(var(--static-body-large-tracking) * 1px);
+  font-weight: 400;
+}
+.m3-body-medium {
+  font-family: var(--static-body-medium-font);
+  font-size: calc(var(--static-body-medium-size) * 1px);
+  line-height: calc(var(--static-body-medium-line-height) * 1px);
+  letter-spacing: calc(var(--static-body-medium-tracking) * 1px);
+  font-weight: 400;
+}
+.m3-body-small {
+  font-family: var(--static-body-small-font);
+  font-size: calc(var(--static-body-small-size) * 1px);
+  line-height: calc(var(--static-body-small-line-height) * 1px);
+  letter-spacing: calc(var(--static-body-small-tracking) * 1px);
+  font-weight: 400;
+}
+.m3-label-large {
+  font-family: var(--static-label-large-font);
+  font-size: calc(var(--static-label-large-size) * 1px);
+  line-height: calc(var(--static-label-large-line-height) * 1px);
+  letter-spacing: calc(var(--static-label-large-tracking) * 1px);
+  font-weight: 500;
+}
+.m3-label-medium {
+  font-family: var(--static-label-medium-font);
+  font-size: calc(var(--static-label-medium-size) * 1px);
+  line-height: calc(var(--static-label-medium-line-height) * 1px);
+  letter-spacing: calc(var(--static-label-medium-tracking) * 1px);
+  font-weight: 500;
+}
+.m3-label-small {
+  font-family: var(--static-label-small-font);
+  font-size: calc(var(--static-label-small-size) * 1px);
+  line-height: calc(var(--static-label-small-line-height) * 1px);
+  letter-spacing: calc(var(--static-label-small-tracking) * 1px);
+  font-weight: 500;
+}

@@ -1,15 +1,19 @@
 <template>
   <footer
     ref="root"
-    class="flex flex-col relative z-20 bg-k-fg-3 border border-k-fg-5 m-4 rounded-xl overflow-hidden h-k-footer-height pt-(--progress-bar-height)"
-    @mousemove="showControls"
+    :class="{ mobile: isMobile }"
+    class="app-footer"
+    data-vue="AppFooter"
     @contextmenu.prevent="requestContextMenu"
+    @mousemove="showControls"
   >
-    <AudioPlayer v-show="currentStreamable" :class="isRadio && 'pointer-events-none'" />
+    <audio id="audio-player" class="hidden" crossorigin="anonymous" />
 
     <div class="fullscreen-backdrop hidden" />
 
-    <div class="wrapper relative flex flex-1">
+    <MiniPlayer v-if="isMobile" />
+
+    <div v-else class="wrapper">
       <RadioStationInfo v-if="isRadio" />
       <SongInfo v-else />
       <PlaybackControls />
@@ -20,10 +24,12 @@
       <UpNext v-show="showingUpNext" :playable="nextPlayable" class="up-next" />
     </Transition>
   </footer>
+
+  <NowPlayingSheet v-if="isMobile" />
 </template>
 
 <script lang="ts" setup>
-import { useThrottleFn } from '@vueuse/core'
+import { useThrottleFn, watchThrottled } from '@vueuse/core'
 import { computed, nextTick, ref, watch } from 'vue'
 import { useFullscreen } from '@vueuse/core'
 import { eventBus } from '@/utils/eventBus'
@@ -36,10 +42,14 @@ import { preferenceStore } from '@/stores/preferenceStore'
 import { audioService } from '@/services/audioService'
 import { playback } from '@/services/playbackManager'
 import { useContextMenu } from '@/composables/useContextMenu'
+import { useViewport } from '@/composables/useViewport'
+import { volumeManager } from '@/services/volumeManager'
+import { socketService } from '@/services/socketService'
 
-import AudioPlayer from '@/components/layout/app-footer/AudioPlayer.vue'
 import ExtraControls from '@/components/layout/app-footer/FooterExtraControls.vue'
 import PlaybackControls from '@/components/layout/app-footer/FooterPlaybackControls.vue'
+import MiniPlayer from '@/components/layout/app-footer/MiniPlayer.vue'
+import NowPlayingSheet from '@/components/layout/now-playing/NowPlayingSheet.vue'
 
 const SongInfo = defineAsyncComponent(() => import('@/components/layout/app-footer/FooterPlayableInfo.vue'))
 const RadioStationInfo = defineAsyncComponent(() => import('@/components/layout/app-footer/FooterRadioStationInfo.vue'))
@@ -48,6 +58,7 @@ const PlayableContextMenu = defineAsyncComponent(() => import('@/components/play
 const RadioStationContextMenu = defineAsyncComponent(() => import('@/components/radio/RadioStationContextMenu.vue'))
 
 const currentStreamable = requireInjection(CurrentStreamableKey, ref())
+const { isMobile } = useViewport()
 let hideControlsTimeout: number
 
 const root = ref<HTMLElement>()
@@ -129,9 +140,20 @@ watch(
       return
     }
 
+    volumeManager.init(null, preferenceStore.volume)
     await initPlaybackRelatedServices()
   },
   { immediate: true },
+)
+
+// Volume changes come often: save and broadcast them at most once a second.
+watchThrottled(
+  volumeManager.volume,
+  volume => {
+    preferenceStore.volume = volume
+    socketService.broadcast('SOCKET_VOLUME_CHANGED', volume)
+  },
+  { throttle: 1_000 },
 )
 
 const setupControlHidingTimer = () => {
@@ -173,7 +195,28 @@ eventBus.on('FULLSCREEN_TOGGLE', () => toggleFullscreen()).on('UP_NEXT', next =>
 }
 
 footer {
-  box-shadow: 0 0 30px 20px rgba(0, 0, 0, 0.2);
+  position: relative;
+  z-index: 20;
+  flex-shrink: 0;
+
+  &:not(.mobile) {
+    margin: 12px;
+    min-height: 88px;
+    border-radius: 28px;
+    background: var(--schemes-surface-container-high);
+  }
+
+  &.mobile {
+    padding-top: 4px;
+  }
+
+  .wrapper {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    min-height: 88px;
+    padding: 12px 16px;
+  }
 
   .fullscreen-backdrop {
     background-color: #1d1d1d;

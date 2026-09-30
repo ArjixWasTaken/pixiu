@@ -1,87 +1,79 @@
 <template>
   <div class="relative" data-testid="song-list-controls">
-    <div class="flex gap-2 flex-wrap">
-      <BtnGroup uppercase>
-        <template v-if="altPressed">
-          <Btn
-            v-if="selectedPlayables.length < 2 && filteredPlayables.length"
-            v-koel-tooltip
-            variant="highlight"
-            class="btn-play-all"
-            title="Play all. Press Alt/⌥ to change mode."
-            @click.prevent="playAll"
-          >
-            <Icon :icon="faPlay" fixed-width />
-            All
-          </Btn>
-
-          <Btn
-            v-if="selectedPlayables.length > 1"
-            v-koel-tooltip
-            variant="highlight"
-            class="btn-play-selected"
-            title="Play selected. Press Alt/⌥ to change mode."
-            @click.prevent="playSelected"
-          >
-            <Icon :icon="faPlay" fixed-width />
-            Selected
-          </Btn>
-        </template>
-
-        <template v-else>
-          <Btn
-            v-if="selectedPlayables.length < 2 && filteredPlayables.length"
-            v-koel-tooltip
-            variant="highlight"
-            class="btn-shuffle-all"
-            data-testid="btn-shuffle-all"
-            title="Shuffle all. Press Alt/⌥ to change mode."
-            @click.prevent="shuffle"
-          >
-            <Icon :icon="faRandom" fixed-width />
-            All
-          </Btn>
-
-          <Btn
-            v-if="selectedPlayables.length > 1"
-            v-koel-tooltip
-            variant="highlight"
-            class="btn-shuffle-selected"
-            data-testid="btn-shuffle-selected"
-            title="Shuffle selected. Press Alt/⌥ to change mode."
-            @click.prevent="shuffleSelected"
-          >
-            <Icon :icon="faRandom" fixed-width />
-            Selected
-          </Btn>
-        </template>
-
-        <Btn variant="success" v-if="showAddToButton" ref="addToButton">
-          {{ showingAddToMenu ? 'Cancel' : 'Add To…' }}
-        </Btn>
-
-        <Btn variant="destructive" v-if="config.clearQueue" title="Clear current queue" @click.prevent="clearQueue"
-          >Clear</Btn
+    <div class="flex gap-2 flex-wrap items-center">
+      <template v-if="altPressed">
+        <M3Button
+          v-if="selectedPlayables.length < 2 && filteredPlayables.length"
+          class="btn-play-all"
+          icon="play_arrow"
+          title="Play all. Press Alt/⌥ to change mode."
+          @click.prevent="playAll"
         >
-      </BtnGroup>
+          Play all
+        </M3Button>
 
-      <BtnGroup v-if="config.refresh">
-        <Btn variant="success" v-if="config.refresh" v-koel-tooltip title="Refresh" @click.prevent="refresh">
-          <Icon :icon="faRotateRight" fixed-width />
-        </Btn>
-      </BtnGroup>
+        <M3Button
+          v-if="selectedPlayables.length > 1"
+          class="btn-play-selected"
+          icon="play_arrow"
+          title="Play selected. Press Alt/⌥ to change mode."
+          @click.prevent="playSelected"
+        >
+          Play selected
+        </M3Button>
+      </template>
 
-      <BtnGroup v-if="config.filter && allPlayables.length">
-        <ListFilter />
-      </BtnGroup>
+      <template v-else>
+        <M3Button
+          v-if="selectedPlayables.length < 2 && filteredPlayables.length"
+          class="btn-shuffle-all"
+          data-testid="btn-shuffle-all"
+          icon="shuffle"
+          title="Shuffle all. Press Alt/⌥ to change mode."
+          @click.prevent="shuffle"
+        >
+          Shuffle all
+        </M3Button>
+
+        <M3Button
+          v-if="selectedPlayables.length > 1"
+          class="btn-shuffle-selected"
+          data-testid="btn-shuffle-selected"
+          icon="shuffle"
+          title="Shuffle selected. Press Alt/⌥ to change mode."
+          @click.prevent="shuffleSelected"
+        >
+          Shuffle selected
+        </M3Button>
+      </template>
+
+      <span v-if="showAddToButton" ref="addToButton" class="inline-flex">
+        <M3Button :icon="showingAddToMenu ? 'close' : 'playlist_add'" variant="tonal">
+          {{ showingAddToMenu ? 'Cancel' : 'Add to…' }}
+        </M3Button>
+      </span>
+
+      <M3Button
+        v-if="config.clearQueue"
+        icon="clear_all"
+        title="Clear current queue"
+        variant="outlined"
+        @click.prevent="clearQueue"
+      >
+        Clear queue
+      </M3Button>
+
+      <M3IconButton v-if="config.refresh" icon="refresh" label="Refresh" @click.prevent="refresh" />
 
       <slot />
+
+      <ListFilter v-if="config.filter && allPlayables.length" class="ml-2" />
     </div>
 
     <Popover
       v-if="showAddToButton"
       ref="popover"
-      :anchor="addToButton?.button"
+      :anchor="addToButton"
       class="context-menu p-0"
       @toggle="showingAddToMenu = $event"
     >
@@ -91,15 +83,14 @@
 </template>
 
 <script lang="ts" setup>
-import { faPlay, faRandom, faRotateRight } from '@fortawesome/free-solid-svg-icons'
 import type { Ref } from 'vue'
 import { computed, onBeforeUnmount, onMounted, ref, toRef, watch } from 'vue'
 import { FilteredPlayablesKey, PlayablesKey, SelectedPlayablesKey } from '@/config/symbols'
 import { requireInjection } from '@/utils/helpers'
 
 import AddToMenu from '@/components/playable/AddToMenu.vue'
-import Btn from '@/components/ui/form/Btn.vue'
-import BtnGroup from '@/components/ui/form/BtnGroup.vue'
+import M3Button from '@/components/m3/M3Button.vue'
+import M3IconButton from '@/components/m3/M3IconButton.vue'
 import ListFilter from '@/components/ui/ListFilter.vue'
 import Popover from '@/components/ui/Popover.vue'
 
@@ -117,7 +108,7 @@ const [allPlayables] = requireInjection<[Ref<Playable[]>]>(PlayablesKey)
 const [filteredPlayables] = requireInjection<[Ref<Playable[]>]>(FilteredPlayablesKey)
 const [selectedPlayables] = requireInjection<[Ref<Playable[]>]>(SelectedPlayablesKey)
 
-const addToButton = ref<InstanceType<typeof Btn>>()
+const addToButton = ref<HTMLElement>()
 const popover = ref<InstanceType<typeof Popover>>()
 const showingAddToMenu = ref(false)
 const altPressed = ref(false)

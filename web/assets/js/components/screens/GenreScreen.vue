@@ -19,21 +19,24 @@
 
         <template #controls>
           <SongListControls :config @play-all="playAll" @play-selected="playSelected">
-            <Btn variant="ghost" @click="requestContextMenu">
-              <Icon :icon="faEllipsis" fixed-width />
-              <span class="sr-only">More Actions</span>
-            </Btn>
+            <M3IconButton icon="more_vert" label="More actions" @click="requestContextMenu" />
           </SongListControls>
         </template>
       </ScreenHeader>
       <ScreenHeaderSkeleton v-else role="status" aria-busy="true" aria-label="Loading" />
     </template>
 
-    <PlayableListSkeleton v-if="showSkeletons" class="-m-6" role="status" aria-busy="true" aria-label="Loading" />
+    <PlayableListSkeleton
+      v-if="showSkeletons"
+      class="screen-bleed"
+      role="status"
+      aria-busy="true"
+      aria-label="Loading"
+    />
     <SongList
       v-else
       ref="songList"
-      class="-m-6"
+      class="screen-bleed"
       @sort="fetchWithSort"
       @press:enter="onPressEnter"
       @swipe="onSwipe"
@@ -51,7 +54,6 @@
 </template>
 
 <script lang="ts" setup>
-import { faEllipsis } from '@fortawesome/free-solid-svg-icons'
 import { computed, onMounted, ref, watch } from 'vue'
 import { GuitarIcon } from 'lucide-vue-next'
 import { pluralize, secondsToHumanReadable } from '@/utils/formatters'
@@ -67,12 +69,12 @@ import { usePlayableListControls } from '@/composables/usePlayableListControls'
 import { useLocalStorage } from '@/composables/useLocalStorage'
 import { useContextMenu } from '@/composables/useContextMenu'
 
+import M3IconButton from '@/components/m3/M3IconButton.vue'
 import ScreenHeader from '@/components/ui/ScreenHeader.vue'
 import ScreenEmptyState from '@/components/ui/ScreenEmptyState.vue'
 import PlayableListSkeleton from '@/components/playable/playable-list/PlayableListSkeleton.vue'
 import ScreenHeaderSkeleton from '@/components/ui/ScreenHeaderSkeleton.vue'
 import ScreenBase from '@/components/screens/ScreenBase.vue'
-import Btn from '@/components/ui/form/Btn.vue'
 
 const ContextMenu = defineAsyncComponent(() => import('@/components/genre/GenreContextMenu.vue'))
 

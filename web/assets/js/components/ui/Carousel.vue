@@ -1,37 +1,26 @@
 <template>
   <div class="w-full min-w-0">
     <Teleport v-if="actionsHost && hasOverflow" :to="actionsHost">
-      <button
+      <M3IconButton
         v-for="ctrl in controls"
         :key="ctrl.title"
-        type="button"
-        class="w-9 h-9 rounded-full flex items-center justify-center text-k-fg-70 hover:text-k-fg hover:bg-k-fg-5 transition"
-        :title="ctrl.title"
+        :icon="ctrl.icon"
+        :label="ctrl.title"
         @click="slide(ctrl.direction)"
-      >
-        <Icon :icon="ctrl.icon" />
-        <span class="sr-only">{{ ctrl.title }}</span>
-      </button>
+      />
     </Teleport>
 
-    <nav v-else-if="hasOverflow" class="flex justify-end gap-2 mb-2">
-      <button
+    <nav v-else-if="hasOverflow" class="flex justify-end gap-1 mb-2">
+      <M3IconButton
         v-for="ctrl in controls"
         :key="ctrl.title"
-        type="button"
-        class="w-9 h-9 rounded-full flex items-center justify-center text-k-fg-70 hover:text-k-fg hover:bg-k-fg-5 transition"
-        :title="ctrl.title"
+        :icon="ctrl.icon"
+        :label="ctrl.title"
         @click="slide(ctrl.direction)"
-      >
-        <Icon :icon="ctrl.icon" />
-        <span class="sr-only">{{ ctrl.title }}</span>
-      </button>
+      />
     </nav>
 
-    <div
-      ref="scroller"
-      class="home-carousel scroll-mask-x-from-[calc(100%-2rem)] md:scroll-mask-x overflow-x-auto overflow-y-hidden w-full"
-    >
+    <div ref="scroller" class="home-carousel overflow-x-auto overflow-y-hidden w-full pb-1">
       <div class="home-carousel-track flex gap-4">
         <slot />
       </div>
@@ -40,9 +29,10 @@
 </template>
 
 <script setup lang="ts">
-import { faChevronLeft, faChevronRight } from '@fortawesome/free-solid-svg-icons'
 import { inject, onBeforeUnmount, onMounted, onUpdated, ref, watch } from 'vue'
 import { BlockActionsHostKey } from '@/config/symbols'
+
+import M3IconButton from '@/components/m3/M3IconButton.vue'
 
 const actionsHost = inject(BlockActionsHostKey, ref(null))
 
@@ -50,8 +40,8 @@ const scroller = ref<HTMLDivElement>()
 const hasOverflow = ref(false)
 
 const controls = [
-  { title: 'Scroll left', icon: faChevronLeft, direction: -1 as const },
-  { title: 'Scroll right', icon: faChevronRight, direction: 1 as const },
+  { title: 'Scroll left', icon: 'chevron_left', direction: -1 as const },
+  { title: 'Scroll right', icon: 'chevron_right', direction: 1 as const },
 ]
 
 let resizeObserver: ResizeObserver | undefined
@@ -117,6 +107,6 @@ const slide = (direction: 1 | -1) => {
 
 .home-carousel-track > * {
   flex: none;
-  width: 240px;
+  width: 184px;
 }
 </style>

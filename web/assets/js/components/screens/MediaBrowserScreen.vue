@@ -20,7 +20,7 @@
       <EmptyLibraryHint />
     </ScreenEmptyState>
 
-    <div v-else class="-m-6 h-full min-h-full flex flex-col flex-1 overflow-auto">
+    <div v-else class="screen-bleed h-full min-h-full flex flex-col flex-1 overflow-auto">
       <MediaListView
         v-show="!shouldShowSkeleton"
         :items

@@ -28,7 +28,7 @@
     <PlayableList
       v-if="playables.length"
       ref="playableList"
-      class="-m-6"
+      class="screen-bleed"
       @press:enter="onPressEnter"
       @swipe="onSwipe"
     />

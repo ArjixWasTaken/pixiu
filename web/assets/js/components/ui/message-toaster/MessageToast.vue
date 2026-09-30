@@ -1,28 +1,25 @@
 <template>
-  <article
+  <M3Snackbar
     :class="message.type"
-    class="rounded-l-md cursor-pointer flex items-stretch opacity-90 transition-transform duration-300 origin-right hover:opacity-100 hover:scale-110"
+    class="toast"
     title="Click to dismiss"
     @click="dismiss"
+    @close="dismiss"
     @mouseenter="onMouseEnter"
     @mouseleave="onMouseLeave"
   >
-    <aside class="flex items-center px-3 py-0 bg-black/10">
-      <Icon :icon="hovering ? faTimesCircle : typeIcon" />
-    </aside>
-    <main class="flex-1 py-2 pl-3 pr-4">{{ message.content }}</main>
-  </article>
+    <span class="flex items-center gap-3">
+      <M3Icon v-if="message.type !== 'info'" :name="typeIcon" :size="20" class="type-icon" />
+      {{ message.content }}
+    </span>
+  </M3Snackbar>
 </template>
 
 <script lang="ts" setup>
 import { computed, onMounted, ref, toRefs } from 'vue'
-import {
-  faCircleCheck,
-  faCircleExclamation,
-  faCircleInfo,
-  faTimesCircle,
-  faTriangleExclamation,
-} from '@fortawesome/free-solid-svg-icons'
+
+import M3Icon from '@/components/m3/M3Icon.vue'
+import M3Snackbar from '@/components/m3/M3Snackbar.vue'
 
 const props = defineProps<{ message: ToastMessage }>()
 const emit = defineEmits<{ (e: 'dismiss', message: ToastMessage): void }>()
@@ -32,13 +29,13 @@ const { message } = toRefs(props)
 const typeIcon = computed(() => {
   switch (message.value.type) {
     case 'info':
-      return faCircleInfo
+      return 'info'
     case 'success':
-      return faCircleCheck
+      return 'check_circle'
     case 'warning':
-      return faTriangleExclamation
+      return 'warning'
     default:
-      return faCircleExclamation
+      return 'error'
   }
 })
 
@@ -66,21 +63,17 @@ const onMouseLeave = () => {
 onMounted(() => setAutoDismiss())
 </script>
 
-<style lang="postcss" scoped>
-@reference '@css/app.pcss';
-.info {
-  @apply bg-blue-600 text-blue-100;
+<style scoped>
+.toast {
+  cursor: pointer;
 }
 
-.danger {
-  @apply bg-red-700 text-red-100;
+.success .type-icon {
+  color: var(--schemes-inverse-primary);
 }
 
-.success {
-  @apply bg-green-600 text-green-100;
-}
-
-.warning {
-  @apply bg-orange-600 text-orange-100;
+.warning .type-icon,
+.danger .type-icon {
+  color: var(--schemes-error-container);
 }
 </style>

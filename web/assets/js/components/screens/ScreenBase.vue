@@ -8,7 +8,7 @@
     />
     <slot name="header" />
 
-    <main class="scroll-mask-y overflow-scroll flex flex-col b-16 md:b-6 p-6 flex-1 place-content-start">
+    <main class="screen-body flex flex-col flex-1 place-content-start overflow-y-auto">
       <HookSlot :context="{ screen: getCurrentScreen() }" name="screen.top" />
       <slot />
     </main>
@@ -38,11 +38,32 @@ main {
   -ms-overflow-style: -ms-autohiding-scrollbar;
 }
 
+.screen-body {
+  --screen-pad-x: 24px;
+  --screen-pad-bottom: 24px;
+
+  position: relative;
+  padding: 0 var(--screen-pad-x) var(--screen-pad-bottom);
+
+  @media (max-width: 768px) {
+    --screen-pad-x: 16px;
+    --screen-pad-bottom: 16px;
+  }
+
+  /* Lists and grids that run to the edges of the screen. */
+  :slotted(.screen-bleed) {
+    margin: 0 calc(-1 * var(--screen-pad-x)) calc(-1 * var(--screen-pad-bottom));
+  }
+}
+
+/* The current album or artist, blurred behind the header. */
 .cover-bg {
   @apply absolute bg-cover bg-center pointer-events-none;
-  inset: -32px;
-  filter: blur(24px);
-  -webkit-mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.3) 0%, transparent 50%);
-  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.3) 0%, transparent 50%);
+  inset: 0 0 auto 0;
+  height: 360px;
+  filter: blur(48px) saturate(1.2);
+  opacity: 0.35;
+  -webkit-mask-image: linear-gradient(to bottom, black, transparent);
+  mask-image: linear-gradient(to bottom, black, transparent);
 }
 </style>

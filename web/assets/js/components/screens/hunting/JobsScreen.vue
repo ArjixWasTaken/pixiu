@@ -7,14 +7,14 @@
           <span>{{ running.length }} running · {{ waiting.length }} waiting</span>
         </template>
         <template #controls>
-          <Btn v-if="done.length" size="small" variant="ghost" @click.prevent="clearFinished">Clear finished</Btn>
+          <M3Button v-if="done.length" variant="text" @click.prevent="clearFinished">Clear finished</M3Button>
         </template>
       </ScreenHeader>
     </template>
 
     <ScreenEmptyState v-if="loaded && !jobs.length">
       <template #icon>
-        <Icon :icon="faListCheck" />
+        <M3Icon :size="64" name="checklist" />
       </template>
       Nothing going on
       <span class="secondary block"
@@ -22,7 +22,7 @@
       >
     </ScreenEmptyState>
 
-    <div v-else class="flex flex-col gap-8">
+    <div v-else class="flex flex-col gap-6 pt-1" data-vue="JobsScreen">
       <JobGroup v-if="failed.length" :jobs="failed" class="failed" title="Needs you" @retry="retry" />
       <JobGroup v-if="running.length" :jobs="running" title="Running" />
       <JobGroup v-if="waiting.length" :jobs="waiting" title="Waiting" />
@@ -32,7 +32,6 @@
 </template>
 
 <script lang="ts" setup>
-import { faListCheck } from '@fortawesome/free-solid-svg-icons'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { huntingService } from '@/services/huntingService'
 import type { HuntJob, JobState } from '@/services/huntingService'
@@ -41,7 +40,8 @@ import { eventBus } from '@/utils/eventBus'
 import { useRouter } from '@/composables/useRouter'
 import { useErrorHandler } from '@/composables/useErrorHandler'
 
-import Btn from '@/components/ui/form/Btn.vue'
+import M3Button from '@/components/m3/M3Button.vue'
+import M3Icon from '@/components/m3/M3Icon.vue'
 import ScreenBase from '@/components/screens/ScreenBase.vue'
 import ScreenHeader from '@/components/ui/ScreenHeader.vue'
 import ScreenEmptyState from '@/components/ui/ScreenEmptyState.vue'

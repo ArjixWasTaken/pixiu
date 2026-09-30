@@ -1,70 +1,73 @@
 <template>
-  <section id="mainContent" class="flex-1 relative overflow-hidden">
-    <!--
+  <section id="mainContent" class="main-content" data-testid="main-content">
+    <TopBar />
+    <NowPlayingPanel v-if="!isMobile" />
+    <div class="screens">
+      <!--
       Most of the views are render-expensive and have their own UI states (viewport/scroll position), e.g. the playable
       lists), so we use v-show.
       For those that don't need to maintain their own UI state, we use v-if to avoid rendering them when not needed.
     -->
-    <VisualizerScreen v-if="screen === 'Visualizer'" />
-    <ArtOverlay v-if="showArtOverlay" :album="(currentPlayingItem as Song).album_id" />
+      <VisualizerScreen v-if="screen === 'Visualizer'" />
 
-    <HomeScreen v-if="screenLoaded('Home')" v-show="screen === 'Home'" />
-    <QueueScreen v-if="screenLoaded('Queue')" v-show="screen === 'Queue'" />
-    <AllSongsScreen v-if="screenLoaded('Songs')" v-show="screen === 'Songs'" />
-    <AlbumListScreen v-if="screenLoaded('Albums')" v-show="screen === 'Albums'" />
-    <ArtistListScreen v-if="screenLoaded('Artists')" v-show="screen === 'Artists'" />
-    <PlaylistScreen v-if="screenLoaded('Playlist')" v-show="screen === 'Playlist'" />
-    <FavoritesScreen v-if="screenLoaded('Favorites')" v-show="screen === 'Favorites'" />
-    <RecentlyPlayedScreen v-if="screenLoaded('RecentlyPlayed')" v-show="screen === 'RecentlyPlayed'" />
-    <OfflineSongsScreen v-if="screenLoaded('OfflineSongs')" v-show="screen === 'OfflineSongs'" />
-    <UploadScreen v-if="screenLoaded('Upload')" v-show="screen === 'Upload'" />
-    <SearchExcerptsScreen v-if="screenLoaded('Search.Excerpt')" v-show="screen === 'Search.Excerpt'" />
-    <GenreScreen v-if="screenLoaded('Genre')" v-show="screen === 'Genre'" />
-    <PodcastListScreen v-if="screenLoaded('Podcasts')" v-show="screen === 'Podcasts'" />
-    <RadioStationListScreen v-if="screenLoaded('Radio.Stations')" v-show="screen === 'Radio.Stations'" />
-    <MediaBrowser v-if="useMediaBrowser && screenLoaded('MediaBrowser')" v-show="screen === 'MediaBrowser'" />
-    <GenreListScreen v-if="screenLoaded('Genres')" v-show="screen === 'Genres'" />
+      <HomeScreen v-if="screenLoaded('Home')" v-show="screen === 'Home'" />
+      <QueueScreen v-if="screenLoaded('Queue')" v-show="screen === 'Queue'" />
+      <AllSongsScreen v-if="screenLoaded('Songs')" v-show="screen === 'Songs'" />
+      <AlbumListScreen v-if="screenLoaded('Albums')" v-show="screen === 'Albums'" />
+      <ArtistListScreen v-if="screenLoaded('Artists')" v-show="screen === 'Artists'" />
+      <PlaylistScreen v-if="screenLoaded('Playlist')" v-show="screen === 'Playlist'" />
+      <FavoritesScreen v-if="screenLoaded('Favorites')" v-show="screen === 'Favorites'" />
+      <RecentlyPlayedScreen v-if="screenLoaded('RecentlyPlayed')" v-show="screen === 'RecentlyPlayed'" />
+      <OfflineSongsScreen v-if="screenLoaded('OfflineSongs')" v-show="screen === 'OfflineSongs'" />
+      <UploadScreen v-if="screenLoaded('Upload')" v-show="screen === 'Upload'" />
+      <SearchExcerptsScreen v-if="screenLoaded('Search.Excerpt')" v-show="screen === 'Search.Excerpt'" />
+      <GenreScreen v-if="screenLoaded('Genre')" v-show="screen === 'Genre'" />
+      <PodcastListScreen v-if="screenLoaded('Podcasts')" v-show="screen === 'Podcasts'" />
+      <RadioStationListScreen v-if="screenLoaded('Radio.Stations')" v-show="screen === 'Radio.Stations'" />
+      <MediaBrowser v-if="useMediaBrowser && screenLoaded('MediaBrowser')" v-show="screen === 'MediaBrowser'" />
+      <GenreListScreen v-if="screenLoaded('Genres')" v-show="screen === 'Genres'" />
 
-    <SearchSongResultsScreen v-if="screen === 'Search.Playables'" />
-    <AlbumScreen v-if="screen === 'Album'" />
-    <ArtistScreen v-if="screen === 'Artist'" />
-    <SettingsScreen v-if="screen === 'Settings'" />
-    <HuntScreen v-if="screenLoaded('Hunt')" v-show="screen === 'Hunt'" />
-    <WatchesScreen v-if="screen === 'Watches'" />
-    <JobsScreen v-if="screen === 'Jobs'" />
-    <OrphansScreen v-if="screen === 'Orphans'" />
-    <ProfileScreen v-if="screen === 'Profile'" />
-    <PodcastScreen v-if="screen === 'Podcast'" />
-    <EpisodeScreen v-if="screen === 'Episode'" />
-    <UserListScreen v-if="screen === 'Users'" />
-    <YouTubeScreen v-if="useYouTube" v-show="screen === 'YouTube'" />
-    <NotFoundScreen v-if="screen === '404'" />
-    <AcceptPlaylistCollaborationInvite v-if="screen === 'Playlist.Collaborate'" />
+      <SearchSongResultsScreen v-if="screen === 'Search.Playables'" />
+      <AlbumScreen v-if="screen === 'Album'" />
+      <ArtistScreen v-if="screen === 'Artist'" />
+      <SettingsScreen v-if="screen === 'Settings'" />
+      <HuntScreen v-if="screenLoaded('Hunt')" v-show="screen === 'Hunt'" />
+      <WatchesScreen v-if="screen === 'Watches'" />
+      <JobsScreen v-if="screen === 'Jobs'" />
+      <OrphansScreen v-if="screen === 'Orphans'" />
+      <ProfileScreen v-if="screen === 'Profile'" />
+      <PodcastScreen v-if="screen === 'Podcast'" />
+      <EpisodeScreen v-if="screen === 'Episode'" />
+      <UserListScreen v-if="screen === 'Users'" />
+      <YouTubeScreen v-if="useYouTube" v-show="screen === 'YouTube'" />
+      <NotFoundScreen v-if="screen === '404'" />
+      <AcceptPlaylistCollaborationInvite v-if="screen === 'Playlist.Collaborate'" />
 
-    <template v-for="(component, name) in addedScreens" :key="name">
-      <component :is="component" v-if="screen === name" />
-    </template>
+      <template v-for="(component, name) in addedScreens" :key="name">
+        <component :is="component" v-if="screen === name" />
+      </template>
+    </div>
   </section>
 </template>
 
 <script lang="ts" setup>
-import { computed, onMounted, reactive, ref, toRef } from 'vue'
+import { onMounted, reactive, ref, toRef } from 'vue'
 import type { Component } from 'vue'
-import { isSong } from '@/utils/typeGuards'
 import { Filter } from '@/config/hooks'
 import { applyFilters } from '@/hooks'
-import { defineAsyncComponent, requireInjection } from '@/utils/helpers'
-import { preferenceStore as preferences } from '@/stores/preferenceStore'
+import { defineAsyncComponent } from '@/utils/helpers'
 import { useRouter } from '@/composables/useRouter'
 import { useThirdPartyServices } from '@/composables/useThirdPartyServices'
-import { CurrentStreamableKey } from '@/config/symbols'
 import { commonStore } from '@/stores/commonStore'
+import { useViewport } from '@/composables/useViewport'
+
+import TopBar from '@/components/layout/main-wrapper/TopBar.vue'
+import NowPlayingPanel from '@/components/layout/now-playing/NowPlayingPanel.vue'
 
 const AcceptPlaylistCollaborationInvite = defineAsyncComponent(
   () => import('@/components/screens/AcceptPlaylistCollaborationInvite.vue'),
 )
 
-const ArtOverlay = defineAsyncComponent(() => import('@/components/ui/AlbumArtOverlay.vue'))
 const AlbumListScreen = defineAsyncComponent(() => import('@/components/screens/AlbumListScreen.vue'))
 const AlbumScreen = defineAsyncComponent(() => import('@/components/screens/AlbumScreen.vue'))
 const AllSongsScreen = defineAsyncComponent(() => import('@/components/screens/AllSongsScreen.vue'))
@@ -103,17 +106,8 @@ const YouTubeScreen = defineAsyncComponent(() => import('@/components/screens/Yo
 const addedScreens = applyFilters<Partial<Record<ScreenName, Component>>>(Filter.SCREENS, {})
 
 const { useYouTube } = useThirdPartyServices()
+const { isMobile } = useViewport()
 const { onRouteChanged, getCurrentScreen } = useRouter()
-
-const currentPlayingItem = requireInjection(CurrentStreamableKey, ref())
-
-const showArtOverlay = computed(() => {
-  if (!preferences.show_album_art_overlay) {
-    return false
-  }
-
-  return currentPlayingItem.value && isSong(currentPlayingItem.value)
-})
 
 const screen = ref<ScreenName>('Home')
 const loadedScreens = reactive<ScreenName[]>([])
@@ -134,3 +128,38 @@ onMounted(() => {
   loadedScreens.push(screen.value)
 })
 </script>
+
+<style scoped>
+.main-content {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0%;
+  min-width: 0;
+  margin: 12px 12px 0 0;
+  overflow: hidden;
+  border-radius: 28px;
+  background: var(--schemes-surface);
+}
+
+.screens {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+@media (max-width: 768px) {
+  .main-content {
+    margin: 0;
+    border-radius: 0;
+  }
+}
+
+@media (max-width: 640px) and (min-width: 769px) {
+  .main-content {
+    margin-left: 12px;
+  }
+}
+</style>

@@ -70,6 +70,6 @@ describe('embedService', async () => {
 
     expect(getMock).toHaveBeenCalledWith(`embeds/foo/secret`)
     expect(returnedEmbed).toEqual(embed)
-    expect(returnedOptions.theme).toEqual('classic')
+    expect(returnedOptions.theme).toEqual('orange')
   })
 })

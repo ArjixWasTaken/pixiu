@@ -1,0 +1,186 @@
+/* Shared pieces of the Material 3 components (components/m3). */
+
+:root {
+  --m3-elevation-1: 0 1px 2px rgb(0 0 0 / 0.3), 0 1px 3px 1px rgb(0 0 0 / 0.15);
+  --m3-elevation-2: 0 1px 2px rgb(0 0 0 / 0.3), 0 2px 6px 2px rgb(0 0 0 / 0.15);
+  --m3-elevation-3: 0 1px 3px rgb(0 0 0 / 0.3), 0 4px 8px 3px rgb(0 0 0 / 0.15);
+  --m3-elevation-4: 0 2px 3px rgb(0 0 0 / 0.3), 0 6px 10px 4px rgb(0 0 0 / 0.15);
+  --m3-elevation-5: 0 4px 4px rgb(0 0 0 / 0.3), 0 8px 12px 6px rgb(0 0 0 / 0.15);
+  --m3-ease: cubic-bezier(0.2, 0, 0, 1);
+}
+
+.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined';
+  font-weight: normal;
+  font-style: normal;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-feature-settings: 'liga';
+  font-feature-settings: 'liga';
+  -webkit-font-smoothing: antialiased;
+}
+
+/*
+ * A state layer: an overlay in the content color, 8% on hover, 10% on
+ * focus and press. Put `m3-state` on a positioned element.
+ */
+.m3-state {
+  position: relative;
+  isolation: isolate;
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: currentColor;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 150ms linear;
+    z-index: -1;
+  }
+
+  &:hover::before {
+    opacity: 0.08;
+  }
+
+  &:focus-visible::before,
+  &:active::before {
+    opacity: 0.1;
+  }
+
+  &:disabled::before,
+  &[aria-disabled='true']::before {
+    opacity: 0;
+  }
+}
+
+@keyframes m3-equalizer {
+  0%,
+  100% {
+    transform: scaleY(0.3);
+  }
+
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+@keyframes m3-indeterminate {
+  0% {
+    left: -40%;
+    width: 40%;
+  }
+
+  100% {
+    left: 100%;
+    width: 40%;
+  }
+}
+
+@keyframes m3-slide-up {
+  from {
+    transform: translateY(100%);
+  }
+
+  to {
+    transform: none;
+  }
+}
+
+@keyframes m3-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* koel's form controls (components/ui/form) as outlined M3 fields. */
+.k-field {
+  min-height: 48px;
+  padding: 0 16px;
+  border: 1px solid var(--schemes-outline);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--schemes-on-surface);
+  font-size: calc(var(--static-body-large-size) * 1px);
+  caret-color: var(--schemes-primary);
+
+  &::placeholder {
+    color: var(--schemes-on-surface-variant);
+  }
+
+  &:focus,
+  &:focus-within {
+    outline: 2px solid var(--schemes-primary);
+    outline-offset: -2px;
+  }
+
+  &:disabled,
+  &[readonly] {
+    opacity: 0.38;
+    cursor: not-allowed;
+  }
+
+  & select {
+    background: transparent;
+  }
+
+  & option {
+    background: var(--schemes-surface-container);
+    color: var(--schemes-on-surface);
+  }
+}
+
+/* koel's checkbox is a switch. */
+.k-switch {
+  position: relative;
+  display: inline-block;
+  flex-shrink: 0;
+  width: 52px;
+  height: 32px;
+  margin-right: 8px;
+  vertical-align: middle;
+  border: 2px solid var(--schemes-outline);
+  border-radius: 16px;
+  background: var(--schemes-surface-container-highest);
+  cursor: pointer;
+  appearance: none;
+  transition: background-color 150ms linear;
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 6px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--schemes-outline);
+    transform: translateY(-50%);
+    transition:
+      left 200ms var(--m3-ease),
+      width 200ms var(--m3-ease),
+      height 200ms var(--m3-ease);
+  }
+
+  &:checked {
+    border-color: var(--schemes-primary);
+    background: var(--schemes-primary);
+
+    &::after {
+      left: 22px;
+      width: 24px;
+      height: 24px;
+      background: var(--schemes-on-primary);
+    }
+  }
+
+  &:disabled {
+    opacity: 0.38;
+    cursor: not-allowed;
+  }
+}

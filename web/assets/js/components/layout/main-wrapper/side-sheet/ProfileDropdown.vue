@@ -1,26 +1,22 @@
 <template>
   <div ref="containerEl" class="relative flex items-center">
     <button
-      class="rounded-full cursor-pointer active:scale-95 h-[42px] aspect-square"
+      :style="{ width: `${size}px`, height: `${size}px` }"
+      aria-label="Account"
+      class="rounded-full cursor-pointer overflow-hidden block"
       data-testid="profile-dropdown-trigger"
       type="button"
-      @click="open = !open"
+      @click.stop="open = !open"
     >
-      <UserAvatar
-        v-if="currentUser"
-        :user="currentUser"
-        class="w-full h-full p-0.5 border border-solid border-k-fg-10 transition duration-200 ease-in-out hover:border-k-highlight"
-      />
+      <M3Avatar v-if="currentUser" :name="currentUser.name" :size :src="currentUser.avatar" />
     </button>
 
-    <ul v-if="open" v-koel-focus class="context-menu" tabindex="0" @keydown.esc="open = false">
+    <M3Menu v-if="open" v-koel-focus class="menu" tabindex="0" @keydown.esc="open = false">
       <template v-for="(item, index) in items" :key="item.id">
-        <li v-if="index" class="separator" />
-        <ContextMenuItem :data-testid="`profile-menu-${item.id}`" @click="choose(item)">{{
-          item.label()
-        }}</ContextMenuItem>
+        <M3Divider v-if="index" class="my-2" />
+        <M3MenuItem :data-testid="`profile-menu-${item.id}`" :label="item.label()" tag="div" @click="choose(item)" />
       </template>
-    </ul>
+    </M3Menu>
   </div>
 </template>
 
@@ -36,8 +32,12 @@ import { defineAsyncComponent } from '@/utils/helpers'
 import { Filter } from '@/config/hooks'
 import { applyFilters } from '@/hooks'
 
-import ContextMenuItem from '@/components/ui/context-menu/ContextMenuItem.vue'
-import UserAvatar from '@/components/user/UserAvatar.vue'
+import M3Avatar from '@/components/m3/M3Avatar.vue'
+import M3Divider from '@/components/m3/M3Divider.vue'
+import M3Menu from '@/components/m3/M3Menu.vue'
+import M3MenuItem from '@/components/m3/M3MenuItem.vue'
+
+withDefaults(defineProps<{ size?: number }>(), { size: 40 })
 
 const AboutKoelModal = defineAsyncComponent(() => import('@/components/meta/AboutKoelModal.vue'))
 
@@ -81,9 +81,12 @@ onMounted(() => document.addEventListener('click', onClickOutside))
 onBeforeUnmount(() => document.removeEventListener('click', onClickOutside))
 </script>
 
-<style lang="postcss" scoped>
-@reference '@css/app.pcss';
-.context-menu {
-  @apply absolute right-0 top-full mt-2 md:right-full md:bottom-0 md:top-auto md:mt-0 md:mr-3;
+<style scoped>
+.menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 50;
+  min-width: 200px;
 }
 </style>

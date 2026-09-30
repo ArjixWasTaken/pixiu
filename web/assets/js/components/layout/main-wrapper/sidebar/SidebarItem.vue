@@ -1,32 +1,25 @@
 <template>
-  <li
-    :class="{ active }"
-    class="relative before:right-0 px-6 before:top-1/4 before:w-[4px] before:h-1/2 before:absolute before:rounded-full before:transition-[box-shadow-sm,background-color] before:ease-in-out before:duration-500"
-    data-testid="sidebar-item"
-  >
+  <li :class="{ active }" class="sidebar-item" data-testid="sidebar-item">
     <a
+      :aria-current="active ? 'page' : undefined"
       :href="props.href"
-      class="flex items-center overflow-x-hidden gap-3 h-11 relative active:pt-0.5 active:pr-0 active:pb-0 active:pl-0.5 text-k-fg-70 hover:text-k-fg"
+      class="m3-state m3-label-large"
       @click.prevent="onClick"
       @dblclick.prevent="onDblClick"
     >
-      <span>
-        <slot name="icon" />
+      <slot name="icon">
+        <M3Icon v-if="icon" :class="{ spin }" :fill="active" :name="icon" />
+      </slot>
+
+      <span class="label">
+        <slot />
       </span>
 
-      <span class="flex-1 overflow-hidden">
-        <MarqueeText hover-only>
-          <slot />
-        </MarqueeText>
-      </span>
-
-      <span
-        v-if="$slots.badge"
-        class="shrink-0 rounded-full px-2 py-0.5 text-[0.6875rem] leading-none bg-k-fg-10 text-k-fg-70"
-        data-testid="sidebar-item-badge"
-      >
+      <span v-if="$slots.badge" class="badge" data-testid="sidebar-item-badge">
         <slot name="badge" />
       </span>
+
+      <slot name="trailing" />
     </a>
   </li>
 </template>
@@ -34,15 +27,18 @@
 <script lang="ts" setup>
 import { useRouter } from '@/composables/useRouter'
 import { eventBus } from '@/utils/eventBus'
-import MarqueeText from '@/components/ui/MarqueeText.vue'
+import M3Icon from '@/components/m3/M3Icon.vue'
 
 const props = withDefaults(
   defineProps<{
     href?: string | undefined
     active?: boolean
+    icon?: string
+    spin?: boolean
   }>(),
   {
     active: false,
+    spin: false,
   },
 )
 
@@ -71,15 +67,43 @@ const onDblClick = () => {
 </script>
 
 <style lang="postcss" scoped>
-@reference '@css/app.pcss';
-li.active {
+.sidebar-item {
+  list-style: none;
+
   a {
-    @apply text-k-fg;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: 56px;
+    padding: 0 24px 0 16px;
+    border-radius: 9999px;
+    color: var(--schemes-on-surface-variant);
+    text-decoration: none;
+
+    &:hover {
+      color: var(--schemes-on-surface);
+    }
   }
 
-  &::before {
-    @apply bg-k-highlight;
-    box-shadow: 0 0 40px 10px var(--color-highlight);
+  &.active a {
+    background: var(--schemes-secondary-container);
+    color: var(--schemes-on-secondary-container);
   }
+}
+
+.label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.badge {
+  flex-shrink: 0;
+}
+
+.spin {
+  animation: m3-spin 2s linear infinite;
 }
 </style>

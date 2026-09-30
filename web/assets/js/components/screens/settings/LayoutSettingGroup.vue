@@ -7,35 +7,45 @@
         say so.
       </template>
 
-      <FormRow>
-        <template #help>
-          Placeholders: {album_artist}, {artist}, {album}, {year}, {genre}, {disc}, {track}, {title}; {track:02} pads
-          with zeros. A part in [brackets] is left out when its value is missing. “/” separates folders, and the file
-          extension is added at the end.
-        </template>
-        <TextInput v-model="data.template" class="font-mono" name="template" required />
-      </FormRow>
+      <M3TextField
+        v-model="data.template"
+        class="template"
+        label="Layout template"
+        name="template"
+        required
+        supporting-text="Placeholders: {album_artist}, {artist}, {album}, {year}, {genre}, {disc}, {track}, {title}; {track:02} pads with zeros. A part in [brackets] is left out when its value is missing. “/” separates folders, and the file extension is added at the end."
+      />
 
       <div class="preview">
-        <p class="text-xs uppercase tracking-widest text-k-fg-50">
+        <p class="m3-label-medium text-(--schemes-on-surface-variant)">
           Example · {{ layout.example.title }}, track {{ layout.example.track ?? 1 }} of {{ layout.example.album }}
         </p>
-        <code v-if="preview.path" class="font-mono text-sm break-all text-k-highlight">{{ preview.path }}</code>
-        <p v-else class="text-sm text-k-danger">{{ preview.error }}</p>
+        <code v-if="preview.path" class="m3-body-medium font-mono break-all text-(--schemes-primary)">{{
+          preview.path
+        }}</code>
+        <p v-else class="m3-body-medium text-(--schemes-error)">{{ preview.error }}</p>
       </div>
 
-      <AlertBox v-if="layout.misplaced" type="info">
-        {{ pluralize(layout.misplaced, 'song') }} are filed under another layout.
-        <template v-if="layout.refiling"> Moving them now.</template>
-        <a v-else role="button" @click.prevent="refile">Move them</a>
+      <AlertBox v-if="layout.misplaced" type="warning">
+        <div class="flex items-center gap-3">
+          <span class="flex-1">
+            {{ pluralize(layout.misplaced, 'song') }} are filed under another layout.
+            <template v-if="layout.refiling"> Moving them now.</template>
+          </span>
+          <M3Button v-if="!layout.refiling" variant="text" @click.prevent="refile">Move them</M3Button>
+        </div>
       </AlertBox>
 
       <template #footer>
         <div class="flex gap-2">
-          <Btn :disabled="data.template === layout.template" type="submit">Save</Btn>
-          <Btn v-if="data.template !== layout.default" variant="ghost" @click.prevent="data.template = layout.default">
+          <M3Button :disabled="data.template === layout.template" type="submit">Save</M3Button>
+          <M3Button
+            v-if="data.template !== layout.default"
+            variant="text"
+            @click.prevent="data.template = layout.default"
+          >
             Reset to default
-          </Btn>
+          </M3Button>
         </div>
       </template>
     </SettingGroup>
@@ -53,9 +63,8 @@ import { useMessageToaster } from '@/composables/useMessageToaster'
 import { useErrorHandler } from '@/composables/useErrorHandler'
 
 import AlertBox from '@/components/ui/AlertBox.vue'
-import Btn from '@/components/ui/form/Btn.vue'
-import FormRow from '@/components/ui/form/FormRow.vue'
-import TextInput from '@/components/ui/form/TextInput.vue'
+import M3Button from '@/components/m3/M3Button.vue'
+import M3TextField from '@/components/m3/M3TextField.vue'
 import SettingGroup from '@/components/screens/settings/SettingGroup.vue'
 
 const props = defineProps<{ layout: Settings['layout'] }>()
@@ -110,10 +119,14 @@ const refile = async () => {
 }
 </script>
 
-<style lang="postcss" scoped>
-@reference '@css/app.pcss';
-
+<style scoped>
 .preview {
-  @apply flex flex-col gap-1.5 rounded-lg border border-k-fg-10 bg-k-fg-3 px-4 py-3 mb-4;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 16px 0;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: var(--schemes-surface-container-high);
 }
 </style>

@@ -10,10 +10,9 @@
         :key="item.route"
         :href="url(item.route)"
         :active="isCurrentScreen(...item.screens)"
+        :icon="item.busy ? 'progress_activity' : item.icon"
+        :spin="item.busy"
       >
-        <template #icon>
-          <Icon :icon="item.busy ? faSpinner : item.icon" :spin="item.busy" fixed-width />
-        </template>
         <template v-if="item.badgeLabel" #badge>{{ item.badgeLabel }}</template>
         {{ item.label }}
         <span aria-live="polite" class="sr-only">{{ item.busy ? 'in progress' : '' }}</span>
@@ -24,8 +23,6 @@
 
 <script lang="ts" setup>
 import { computed } from 'vue'
-import { faBroom, faEye, faListCheck, faSearch, faSpinner, faTools, faUpload } from '@fortawesome/free-solid-svg-icons'
-import type { IconDefinition } from '@fortawesome/fontawesome-svg-core'
 import type { RouteName } from '@/config/routes'
 import { useRouter } from '@/composables/useRouter'
 import { usePolicies } from '@/composables/usePolicies'
@@ -40,7 +37,8 @@ import SidebarItem from '@/components/layout/main-wrapper/sidebar/SidebarItem.vu
 
 export interface ManageSidebarItem {
   label: string
-  icon: IconDefinition
+  /** A Material Symbols name. */
+  icon: string
   route: RouteName
   screens: ScreenName[]
   visible: () => boolean
@@ -55,21 +53,21 @@ const items = computed(() =>
   applyFilters<ManageSidebarItem[]>(Filter.MANAGE_SIDEBAR_ITEMS, [
     {
       label: 'Discover',
-      icon: faSearch,
+      icon: 'travel_explore',
       route: 'hunt',
       screens: ['Hunt'],
       visible: () => true,
     },
     {
       label: 'Watches',
-      icon: faEye,
+      icon: 'visibility',
       route: 'watches',
       screens: ['Watches'],
       visible: () => true,
     },
     {
       label: 'Jobs',
-      icon: faListCheck,
+      icon: 'checklist',
       route: 'jobs',
       screens: ['Jobs'],
       visible: () => true,
@@ -78,7 +76,7 @@ const items = computed(() =>
     },
     {
       label: 'Uploads',
-      icon: faUpload,
+      icon: 'upload',
       route: 'upload',
       screens: ['Upload'],
       visible: () => currentUserCan.uploadSongs(),
@@ -87,7 +85,7 @@ const items = computed(() =>
     },
     {
       label: 'Orphans',
-      icon: faBroom,
+      icon: 'cleaning_services',
       route: 'orphans',
       screens: ['Orphans'],
       visible: () => true,
@@ -95,7 +93,7 @@ const items = computed(() =>
     },
     {
       label: 'Settings',
-      icon: faTools,
+      icon: 'settings',
       route: 'settings',
       screens: ['Settings'],
       visible: () => currentUserCan.manageSettings(),

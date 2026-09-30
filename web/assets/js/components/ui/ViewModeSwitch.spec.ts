@@ -7,26 +7,22 @@ describe('viewModeSwitch.vue', () => {
   const h = createHarness()
 
   it.each<[ViewMode, string, string]>([
-    ['grid', 'view-mode-grid', 'view-mode-list'],
-    ['list', 'view-mode-list', 'view-mode-grid'],
-  ])('marks the %s label active', (mode, activeTestId, inactiveTestId) => {
+    ['grid', 'Grid', 'List'],
+    ['list', 'List', 'Grid'],
+  ])('marks %s as pressed', (mode, pressed, unpressed) => {
     h.render(Component, { props: { modelValue: mode } })
 
-    expect(screen.getByTestId(activeTestId).classList.contains('active')).toBe(true)
-    expect(screen.getByTestId(inactiveTestId).classList.contains('active')).toBe(false)
+    expect(screen.getByRole('button', { name: pressed }).getAttribute('aria-pressed')).toBe('true')
+    expect(screen.getByRole('button', { name: unpressed }).getAttribute('aria-pressed')).toBe('false')
   })
 
   it('emits the correct event', async () => {
-    const { emitted } = h.render(Component, {
-      props: {
-        modelValue: 'grid',
-      },
-    })
+    const { emitted } = h.render(Component, { props: { modelValue: 'grid' } })
 
-    await h.user.click(screen.getByTestId('view-mode-list'))
+    await h.user.click(screen.getByRole('button', { name: 'List' }))
     expect(emitted()['update:modelValue'][0]).toEqual(['list'])
 
-    await h.user.click(screen.getByTestId('view-mode-grid'))
+    await h.user.click(screen.getByRole('button', { name: 'Grid' }))
     expect(emitted()['update:modelValue'][1]).toEqual(['grid'])
   })
 })

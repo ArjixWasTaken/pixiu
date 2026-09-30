@@ -1,3 +1,3 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`SidebarSectionHeader > renders correctly 1`] = `<h3 class="uppercase px-6 tracking-widest mb-3 text-k-fg">Library</h3>`;
+exports[`SidebarSectionHeader > renders correctly 1`] = `<h3 class="m3-title-small px-4 py-[18px] text-(--schemes-on-surface-variant)">Library</h3>`;

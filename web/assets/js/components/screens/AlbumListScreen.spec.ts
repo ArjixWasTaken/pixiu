@@ -1,6 +1,7 @@
 import { screen, waitFor } from '@testing-library/vue'
-import { describe, expect, it } from 'vite-plus/test'
+import { afterEach, beforeEach, describe, expect, it } from 'vite-plus/test'
 import { createHarness } from '@/__tests__/TestHarness'
+import { setViewport } from '@/composables/useViewport'
 import { albumStore } from '@/stores/albumStore'
 import { commonStore } from '@/stores/commonStore'
 import { preferenceStore as preferences } from '@/stores/preferenceStore'
@@ -19,6 +20,9 @@ const albumTableStub = {
 
 describe('albumListScreen.vue', () => {
   const h = createHarness()
+
+  beforeEach(() => setViewport({ mobile: false }))
+  afterEach(() => setViewport({ mobile: true, wide: true }))
 
   const renderComponent = async () => {
     const paginateMock = h.mock(albumStore, 'paginate').mockResolvedValueOnce('next-cursor-token')
@@ -68,13 +72,13 @@ describe('albumListScreen.vue', () => {
     screen.getByTestId('album-grid')
     expect(screen.queryByTestId('album-table')).toBeNull()
 
-    await h.user.click(screen.getByRole('radio', { name: 'View as table' }))
+    await h.user.click(screen.getByRole('button', { name: 'Table' }))
     await waitFor(() => {
       screen.getByTestId('album-table')
       expect(screen.queryByTestId('album-grid')).toBeNull()
     })
 
-    await h.user.click(screen.getByRole('radio', { name: 'View as grid' }))
+    await h.user.click(screen.getByRole('button', { name: 'Grid' }))
     await waitFor(() => {
       screen.getByTestId('album-grid')
       expect(screen.queryByTestId('album-table')).toBeNull()
@@ -84,7 +88,7 @@ describe('albumListScreen.vue', () => {
   it('shows all or only favorites upon toggling the button', async () => {
     const { paginateMock } = await renderComponent()
 
-    await h.user.click(screen.getByRole('button', { name: 'Show favorites only' }))
+    await h.user.click(screen.getByRole('button', { name: 'Favorites only' }))
 
     await waitFor(() =>
       expect(paginateMock).toHaveBeenNthCalledWith(2, {
@@ -95,7 +99,7 @@ describe('albumListScreen.vue', () => {
       }),
     )
 
-    await h.user.click(screen.getByRole('button', { name: 'Show all' }))
+    await h.user.click(screen.getByRole('button', { name: 'Favorites only' }))
 
     await waitFor(() =>
       expect(paginateMock).toHaveBeenNthCalledWith(3, {

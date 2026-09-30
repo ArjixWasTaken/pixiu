@@ -8,33 +8,33 @@
         </template>
         <template v-if="orphans.length" #controls>
           <div class="flex gap-2">
-            <Btn :disabled="!selected.length" size="small" variant="success" @click.prevent="keep">Keep</Btn>
-            <Btn :disabled="!selected.length" size="small" variant="destructive" @click.prevent="deleteSelected">
+            <M3Button :disabled="!selected.length" variant="tonal" @click.prevent="keep">Keep</M3Button>
+            <M3Button :disabled="!selected.length" class="danger" variant="outlined" @click.prevent="deleteSelected">
               Delete
-            </Btn>
-            <Btn size="small" variant="ghost" @click.prevent="deleteAll">Delete all</Btn>
+            </M3Button>
+            <M3Button class="danger" variant="text" @click.prevent="deleteAll">Delete all</M3Button>
           </div>
         </template>
       </ScreenHeader>
     </template>
 
-    <p class="text-k-fg-70 mb-6 max-w-[64ch]">
+    <p class="m3-body-large text-(--schemes-on-surface-variant) pt-1 mb-3 max-w-[64ch]">
       Nothing keeps these any more: they left a watched playlist, were excluded, or their watch was removed. píxiū never
       deletes music on its own. Keep them for good, or delete them from disk.
     </p>
 
     <ScreenEmptyState v-if="loaded && !orphans.length">
       <template #icon>
-        <Icon :icon="faHeartCircleCheck" />
+        <M3Icon :size="64" name="verified" />
       </template>
       Everything in your library is wanted
       <span class="secondary block">Songs show up here when nothing keeps them any more.</span>
     </ScreenEmptyState>
 
-    <ul v-else class="divide-y divide-k-fg-5">
-      <li v-if="orphans.length" class="flex items-center gap-4 py-2 text-sm text-k-fg-70">
-        <CheckBox v-model="allSelected" name="select_all" />
-        Select all
+    <ul v-else data-vue="OrphansScreen">
+      <li v-if="orphans.length" class="flex items-center gap-3 py-2 list-none">
+        <M3Checkbox v-model="allSelected" aria-label="Select all" name="select_all" />
+        <span class="m3-label-large">Select all</span>
       </li>
       <OrphanRow v-for="orphan in orphans" :key="orphan.song.id" v-model="selectedIds[orphan.song.id]" :orphan />
     </ul>
@@ -42,7 +42,6 @@
 </template>
 
 <script lang="ts" setup>
-import { faHeartCircleCheck } from '@fortawesome/free-solid-svg-icons'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { huntingService } from '@/services/huntingService'
 import type { Orphan } from '@/services/huntingService'
@@ -52,8 +51,9 @@ import { useDialogBox } from '@/composables/useDialogBox'
 import { useMessageToaster } from '@/composables/useMessageToaster'
 import { useErrorHandler } from '@/composables/useErrorHandler'
 
-import Btn from '@/components/ui/form/Btn.vue'
-import CheckBox from '@/components/ui/form/CheckBox.vue'
+import M3Button from '@/components/m3/M3Button.vue'
+import M3Checkbox from '@/components/m3/M3Checkbox.vue'
+import M3Icon from '@/components/m3/M3Icon.vue'
 import ScreenBase from '@/components/screens/ScreenBase.vue'
 import ScreenHeader from '@/components/ui/ScreenHeader.vue'
 import ScreenEmptyState from '@/components/ui/ScreenEmptyState.vue'
@@ -120,3 +120,9 @@ const deleteAll = () => remove('all', orphans.value.length)
 
 onMounted(fetchOrphans)
 </script>
+
+<style scoped>
+.danger {
+  color: var(--schemes-error);
+}
+</style>

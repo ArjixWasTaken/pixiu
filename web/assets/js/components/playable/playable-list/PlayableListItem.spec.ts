@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vite-plus/test'
 import { screen } from '@testing-library/vue'
 import { playableStore } from '@/stores/playableStore'
-import { PlayableListConfigKey } from '@/config/symbols'
 import { createHarness } from '@/__tests__/TestHarness'
 
 const isCachedMock = vi.fn().mockReturnValue(false)
@@ -18,6 +17,7 @@ vi.mock('@/composables/useOfflinePlayback', () => ({
   }),
 }))
 
+import { setViewport } from '@/composables/useViewport'
 import Component from './PlayableListItem.vue'
 
 describe('playableListItem.vue', () => {
@@ -67,11 +67,11 @@ describe('playableListItem.vue', () => {
       favorite: true,
     })
 
+    setViewport({ mobile: false })
     renderComponent(song)
 
     screen.getByText('Test Song')
-    screen.getByText('Test Artist')
-    screen.getByText('Test Album')
+    screen.getByText('Test Artist · Test Album')
     screen.getByRole('button', { name: 'Undo Favorite' })
   })
 
@@ -90,47 +90,6 @@ describe('playableListItem.vue', () => {
     const showDisc = true
     const { getByText } = renderComponent(song, showDisc)
     expect(getByText('Disc 2')).toBeTruthy()
-  })
-
-  it('shows collaboration info when collaborative', () => {
-    const song = h.factory('song').make({
-      collaboration: {
-        user: { name: 'Alice', avatar: 'https://example.com/alice.jpg' },
-        added_at: '2025-01-01',
-        fmt_added_at: 'Jan 1, 2025',
-      },
-    })
-
-    const { getByText } = h.render(Component, {
-      props: {
-        item: { playable: song, selected: false },
-      },
-      global: {
-        provide: {
-          [<symbol>PlayableListConfigKey]: [{ collaborative: true }],
-        },
-      },
-    })
-
-    expect(getByText('Jan 1, 2025')).toBeTruthy()
-  })
-
-  it('does not show collaboration info when not collaborative', () => {
-    const song = h.factory('song').make({
-      collaboration: {
-        user: { name: 'Alice', avatar: 'https://example.com/alice.jpg' },
-        added_at: '2025-01-01',
-        fmt_added_at: 'Jan 1, 2025',
-      },
-    })
-
-    const { queryByText } = h.render(Component, {
-      props: {
-        item: { playable: song, selected: false },
-      },
-    })
-
-    expect(queryByText('Jan 1, 2025')).toBeNull()
   })
 
   it('toggles favorite state when the Favorite button is clicked', async () => {

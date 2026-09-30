@@ -2,6 +2,7 @@
   <BaseCard
     v-if="showing"
     :entity="album"
+    :href="url('albums.show', { id: album.id })"
     :title="`${album.name} by ${album.artist_name}`"
     class="group"
     @contextmenu="requestContextMenu"
@@ -13,49 +14,19 @@
     </template>
 
     <template #name>
-      <div class="flex gap-2 items-center">
-        <a :href="url('albums.show', { id: album.id })" class="font-medium flex-1" data-testid="name">
-          <ExternalMark v-if="album.is_external" class="mr-1" />
-          {{ album.name }}
-        </a>
-
-        <span
-          v-if="showReleaseYear && album.year"
-          :title="`Released in ${album.year}`"
-          class="text-sm text-k-fg rounded-sm px-2 py-[2px] bg-k-fg-10"
-        >
-          {{ album.year }}
-        </span>
-      </div>
-
-      <div class="space-x-2">
-        <a v-if="isStandardArtist" :href="url('artists.show', { id: album.artist_id })">{{ album.artist_name }}</a>
-        <span v-else>{{ album.artist_name }}</span>
-      </div>
-    </template>
-
-    <template #meta>
-      <a :title="`Shuffle all songs in the album ${album.name}`" role="button" @click.prevent="shuffle"> Shuffle </a>
-      <span v-if="allowDownload" aria-hidden="true">•</span>
-      <a
-        v-if="allowDownload"
-        :title="`Download all songs in the album ${album.name}`"
-        role="button"
-        @click.prevent="download"
-      >
-        Download
+      <a :href="url('albums.show', { id: album.id })" class="m3-title-medium title" data-testid="name">
+        {{ album.name }}
       </a>
+      <p class="m3-body-medium subtitle">{{ subtitle }}</p>
     </template>
   </BaseCard>
 </template>
 
 <script lang="ts" setup>
-import { computed, toRef, toRefs } from 'vue'
+import { computed, toRefs } from 'vue'
 import { albumStore } from '@/stores/albumStore'
-import { artistStore } from '@/stores/artistStore'
-import { commonStore } from '@/stores/commonStore'
 import { playableStore } from '@/stores/playableStore'
-import { useDownload } from '@/composables/useDownload'
+import { useViewport } from '@/composables/useViewport'
 import { useDraggable } from '@/composables/useDragAndDrop'
 import { useRouter } from '@/composables/useRouter'
 import { playback } from '@/services/playbackManager'
@@ -64,7 +35,6 @@ import { defineAsyncComponent } from '@/utils/helpers'
 
 import BaseCard from '@/components/ui/album-artist/AlbumOrArtistCard.vue'
 import CardThumbnail from '@/components/ui/album-artist/AlbumOrArtistCardThumbnail.vue'
-import ExternalMark from '@/components/ui/ExternalMark.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -82,12 +52,14 @@ const { go, url } = useRouter()
 const { startDragging } = useDraggable('album')
 const { openContextMenu } = useContextMenu()
 
-const { album, showReleaseYear } = toRefs(props)
+const { album } = toRefs(props)
 
-// We're not checking for supports_batch_downloading here, as the number of songs on the album is not yet known.
-const allowDownload = toRef(commonStore.state, 'allows_download')
+const { isMobile } = useViewport()
 
-const isStandardArtist = computed(() => artistStore.isStandard(album.value.artist_id))
+/** "Artist · year"; phones show only the artist. */
+const subtitle = computed(() =>
+  isMobile.value || !album.value.year ? album.value.artist_name : `${album.value.artist_name} · ${album.value.year}`,
+)
 const showing = computed(() => !albumStore.isUnknown(album.value))
 
 const shuffle = async () => {
@@ -97,8 +69,6 @@ const shuffle = async () => {
 
 const toggleFavorite = () => albumStore.toggleFavorite(album.value)
 
-const { fromAlbum } = useDownload()
-const download = () => fromAlbum(album.value)
 const onDragStart = (event: DragEvent) => startDragging(event, album.value)
 
 const requestContextMenu = (event: MouseEvent) =>

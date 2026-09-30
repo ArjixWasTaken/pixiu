@@ -1,5 +1,5 @@
 <template>
-  <h3 class="uppercase px-6 tracking-widest mb-3 text-k-fg">
+  <h3 class="m3-title-small px-4 py-[18px] text-(--schemes-on-surface-variant)">
     <slot />
   </h3>
 </template>

@@ -2,6 +2,6 @@
 
 exports[`playableList.vue > renders 1`] = `
 <div class="playable-list-wrap relative flex flex-col flex-1 overflow-auto py-0" data-testid="song-list">
-  <!--v-if--><br data-testid="stub" item-height="64" items="[object Object],[object Object],[object Object],[object Object],[object Object]">
+  <!--v-if--><br data-testid="stub" item-height="72" items="[object Object],[object Object],[object Object],[object Object],[object Object]">
 </div>
 `;

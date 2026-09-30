@@ -1,6 +1,6 @@
 <template>
   <div ref="root" class="popover">
-    <TransitionGroup class="flex flex-col items-end gap-2" name="toast" tag="ul">
+    <TransitionGroup class="flex flex-col items-start gap-2" data-vue="MessageToaster" name="toast" tag="ul">
       <li v-for="message in messages" :key="message.id">
         <MessageToast :message="message" @dismiss="removeMessage(message)" />
       </li>
@@ -59,24 +59,40 @@ defineExpose({ info, success, warning, error })
 </script>
 
 <style lang="postcss" scoped>
-@reference '@css/app.pcss';
+/* Snackbars at the bottom left, above the player. */
 .popover,
 .popover:popover-open {
   inset: unset;
-  @apply fixed top-3 right-0 p-0 bg-transparent m-0 overflow-visible border-0 backdrop:bg-transparent;
+  position: fixed;
+  left: 24px;
+  bottom: 124px;
+  margin: 0;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  background: transparent;
+
+  &::backdrop {
+    background: transparent;
+  }
+
+  @media (max-width: 768px) {
+    left: 8px;
+    right: 8px;
+    bottom: 176px;
+  }
 }
 
-.toast-enter-active {
-  @apply opacity-100 transition-all duration-200 ease-in;
-}
-
+.toast-enter-active,
 .toast-leave-active {
-  @apply opacity-0 transition-all duration-200 ease-out;
+  transition:
+    opacity 200ms linear,
+    transform 200ms var(--m3-ease);
 }
 
 .toast-enter-from,
 .toast-leave-to {
-  @apply opacity-0;
-  transform: translateX(100px);
+  opacity: 0;
+  transform: translateY(16px);
 }
 </style>

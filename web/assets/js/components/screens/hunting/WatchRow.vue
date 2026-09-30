@@ -1,61 +1,56 @@
 <template>
-  <li class="flex items-center gap-4 p-4 rounded-lg bg-k-fg-5">
-    <img v-if="watch.image" :src="watch.image" alt="" class="size-16 rounded-md object-cover" loading="lazy" />
-    <div v-else class="size-16 rounded-md bg-k-fg-10 flex items-center justify-center text-k-fg-50">
-      <Icon :icon="kindIcon" size="lg" />
-    </div>
+  <li class="list-none">
+    <M3Card class="flex items-center gap-4 flex-wrap p-4" variant="outlined">
+      <div :style="watch.image ? { backgroundImage: `url(${watch.image})` } : {}" class="art">
+        <M3Icon v-if="!watch.image" :name="kindIcon" fill />
+      </div>
 
-    <div class="flex-1 min-w-0 flex flex-col gap-1">
-      <p class="truncate font-medium">
-        {{ watch.name }}
-        <span class="text-k-fg-50 text-xs uppercase ml-1">{{ kindLabel }}</span>
-      </p>
+      <div class="flex-1 min-w-[220px] flex flex-col gap-1">
+        <div class="flex items-center gap-2 min-w-0">
+          <p class="m3-title-medium truncate">{{ watch.name }}</p>
+          <span class="m3-label-small kind">{{ kindLabel }}</span>
+        </div>
+        <p class="m3-body-medium muted">
+          <span :class="watch.status.state" class="status">{{ statusLabel }}</span>
+          <template v-if="watch.songs">
+            · {{ watch.songs.have }} of {{ watch.songs.total }} songs in your library</template
+          >
+          <template v-if="watch.kind === 'artist'">
+            · {{ pluralize(watch.releases_known, 'release') }} known ·
+            {{ watch.include_singles ? 'albums, singles and EPs' : 'albums only' }}
+          </template>
+          <template v-if="watch.jobs.queued"> · {{ watch.jobs.queued }} on the way</template>
+          <a v-if="watch.jobs.failed" :href="url('jobs')" class="failed"> · {{ watch.jobs.failed }} failed</a>
+        </p>
+        <p v-if="watch.status.error" :title="watch.status.error" class="m3-body-small failed truncate">
+          {{ watch.status.error }}
+        </p>
+      </div>
 
-      <p class="text-sm text-k-fg-70">
-        <span :class="watch.status.state" class="status">{{ statusLabel }}</span>
-        <template v-if="watch.songs">
-          · {{ watch.songs.have }} of {{ watch.songs.total }} songs in your library</template
-        >
-        <template v-if="watch.kind === 'artist'">
-          · {{ pluralize(watch.releases_known, 'release') }} known ·
-          {{ watch.include_singles ? 'albums, singles and EPs' : 'albums only' }}
-        </template>
-        <template v-if="watch.jobs.queued"> · {{ watch.jobs.queued }} on the way</template>
-        <a v-if="watch.jobs.failed" :href="url('jobs')" class="failed"> · {{ watch.jobs.failed }} failed</a>
-      </p>
-
-      <p v-if="watch.status.error" class="text-sm text-k-danger truncate" :title="watch.status.error">
-        {{ watch.status.error }}
-      </p>
-    </div>
-
-    <div class="flex gap-2 shrink-0">
-      <Btn
-        v-if="watch.playlist_id"
-        :href="url('playlists.show', { id: watch.playlist_id })"
-        size="small"
-        tag="a"
-        variant="ghost"
-      >
-        Playlist
-      </Btn>
-      <Btn :href="watch.link" rel="noopener" size="small" tag="a" target="_blank" variant="ghost">
-        <Icon :icon="faArrowUpRightFromSquare" />
-      </Btn>
-      <Btn :disabled="busy" size="small" @click.prevent="emit('sync')">Sync now</Btn>
-      <Btn size="small" variant="destructive" @click.prevent="emit('remove')">Remove</Btn>
-    </div>
+      <div class="flex gap-1 items-center flex-wrap">
+        <M3Button v-if="watch.playlist_id" :href="url('playlists.show', { id: watch.playlist_id })" variant="text">
+          Playlist
+        </M3Button>
+        <a :href="watch.link" rel="noopener" target="_blank">
+          <M3IconButton icon="open_in_new" label="Open on YouTube Music" />
+        </a>
+        <M3Button :disabled="busy" variant="tonal" @click.prevent="emit('sync')">Sync now</M3Button>
+        <M3Button class="remove" variant="text" @click.prevent="emit('remove')">Remove</M3Button>
+      </div>
+    </M3Card>
   </li>
 </template>
 
 <script lang="ts" setup>
-import { faArrowUpRightFromSquare, faHeart, faListUl, faMicrophone } from '@fortawesome/free-solid-svg-icons'
 import { computed } from 'vue'
 import type { Watch } from '@/services/huntingService'
 import { pluralize, timeAgo } from '@/utils/formatters'
 import { useRouter } from '@/composables/useRouter'
 
-import Btn from '@/components/ui/form/Btn.vue'
+import M3Button from '@/components/m3/M3Button.vue'
+import M3Card from '@/components/m3/M3Card.vue'
+import M3Icon from '@/components/m3/M3Icon.vue'
+import M3IconButton from '@/components/m3/M3IconButton.vue'
 
 const props = defineProps<{ watch: Watch }>()
 const emit = defineEmits<{ (e: 'sync'): void; (e: 'remove'): void }>()
@@ -66,7 +61,9 @@ const kindLabel = computed(
   () => ({ playlist: 'Playlist', liked_music: 'Liked music', artist: 'Artist' })[props.watch.kind],
 )
 
-const kindIcon = computed(() => ({ playlist: faListUl, liked_music: faHeart, artist: faMicrophone })[props.watch.kind])
+const kindIcon = computed(
+  () => ({ playlist: 'queue_music', liked_music: 'favorite', artist: 'artist' })[props.watch.kind],
+)
 
 const busy = computed(() => ['syncing', 'queued'].includes(props.watch.status.state))
 
@@ -88,25 +85,50 @@ const statusLabel = computed(() => {
 })
 </script>
 
-<style lang="postcss" scoped>
-@reference '@css/app.pcss';
+<style scoped>
+.art {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  background-color: var(--schemes-secondary-container);
+  background-size: cover;
+  background-position: center;
+  color: var(--schemes-on-secondary-container);
+}
+
+.kind {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 8px;
+  background: var(--schemes-secondary-container);
+  color: var(--schemes-on-secondary-container);
+}
+
+.muted {
+  color: var(--schemes-on-surface-variant);
+}
 
 .status {
   &.syncing,
   &.queued {
-    @apply text-k-highlight;
+    color: var(--schemes-primary);
   }
 
   &.waiting {
-    @apply text-k-warning;
+    color: var(--schemes-tertiary);
   }
 
   &.failed {
-    @apply text-k-danger;
+    color: var(--schemes-error);
   }
 }
 
-.failed {
-  @apply text-k-danger;
+.failed,
+.remove {
+  color: var(--schemes-error);
 }
 </style>

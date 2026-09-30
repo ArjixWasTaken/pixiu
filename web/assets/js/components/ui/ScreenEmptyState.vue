@@ -1,32 +1,55 @@
 <template>
-  <article
-    class="relative flex place-content-center place-items-center flex-1 text-k-fg-50"
-    data-testid="screen-empty-state"
-  >
-    <div class="md:max-w-3/4 px-6 pt-0 mx-auto flex flex-col items-center pb-k-header-height">
-      <span class="jumbo-icon block text-[6rem] mb-4 opacity-70">
-        <slot name="icon">☕️</slot>
-      </span>
-      <div class="text text-center text-3xl font-light flex flex-col gap-2">
-        <slot>Placeholder text goes here.</slot>
-      </div>
+  <article class="screen-empty-state" data-testid="screen-empty-state" data-vue="ScreenEmptyState">
+    <span class="icon">
+      <slot name="icon">
+        <M3Icon :size="64" name="search" />
+      </slot>
+    </span>
+    <div class="text">
+      <slot>Placeholder text goes here.</slot>
     </div>
   </article>
 </template>
 
-<style lang="postcss">
-@reference '@css/app.pcss';
-.text {
-  a {
-    @apply text-k-highlight;
+<script lang="ts" setup>
+import M3Icon from '@/components/m3/M3Icon.vue'
+</script>
 
-    &:hover {
-      @apply text-k-fg;
-    }
+<style lang="postcss" scoped>
+.screen-empty-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px;
+  text-align: center;
+  color: var(--schemes-on-surface-variant);
+}
+
+.icon {
+  font-size: 64px;
+  line-height: 1;
+}
+
+.text {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 48ch;
+  color: var(--schemes-on-surface);
+  font-size: calc(var(--static-headline-small-size) * 1px);
+  line-height: calc(var(--static-headline-small-line-height) * 1px);
+
+  :deep(a) {
+    color: var(--schemes-primary);
   }
 
-  .secondary {
-    @apply text-2xl font-thin;
+  :deep(.secondary) {
+    color: var(--schemes-on-surface-variant);
+    font-size: calc(var(--static-body-large-size) * 1px);
+    line-height: calc(var(--static-body-large-line-height) * 1px);
   }
 }
 </style>

@@ -1,41 +1,30 @@
-import { describe, expect, it, vi } from 'vite-plus/test'
+import { describe, expect, it } from 'vite-plus/test'
 import { fireEvent, screen } from '@testing-library/vue'
 import { createHarness } from '@/__tests__/TestHarness'
-import { socketService } from '@/services/socketService'
 import { volumeManager } from '@/services/volumeManager'
-import { preferenceStore } from '@/stores/preferenceStore'
 import Component from './VolumeSlider.vue'
 
 describe('volumeSlider.vue', () => {
   const h = createHarness({
-    beforeEach: () => {
-      vi.useFakeTimers()
-      preferenceStore.volume = 5
-    },
+    beforeEach: () => volumeManager.init(null, 5),
   })
 
   it('mutes and unmutes', async () => {
-    const { html } = h.render(Component)
-    expect(html()).toMatchSnapshot()
+    h.render(Component)
     expect(volumeManager.volume.value).toEqual(5)
 
-    await h.user.click(screen.getByTitle('Mute'))
-    expect(html()).toMatchSnapshot()
+    await h.user.click(screen.getByRole('button', { name: 'Mute' }))
     expect(volumeManager.volume.value).toEqual(0)
 
-    await h.user.click(screen.getByTitle('Unmute'))
-    expect(html()).toMatchSnapshot()
+    await h.user.click(screen.getByRole('button', { name: 'Unmute' }))
     expect(volumeManager.volume.value).toEqual(5)
   })
 
-  it('sets and broadcasts volume', async () => {
-    const broadcastMock = h.mock(socketService, 'broadcast')
+  it('sets the volume', async () => {
     h.render(Component)
 
-    await fireEvent.update(screen.getByRole('slider'), '4.2')
-    vi.runAllTimers()
+    await fireEvent.update(screen.getByRole('slider', { name: 'Volume' }), '4.2')
 
     expect(volumeManager.volume.value).toBe(4.2)
-    expect(broadcastMock).toHaveBeenCalledWith('SOCKET_VOLUME_CHANGED', 4.2)
   })
 })

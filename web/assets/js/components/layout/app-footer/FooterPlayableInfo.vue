@@ -1,25 +1,17 @@
 <template>
-  <div
-    :class="{ playing: playable?.playback_state === 'Playing' }"
-    :draggable="draggable"
-    class="song-info px-6 py-0 flex items-center content-start w-[84px] md:w-[420px] gap-5"
-    @dragstart="onDragStart"
-  >
-    <span
-      v-koel-tooltip
-      :class="playable && 'cursor-pointer'"
-      :title="playable ? 'Scroll to currently playing' : undefined"
-      class="album-thumb block h-[55%] md:h-3/4 aspect-square rounded-full bg-cover"
-      @click="scrollToCurrentInQueue"
+  <div :draggable class="song-info" data-vue="FooterPlayableInfo" @dragstart="onDragStart">
+    <button
+      :aria-label="nowPlaying.open.value ? 'Collapse player' : 'Expand player'"
+      :style="{ backgroundImage: `url(${cover}), url(${defaultCover})` }"
+      class="album-thumb"
+      type="button"
+      @click="nowPlaying.toggle"
     />
-    <div v-if="playable" class="meta overflow-hidden hidden md:block">
-      <h3 class="title overflow-hidden whitespace-nowrap">
-        <MarqueeText :text="playable.title" />
-      </h3>
-      <a :href="artistOrPodcastUri" class="artist overflow-hidden whitespace-nowrap block text-[0.9rem]">
-        <MarqueeText :text="artistOrPodcastName" />
-      </a>
+    <div v-if="playable" class="meta">
+      <p class="title m3-title-medium" @click="nowPlaying.toggle">{{ playable.title }}</p>
+      <a :href="artistOrPodcastUri" class="artist m3-body-medium">{{ artistOrPodcastName }}</a>
     </div>
+    <FavoriteButton v-if="playable" :favorite="playable.favorite" size="md" @toggle="toggleFavorite" />
   </div>
 </template>
 
@@ -30,16 +22,18 @@ import { computed, ref } from 'vue'
 import { getPlayableProp, requireInjection, use } from '@/utils/helpers'
 import { isSong } from '@/utils/typeGuards'
 import { CurrentStreamableKey } from '@/config/symbols'
+import { playableStore } from '@/stores/playableStore'
 import { useDraggable } from '@/composables/useDragAndDrop'
 import { useRouter } from '@/composables/useRouter'
 import { useBranding } from '@/composables/useBranding'
-import { cache } from '@/services/cache'
+import { useNowPlaying } from '@/composables/useNowPlaying'
 
-import MarqueeText from '@/components/ui/MarqueeText.vue'
+import FavoriteButton from '@/components/ui/FavoriteButton.vue'
 
 const { startDragging } = useDraggable('playables')
-const { go, url } = useRouter()
+const { url } = useRouter()
 const { cover: defaultCover } = useBranding()
+const nowPlaying = useNowPlaying()
 
 const playable = requireInjection<Ref<Playable | undefined>>(CurrentStreamableKey, ref())
 
@@ -61,52 +55,51 @@ const artistOrPodcastName = computed(() =>
   playable.value ? getPlayableProp(playable.value, 'artist_name', 'podcast_title') : '',
 )
 
-const coverBackgroundImage = computed(() => `url(${cover.value ?? defaultCover})`)
 const draggable = computed(() => Boolean(playable.value) && !isMobile.any)
 
 const onDragStart = (event: DragEvent) => use(playable.value, p => startDragging(event, [p]))
-
-const scrollToCurrentInQueue = () => {
-  if (!playable.value) {
-    return
-  }
-
-  cache.set('scroll-to-current-in-queue', true)
-  go(url('queue'))
-}
+const toggleFavorite = () => use(playable.value, p => playableStore.toggleFavorite(p))
 </script>
 
-<style lang="postcss" scoped>
-@reference '@css/app.pcss';
+<style scoped>
 .song-info {
-  :fullscreen & {
-    @apply pl-0;
-  }
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 300px;
+  min-width: 0;
+  flex-shrink: 0;
+}
 
-  .album-thumb {
-    background-image: v-bind(coverBackgroundImage);
+.album-thumb {
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  background-size: cover;
+  background-position: center;
+  cursor: pointer;
+}
 
-    :fullscreen & {
-      @apply h-20;
-    }
-  }
+.meta {
+  flex: 1;
+  min-width: 0;
+}
 
-  .meta {
-    :fullscreen & {
-      @apply -mt-72 origin-bottom-left absolute overflow-hidden;
+.title,
+.artist {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
-      .title {
-        @apply text-5xl mb-[0.4rem] font-bold;
-      }
+.title {
+  color: var(--schemes-on-surface);
+  cursor: pointer;
+}
 
-      .artist {
-        @apply text-3xl w-fit;
-      }
-    }
-  }
-
-  &.playing .album-thumb {
-    @apply motion-reduce:animate-none animate-vinyl-spin;
-  }
+.artist {
+  color: var(--schemes-on-surface-variant);
 }
 </style>

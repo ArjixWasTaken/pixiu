@@ -1,55 +1,47 @@
 <template>
   <li
     :class="{ playing }"
-    class="group flex items-center gap-4 px-6 py-4 hover:bg-k-fg-5"
+    class="playable-card m3-state"
     data-testid="song-card"
+    data-vue="PlayableCard"
     draggable="true"
     tabindex="0"
-    @dblclick="play"
-    @keydown.enter.self.prevent="play"
-    @dragstart="onDragStart"
+    @click="play"
     @contextmenu.prevent="onContextMenu"
+    @dragstart="onDragStart"
+    @keydown.enter.self.prevent="play"
   >
     <PlayableThumbnail :playable @clicked="play" />
-    <span class="flex-1 min-w-0 gap-1 flex flex-col">
-      <span class="title flex gap-2 items-center truncate">
-        <Icon
+    <span class="flex-1 min-w-0 flex flex-col">
+      <span class="title m3-body-large flex gap-2 items-center">
+        <M3Icon
           v-if="cachingOffline"
-          :icon="faSpinner"
-          class="opacity-50!"
-          spin
+          :size="16"
+          class="opacity-60"
+          name="progress_activity"
           title="Caching for offline playback"
-          aria-label="Caching for offline playback"
         />
-        <Icon
+        <M3Icon
           v-else-if="cachingFailed"
-          :icon="faExclamationTriangle"
-          class="text-k-danger opacity-75!"
+          :size="16"
           :title="`Error: ${cachingErrorMessage}`"
+          class="text-(--schemes-error)"
+          name="error"
         />
         <OfflineMark v-else-if="cachedOffline" />
         <span class="truncate">{{ playable.title }}</span>
       </span>
-      <span class="block truncate text-k-fg-50 text-[0.9rem]">{{ artist }}</span>
+      <span class="supporting m3-body-medium truncate">{{ artist }}</span>
     </span>
-    <span class="flex flex-col items-end gap-1">
-      <FavoriteButton
-        :favorite="playable.favorite"
-        class="text-k-fg-50 hover:text-k-fg transition-opacity"
-        :class="
-          playable.favorite ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus:opacity-100 no-hover:opacity-100'
-        "
-        @toggle="toggleFavorite"
-      />
-      <span class="text-k-fg-50 text-[0.9rem] tabular-nums">
-        {{ fmtLength }}
-      </span>
+    <span class="trailing">
+      <span class="time m3-label-medium">{{ fmtLength }}</span>
+      <FavoriteButton :favorite="playable.favorite" @toggle="toggleFavorite" />
+      <M3IconButton :icon-size="20" icon="more_vert" label="More actions" @click.stop="onContextMenu" />
     </span>
   </li>
 </template>
 
 <script lang="ts" setup>
-import { faExclamationTriangle, faSpinner } from '@fortawesome/free-solid-svg-icons'
 import { computed, toRefs } from 'vue'
 import { defineAsyncComponent, getPlayableProp } from '@/utils/helpers'
 import { secondsToHis } from '@/utils/formatters'
@@ -63,6 +55,8 @@ import { playableStore } from '@/stores/playableStore'
 import PlayableThumbnail from '@/components/playable/PlayableThumbnail.vue'
 import OfflineMark from '@/components/ui/OfflineMark.vue'
 import FavoriteButton from '@/components/ui/FavoriteButton.vue'
+import M3Icon from '@/components/m3/M3Icon.vue'
+import M3IconButton from '@/components/m3/M3IconButton.vue'
 
 const PlayableContextMenu = defineAsyncComponent(() => import('@/components/playable/PlayableContextMenu.vue'))
 
@@ -100,9 +94,43 @@ const onContextMenu = (event: MouseEvent) => {
 }
 </script>
 
-<style lang="postcss" scoped>
-@reference '@css/app.pcss';
-li.playing .title {
-  @apply text-k-highlight;
+<style scoped>
+.playable-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 72px;
+  padding: 8px 8px 8px 16px;
+  border-radius: 16px;
+  color: var(--schemes-on-surface);
+  cursor: pointer;
+  list-style: none;
+
+  &.playing .title {
+    color: var(--schemes-primary);
+  }
+}
+
+.supporting {
+  color: var(--schemes-on-surface-variant);
+}
+
+.trailing {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  color: var(--schemes-on-surface-variant);
+}
+
+.time {
+  min-width: 44px;
+  margin-right: 4px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+
+  @media (max-width: 768px) {
+    display: none;
+  }
 }
 </style>

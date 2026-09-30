@@ -1,30 +1,29 @@
 :root {
-  --color-fg: #ffffff; /* full format to conform with input[type=color] requirements */
-  --color-bg: #111111;
+  /* koel's colors follow the Material 3 scheme (css/m3/fig-tokens.css). */
+  --color-fg: var(--schemes-on-surface);
+  --color-bg: var(--schemes-surface-container);
 
-  --color-highlight: #f1661b;
-  --color-highlight-fg: #ffffff;
+  --color-highlight: var(--schemes-primary);
+  --color-highlight-fg: var(--schemes-on-primary);
 
   --bg-image: none;
   --bg-position: center;
   --bg-attachment: fixed;
   --bg-size: cover;
 
-  --font-family:
-    system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen-Sans, Ubuntu, Cantarell, 'Helvetica Neue',
-    sans-serif;
-  --font-size: 13px;
+  --font-family: Roboto, system-ui, sans-serif;
+  --font-size: 14px;
 
   --header-height: auto;
   --footer-height: 84px;
   --side-sheet-width: 24rem;
   --sidebar-width: 21.5rem;
 
-  --color-love: #bf2043;
-  --color-success: #56a052;
-  --color-primary: #0191f7;
-  --color-danger: #c34848;
-  --color-warning: #c77700;
+  --color-love: var(--schemes-primary);
+  --color-success: var(--schemes-tertiary);
+  --color-primary: var(--schemes-primary);
+  --color-danger: var(--schemes-error);
+  --color-warning: var(--schemes-tertiary);
 
   --k-fg-3: color-mix(in srgb, var(--color-fg), transparent 97%);
   --k-fg-5: color-mix(in srgb, var(--color-fg), transparent 95%);
@@ -55,6 +54,7 @@
   --fade-size: 3rem;
 
   @media screen and (max-width: 768px) {
+    --color-bg: var(--schemes-surface);
     --header-height: 56px;
     --footer-height: 96px;
     --side-sheet-width: 100%;

@@ -1,6 +1,6 @@
 <template>
-  <section>
-    <h2 class="title text-sm uppercase tracking-widest text-k-fg-70 mb-3">{{ title }}</h2>
+  <section data-vue="JobGroup">
+    <h2 class="title m3-title-small mb-2">{{ title }}</h2>
     <ul class="flex flex-col gap-2">
       <JobRow v-for="job in jobs" :key="job.id" :job @retry="emit('retry', job)" />
     </ul>
@@ -16,10 +16,12 @@ defineProps<{ title: string; jobs: HuntJob[] }>()
 const emit = defineEmits<{ (e: 'retry', job: HuntJob): void }>()
 </script>
 
-<style lang="postcss" scoped>
-@reference '@css/app.pcss';
+<style scoped>
+.title {
+  color: var(--schemes-on-surface-variant);
 
-.failed .title {
-  @apply text-k-danger;
+  .failed & {
+    color: var(--schemes-error);
+  }
 }
 </style>

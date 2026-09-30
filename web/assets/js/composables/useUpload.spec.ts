@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vite-plus/test'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import { commonStore } from '@/stores/commonStore'
 import { uploadService } from '@/services/uploadService'
 import type { UploadFile, UploadStatus } from '@/services/uploadService'
@@ -34,6 +34,10 @@ vi.mock('@/composables/usePolicies', () => ({
 import { useUpload } from './useUpload'
 
 describe('useUpload', () => {
+  // Queued files would start uploading for real; these tests only look at the queue.
+  beforeEach(() => vi.spyOn(uploadService, 'proceed').mockImplementation(() => {}))
+  afterEach(() => vi.restoreAllMocks())
+
   it('computes mediaPathSetUp when storage is not local', () => {
     commonStore.state.storage_driver = 's3'
 

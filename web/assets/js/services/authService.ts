@@ -25,7 +25,7 @@ const isTwoFactorChallengeRequired = (response: LoginResponse): response is TwoF
 }
 
 export const authService = {
-  /** Whether the hoard has its admin yet; until then, the login screen claims it. */
+  /** Whether píxiū has its admin yet; until then, the login screen creates it. */
   claimed: async () => (await http.get<{ claimed: boolean }>('auth/status')).claimed,
 
   /** Creates the admin account of a fresh píxiū, and signs in as it. */

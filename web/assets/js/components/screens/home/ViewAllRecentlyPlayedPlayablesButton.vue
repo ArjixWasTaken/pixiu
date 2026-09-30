@@ -1,11 +1,11 @@
 <template>
-  <Btn size="small" variant="highlight" rounded @click.prevent="goToRecentlyPlayedScreen"> View All </Btn>
+  <M3Button variant="text" @click.prevent="goToRecentlyPlayedScreen">View all</M3Button>
 </template>
 
 <script lang="ts" setup>
 import { useRouter } from '@/composables/useRouter'
 
-import Btn from '@/components/ui/form/Btn.vue'
+import M3Button from '@/components/m3/M3Button.vue'
 
 const { go, url } = useRouter()
 const goToRecentlyPlayedScreen = () => go(url('recently-played'))

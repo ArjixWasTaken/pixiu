@@ -1,8 +1,3 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`messageToast.vue > renders 1`] = `
-<article data-v-59c73f57="" class="success rounded-l-md cursor-pointer flex items-stretch opacity-90 transition-transform duration-300 origin-right hover:opacity-100 hover:scale-110" title="Click to dismiss">
-  <aside data-v-59c73f57="" class="flex items-center px-3 py-0 bg-black/10"><br data-v-59c73f57="" data-testid="Icon" icon="[object Object]"></aside>
-  <main data-v-59c73f57="" class="flex-1 py-2 pl-3 pr-4"></main>
-</article>
-`;
+exports[`messageToast.vue > renders 1`] = `<div data-v-5216974a="" data-v-59c73f57="" class="m3-snackbar success toast" role="status" title="Click to dismiss"><span data-v-5216974a="" class="m3-body-medium message"><span data-v-59c73f57="" class="flex items-center gap-3"><span data-v-241cb009="" data-v-59c73f57="" style="font-size: 20px; width: 20px; height: 20px; font-variation-settings: 'FILL' 0, 'wght' 400, 'opsz' 20;" class="material-symbols-outlined m3-icon type-icon" aria-hidden="true">check_circle</span> </span></span><button data-v-5216974a="" aria-label="Close" class="close m3-state" type="button"><span data-v-241cb009="" data-v-5216974a="" style="font-size: 24px; width: 24px; height: 24px; font-variation-settings: 'FILL' 0, 'wght' 400, 'opsz' 24;" class="material-symbols-outlined m3-icon" aria-hidden="true">close</span></button></div>`;

@@ -312,8 +312,8 @@ const showDiscLabel = (row: Playable) => {
   return discIndexMap.value[index] !== undefined
 }
 
-const standardSongItemHeight = 64
-const discNumberHeight = 32.5
+const standardSongItemHeight = 72
+const discNumberHeight = 44
 
 const calculatedItemHeight = computed(() => {
   if (noDiscLabel.value) {
@@ -345,115 +345,13 @@ onMounted(() => render())
 </script>
 
 <style lang="postcss">
-@reference '@css/app.pcss';
 .playable-list-wrap {
   .virtual-scroller {
-    @apply flex-1;
+    flex: 1;
   }
 
   &.dragging .song-item * {
-    @apply pointer-events-none;
-  }
-
-  .song-list-header > span,
-  .song-item > span {
-    @apply text-left p-2 align-middle truncate;
-
-    &.time {
-      @apply basis-20 overflow-visible;
-    }
-
-    &.track-number {
-      @apply basis-16;
-    }
-
-    &.album {
-      @apply basis-[27%];
-    }
-
-    &.collaborator {
-      @apply basis-20;
-    }
-
-    &.year {
-      @apply basis-[64px] text-left;
-    }
-
-    &.genre {
-      @apply basis-48 text-left;
-    }
-
-    &.added-at {
-      @apply basis-44 text-left;
-    }
-
-    &.rating {
-      @apply basis-36 text-left overflow-visible;
-    }
-
-    &.favorite {
-      @apply basis-16 text-center;
-    }
-
-    &.extra {
-      @apply basis-12 text-center;
-    }
-
-    &.play {
-      @apply hidden no-hover:block;
-    }
-
-    &.title-artist {
-      @apply flex-1;
-    }
-  }
-
-  .song-list-header {
-    @apply tracking-widest uppercase cursor-pointer text-k-fg-70;
-
-    .extra {
-      @apply px-0;
-    }
-  }
-
-  .unsortable span {
-    @apply cursor-default;
-  }
-
-  @media only screen and (max-width: 768px) {
-    .scroller {
-      top: 0;
-
-      .item-container {
-        left: 12px;
-        right: 12px;
-        width: calc(200vw - 24px);
-      }
-    }
-
-    .song-item {
-      padding: 8px 12px;
-      position: relative;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      width: 200%;
-    }
-
-    .song-item :is(.track-number, .album, .time, .year, .genre, .collaborator, .added-at, .rating, .favorite),
-    .song-list-header :is(.track-number, .album, .time, .year, .genre, .collaborator, .added-at, .rating, .favorite) {
-      display: none;
-    }
-
-    .song-item span {
-      padding: 0;
-      vertical-align: bottom;
-
-      &.thumbnail {
-        display: block;
-        padding-right: 12px;
-      }
-    }
+    pointer-events: none;
   }
 }
 </style>

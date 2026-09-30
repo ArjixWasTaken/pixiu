@@ -1,10 +1,10 @@
 <template>
   <div v-if="hasLyrics" class="group relative h-full">
-    <LrcLyricsPane v-if="isLrc" :font-size="fontSize" :lyrics="lrcLyrics" class="absolute inset-0 px-6 py-8" />
+    <LrcLyricsPane v-if="isLrc" :font-size="fontSize" :lyrics="lrcLyrics" class="absolute inset-0 px-4 py-3" />
 
     <div
       v-else
-      class="lyrics absolute inset-0 px-6 py-8 overflow-y-auto scroll-mask-y whitespace-pre-wrap leading-relaxed"
+      class="lyrics absolute inset-0 px-4 py-3 overflow-y-auto scroll-mask-y whitespace-pre-wrap leading-relaxed text-(--schemes-on-surface)"
       data-testid="plain-text-lyrics"
     >
       {{ plainTextLyrics }}
@@ -16,7 +16,7 @@
       @out="zoomOut"
     />
   </div>
-  <p v-else class="px-6 py-8">
+  <p v-else class="m3-body-large px-4 py-3 text-(--schemes-on-surface-variant)">
     <template v-if="userCanUpdateLyrics">
       No lyrics found.
       <a role="button" @click.prevent="showEditSongForm">Click here</a>
@@ -44,7 +44,7 @@ const zoomLevel = ref(preferences.lyrics_zoom_level || 1)
 
 const { plainTextLyrics, lrcLyrics, isLrc, hasLyrics, userCanUpdateLyrics } = useLyrics(song)
 
-const fontSize = computed(() => `${1 + (zoomLevel.value - 1) * 0.2}rem`)
+const fontSize = computed(() => `${1.5 + (zoomLevel.value - 1) * 0.2}rem`)
 
 const zoomIn = () => (zoomLevel.value = Math.min(zoomLevel.value + 1, 8))
 const zoomOut = () => (zoomLevel.value = Math.max(zoomLevel.value - 1, -2))

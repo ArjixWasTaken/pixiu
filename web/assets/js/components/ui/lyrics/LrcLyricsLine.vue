@@ -1,8 +1,5 @@
 <template>
-  <p
-    :class="{ active: isActive }"
-    class="relative leading-relaxed origin-left transition-all duration-200 cursor-default text-k-fg"
-  >
+  <p :class="{ active: isActive }" class="lrc-line relative origin-left transition-all duration-200 cursor-default">
     {{ line.text }}
   </p>
 </template>
@@ -14,11 +11,13 @@ defineProps<{
 }>()
 </script>
 
-<style lang="postcss" scoped>
-@reference '@css/app.pcss';
-p {
+<style scoped>
+.lrc-line {
+  color: var(--schemes-on-surface);
+  line-height: 1.33;
+
   &.active {
-    @apply scale-105 font-semibold;
+    color: var(--schemes-primary);
   }
 }
 </style>

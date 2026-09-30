@@ -1,6 +1,7 @@
 import { screen, waitFor } from '@testing-library/vue'
-import { describe, expect, it, vi } from 'vite-plus/test'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import { createHarness } from '@/__tests__/TestHarness'
+import { setViewport } from '@/composables/useViewport'
 import { assertOpenModal } from '@/__tests__/assertions'
 import { preferenceStore as preferences } from '@/stores/preferenceStore'
 import { radioStationStore } from '@/stores/radioStationStore'
@@ -24,6 +25,9 @@ describe('radioStationListScreen.vue', () => {
       preferences.temporary.radio_stations_view_mode = 'grid'
     },
   })
+
+  beforeEach(() => setViewport({ mobile: false }))
+  afterEach(() => setViewport({ mobile: true, wide: true }))
 
   const renderComponent = async (stations?: RadioStation[]) => {
     radioStationStore.state.stations = stations || h.factory('radio-station').make(9)
@@ -76,13 +80,13 @@ describe('radioStationListScreen.vue', () => {
     screen.getByTestId('radio-station-grid')
     expect(screen.queryByTestId('radio-station-table')).toBeNull()
 
-    await h.user.click(screen.getByRole('radio', { name: 'View as table' }))
+    await h.user.click(screen.getByRole('button', { name: 'Table' }))
     await waitFor(() => {
       screen.getByTestId('radio-station-table')
       expect(screen.queryByTestId('radio-station-grid')).toBeNull()
     })
 
-    await h.user.click(screen.getByRole('radio', { name: 'View as grid' }))
+    await h.user.click(screen.getByRole('button', { name: 'Grid' }))
     await waitFor(() => {
       screen.getByTestId('radio-station-grid')
       expect(screen.queryByTestId('radio-station-table')).toBeNull()

@@ -1,14 +1,12 @@
 <template>
   <OnClickOutside @trigger="maybeHideInput">
-    <form class="flex border rounded-md border-k-fg-10 focus-within:border-k-highlight" @submit.prevent>
-      <button v-koel-tooltip class="px-3.5 py-2" title="Filter" type="button" @click.prevent="showInput">
-        <Icon :icon="faFilter" fixed-width />
-      </button>
-      <TextInput
-        v-if="showingInput"
+    <M3Chip v-if="!showingInput" icon="filter_list" title="Filter" @click.prevent="showInput">Filter</M3Chip>
+    <form v-else class="filter-field m3-label-large" @submit.prevent>
+      <M3Icon :size="18" class="text-(--schemes-primary)" name="filter_list" />
+      <input
         ref="input"
         v-model="keywords"
-        class="text-k-fg bg-transparent border-0 rounded-none pl-0! h-[unset]! placeholder:text-k-fg-50 outline-hidden"
+        aria-label="Filter"
         placeholder="Keywords"
         type="search"
         @blur="inputting = false"
@@ -20,14 +18,14 @@
 
 <script lang="ts" setup>
 import { OnClickOutside } from '@vueuse/components'
-import { faFilter } from '@fortawesome/free-solid-svg-icons'
 import { computed, nextTick, ref } from 'vue'
 import { requireInjection } from '@/utils/helpers'
 import { FilterKeywordsKey } from '@/config/symbols'
 
-import TextInput from '@/components/ui/form/TextInput.vue'
+import M3Chip from '@/components/m3/M3Chip.vue'
+import M3Icon from '@/components/m3/M3Icon.vue'
 
-const input = ref<InstanceType<typeof TextInput>>()
+const input = ref<HTMLInputElement>()
 const inputting = ref(false)
 
 const keywords = requireInjection(FilterKeywordsKey, ref(''))
@@ -43,8 +41,29 @@ const showInput = () => {
   inputting.value = true
 
   nextTick(() => {
-    input.value?.el?.focus()
-    input.value?.el?.select()
+    input.value?.focus()
+    input.value?.select()
   })
 }
 </script>
+
+<style scoped>
+.filter-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 12px 0 8px;
+  border-radius: 8px;
+  border: 1px solid var(--schemes-outline);
+  color: var(--schemes-on-surface);
+
+  input {
+    width: 160px;
+    background: transparent;
+    border: 0;
+    outline: 0;
+    color: inherit;
+  }
+}
+</style>

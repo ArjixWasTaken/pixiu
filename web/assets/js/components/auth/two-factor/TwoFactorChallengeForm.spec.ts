@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vite-plus/test'
 import { screen, within } from '@testing-library/vue'
 import { createHarness } from '@/__tests__/TestHarness'
 import { authService } from '@/services/authService'
+import { logger } from '@/utils/logger'
 import Component from './TwoFactorChallengeForm.vue'
 
 describe('twoFactorChallengeForm.vue', () => {
@@ -72,6 +73,7 @@ describe('twoFactorChallengeForm.vue', () => {
 
   it('marks the form as failed and clears the code on TOTP rejection', async () => {
     h.mock(authService, 'submitTwoFactorChallenge').mockRejectedValue('Unauthorized')
+    const errorMock = h.mock(logger, 'error')
     h.render(Component, { props: { loginToken: 'login-token-abc' } })
 
     await typeTotp('000000')
@@ -80,10 +82,12 @@ describe('twoFactorChallengeForm.vue', () => {
     expect(screen.getByTestId('two-factor-challenge-form').classList.contains('error')).toBe(true)
     const boxes = within(screen.getByTestId('one-time-code-input')).getAllByRole<HTMLInputElement>('textbox')
     expect(boxes.every(b => b.value === '')).toBe(true)
+    expect(errorMock).toHaveBeenCalledWith('Unauthorized')
   })
 
   it('keeps the recovery code on rejection so the user can fix a typo', async () => {
     h.mock(authService, 'submitTwoFactorChallenge').mockRejectedValue('Unauthorized')
+    const errorMock = h.mock(logger, 'error')
     h.render(Component, { props: { loginToken: 'login-token-abc' } })
 
     await h.user.click(screen.getByTestId('use-recovery-code'))
@@ -94,5 +98,6 @@ describe('twoFactorChallengeForm.vue', () => {
 
     expect(screen.getByTestId('two-factor-challenge-form').classList.contains('error')).toBe(true)
     expect(recoveryField.value).toBe('AAAA BBBB CCCC DDDD EEEE FFFF GGGG HHHH')
+    expect(errorMock).toHaveBeenCalledWith('Unauthorized')
   })
 })

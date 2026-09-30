@@ -18,8 +18,5 @@ const model = defineModel<Theme>()
 
 const themes = ref<Theme[]>([])
 
-onMounted(async () => {
-  await themeStore.fetchCustomThemes()
-  themes.value = themeStore.all
-})
+onMounted(() => (themes.value = themeStore.all))
 </script>

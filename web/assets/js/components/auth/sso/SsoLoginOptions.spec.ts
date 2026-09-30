@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from 'vite-plus/test'
 import { createHarness } from '@/__tests__/TestHarness'
 import { authService } from '@/services/authService'
 import { MessageToasterStub } from '@/__tests__/stubs'
+import { logger } from '@/utils/logger'
 import Component from './SsoLoginOptions.vue'
 
 const token = { 'audio-token': 'audio-token', token: 'api-token' }
@@ -62,11 +63,13 @@ describe('ssoLoginOptions.vue', () => {
   it('toasts on error without emitting loggedIn', async () => {
     window.KOEL.sso_providers = ['Google']
     const toastMock = h.mock(MessageToasterStub.value, 'error')
+    const errorMock = h.mock(logger, 'error')
     const { emitted } = renderWithGoogle()
 
     await h.user.click(screen.getByTestId('sso-error'))
 
     expect(toastMock).toHaveBeenCalledWith('Login failed. Please try again.')
+    expect(errorMock).toHaveBeenCalled()
     expect(emitted().loggedIn).toBeFalsy()
   })
 })

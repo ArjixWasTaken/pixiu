@@ -7,22 +7,22 @@ describe('authFormCard.vue', () => {
   const h = createHarness()
 
   it('renders the logo and the slotted body', () => {
-    h.render(Component, { slots: { default: '<p>Body content</p>' } })
+    const { container } = h.render(Component, { slots: { default: '<p>Body content</p>' } })
 
-    screen.getByAltText('Logo')
+    expect(container.querySelector('img')).not.toBeNull()
     screen.getByText('Body content')
   })
 
   it('applies the error class when failed', () => {
     const { container } = h.render(Component, { props: { failed: true } })
 
-    expect(container.querySelector('form')!.classList.contains('error')).toBe(true)
+    expect(container.querySelector('.auth-card')!.classList.contains('error')).toBe(true)
   })
 
   it('does not apply the error class by default', () => {
     const { container } = h.render(Component)
 
-    expect(container.querySelector('form')!.classList.contains('error')).toBe(false)
+    expect(container.querySelector('.auth-card')!.classList.contains('error')).toBe(false)
   })
 
   it('emits submit when the form is submitted', async () => {

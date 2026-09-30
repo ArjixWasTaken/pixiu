@@ -1,15 +1,16 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
 exports[`footerPlayableInfo.vue > renders with current playable 1`] = `
-<div data-v-4e9359fd="" class="playing song-info px-6 py-0 flex items-center content-start w-[84px] md:w-[420px] gap-5" draggable="true"><span data-v-4e9359fd="" class="cursor-pointer album-thumb block h-[55%] md:h-3/4 aspect-square rounded-full bg-cover" title="Scroll to currently playing"></span>
-  <div data-v-4e9359fd="" class="meta overflow-hidden hidden md:block">
-    <h3 data-v-4e9359fd="" class="title overflow-hidden whitespace-nowrap"><span data-v-4e9359fd="" class="block truncate">Fahrstuhl zum Mond</span></h3><a data-v-4e9359fd="" href="/#/artists/led-zeppelin" class="artist overflow-hidden whitespace-nowrap block text-[0.9rem]"><span data-v-4e9359fd="" class="block truncate">Led Zeppelin</span></a>
-  </div>
+<div data-v-4e9359fd="" draggable="true" class="song-info" data-vue="FooterPlayableInfo"><button data-v-4e9359fd="" aria-label="Expand player" style="background-image: url(&quot;https://via.placeholder.com/150&quot;), url(&quot;/assets/img/covers/default.svg&quot;);" class="album-thumb" type="button"></button>
+  <div data-v-4e9359fd="" class="meta">
+    <p data-v-4e9359fd="" class="title m3-title-medium">Fahrstuhl zum Mond</p><a data-v-4e9359fd="" href="/#/artists/led-zeppelin" class="artist m3-body-medium">Led Zeppelin</a>
+  </div><button data-v-2e59174f="" data-v-2100da4e="" data-v-4e9359fd="" aria-label="Favorite" aria-pressed="false" title="Favorite" class="standard s round toggle m3-icon-button m3-state favorite-button" type="button"><span data-v-241cb009="" data-v-2e59174f="" style="font-size: 24px; width: 24px; height: 24px; font-variation-settings: 'FILL' 0, 'wght' 400, 'opsz' 24;" class="material-symbols-outlined m3-icon" aria-hidden="true">favorite</span></button>
 </div>
 `;
 
 exports[`footerPlayableInfo.vue > renders with no current playable 1`] = `
-<div data-v-4e9359fd="" class="song-info px-6 py-0 flex items-center content-start w-[84px] md:w-[420px] gap-5" draggable="false"><span data-v-4e9359fd="" class="album-thumb block h-[55%] md:h-3/4 aspect-square rounded-full bg-cover"></span>
+<div data-v-4e9359fd="" draggable="false" class="song-info" data-vue="FooterPlayableInfo"><button data-v-4e9359fd="" aria-label="Expand player" style="background-image: url(&quot;/assets/img/covers/default.svg&quot;), url(&quot;/assets/img/covers/default.svg&quot;);" class="album-thumb" type="button"></button>
+  <!--v-if-->
   <!--v-if-->
 </div>
 `;

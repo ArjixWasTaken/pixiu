@@ -24,23 +24,15 @@
             @play-all="playAll"
             @play-selected="playSelected"
           >
-            <FavoriteButton
-              v-if="artist.favorite"
-              :favorite="artist.favorite"
-              class="px-3.5 py-2"
-              @toggle="toggleFavorite"
-            />
+            <FavoriteButton v-if="artist.favorite" :favorite="artist.favorite" @toggle="toggleFavorite" />
             <StarRating :rateable="artist" class="px-2" />
-            <Btn variant="ghost" @click="requestContextMenu">
-              <Icon :icon="faEllipsis" fixed-width />
-              <span class="sr-only">More Actions</span>
-            </Btn>
+            <M3IconButton icon="more_vert" label="More actions" @click="requestContextMenu" />
           </SongListControls>
         </template>
       </ScreenHeader>
     </template>
 
-    <ScreenTabs v-if="artist" class="-m-6" :class="loading && 'pointer-events-none'">
+    <ScreenTabs v-if="artist" class="screen-bleed" :class="loading && 'pointer-events-none'">
       <template #header>
         <nav>
           <ul>
@@ -94,7 +86,6 @@
 </template>
 
 <script lang="ts" setup>
-import { faEllipsis } from '@fortawesome/free-solid-svg-icons'
 import { computed, ref } from 'vue'
 import { defineAsyncComponent } from '@/utils/helpers'
 import { eventBus } from '@/utils/eventBus'
@@ -110,6 +101,7 @@ import { useThirdPartyServices } from '@/composables/useThirdPartyServices'
 import { useRouter } from '@/composables/useRouter'
 import { useContextMenu } from '@/composables/useContextMenu'
 
+import M3IconButton from '@/components/m3/M3IconButton.vue'
 import ScreenHeader from '@/components/ui/ScreenHeader.vue'
 import ArtistThumbnail from '@/components/ui/album-artist/AlbumOrArtistThumbnail.vue'
 import ScreenHeaderSkeleton from '@/components/ui/ScreenHeaderSkeleton.vue'
@@ -117,7 +109,6 @@ import SongListSkeleton from '@/components/playable/playable-list/PlayableListSk
 import ScreenTabs from '@/components/ui/ArtistAlbumScreenTabs.vue'
 import ScreenBase from '@/components/screens/ScreenBase.vue'
 import GridListView from '@/components/ui/GridListView.vue'
-import Btn from '@/components/ui/form/Btn.vue'
 
 const ArtistInfo = defineAsyncComponent(() => import('@/components/artist/ArtistInfo.vue'))
 const AlbumCard = defineAsyncComponent(() => import('@/components/album/AlbumCard.vue'))

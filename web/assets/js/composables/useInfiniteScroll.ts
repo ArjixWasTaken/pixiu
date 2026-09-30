@@ -1,5 +1,5 @@
 import type { Ref } from 'vue'
-import { onBeforeUnmount, ref, watch } from 'vue'
+import { onScopeDispose, ref, watch } from 'vue'
 
 import ToTopButton from '@/components/ui/BtnScrollToTop.vue'
 
@@ -33,7 +33,7 @@ export const useInfiniteScroll = (container: Ref<HTMLElement | undefined>, loadM
     { flush: 'post' },
   )
 
-  onBeforeUnmount(() => observer?.disconnect())
+  onScopeDispose(() => observer?.disconnect())
 
   return {
     ToTopButton,

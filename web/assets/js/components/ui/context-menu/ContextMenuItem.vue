@@ -2,16 +2,16 @@
   <li
     ref="el"
     :class="cssClasses"
-    class="focus:outline-hidden focus:bg-k-highlight focus:text-k-highlight-fg hover:bg-k-highlight hover:text-k-highlight-fg"
+    class="focus:outline-hidden"
     tabindex="-1"
     @mouseover="focus()"
     @click.prevent="emit('click')"
   >
-    <span v-if="hasIconSlot" class="w-4">
+    <span v-if="hasIconSlot" class="menu-icon flex w-5 justify-center text-(--schemes-on-surface-variant)">
       <slot name="icon" />
     </span>
 
-    <span class="label flex-1 min-w-0 max-w-40 truncate">
+    <span class="label flex-1 min-w-0 max-w-56 truncate">
       <slot />
     </span>
 
@@ -19,15 +19,14 @@
       <slot name="subMenuItems" />
     </ul>
 
-    <span v-if="hasSubMenuItems" class="ml-auto">
-      <Icon :icon="faCaretRight" fixed-width />
-    </span>
+    <M3Icon v-if="hasSubMenuItems" class="sub-arrow ml-auto text-(--schemes-on-surface-variant)" name="arrow_right" />
   </li>
 </template>
 
 <script setup lang="ts">
-import { faCaretRight } from '@fortawesome/free-solid-svg-icons'
 import { ref, useSlots } from 'vue'
+
+import M3Icon from '@/components/m3/M3Icon.vue'
 
 const emit = defineEmits<{ (e: 'click'): void }>()
 

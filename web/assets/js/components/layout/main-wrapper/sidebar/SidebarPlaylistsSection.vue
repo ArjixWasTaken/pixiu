@@ -1,6 +1,6 @@
 <template>
   <SidebarSection>
-    <SidebarSectionHeader class="flex items-center">
+    <SidebarSectionHeader class="flex items-center py-2!">
       <span class="flex-1">Playlists</span>
       <CreatePlaylistContextMenuButton />
     </SidebarSectionHeader>
@@ -133,7 +133,7 @@ ul.dragging {
 }
 
 ul.dragging:not(.has-folder-target) {
-  @apply outline-1 outline-dashed outline-offset-2 outline-k-highlight rounded-md;
+  @apply outline-1 outline-dashed outline-offset-2 outline-(--schemes-primary) rounded-3xl;
 }
 
 ul.dragging.has-folder-target > :deep(*) {

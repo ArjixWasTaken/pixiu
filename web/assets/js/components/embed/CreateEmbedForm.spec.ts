@@ -3,7 +3,6 @@ import { createHarness } from '@/__tests__/TestHarness'
 import { embedService } from '@/stores/embedService'
 import { screen, waitFor } from '@testing-library/vue'
 import Component from './CreateEmbedForm.vue'
-import { themeStore } from '@/stores/themeStore'
 
 describe('createEmbedForm.vue', () => {
   const h = createHarness()
@@ -32,7 +31,7 @@ describe('createEmbedForm.vue', () => {
 
       expect(encryptOptionsMock).toHaveBeenCalledWith({
         layout: ['episodes', 'songs'].includes(embeddable.type) ? 'compact' : 'full',
-        theme: 'classic',
+        theme: 'orange',
         preview: false,
       })
     })
@@ -75,7 +74,6 @@ describe('createEmbedForm.vue', () => {
 
   it('has a Theme dropdown for Plus user', async () => {
     await h.withPlusEdition(async () => {
-      h.mock(themeStore, 'fetchCustomThemes')
       const { embed, encryptOptionsMock } = await renderComponent()
 
       await h.user.click(screen.getByRole('checkbox', { name: 'Show code' }))
@@ -87,7 +85,7 @@ describe('createEmbedForm.vue', () => {
 
       // The Theme dropdown is loaded asynchronously, so we need to wait for it to be loaded and rendered
       await waitFor(async () => {
-        await h.user.selectOptions(screen.getByRole('combobox', { name: 'Theme' }), 'laura')
+        await h.user.selectOptions(screen.getByRole('combobox', { name: 'Theme' }), 'red')
       })
 
       const iframe: HTMLIFrameElement = screen.getByTestId('embed-preview-iframe')

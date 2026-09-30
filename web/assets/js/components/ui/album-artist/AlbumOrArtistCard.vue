@@ -1,50 +1,46 @@
 <template>
-  <WithGradientBorder
-    border-width="1px"
-    :color="gradientColor"
-    border-color="color-mix(in srgb, var(--color-fg), transparent 97%)"
-    class="rounded-lg max-w-full md:max-w-[256px]"
-    :class="{ compact: layout === 'compact' }"
+  <M3Card
+    :class="layout"
+    :draggable="!isMobile.any"
+    class="album-artist-card"
+    data-testid="artist-album-card"
+    interactive
+    tabindex="0"
+    @click="open"
+    @contextmenu.prevent="onContextMenu"
+    @dblclick="onDblClick"
+    @dragstart="onDragStart"
+    @keydown.enter.self="open"
   >
-    <article
-      :class="layout"
-      class="relative group flex h-full p-5 rounded-[inherit] flex-col gap-5"
-      data-testid="artist-album-card"
-      :draggable="!isMobile.any"
-      tabindex="0"
-      @dblclick="onDblClick"
-      @dragstart="onDragStart"
-      @contextmenu.prevent="onContextMenu"
-    >
-      <slot name="thumbnail">
-        <Thumbnail v-if="hasThumbnail(entity)" :entity />
-      </slot>
+    <slot name="thumbnail">
+      <Thumbnail v-if="hasThumbnail(entity)" :entity />
+    </slot>
 
-      <footer class="flex flex-1 flex-col gap-1.5 overflow-hidden">
-        <div class="name flex flex-col gap-2 whitespace-nowrap">
-          <slot name="name" />
-        </div>
-        <p class="meta text-[0.9rem] flex gap-1.5 opacity-70 hover:opacity-100">
-          <slot name="meta" />
-        </p>
-      </footer>
+    <footer class="text">
+      <slot name="name" />
+      <p v-if="$slots.meta" class="m3-body-medium meta">
+        <slot name="meta" />
+      </p>
+    </footer>
 
-      <slot />
-    </article>
-  </WithGradientBorder>
+    <slot />
+  </M3Card>
 </template>
 
 <script lang="ts" setup>
 import isMobile from 'ismobilejs'
-import { computed, toRefs } from 'vue'
-import { textToHsl } from '@/utils/formatters'
+import { toRefs } from 'vue'
+import { useRouter } from '@/composables/useRouter'
 
 import Thumbnail from '@/components/ui/album-artist/AlbumOrArtistThumbnail.vue'
-import WithGradientBorder from '@/components/ui/WithGradientBorder.vue'
+import M3Card from '@/components/m3/M3Card.vue'
 
-const props = withDefaults(defineProps<{ layout?: CardLayout; entity: Artist | Album | Podcast | RadioStation }>(), {
-  layout: 'full',
-})
+const props = withDefaults(
+  defineProps<{ layout?: CardLayout; entity: Artist | Album | Podcast | RadioStation; href?: string }>(),
+  {
+    layout: 'full',
+  },
+)
 
 const emit = defineEmits<{
   (e: 'dblclick'): void
@@ -56,7 +52,16 @@ const hasThumbnail = (entity: Artist | Album | Podcast | RadioStation): entity i
   entity.type !== 'radio-stations' && entity.type !== 'podcasts'
 
 const { layout } = toRefs(props)
-const gradientColor = computed(() => textToHsl(String(props.entity.id)))
+const { go } = useRouter()
+
+/** The whole card opens the album or artist; links and buttons inside do their own thing. */
+const open = (event: Event) => {
+  if (!props.href || (event.target as HTMLElement).closest('a, button')) {
+    return
+  }
+
+  go(props.href)
+}
 
 const onDblClick = () => emit('dblclick')
 const onDragStart = (e: DragEvent) => emit('dragstart', e)
@@ -64,41 +69,56 @@ const onContextMenu = (e: MouseEvent) => emit('contextmenu', e)
 </script>
 
 <style lang="postcss" scoped>
-@reference '@css/app.pcss';
-article {
-  @apply bg-k-fg-5;
+.album-artist-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+  padding: 8px;
+  outline: none;
 
-  &.full {
-    :deep(.play-icon) {
-      @apply scale-[3];
-    }
+  &:focus-visible {
+    outline: 2px solid var(--schemes-secondary);
   }
 
-  .name {
-    &:deep(a) {
-      @apply overflow-hidden text-ellipsis text-k-fg;
-
-      &:is(:hover, :active, :focus) {
-        @apply text-k-highlight;
-      }
-    }
-  }
-
-  &:focus,
-  &:focus-within {
-    @apply ring-1 ring-k-highlight;
+  @media (max-width: 768px) {
+    padding: 0;
   }
 
   &.compact {
-    @apply flex-row gap-4 p-3 rounded-md items-center;
+    flex-direction: row;
+    align-items: center;
+    gap: 16px;
 
-    :deep(.thumbnail) {
-      @apply w-[80px] rounded-md;
+    :deep(.card-thumbnail) {
+      width: 80px;
+      flex-shrink: 0;
     }
   }
 }
 
-.compact {
-  @apply max-w-full rounded-md;
+.text {
+  min-width: 0;
+  padding: 0 4px 4px;
+
+  :deep(p),
+  :deep(a) {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  :deep(.title) {
+    color: var(--schemes-on-surface);
+  }
+
+  :deep(.subtitle) {
+    color: var(--schemes-on-surface-variant);
+  }
+}
+
+.meta {
+  color: var(--schemes-on-surface-variant);
 }
 </style>

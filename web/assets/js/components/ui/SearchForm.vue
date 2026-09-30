@@ -1,53 +1,40 @@
 <template>
-  <form
+  <M3SearchBar
     id="searchForm"
-    class="relative text-k-fg-70 flex items-stretch border border-k-fg-10 overflow-hidden py-0 rounded-md bg-k-bg-50 focus-within:border-k-highlight transition-[border,background-color] duration-200 ease-in-out"
-    role="search"
-    @submit.prevent="onSubmit"
+    ref="bar"
+    v-model="q"
+    :placeholder
+    autocorrect="off"
+    name="q"
+    spellcheck="false"
+    @blur="onBlur"
+    @focus="onFocus"
+    @input="onInput"
+    @submit="onSubmit"
   >
-    <TextInput
-      ref="input"
-      v-model="q"
-      :class="{ dirty: q }"
-      :placeholder
-      autocorrect="false"
-      class="flex-1 rounded-none border-0 bg-transparent focus-visible:outline-hidden px-4"
-      name="q"
-      required
-      spellcheck="false"
-      type="text"
-      @focus="onFocus"
-      @blur="onBlur"
-      @input="onInput"
-    />
-
-    <button class="block md:hidden py-0 px-4 bg-k-fg-5 rounded-none" title="Search" type="submit">
-      <Icon :icon="faSearch" />
-    </button>
-
-    <span class="hidden md:flex items-center px-3 text-k-fg-30 pointer-events-none">
-      <Icon :icon="faSearch" />
-    </span>
-  </form>
+    <template v-if="$slots.trailing" #trailing>
+      <slot name="trailing" />
+    </template>
+  </M3SearchBar>
 </template>
 
 <script lang="ts" setup>
-import isMobile from 'ismobilejs'
-import { faSearch } from '@fortawesome/free-solid-svg-icons'
-import { ref } from 'vue'
+import { computed, ref, useTemplateRef } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import { eventBus } from '@/utils/eventBus'
 import { useRouter } from '@/composables/useRouter'
+import { useViewport } from '@/composables/useViewport'
 
-import TextInput from '@/components/ui/form/TextInput.vue'
-
-const placeholder = isMobile.any ? 'Search' : 'Press F to search'
+import M3SearchBar from '@/components/m3/M3SearchBar.vue'
 
 const emit = defineEmits<{ (e: 'focus-change', focused: boolean): void }>()
 
 const { go, url } = useRouter()
+const { isMobile } = useViewport()
 
-const input = ref<InstanceType<typeof TextInput>>()
+const placeholder = computed(() => (isMobile.value ? 'Search' : 'Search songs, artists and albums'))
+
+const bar = useTemplateRef('bar')
 const q = ref('')
 
 let onInput = () => {
@@ -59,24 +46,14 @@ if (!window.RUNNING_UNIT_TESTS) {
   onInput = useDebounceFn(onInput, 500)
 }
 
-const onSubmit = () => {
-  eventBus.emit('TOGGLE_SIDEBAR')
-  go(url('search'))
-}
+const onSubmit = () => go(url('search'))
 
 const onFocus = () => {
   emit('focus-change', true)
-  maybeGoToSearchScreen()
+  isMobile.value || go(url('search'))
 }
 
-const onBlur = () => {
-  emit('focus-change', false)
-}
+const onBlur = () => emit('focus-change', false)
 
-const maybeGoToSearchScreen = () => isMobile.any || go(url('search'))
-
-eventBus.on('FOCUS_SEARCH_FIELD', () => {
-  input.value?.el?.focus()
-  input.value?.el?.select()
-})
+eventBus.on('FOCUS_SEARCH_FIELD', () => bar.value?.focus())
 </script>

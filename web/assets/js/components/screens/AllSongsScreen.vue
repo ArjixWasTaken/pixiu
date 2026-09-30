@@ -21,12 +21,12 @@
       </ScreenHeader>
     </template>
 
-    <SongListSkeleton v-if="showSkeletons" class="-m-6" role="status" aria-busy="true" aria-label="Loading" />
+    <SongListSkeleton v-if="showSkeletons" class="screen-bleed" role="status" aria-busy="true" aria-label="Loading" />
     <template v-else>
       <SongList
         v-if="songs?.length > 0"
         ref="songList"
-        class="-m-6"
+        class="screen-bleed"
         @sort="sort"
         @swipe="onSwipe"
         @press:enter="onPressEnter"

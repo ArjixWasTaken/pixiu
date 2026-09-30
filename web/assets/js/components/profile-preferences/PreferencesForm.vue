@@ -55,12 +55,6 @@
       </div>
     </FormRow>
     <FormRow>
-      <label class="pref-row">
-        <span>Show a translucent, blurred overlay of the current album's art</span>
-        <CheckBox v-model="preferences.show_album_art_overlay" name="show_album_art_overlay" />
-      </label>
-    </FormRow>
-    <FormRow>
       <div class="pref-row">
         <span class="flex-1">
           <span class="flex items-center gap-3">

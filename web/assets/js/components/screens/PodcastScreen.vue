@@ -48,16 +48,13 @@
               <StarRating :rateable="podcast" />
             </span>
 
-            <Btn variant="ghost" @click="requestContextMenu">
-              <Icon :icon="faEllipsis" fixed-width />
-              <span class="sr-only">More Actions</span>
-            </Btn>
+            <M3IconButton icon="more_vert" label="More actions" @click="requestContextMenu" />
           </div>
         </template>
       </ScreenHeader>
     </template>
 
-    <div class="-m-6 min-h-full flex flex-col flex-1 overflow-auto divide-y divide-k-fg-10">
+    <div class="screen-bleed min-h-full flex flex-col flex-1 overflow-auto divide-y divide-k-fg-10">
       <template v-if="loading && !episodes && !podcast">
         <EpisodeItemSkeleton v-for="i in 5" :key="i" />
       </template>
@@ -77,7 +74,7 @@
 <script setup lang="ts">
 import DOMPurify from 'dompurify'
 import { orderBy } from 'lodash-es'
-import { faEllipsis, faPause, faPlay, faRotateRight } from '@fortawesome/free-solid-svg-icons'
+import { faPause, faPlay, faRotateRight } from '@fortawesome/free-solid-svg-icons'
 import { computed, nextTick, onMounted, provide, reactive, ref } from 'vue'
 import { useRouter } from '@/composables/useRouter'
 import { useErrorHandler } from '@/composables/useErrorHandler'
@@ -93,6 +90,7 @@ import { useContextMenu } from '@/composables/useContextMenu'
 import { defineAsyncComponent } from '@/utils/helpers'
 
 import ScreenBase from '@/components/screens/ScreenBase.vue'
+import M3IconButton from '@/components/m3/M3IconButton.vue'
 import ScreenHeader from '@/components/ui/ScreenHeader.vue'
 import ScreenHeaderSkeleton from '@/components/ui/ScreenHeaderSkeleton.vue'
 import EpisodeItem from '@/components/podcast/EpisodeItem.vue'

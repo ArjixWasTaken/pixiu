@@ -3,33 +3,20 @@
     <template #header>
       {{ headingText }}
 
-      <Btn
-        size="small"
+      <M3Button
         v-if="playables.length && !searching"
-        variant="highlight"
         data-testid="view-all-songs-btn"
-        rounded
+        variant="text"
         @click.prevent="goToSongResults"
       >
-        View All
-      </Btn>
+        View all
+      </M3Button>
     </template>
 
-    <PlayableListSkeleton
-      v-if="searching"
-      class="border border-k-fg-5 rounded-lg"
-      role="status"
-      aria-busy="true"
-      aria-label="Loading"
-    />
+    <PlayableListSkeleton v-if="searching" role="status" aria-busy="true" aria-label="Loading" />
     <template v-else>
-      <PlayableList
-        v-if="displayedPlayables.length"
-        ref="playableList"
-        class="border border-k-fg-5 rounded-lg overflow-hidden"
-        @press:enter="onPressEnter"
-      />
-      <p v-else>Nothing found.</p>
+      <PlayableList v-if="displayedPlayables.length" ref="playableList" class="-mx-3" @press:enter="onPressEnter" />
+      <p v-else class="m3-body-medium text-(--schemes-on-surface-variant)">Nothing found.</p>
     </template>
   </ExcerptResultBlock>
 </template>
@@ -42,7 +29,7 @@ import { usePlayableList } from '@/composables/usePlayableList'
 import { playback } from '@/services/playbackManager'
 
 import ExcerptResultBlock from '@/components/screens/search/ExcerptResultBlock.vue'
-import Btn from '@/components/ui/form/Btn.vue'
+import M3Button from '@/components/m3/M3Button.vue'
 import PlayableListSkeleton from '@/components/playable/playable-list/PlayableListSkeleton.vue'
 
 const props = withDefaults(defineProps<{ playables?: Playable[]; query?: string; searching?: boolean }>(), {

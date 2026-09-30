@@ -26,11 +26,11 @@
       </ScreenHeader>
     </template>
 
-    <PlayableListSkeleton v-if="loading" class="-m-6" role="status" aria-busy="true" aria-label="Loading" />
+    <PlayableListSkeleton v-if="loading" class="screen-bleed" role="status" aria-busy="true" aria-label="Loading" />
     <PlayableList
       v-if="playables.length"
       ref="playableList"
-      class="-m-6"
+      class="screen-bleed"
       @reorder="onReorder"
       @press:delete="removeSelected"
       @press:enter="onPressEnter"

@@ -17,7 +17,7 @@ describe('viewAllRecentlyPlayedPlayablesButton.vue', () => {
 
   it('navigates to recently played screen on click', async () => {
     h.render(Component)
-    await h.user.click(screen.getByText('View All'))
+    await h.user.click(screen.getByText('View all'))
 
     expect(goMock).toHaveBeenCalledWith('/#/recently-played')
   })

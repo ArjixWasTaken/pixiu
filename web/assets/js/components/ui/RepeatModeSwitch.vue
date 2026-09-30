@@ -1,23 +1,19 @@
 <template>
-  <button
-    v-koel-tooltip
-    :class="{ active: mode !== 'NO_REPEAT' }"
-    :title="`Change repeat mode (current: ${readableMode})`"
-    class="relative text-k-fg-30"
+  <M3IconButton
+    :icon="mode === 'REPEAT_ONE' ? 'repeat_one' : 'repeat'"
+    :label="`Change repeat mode (current: ${readableMode})`"
+    :selected="mode !== 'NO_REPEAT'"
     data-testid="repeat-mode-switch"
-    type="button"
     @click.prevent="changeMode"
-  >
-    <Repeat1 v-if="mode === 'REPEAT_ONE'" :size="16" />
-    <Repeat v-else :size="16" />
-  </button>
+  />
 </template>
 
 <script lang="ts" setup>
-import { Repeat, Repeat1 } from 'lucide-vue-next'
 import { computed, toRef } from 'vue'
 import { preferenceStore } from '@/stores/preferenceStore'
 import { playback } from '@/services/playbackManager'
+
+import M3IconButton from '@/components/m3/M3IconButton.vue'
 
 const mode = toRef(preferenceStore.state, 'repeat_mode')
 
@@ -30,15 +26,3 @@ const readableMode = computed(() =>
 
 const changeMode = () => playback().rotateRepeatMode()
 </script>
-
-<style lang="postcss" scoped>
-@reference '@css/app.pcss';
-.active {
-  @apply text-k-fg-70;
-}
-
-button::after {
-  content: '';
-  @apply absolute -inset-3;
-}
-</style>

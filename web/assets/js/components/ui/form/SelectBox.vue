@@ -1,15 +1,19 @@
 <template>
-  <div class="relative bg-k-bg-input text-k-fg-input rounded-sm border border-k-fg-10">
-    <select ref="el" v-model="value" class="appearance-none w-full pl-3.5 pr-8 py-2 text-base text-current">
+  <div class="k-field k-select relative p-0!">
+    <select ref="el" v-model="value" class="appearance-none w-full min-h-[46px] pl-4 pr-10 text-current">
       <slot />
     </select>
-    <Icon :icon="faCaretDown" class="text-k-highlight pointer-events-none absolute top-1/3 right-[8px]" size="sm" />
+    <M3Icon
+      class="pointer-events-none absolute top-1/2 -translate-y-1/2 right-2 text-(--schemes-on-surface-variant)"
+      name="arrow_drop_down"
+    />
   </div>
 </template>
 
 <script lang="ts" setup>
 import { ref } from 'vue'
-import { faCaretDown } from '@fortawesome/free-solid-svg-icons'
+
+import M3Icon from '@/components/m3/M3Icon.vue'
 
 const value = defineModel<any>()
 
