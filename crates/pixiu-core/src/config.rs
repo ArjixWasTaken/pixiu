@@ -114,6 +114,10 @@ pub struct ServerConfig {
     /// Address to bind. Defaults to loopback; the Docker image binds `0.0.0.0`.
     pub host: IpAddr,
     pub port: u16,
+    /// Whether a reverse proxy in front of píxiū says who connected, in
+    /// `X-Forwarded-For`. Only turn it on behind one: anyone could claim
+    /// any address otherwise. Throttles count requests per address.
+    pub trust_proxy_headers: bool,
 }
 
 impl Default for ServerConfig {
@@ -121,6 +125,7 @@ impl Default for ServerConfig {
         Self {
             host: IpAddr::V4(Ipv4Addr::LOCALHOST),
             port: 4533,
+            trust_proxy_headers: false,
         }
     }
 }

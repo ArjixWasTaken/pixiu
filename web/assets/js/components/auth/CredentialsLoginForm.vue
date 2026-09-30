@@ -52,11 +52,14 @@
     <p v-if="problem" class="m3-body-medium text-center text-(--schemes-error)">{{ problem }}</p>
 
     <M3Button class="w-full" data-testid="submit" type="submit">{{ claiming ? 'Create account' : 'Log in' }}</M3Button>
+    <M3Button v-if="passwordReset && !claiming" class="self-center" variant="text" @click.prevent="$emit('forgot')">
+      Forgot password?
+    </M3Button>
   </AuthFormCard>
 </template>
 
 <script lang="ts" setup>
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { onBeforeUnmount, ref } from 'vue'
 import { authService } from '@/services/authService'
 import { getHttpErrorBody, isHttpError } from '@/services/http'
 import { logger } from '@/utils/logger'
@@ -67,21 +70,18 @@ import M3IconButton from '@/components/m3/M3IconButton.vue'
 import M3TextField from '@/components/m3/M3TextField.vue'
 import AuthFormCard from '@/components/auth/AuthFormCard.vue'
 
-const emit = defineEmits<{ (e: 'loggedIn'): void }>()
+const props = defineProps<{
+  /** A fresh píxiū has no admin yet: the form creates the account instead. */
+  claiming: boolean
+  /** Whether a forgotten password can be reset by email. */
+  passwordReset: boolean
+}>()
+
+const emit = defineEmits<{ (e: 'loggedIn'): void; (e: 'forgot'): void }>()
 
 const failed = ref(false)
-/** A fresh píxiū has no admin yet: the form creates the account instead. */
-const claiming = ref(false)
 const problem = ref('')
 const showPassword = ref(false)
-
-onMounted(async () => {
-  try {
-    claiming.value = !(await authService.claimed())
-  } catch (error: unknown) {
-    logger.error(error)
-  }
-})
 
 let errorResetTimer: number | null = null
 
@@ -97,7 +97,7 @@ const { data, handleSubmit } = useForm<{ username: string; password: string; con
   onSubmit: async ({ username, password, confirm }) => {
     problem.value = ''
 
-    if (!claiming.value) {
+    if (!props.claiming) {
       return await authService.login(username, password)
     }
 
@@ -121,7 +121,7 @@ const { data, handleSubmit } = useForm<{ username: string; password: string; con
     // password is right cannot sign in (awaiting approval, turned off).
     // A wrong password just shakes.
     const body = isHttpError(error) ? getHttpErrorBody(error) : undefined
-    if (claiming.value || body?.code) {
+    if (props.claiming || body?.code) {
       problem.value = body?.message ?? (error instanceof Error ? error.message : 'That did not work.')
     }
 

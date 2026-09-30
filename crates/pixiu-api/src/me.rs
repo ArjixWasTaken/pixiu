@@ -1,17 +1,23 @@
-//! The signed-in user's account: their name and email, their password, and
-//! the API keys that sign apps in as them.
+//! The signed-in user's account: their name and email, their password, the
+//! API keys that sign apps in as them, and which alerts they get by email.
 
 use axum::{
     Json,
     extract::{Path, State},
     http::StatusCode,
 };
-use pixiu_accounts::users;
+use std::collections::HashMap;
+
+use pixiu_accounts::{alerts, links, users};
+use pixiu_core::alerts::AlertKind;
 use pixiu_db::{ApiKey, Role, User, now, toasty};
 use serde::Deserialize;
 use serde_json::{Value as JsonValue, json};
 
-use crate::{ApiError, ApiResult, ApiState, Session, auth};
+use crate::{
+    ApiError, ApiResult, ApiState, Session, auth,
+    throttle::{Action, too_many},
+};
 
 /// How an account is shown to its owner and to admins.
 pub(crate) fn describe(user: &User) -> JsonValue {
@@ -30,9 +36,16 @@ pub(crate) fn describe(user: &User) -> JsonValue {
     })
 }
 
+/// The account as its owner sees it: with whether email works here.
+fn describe_own(state: &ApiState, user: &User) -> JsonValue {
+    let mut account = describe(user);
+    account["mail_ready"] = json!(state.mailer.ready());
+    account
+}
+
 /// `GET /api/me`.
-pub(crate) async fn show(session: Session) -> Json<JsonValue> {
-    Json(describe(&session.user))
+pub(crate) async fn show(State(state): State<ApiState>, session: Session) -> Json<JsonValue> {
+    Json(describe_own(&state, &session.user))
 }
 
 #[derive(Deserialize)]
@@ -43,21 +56,93 @@ pub(crate) struct Profile {
 }
 
 /// `PUT /api/me`: a new username or email. A new email waits to be
-/// confirmed.
+/// confirmed; píxiū sends the link when it can.
 pub(crate) async fn update(
     State(state): State<ApiState>,
     session: Session,
     Json(profile): Json<Profile>,
 ) -> ApiResult<Json<JsonValue>> {
+    let mut db = state.db.clone();
+    let before = session.user.email.clone();
     let user = users::set_profile(
-        &mut state.db.clone(),
+        &mut db,
         session.user,
         &profile.username,
         &profile.email,
         false,
     )
     .await?;
-    Ok(Json(describe(&user)))
+    if user.email.is_some() && user.email != before && state.mailer.ready() {
+        state
+            .throttle
+            .hit(Action::VerifyEmail, &user.id.to_string());
+        links::send_verification(&mut db, &state.mailer, &user).await?;
+    }
+    Ok(Json(describe_own(&state, &user)))
+}
+
+/// `POST /api/me/email/resend`: sends the link confirming the user's email
+/// again.
+pub(crate) async fn resend_verification(
+    State(state): State<ApiState>,
+    session: Session,
+) -> ApiResult<StatusCode> {
+    let user = session.user;
+    if user.email.is_some() && user.email_verified_at.is_some() {
+        return Err(ApiError::unprocessable(
+            "Your email address is confirmed already.",
+        ));
+    }
+    if !state
+        .throttle
+        .allow(Action::VerifyEmail, &user.id.to_string())
+    {
+        return Err(too_many());
+    }
+    links::send_verification(&mut state.db.clone(), &state.mailer, &user).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// `GET /api/me/alerts`: which alerts the user gets by email, and whether
+/// email can reach them at all.
+pub(crate) async fn alerts(
+    State(state): State<ApiState>,
+    session: Session,
+) -> ApiResult<Json<JsonValue>> {
+    let wanted = alerts::wanted(&mut state.db.clone(), session.user.id).await?;
+    Ok(Json(describe_alerts(&state, &session.user, &wanted)))
+}
+
+fn describe_alerts(state: &ApiState, user: &User, wanted: &HashMap<AlertKind, bool>) -> JsonValue {
+    json!({
+        "deliverable": state.mailer.ready() && user.email.is_some() && user.email_verified_at.is_some(),
+        "alerts": AlertKind::ALL
+            .iter()
+            .map(|kind| (kind.name(), wanted[kind]))
+            .collect::<HashMap<_, _>>(),
+    })
+}
+
+/// `PUT /api/me/alerts`: `{kind: on}` for the kinds to switch.
+pub(crate) async fn set_alerts(
+    State(state): State<ApiState>,
+    session: Session,
+    Json(changes): Json<HashMap<String, bool>>,
+) -> ApiResult<Json<JsonValue>> {
+    let changes = changes
+        .into_iter()
+        .map(|(name, on)| {
+            AlertKind::ALL
+                .into_iter()
+                .find(|kind| kind.name() == name)
+                .map(|kind| (kind, on))
+                .ok_or_else(|| ApiError::unprocessable(format!("no such alert: {name}")))
+        })
+        .collect::<ApiResult<HashMap<_, _>>>()?;
+    let mut db = state.db.clone();
+    alerts::set_wanted(&mut db, session.user.id, &changes).await?;
+    let wanted = alerts::wanted(&mut db, session.user.id).await?;
+    Ok(Json(describe_alerts(&state, &session.user, &wanted)))
 }
 
 #[derive(Deserialize)]

@@ -30,6 +30,13 @@
             @click="choose(() => emit('toggleStatus'))"
           />
           <M3MenuItem
+            v-if="mailReady && account.email"
+            icon="forward_to_inbox"
+            label="Email a password reset link"
+            tag="div"
+            @click="choose(() => emit('sendReset'))"
+          />
+          <M3MenuItem
             icon="password"
             label="Set a temporary password"
             tag="div"
@@ -76,11 +83,17 @@ import M3Menu from '@/components/m3/M3Menu.vue'
 import M3MenuItem from '@/components/m3/M3MenuItem.vue'
 import M3TextField from '@/components/m3/M3TextField.vue'
 
-const props = defineProps<{ account: ManagedAccount; isYou: boolean }>()
+const props = defineProps<{
+  account: ManagedAccount
+  isYou: boolean
+  /** Whether this server sends email. */
+  mailReady: boolean
+}>()
 const emit = defineEmits<{
   (e: 'toggleRole'): void
   (e: 'toggleStatus'): void
   (e: 'setPassword', password: string): void
+  (e: 'sendReset'): void
   (e: 'remove'): void
 }>()
 

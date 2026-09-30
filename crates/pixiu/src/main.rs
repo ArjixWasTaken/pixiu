@@ -58,9 +58,12 @@ async fn serve() -> anyhow::Result<()> {
         pixiu_core::VERSION,
         listener.local_addr()?
     );
-    axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal())
-        .await?;
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown_signal())
+    .await?;
     Ok(())
 }
 

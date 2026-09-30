@@ -5,6 +5,9 @@
 # Loopback by default; use "0.0.0.0" to accept connections from the network.
 host = "127.0.0.1"
 port = 4533
+# Behind a reverse proxy (Caddy, nginx), trust the client address it passes
+# in X-Forwarded-For. Leave off when píxiū faces the internet directly.
+trust_proxy_headers = false
 
 [paths]
 # Database, secrets and caches.

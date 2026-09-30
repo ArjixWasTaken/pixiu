@@ -5,7 +5,10 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use pixiu_core::SecretBox;
+use pixiu_core::{
+    SecretBox,
+    alerts::{Alert, AlertSink, NoAlerts},
+};
 use pixiu_db::{Db, SessionEventKind, SessionState};
 use pixiu_hunt::SessionCheck;
 use pixiu_jobs::warden::{BoxFuture, Platform, Refresher, Warden};
@@ -63,11 +66,29 @@ impl Refresher for FakeRefresher {
     }
 }
 
+/// Keeps the alerts raised.
+#[derive(Default)]
+struct Alerts(Mutex<Vec<(u64, Alert)>>);
+
+impl Alerts {
+    fn raised(&self) -> Vec<(u64, Alert)> {
+        self.0.lock().unwrap().clone()
+    }
+}
+
+impl AlertSink for Alerts {
+    fn alert(&self, user: u64, alert: Alert) -> BoxFuture<'_, ()> {
+        self.0.lock().unwrap().push((user, alert));
+        Box::pin(async {})
+    }
+}
+
 struct Setup {
     _dir: tempfile::TempDir,
     db: Db,
     secrets: SecretBox,
     script: Arc<Script>,
+    alerts: Arc<Alerts>,
 }
 
 impl Setup {
@@ -80,6 +101,7 @@ impl Setup {
             db,
             secrets: SecretBox::ephemeral(),
             script: Arc::default(),
+            alerts: Arc::default(),
         }
     }
 
@@ -90,6 +112,7 @@ impl Setup {
             OWNER,
             Box::new(FakePlatform(Arc::clone(&self.script))),
             Box::new(FakeRefresher(Arc::clone(&self.script))),
+            Arc::clone(&self.alerts) as Arc<dyn AlertSink>,
         )
         .await
         .unwrap()
@@ -233,6 +256,16 @@ async fn sessions_expire_when_refreshing_fails_and_stay_expired() {
     assert!(error.contains("password changed"), "{error}");
     assert!(error.contains("no longer logged in"), "{error}");
     assert_eq!(warden.cookies().await, None, "expired cookies are not used");
+    // The owner hears about it.
+    let raised = setup.alerts.raised();
+    assert!(
+        matches!(
+            &raised[..],
+            [(OWNER, Alert::YouTubeMusicExpired { expired_at, reason })]
+                if Some(*expired_at) == health.expired_at && reason.contains("password changed")
+        ),
+        "{raised:?}"
+    );
 
     // Transient trouble does not hide an expiry.
     setup
@@ -244,6 +277,7 @@ async fn sessions_expire_when_refreshing_fails_and_stay_expired() {
     let restarted = setup.warden().await;
     assert!(restarted.health().is_expired());
     assert!(restarted.restore().await.is_expired());
+    assert_eq!(setup.alerts.raised().len(), 1, "one alert per expiry");
 
     // Logging in again recovers.
     setup.script.apply_answers([SessionCheck::Valid]);
@@ -362,6 +396,7 @@ async fn every_user_has_a_warden_of_their_own() {
             scripts: [(OWNER, Arc::clone(&mine)), (OTHER, Arc::clone(&theirs))].into(),
             forgotten: Arc::clone(&forgotten),
         }),
+        Arc::new(NoAlerts),
     );
 
     mine.apply_answers([SessionCheck::Valid]);

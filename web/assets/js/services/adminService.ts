@@ -28,6 +28,7 @@ export const adminService = {
     changes: Partial<{ role: Role; status: 'active' | 'disabled'; username: string; email: string }>,
   ) => http.patch<Account>(`admin/users/${id}`, changes),
   setTemporaryPassword: (id: number, password: string) => http.post(`admin/users/${id}/password`, { password }),
+  sendPasswordReset: (id: number) => http.post(`admin/users/${id}/password-reset`, {}),
   deleteUser: (id: number) => http.delete<{ freed_bytes: number }>(`admin/users/${id}`),
   storage: () => http.get<StoreUsage>('admin/storage'),
 }

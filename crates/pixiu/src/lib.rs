@@ -6,6 +6,7 @@ use std::{path::Path, sync::Arc};
 
 use anyhow::Context;
 use axum::Router;
+use pixiu_accounts::{MailTransport, Mailer, Settings, SmtpTransport, alerts::MailAlerts};
 use pixiu_browser::LoginDesks;
 use pixiu_core::{Config, SecretBox, TranscodeFormat, config::PathsConfig, playing::NowPlaying};
 use pixiu_db::{Db, User};
@@ -39,6 +40,13 @@ pub struct Services {
     pub desks: Arc<LoginDesks>,
     /// Fed by the Subsonic API, shown by the web player.
     pub now_playing: NowPlaying,
+    /// What admins set in the player: the public address, registration,
+    /// the mail server.
+    pub settings: Arc<Settings>,
+    pub mailer: Arc<Mailer>,
+    pub throttle: Arc<pixiu_api::Throttle>,
+    /// See [`ServerConfig`](pixiu_core::config::ServerConfig).
+    pub trust_proxy_headers: bool,
 }
 
 impl Services {
@@ -51,7 +59,30 @@ impl Services {
     /// cannot be moved into the store, or the stored YouTube Music session
     /// cannot be read.
     pub async fn new(db: Db, config: &Config, secrets: SecretBox) -> anyhow::Result<Self> {
+        Self::with_transport(db, config, secrets, Arc::new(SmtpTransport)).await
+    }
+
+    /// Builds the services, sending email through `transport` (tests keep
+    /// it instead).
+    ///
+    /// # Errors
+    ///
+    /// As [`new`](Self::new).
+    pub async fn with_transport(
+        db: Db,
+        config: &Config,
+        secrets: SecretBox,
+        transport: Arc<dyn MailTransport>,
+    ) -> anyhow::Result<Self> {
         let paths = &config.paths;
+        let settings = Settings::load(db.clone(), secrets.clone())
+            .await
+            .context("failed to read the server settings")?;
+        let mailer = Mailer::new(Arc::clone(&settings), transport);
+        let alerts = Arc::new(MailAlerts {
+            db: db.clone(),
+            mailer: Arc::clone(&mailer),
+        });
         let treasury = Treasury::new(db.clone(), &paths.treasure_dir, paths.cache_dir());
         // Before anything else touches the library: files filed before the
         // store existed move into it, and what a crash left behind goes.
@@ -98,6 +129,7 @@ impl Services {
                 pool,
                 desks: Arc::clone(&desks),
             }),
+            Arc::clone(&alerts) as _,
         );
         let sources = pixiu_enrich::Online::new(config.enrich.contact.as_deref())
             .context("failed to set up MusicBrainz and friends")?;
@@ -107,6 +139,7 @@ impl Services {
                 hunter: Arc::clone(&hunter),
                 wardens: Arc::clone(&wardens),
                 sources: Arc::new(sources),
+                alerts,
             }),
         );
         Ok(Self {
@@ -119,6 +152,10 @@ impl Services {
             jobs,
             desks,
             now_playing: NowPlaying::default(),
+            settings,
+            mailer,
+            throttle: Arc::default(),
+            trust_proxy_headers: config.server.trust_proxy_headers,
         })
     }
 
@@ -134,14 +171,19 @@ impl Services {
             wardens: Arc::clone(&self.wardens),
             jobs: Arc::clone(&self.jobs),
             desks: Arc::clone(&self.desks),
+            settings: Arc::clone(&self.settings),
+            mailer: Arc::clone(&self.mailer),
+            throttle: Arc::clone(&self.throttle),
+            trust_proxy_headers: self.trust_proxy_headers,
         }
     }
 
-    /// Starts the background workers: every user's session warden (each
+    /// Starts the background workers: the outbox, every user's session warden (each
     /// resuming its owner's paused jobs whenever their login works again),
     /// the job queue (which resumes unfinished jobs), and the watch
     /// scheduler.
     pub fn start(&self) {
+        self.mailer.start();
         self.jobs.start();
         watch::schedule(self.db.clone(), Arc::clone(&self.jobs));
         let (wardens, jobs) = (Arc::clone(&self.wardens), Arc::clone(&self.jobs));

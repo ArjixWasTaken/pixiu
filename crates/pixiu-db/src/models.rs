@@ -767,6 +767,12 @@ pub struct Watch {
     pub next_sync_at: Timestamp,
 
     pub last_error: Option<String>,
+
+    /// Syncs failed in a row; the user hears about a long streak.
+    pub failures: u32,
+
+    /// When the current streak of failures began.
+    pub failing_since: Option<Timestamp>,
 }
 
 /// A playlist: made by its user in a Subsonic client or the player, or
@@ -927,4 +933,70 @@ pub struct WatchExclusion {
     pub artist: Option<String>,
 
     pub excluded_at: Timestamp,
+}
+
+/// What an [`AccountToken`] is for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, toasty::Embed)]
+pub enum TokenPurpose {
+    /// Confirms the email address it was sent to.
+    VerifyEmail,
+    /// Lets its holder choose a new password.
+    ResetPassword,
+}
+
+/// A single-use link sent by email. Only the SHA-256 of the token is
+/// stored; the link holds the token itself.
+#[derive(Debug, toasty::Model)]
+pub struct AccountToken {
+    #[key]
+    #[auto]
+    pub id: u64,
+
+    #[index]
+    pub user_id: u64,
+
+    pub purpose: TokenPurpose,
+
+    /// Hex-encoded SHA-256 of the token.
+    #[unique]
+    pub token_hash: String,
+
+    /// For email confirmations, the address confirmed.
+    pub email: Option<String>,
+
+    pub created_at: Timestamp,
+
+    pub expires_at: Timestamp,
+}
+
+/// A user's setting, by name, as JSON.
+#[derive(Debug, toasty::Model)]
+#[unique(user_id, key)]
+pub struct UserSetting {
+    #[key]
+    #[auto]
+    pub id: u64,
+
+    pub user_id: u64,
+
+    pub key: String,
+
+    pub value: String,
+}
+
+/// An alert emailed to a user, so each is sent once (e.g. once per expiry
+/// of their YouTube Music session), even across restarts.
+#[derive(Debug, toasty::Model)]
+#[unique(user_id, dedupe_key)]
+pub struct SentAlert {
+    #[key]
+    #[auto]
+    pub id: u64,
+
+    pub user_id: u64,
+
+    /// What the alert was about, e.g. `youtube-music/expired/<when>`.
+    pub dedupe_key: String,
+
+    pub sent_at: Timestamp,
 }

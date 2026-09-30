@@ -6,12 +6,16 @@
 //! revisits the platform in the headless browser with the persistent
 //! profile, which rotates short-lived cookies, and stores the fresh ones.
 //! When even that fails (a password change, "sign out everywhere"), the
-//! session is marked expired and the web player asks the admin to log in again.
+//! session is marked expired, the web player asks its owner to sign in again,
+//! and they get an alert.
 
 use std::{future::Future, pin::Pin, sync::Arc, time::Duration};
 
 use jiff::Timestamp;
-use pixiu_core::SecretBox;
+use pixiu_core::{
+    SecretBox,
+    alerts::{Alert, AlertSink},
+};
 use pixiu_db::{Db, SessionEvent, SessionEventKind, SessionState, SourceSession, now, toasty};
 use pixiu_hunt::SessionCheck;
 use tokio::sync::watch;
@@ -77,6 +81,8 @@ pub struct Warden {
     platform: Box<dyn Platform>,
     refresher: Box<dyn Refresher>,
     health: watch::Sender<Health>,
+    /// Tells the owner when their session expires.
+    alerts: Arc<dyn AlertSink>,
     /// Checks and refreshes never overlap.
     lock: tokio::sync::Mutex<()>,
 }
@@ -91,6 +97,7 @@ impl Warden {
         owner: u64,
         platform: Box<dyn Platform>,
         refresher: Box<dyn Refresher>,
+        alerts: Arc<dyn AlertSink>,
     ) -> Result<Arc<Self>, toasty::Error> {
         let session = load(&mut db.clone(), owner).await?;
         let (health, _) = watch::channel(Health::of(session.as_ref()));
@@ -101,6 +108,7 @@ impl Warden {
             platform,
             refresher,
             health,
+            alerts,
             lock: tokio::sync::Mutex::new(()),
         }))
     }
@@ -368,9 +376,10 @@ impl Warden {
         if let Ok(Some(mut session)) = load(&mut db, self.owner).await
             && session.state != SessionState::Expired
         {
+            let expired_at = now();
             let _ = toasty::update!(session {
                 state: SessionState::Expired,
-                expired_at: Some(now()),
+                expired_at: Some(expired_at),
                 last_error: Some(reason.to_owned()),
             })
             .exec(&mut db)
@@ -382,6 +391,15 @@ impl Warden {
                 &format!("Session expired: {reason}"),
             )
             .await;
+            self.alerts
+                .alert(
+                    self.owner,
+                    Alert::YouTubeMusicExpired {
+                        expired_at,
+                        reason: reason.to_owned(),
+                    },
+                )
+                .await;
         }
         tracing::warn!(reason, "YouTube Music session expired");
         self.publish().await

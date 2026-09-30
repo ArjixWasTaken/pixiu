@@ -24,6 +24,7 @@ pixiu-treasury = { path = "crates/pixiu-treasury" }
 # Pinned exactly: both are early-stage and ship breaking changes in minor releases.
 toasty = { version = "=0.11.0", features = ["sqlite", "migration", "jiff", "serde"] }
 toasty-cli = "=0.11.0"
+toasty-core = "=0.11.0"
 
 anyhow = "1"
 argon2 = "0.6"
@@ -38,6 +39,8 @@ futures-util = "0.3"
 hex = "0.4"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp", "gif", "bmp"] }
 jiff = "0.2"
+# SMTP for account emails and alerts, with rustls on ring like the rest.
+lettre = { version = "0.11.23", default-features = false, features = ["builder", "hostname", "smtp-transport", "tokio1", "tokio1-rustls-tls"] }
 lofty = "0.25"
 md-5 = "0.11"
 mime_guess = "2"

@@ -593,12 +593,14 @@ interface ScreenNames {
   Queue: true
   'Radio.Stations': true
   RecentlyPlayed: true
+  ResetPassword: true
   'Search.Excerpt': true
   'Search.Playables': true
   Settings: true
   Songs: true
   Upload: true
   Users: true
+  VerifyEmail: true
   Visualizer: true
   YouTube: true
 }

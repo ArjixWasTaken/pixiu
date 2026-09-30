@@ -5,6 +5,7 @@ use std::{
     time::Duration,
 };
 
+use pixiu_core::alerts::{Alert, AlertSink, NoAlerts};
 use pixiu_db::{
     Album, Artist, ClaimKind, Db, Job, JobKind, JobState, Playlist, PlaylistEntry, ReleaseReason,
     ReleasedClaim, Track, TrackClaim, TrackOrigin, Watch, WatchKind, now, toasty,
@@ -28,11 +29,16 @@ struct FakeCatalog {
     /// Browse ids and kinds of the artist's releases.
     albums: Mutex<Vec<(&'static str, AlbumKind)>>,
     logged_in: Mutex<bool>,
+    /// Playlists fail with this while set.
+    failing: Mutex<Option<&'static str>>,
 }
 
 impl Catalog for FakeCatalog {
     fn playlist<'a>(&'a self, id: &'a str) -> BoxFuture<'a, Result<RemotePlaylist, CatalogError>> {
         Box::pin(async move {
+            if let Some(error) = *self.failing.lock().unwrap() {
+                return Err(CatalogError::Failed(error.to_owned()));
+            }
             let tracks = self
                 .playlist
                 .lock()
@@ -277,7 +283,7 @@ async fn playlists_are_mirrored_and_claims_follow_them() {
 
     let wanted = Wanted::Playlist { watch_id: watch.id };
     let queued = done(
-        watch::sync(&s.treasury, &s.catalog, watch.id)
+        watch::sync(&s.treasury, &s.catalog, &NoAlerts, watch.id)
             .await
             .unwrap(),
     );
@@ -324,7 +330,7 @@ async fn playlists_are_mirrored_and_claims_follow_them() {
     }
     assert!(
         done(
-            watch::sync(&s.treasury, &s.catalog, watch.id)
+            watch::sync(&s.treasury, &s.catalog, &NoAlerts, watch.id)
                 .await
                 .unwrap()
         )
@@ -336,7 +342,7 @@ async fn playlists_are_mirrored_and_claims_follow_them() {
     s.treasury.claim(a, &wanted.claim(None)).await.unwrap();
     *s.catalog.playlist.lock().unwrap() = vec!["c", "a"];
     done(
-        watch::sync(&s.treasury, &s.catalog, watch.id)
+        watch::sync(&s.treasury, &s.catalog, &NoAlerts, watch.id)
             .await
             .unwrap(),
     );
@@ -384,7 +390,7 @@ async fn liked_music_waits_for_a_login() {
     );
 
     assert_eq!(
-        watch::sync(&s.treasury, &s.catalog, watch.id)
+        watch::sync(&s.treasury, &s.catalog, &NoAlerts, watch.id)
             .await
             .unwrap(),
         Synced::NeedsLogin(WAITING_FOR_LOGIN.to_owned())
@@ -396,7 +402,7 @@ async fn liked_music_waits_for_a_login() {
     *s.catalog.logged_in.lock().unwrap() = true;
     *s.catalog.playlist.lock().unwrap() = vec!["x"];
     let queued = done(
-        watch::sync(&s.treasury, &s.catalog, watch.id)
+        watch::sync(&s.treasury, &s.catalog, &NoAlerts, watch.id)
             .await
             .unwrap(),
     );
@@ -409,6 +415,79 @@ async fn liked_music_waits_for_a_login() {
             .last_error
             .is_none()
     );
+}
+
+/// Keeps the alerts raised.
+#[derive(Default)]
+struct Alerts(Mutex<Vec<(u64, Alert)>>);
+
+impl AlertSink for Alerts {
+    fn alert(&self, user: u64, alert: Alert) -> BoxFuture<'_, ()> {
+        self.0.lock().unwrap().push((user, alert));
+        Box::pin(async {})
+    }
+}
+
+#[tokio::test]
+async fn watches_that_keep_failing_raise_an_alert() {
+    let s = setup().await;
+    let mut db = s.db.clone();
+    let alerts = Alerts::default();
+    let watch = watch::add(
+        &s.treasury,
+        &s.jobs,
+        OWNER,
+        NewWatch {
+            kind: WatchKind::Playlist,
+            remote_id: "PL1".to_owned(),
+            include_singles: false,
+            only_new: false,
+        },
+    )
+    .await
+    .unwrap();
+    let sync = || watch::sync(&s.treasury, &s.catalog, &alerts, watch.id);
+
+    *s.catalog.failing.lock().unwrap() = Some("the playlist is private");
+    for _ in 1..watch::FAILING_AFTER {
+        assert!(sync().await.is_err());
+    }
+    assert!(alerts.0.lock().unwrap().is_empty(), "not yet");
+    let streak = Watch::get_by_id(&mut db, &watch.id).await.unwrap();
+    assert_eq!(streak.failures, watch::FAILING_AFTER - 1);
+    let since = streak.failing_since.unwrap();
+
+    // The third failure in a row tells the owner; later ones repeat the
+    // same alert, which the sink sends once.
+    assert!(sync().await.is_err());
+    assert!(sync().await.is_err());
+    let raised = alerts.0.lock().unwrap().clone();
+    assert_eq!(raised.len(), 2);
+    for (user, alert) in &raised {
+        assert_eq!(*user, OWNER);
+        assert_eq!(
+            *alert,
+            Alert::WatchFailing {
+                watch_id: watch.id,
+                name: streak.name.clone(),
+                error: "the playlist is private".to_owned(),
+                since,
+            }
+        );
+    }
+
+    // A sync that works ends the streak; the next one is a new alert.
+    *s.catalog.failing.lock().unwrap() = None;
+    done(sync().await.unwrap());
+    let recovered = Watch::get_by_id(&mut db, &watch.id).await.unwrap();
+    assert_eq!((recovered.failures, recovered.failing_since), (0, None));
+    *s.catalog.failing.lock().unwrap() = Some("gone");
+    for _ in 0..watch::FAILING_AFTER {
+        assert!(sync().await.is_err());
+    }
+    let raised = alerts.0.lock().unwrap().clone();
+    assert_eq!(raised.len(), 3);
+    assert_ne!(raised[2].1.dedupe_key(), raised[0].1.dedupe_key());
 }
 
 #[tokio::test]
@@ -444,7 +523,7 @@ async fn artists_bring_their_releases() {
     .unwrap();
     assert!(
         done(
-            watch::sync(&s.treasury, &s.catalog, newcomer.id)
+            watch::sync(&s.treasury, &s.catalog, &NoAlerts, newcomer.id)
                 .await
                 .unwrap()
         )
@@ -470,7 +549,7 @@ async fn artists_bring_their_releases() {
         watch_id: newcomer.id,
     };
     let queued = done(
-        watch::sync(&s.treasury, &s.catalog, newcomer.id)
+        watch::sync(&s.treasury, &s.catalog, &NoAlerts, newcomer.id)
             .await
             .unwrap(),
     );
@@ -478,7 +557,7 @@ async fn artists_bring_their_releases() {
     // Nothing twice.
     assert!(
         done(
-            watch::sync(&s.treasury, &s.catalog, newcomer.id)
+            watch::sync(&s.treasury, &s.catalog, &NoAlerts, newcomer.id)
                 .await
                 .unwrap()
         )
@@ -500,7 +579,7 @@ async fn artists_bring_their_releases() {
     .await
     .unwrap();
     let queued = done(
-        watch::sync(&s.treasury, &s.catalog, everything.id)
+        watch::sync(&s.treasury, &s.catalog, &NoAlerts, everything.id)
             .await
             .unwrap(),
     );
@@ -518,7 +597,7 @@ async fn removing_a_watch_lets_go() {
         .await
         .unwrap();
     for job in done(
-        watch::sync(&s.treasury, &s.catalog, watch.id)
+        watch::sync(&s.treasury, &s.catalog, &NoAlerts, watch.id)
             .await
             .unwrap(),
     ) {
@@ -607,7 +686,7 @@ async fn excluded_songs_are_orphaned_and_skipped() {
         .await
         .unwrap();
     for job in done(
-        watch::sync(&s.treasury, &s.catalog, watch.id)
+        watch::sync(&s.treasury, &s.catalog, &NoAlerts, watch.id)
             .await
             .unwrap(),
     ) {
@@ -683,7 +762,7 @@ async fn excluded_songs_are_orphaned_and_skipped() {
 
     // Later syncs neither list, claim nor fetch them.
     let jobs = done(
-        watch::sync(&s.treasury, &s.catalog, watch.id)
+        watch::sync(&s.treasury, &s.catalog, &NoAlerts, watch.id)
             .await
             .unwrap(),
     );
@@ -704,7 +783,7 @@ async fn excluded_songs_are_orphaned_and_skipped() {
             .any(|job| watch::synced_watch(job) == Some(watch.id))
     );
     done(
-        watch::sync(&s.treasury, &s.catalog, watch.id)
+        watch::sync(&s.treasury, &s.catalog, &NoAlerts, watch.id)
             .await
             .unwrap(),
     );

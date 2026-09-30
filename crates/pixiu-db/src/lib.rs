@@ -61,6 +61,20 @@ pub async fn open(path: &Path) -> Result<Db, OpenError> {
     Ok(db)
 }
 
+/// Begins a transaction that reads, then writes: it takes the write lock
+/// at once, waiting its turn. A plain transaction would take it only at its
+/// first write, and fail if another connection wrote since it read.
+///
+/// # Errors
+///
+/// Fails when the lock is not free within the busy timeout.
+pub async fn write_transaction(db: &mut Db) -> toasty::Result<toasty::Transaction<'_>> {
+    db.transaction_builder()
+        .mode(toasty_core::driver::operation::TransactionMode::Immediate)
+        .begin()
+        .await
+}
+
 /// Applies any pending embedded migrations.
 ///
 /// # Errors

@@ -361,6 +361,7 @@ async fn songs_are_excluded_from_watched_playlists() {
         .await
         .unwrap();
         let watch = toasty::create!(Watch {
+            failures: 0_u32,
             user_id: 1_u64,
             kind: WatchKind::Playlist,
             remote_id: "PLroad",

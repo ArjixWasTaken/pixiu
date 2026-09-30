@@ -1,20 +1,25 @@
 //! Signing in and out. A successful sign-in (or setting up a fresh server)
 //! mints an API key named "Web session", which the player keeps and sends
 //! as a bearer token here and as `apiKey` to the Subsonic API. Signing out
-//! revokes it.
+//! revokes it. Forgotten passwords and email confirmations are here too.
 
 use axum::{Json, extract::State, http::StatusCode};
-use pixiu_accounts::users;
+use pixiu_accounts::{links, users};
 use pixiu_db::{ApiKey, User, UserStatus, now, toasty};
 use serde::{Deserialize, Serialize};
 
-use crate::{ApiError, ApiResult, ApiState, Session};
+use crate::{
+    ApiError, ApiResult, ApiState, Session,
+    throttle::{Action, ClientIp, too_many},
+};
 
 #[derive(Serialize)]
 pub(crate) struct Status {
     /// Whether an account exists; until one does, the player offers to set
     /// píxiū up instead of signing in.
     claimed: bool,
+    /// Whether a forgotten password can be reset by email.
+    password_reset: bool,
 }
 
 /// `GET /api/auth/status`.
@@ -24,7 +29,10 @@ pub(crate) async fn status(State(state): State<ApiState>) -> ApiResult<Json<Stat
         .exec(&mut state.db.clone())
         .await?
         .is_some();
-    Ok(Json(Status { claimed }))
+    Ok(Json(Status {
+        claimed,
+        password_reset: state.mailer.ready(),
+    }))
 }
 
 /// Koel's composite token: the same key serves the API and the audio.
@@ -97,8 +105,12 @@ pub(crate) fn inactive(status: UserStatus) -> Option<ApiError> {
 /// `POST /api/auth/login`.
 pub(crate) async fn login(
     State(state): State<ApiState>,
+    ClientIp(ip): ClientIp,
     Json(credentials): Json<Credentials>,
 ) -> ApiResult<Json<Tokens>> {
+    if state.throttle.blocked(Action::FailedLogin, &ip) {
+        return Err(too_many());
+    }
     let login = credentials.username.trim();
     let mut db = state.db.clone();
     let user = users::find_by_login(&mut db, login).await?;
@@ -106,7 +118,8 @@ pub(crate) async fn login(
     let hash = user.as_ref().map(|user| user.password_hash.clone());
     let verified = verify(credentials.password.clone(), hash).await?;
     let Some(mut user) = user.filter(|_| verified) else {
-        tracing::warn!(login, "failed sign-in");
+        tracing::warn!(login, ip, "failed sign-in");
+        state.throttle.hit(Action::FailedLogin, &ip);
         return Err(ApiError::new(
             StatusCode::UNAUTHORIZED,
             "Wrong username or password.",
@@ -156,5 +169,86 @@ pub(crate) async fn logout(
     session: Session,
 ) -> ApiResult<StatusCode> {
     session.key.delete().exec(&mut state.db.clone()).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Deserialize)]
+pub(crate) struct Forgot {
+    /// A username or an email address.
+    login: String,
+}
+
+/// `POST /api/auth/forgot`: emails a reset link to the account, if there
+/// is one that may have it. The answer is the same either way, and comes at
+/// once, so it tells nobody which accounts exist.
+pub(crate) async fn forgot(
+    State(state): State<ApiState>,
+    ClientIp(ip): ClientIp,
+    Json(forgot): Json<Forgot>,
+) -> ApiResult<StatusCode> {
+    state.throttle.check(Action::Forgot, &ip)?;
+    tokio::spawn(async move {
+        let mut db = state.db.clone();
+        let user = match users::find_by_login(&mut db, forgot.login.trim()).await {
+            Ok(Some(user)) if links::may_reset(&user) => user,
+            Ok(_) => return,
+            Err(error) => {
+                tracing::error!(%error, "cannot look up who forgot their password");
+                return;
+            }
+        };
+        if !state
+            .throttle
+            .allow(Action::ResetEmail, &user.id.to_string())
+        {
+            tracing::warn!(
+                user = user.id,
+                "too many password reset emails; not sending another"
+            );
+            return;
+        }
+        if let Err(error) = links::send_reset(&mut db, &state.mailer, &user).await {
+            tracing::warn!(%error, user = user.id, "cannot send a password reset email");
+        }
+    });
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Deserialize)]
+pub(crate) struct Reset {
+    token: String,
+    password: String,
+}
+
+/// `POST /api/auth/reset`: follows a reset link, and signs in with the new
+/// password (when the account works).
+pub(crate) async fn reset(
+    State(state): State<ApiState>,
+    Json(reset): Json<Reset>,
+) -> ApiResult<Json<Tokens>> {
+    let user = links::reset_password(
+        &mut state.db.clone(),
+        &state.secrets,
+        &reset.token,
+        &reset.password,
+    )
+    .await?;
+    if let Some(refusal) = inactive(user.status) {
+        return Err(refusal);
+    }
+    Ok(Json(Tokens::of(mint_key(&state, &user).await?)))
+}
+
+#[derive(Deserialize)]
+pub(crate) struct Verification {
+    token: String,
+}
+
+/// `POST /api/auth/verify-email`: follows a confirmation link.
+pub(crate) async fn verify_email(
+    State(state): State<ApiState>,
+    Json(verification): Json<Verification>,
+) -> ApiResult<StatusCode> {
+    links::verify_email(&mut state.db.clone(), &verification.token).await?;
     Ok(StatusCode::NO_CONTENT)
 }

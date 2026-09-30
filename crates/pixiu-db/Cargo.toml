@@ -18,6 +18,7 @@ jiff.workspace = true
 sha2.workspace = true
 thiserror.workspace = true
 toasty.workspace = true
+toasty-core.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 

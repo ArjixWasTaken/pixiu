@@ -15,6 +15,7 @@ use std::{
 };
 
 use jiff::{SignedDuration, Timestamp};
+use pixiu_core::alerts::{Alert, AlertSink};
 use pixiu_db::{
     ClaimKind, Db, Job, JobKind, JobState, Playlist, PlaylistEntry, ReleaseReason, SessionState,
     Track, TrackClaim, User, UserStatus, Watch, WatchExclusion, WatchKind, now, toasty,
@@ -74,13 +75,16 @@ pub enum Synced {
     NeedsLogin(String),
 }
 
+/// Failed syncs in a row before the watch's owner hears about it.
+pub const FAILING_AFTER: u32 = 3;
+
 fn failed(error: impl ToString) -> String {
     error.to_string()
 }
 
 /// Brings a watch up to date: a mirror follows its playlist, claims follow
 /// the mirror, and what its owner's library lacks is queued. The watch records how
-/// it went.
+/// it went, and its owner hears about it when it keeps failing.
 ///
 /// # Errors
 ///
@@ -88,6 +92,7 @@ fn failed(error: impl ToString) -> String {
 pub async fn sync(
     treasury: &Treasury,
     catalog: &dyn Catalog,
+    alerts: &dyn AlertSink,
     watch_id: u64,
 ) -> Result<Synced, String> {
     let mut db = treasury.db();
@@ -106,29 +111,56 @@ pub async fn sync(
         }
         WatchKind::Artist => sync_artist(treasury, &mut db, catalog, &watch).await,
     };
-    record(&mut db, watch_id, &result).await;
+    if let Some(alert) = record(&mut db, watch_id, &result).await {
+        alerts.alert(watch.user_id, alert).await;
+    }
     result
 }
 
-async fn record(db: &mut Db, watch_id: u64, result: &Result<Synced, String>) {
+/// Records how a sync went; the alert to raise when the watch has failed
+/// [`FAILING_AFTER`] times in a row.
+async fn record(db: &mut Db, watch_id: u64, result: &Result<Synced, String>) -> Option<Alert> {
     let Ok(Some(mut watch)) = Watch::filter_by_id(watch_id).first().exec(db).await else {
-        return;
+        return None;
     };
-    let (last_synced_at, last_error) = match result {
-        Ok(Synced::Done(_)) => (Some(now()), None),
-        Ok(Synced::NeedsLogin(reason)) | Err(reason) => {
-            (watch.last_synced_at, Some(reason.clone()))
-        }
+    // Waiting for a login is not the watch's failure: its owner hears
+    // about their session instead.
+    let (last_synced_at, last_error, failures, failing_since) = match result {
+        Ok(Synced::Done(_)) => (Some(now()), None, 0, None),
+        Ok(Synced::NeedsLogin(reason)) => (
+            watch.last_synced_at,
+            Some(reason.clone()),
+            watch.failures,
+            watch.failing_since,
+        ),
+        Err(reason) => (
+            watch.last_synced_at,
+            Some(reason.clone()),
+            watch.failures + 1,
+            watch.failing_since.or_else(|| Some(now())),
+        ),
+    };
+    let alert = match (result, failing_since) {
+        (Err(error), Some(since)) if failures >= FAILING_AFTER => Some(Alert::WatchFailing {
+            watch_id,
+            name: watch.name.clone(),
+            error: error.clone(),
+            since,
+        }),
+        _ => None,
     };
     let updated = toasty::update!(watch {
         last_synced_at,
         last_error,
+        failures,
+        failing_since,
     })
     .exec(db)
     .await;
     if let Err(error) = updated {
         tracing::error!(%error, watch_id, "cannot record a watch sync");
     }
+    alert
 }
 
 async fn sync_playlist(
@@ -508,6 +540,7 @@ pub async fn add(
     }
     let interval = default_interval(new.kind);
     let watch = toasty::create!(Watch {
+        failures: 0_u32,
         user_id: owner,
         kind: new.kind,
         remote_id,

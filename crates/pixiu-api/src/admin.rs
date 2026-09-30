@@ -10,7 +10,7 @@ use axum::{
     http::StatusCode,
 };
 use jiff::Timestamp;
-use pixiu_accounts::{NewUser, users};
+use pixiu_accounts::{NewUser, links, users};
 use pixiu_db::{ApiKey, JobState, Role, User, UserStatus};
 use serde::Deserialize;
 use serde_json::{Value as JsonValue, json};
@@ -199,6 +199,23 @@ pub(crate) async fn set_password(
         None,
     )
     .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// `POST /api/admin/users/{id}/password-reset`: emails the user a link to
+/// choose a new password. Their current one keeps working until they do.
+pub(crate) async fn send_reset(
+    State(state): State<ApiState>,
+    AdminSession(admin): AdminSession,
+    Path(id): Path<u64>,
+) -> ApiResult<StatusCode> {
+    let user = load(&state, id).await?;
+    links::send_reset(&mut state.db.clone(), &state.mailer, &user).await?;
+    tracing::info!(
+        admin = admin.user.id,
+        user = id,
+        "password reset email sent by an admin"
+    );
     Ok(StatusCode::NO_CONTENT)
 }
 

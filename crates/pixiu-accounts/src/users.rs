@@ -30,6 +30,8 @@ pub enum AccountError {
     NotFound,
     #[error("píxiū is set up already.")]
     AlreadySetUp,
+    #[error("This link has expired or was already used.")]
+    LinkExpired,
     #[error("database error: {0}")]
     Db(#[from] toasty::Error),
     #[error("background task failed: {0}")]
@@ -226,7 +228,7 @@ async fn insert(
         None => None,
     };
     let (hash, sealed) = seal(secrets, &new.password).await?;
-    let mut tx = db.transaction().await?;
+    let mut tx = pixiu_db::write_transaction(db).await?;
     if first && User::all().first().exec(&mut tx).await?.is_some() {
         return Err(AccountError::AlreadySetUp);
     }
@@ -274,7 +276,7 @@ pub async fn set_password(
 ) -> Result<User, AccountError> {
     check_password(password)?;
     let (hash, sealed) = seal(secrets, password).await?;
-    let mut tx = db.transaction().await?;
+    let mut tx = pixiu_db::write_transaction(db).await?;
     toasty::update!(user {
         password_hash: hash,
         subsonic_secret: Some(sealed),
@@ -293,7 +295,8 @@ pub async fn set_password(
 }
 
 /// Changes a user's username and email. A new email is unconfirmed unless
-/// `verified`.
+/// `verified`. Only a new username must follow today's rules: names from
+/// before them (`me@example.com`) stay.
 ///
 /// # Errors
 ///
@@ -305,9 +308,13 @@ pub async fn set_profile(
     email: &str,
     verified: bool,
 ) -> Result<User, AccountError> {
-    let username = check_username(username)?;
+    let username = if username.trim() == user.username {
+        user.username.clone()
+    } else {
+        check_username(username)?
+    };
     let email = check_email(email)?;
-    let mut tx = db.transaction().await?;
+    let mut tx = pixiu_db::write_transaction(db).await?;
     if username_taken(&mut tx, &username, Some(user.id)).await? {
         return Err(AccountError::UsernameTaken);
     }
@@ -369,7 +376,7 @@ async fn load(db: &mut dyn toasty::Executor, id: u64) -> Result<User, AccountErr
 ///
 /// Fails for the last active admin, unknown users, or on database errors.
 pub async fn set_role(db: &mut Db, id: u64, role: Role) -> Result<User, AccountError> {
-    let mut tx = db.transaction().await?;
+    let mut tx = pixiu_db::write_transaction(db).await?;
     let mut user = load(&mut tx, id).await?;
     if role != Role::Admin && is_last_admin(&mut tx, &user).await? {
         return Err(AccountError::LastAdmin);
@@ -386,7 +393,7 @@ pub async fn set_role(db: &mut Db, id: u64, role: Role) -> Result<User, AccountE
 ///
 /// Fails for the last active admin, unknown users, or on database errors.
 pub async fn set_status(db: &mut Db, id: u64, status: UserStatus) -> Result<User, AccountError> {
-    let mut tx = db.transaction().await?;
+    let mut tx = pixiu_db::write_transaction(db).await?;
     let mut user = load(&mut tx, id).await?;
     if status != UserStatus::Active && is_last_admin(&mut tx, &user).await? {
         return Err(AccountError::LastAdmin);
@@ -418,7 +425,7 @@ pub async fn check_deletable(db: &mut dyn toasty::Executor, id: u64) -> Result<U
 ///
 /// Fails for the last active admin, unknown users, or on database errors.
 pub async fn delete(db: &mut Db, id: u64) -> Result<(), AccountError> {
-    let mut tx = db.transaction().await?;
+    let mut tx = pixiu_db::write_transaction(db).await?;
     check_deletable(&mut tx, id).await?;
     let owner = i64::try_from(id).unwrap_or(i64::MAX);
     for statement in [
@@ -442,6 +449,9 @@ pub async fn delete(db: &mut Db, id: u64) -> Result<(), AccountError> {
         "DELETE FROM session_events WHERE user_id = ?1",
         "DELETE FROM api_keys WHERE user_id = ?1",
         "DELETE FROM web_sessions WHERE user_id = ?1",
+        "DELETE FROM account_tokens WHERE user_id = ?1",
+        "DELETE FROM user_settings WHERE user_id = ?1",
+        "DELETE FROM sent_alerts WHERE user_id = ?1",
         "DELETE FROM users WHERE id = ?1",
     ] {
         toasty::sql::query(statement)

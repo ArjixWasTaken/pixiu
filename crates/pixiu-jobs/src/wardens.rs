@@ -8,7 +8,7 @@ use std::{
     sync::{Arc, Mutex, OnceLock},
 };
 
-use pixiu_core::SecretBox;
+use pixiu_core::{SecretBox, alerts::AlertSink};
 use pixiu_db::{Db, SourceSession, toasty};
 use tokio::task::JoinHandle;
 
@@ -38,6 +38,7 @@ pub struct Wardens {
     db: Db,
     secrets: SecretBox,
     factory: Box<dyn SessionFactory>,
+    alerts: Arc<dyn AlertSink>,
     wardens: tokio::sync::Mutex<HashMap<u64, Running>>,
     /// Once started, new wardens run at once and resume their owner's
     /// paused jobs when their login works again.
@@ -48,11 +49,17 @@ pub struct Wardens {
 
 impl Wardens {
     #[must_use]
-    pub fn new(db: Db, secrets: SecretBox, factory: Box<dyn SessionFactory>) -> Arc<Self> {
+    pub fn new(
+        db: Db,
+        secrets: SecretBox,
+        factory: Box<dyn SessionFactory>,
+        alerts: Arc<dyn AlertSink>,
+    ) -> Arc<Self> {
         Arc::new(Self {
             db,
             secrets,
             factory,
+            alerts,
             wardens: tokio::sync::Mutex::default(),
             jobs: OnceLock::new(),
             health: Mutex::default(),
@@ -75,6 +82,7 @@ impl Wardens {
             owner,
             self.factory.platform(owner),
             self.factory.refresher(owner),
+            Arc::clone(&self.alerts),
         )
         .await?;
         let tasks = match self.jobs.get() {

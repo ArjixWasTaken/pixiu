@@ -19,10 +19,14 @@ mod me;
 mod offerings;
 mod orphans;
 mod playlists;
+mod server_settings;
 mod settings;
 mod songs;
 mod sources;
+mod throttle;
 mod watches;
+
+pub use throttle::Throttle;
 
 use std::{fmt::Display, sync::Arc};
 
@@ -33,6 +37,7 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{delete, get, patch, post, put},
 };
+use pixiu_accounts::{Mailer, Settings};
 use pixiu_browser::LoginDesks;
 use pixiu_core::SecretBox;
 use pixiu_db::{ApiKey, Db, Library, Role, User, UserStatus, now, toasty};
@@ -55,6 +60,14 @@ pub struct ApiState {
     pub jobs: Arc<Jobs>,
     /// Every user's login browser.
     pub desks: Arc<LoginDesks>,
+    /// What admins set in the player: the public address, registration,
+    /// the mail server.
+    pub settings: Arc<Settings>,
+    pub mailer: Arc<Mailer>,
+    /// Limits guessing passwords and flooding inboxes.
+    pub throttle: Arc<Throttle>,
+    /// Whether `X-Forwarded-For` names the client (behind a reverse proxy).
+    pub trust_proxy_headers: bool,
 }
 
 /// Builds the API router. Paths are absolute (`/api/...`), so mount it
@@ -65,6 +78,9 @@ pub fn router(state: ApiState) -> Router {
         .route("/api/auth/login", post(auth::login))
         .route("/api/auth/setup", post(auth::setup))
         .route("/api/auth/session", delete(auth::logout))
+        .route("/api/auth/forgot", post(auth::forgot))
+        .route("/api/auth/reset", post(auth::reset))
+        .route("/api/auth/verify-email", post(auth::verify_email))
         .route("/api/bootstrap", get(bootstrap::bootstrap))
         .route("/api/albums", get(library::albums))
         .route("/api/artists", get(library::artists))
@@ -135,13 +151,32 @@ pub fn router(state: ApiState) -> Router {
         .route("/api/me/password", put(me::change_password))
         .route("/api/me/keys", get(me::keys).post(me::create_key))
         .route("/api/me/keys/{id}", delete(me::revoke_key))
+        .route("/api/me/email/resend", post(me::resend_verification))
+        .route("/api/me/alerts", get(me::alerts).put(me::set_alerts))
         .route("/api/admin/users", get(admin::list).post(admin::create))
         .route(
             "/api/admin/users/{id}",
             patch(admin::update).delete(admin::delete),
         )
         .route("/api/admin/users/{id}/password", post(admin::set_password))
+        .route(
+            "/api/admin/users/{id}/password-reset",
+            post(admin::send_reset),
+        )
         .route("/api/admin/storage", get(admin::storage))
+        .route("/api/admin/settings", get(server_settings::show))
+        .route(
+            "/api/admin/settings/server",
+            put(server_settings::set_server),
+        )
+        .route(
+            "/api/admin/settings/smtp",
+            put(server_settings::set_smtp).delete(server_settings::remove_smtp),
+        )
+        .route(
+            "/api/admin/settings/smtp/test",
+            post(server_settings::test_smtp),
+        )
         .route("/api/sources", get(sources::status))
         .route("/api/sources/validate", post(sources::validate))
         .route("/api/sources/refresh", post(sources::refresh))
@@ -234,6 +269,9 @@ impl From<pixiu_accounts::AccountError> for ApiError {
         match error {
             AccountError::Invalid(message) => Self::unprocessable(message),
             AccountError::NotFound => Self::not_found("user"),
+            error @ AccountError::LinkExpired => {
+                Self::new(StatusCode::GONE, error.to_string()).with_code("expired")
+            }
             error @ (AccountError::UsernameTaken
             | AccountError::EmailTaken
             | AccountError::LastAdmin

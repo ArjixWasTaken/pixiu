@@ -14,6 +14,8 @@ describe('settingsScreen.vue', () => {
           YouTubeMusicSettings: h.stub('youtube-music-settings'),
           LibrarySettings: h.stub('library-settings'),
           UsersSettings: h.stub('users-settings'),
+          SignInSettings: h.stub('sign-in-settings'),
+          EmailSettings: h.stub('email-settings'),
         },
       },
     })
@@ -28,10 +30,12 @@ describe('settingsScreen.vue', () => {
     ])
   })
 
-  it('shows admins the users tab', () => {
+  it('shows admins the server tabs too', () => {
     h.actingAsAdmin()
     render()
 
-    screen.getByTestId('settings-tab-users')
+    for (const tab of ['users', 'sign-in', 'email']) {
+      screen.getByTestId(`settings-tab-${tab}`)
+    }
   })
 })

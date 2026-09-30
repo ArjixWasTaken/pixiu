@@ -21,7 +21,9 @@
         :key="account.id"
         :account
         :is-you="String(account.id) === String(currentUser.id)"
+        :mail-ready
         @remove="remove(account)"
+        @send-reset="sendReset(account)"
         @set-password="setPassword(account, $event)"
         @toggle-role="toggleRole(account)"
         @toggle-status="toggleStatus(account)"
@@ -33,6 +35,7 @@
 <script lang="ts" setup>
 import { onMounted, ref } from 'vue'
 import { adminService } from '@/services/adminService'
+import { serverSettingsService } from '@/services/serverSettingsService'
 import type { ManagedAccount, StoreUsage } from '@/services/adminService'
 import { formatBytes, pluralize } from '@/utils/formatters'
 import { useAuthorization } from '@/composables/useAuthorization'
@@ -51,10 +54,17 @@ const { handleHttpError } = useErrorHandler('dialog')
 
 const accounts = ref<ManagedAccount[]>([])
 const storage = ref<StoreUsage | null>(null)
+const mailReady = ref(false)
 
 const refresh = async () => {
   try {
-    ;[accounts.value, storage.value] = await Promise.all([adminService.users(), adminService.storage()])
+    let settings
+    ;[accounts.value, storage.value, settings] = await Promise.all([
+      adminService.users(),
+      adminService.storage(),
+      serverSettingsService.get(),
+    ])
+    mailReady.value = settings.mail_ready
   } catch (error: unknown) {
     handleHttpError(error)
   }
@@ -90,6 +100,12 @@ const setPassword = (account: ManagedAccount, password: string) =>
   change(async () => {
     await adminService.setTemporaryPassword(account.id, password)
     toastSuccess(`${account.username} is signed out, and chooses a new password at their next sign-in.`)
+  })
+
+const sendReset = (account: ManagedAccount) =>
+  change(async () => {
+    await adminService.sendPasswordReset(account.id)
+    toastSuccess(`píxiū emailed ${account.username} a link to choose a new password. It works for an hour.`)
   })
 
 const remove = async (account: ManagedAccount) => {

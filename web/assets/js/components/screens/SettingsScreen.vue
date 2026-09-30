@@ -55,6 +55,8 @@ import AccountSettings from '@/components/account/AccountSettings.vue'
 import YouTubeMusicSettings from '@/components/screens/settings/YouTubeMusicSettings.vue'
 import LibrarySettings from '@/components/screens/settings/LibrarySettings.vue'
 import UsersSettings from '@/components/screens/settings/admin/UsersSettings.vue'
+import SignInSettings from '@/components/screens/settings/admin/SignInSettings.vue'
+import EmailSettings from '@/components/screens/settings/admin/EmailSettings.vue'
 
 export interface SettingsTab {
   id: string
@@ -79,6 +81,20 @@ const allTabs = applyFilters<SettingsTab[]>(Filter.SETTINGS_TABS, [
     label: 'Users',
     icon: 'group',
     component: UsersSettings,
+    visible: () => currentUserCan.manageUsers(),
+  },
+  {
+    id: 'sign-in',
+    label: 'Sign-in',
+    icon: 'login',
+    component: SignInSettings,
+    visible: () => currentUserCan.manageUsers(),
+  },
+  {
+    id: 'email',
+    label: 'Email',
+    icon: 'mail',
+    component: EmailSettings,
     visible: () => currentUserCan.manageUsers(),
   },
 ])

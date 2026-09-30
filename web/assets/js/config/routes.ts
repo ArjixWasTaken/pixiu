@@ -10,6 +10,8 @@ const ALBUM_ID = 'al-[0-9]+'
 const ARTIST_ID = 'ar-[0-9]+'
 const PLAYLIST_ID = 'pl-[0-9]+'
 const SONG_ID = 'tr-[0-9]+'
+// The tokens of links píxiū emails: base64url.
+const EMAIL_TOKEN = '[A-Za-z0-9_-]+'
 
 export const routes = [
   {
@@ -213,6 +215,30 @@ export const routes = [
     screen: 'MediaBrowser',
     constraints: {
       folder: UUID_REGEX,
+    },
+  },
+  {
+    name: 'verify-email',
+    path: '/verify-email/:token',
+    screen: 'VerifyEmail',
+    meta: {
+      public: true,
+      layout: 'email-link',
+    },
+    constraints: {
+      token: EMAIL_TOKEN,
+    },
+  },
+  {
+    name: 'reset-password',
+    path: '/reset-password/:token',
+    screen: 'ResetPassword',
+    meta: {
+      public: true,
+      layout: 'email-link',
+    },
+    constraints: {
+      token: EMAIL_TOKEN,
     },
   },
   {

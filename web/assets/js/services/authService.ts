@@ -8,9 +8,26 @@ const REDIRECT_KEY = 'redirect'
 
 const { get: lsGet, set: lsSet, remove: lsRemove } = useLocalStorage(false) // authentication local storage data aren't namespaced
 
-export const authService = {
+export interface AuthStatus {
   /** Whether píxiū has its admin yet; until then, the login screen creates it. */
-  claimed: async () => (await http.get<{ claimed: boolean }>('auth/status')).claimed,
+  claimed: boolean
+  /** Whether a forgotten password can be reset by email. */
+  password_reset: boolean
+}
+
+export const authService = {
+  status: () => http.get<AuthStatus>('auth/status'),
+
+  /** Emails a reset link to the account, if there is one. Says nothing either way. */
+  forgot: (login: string) => http.post('auth/forgot', { login }),
+
+  /** Follows a reset link: sets the new password and signs in with it. */
+  async resetPassword(token: string, password: string) {
+    this.setTokensUsingCompositeToken(await http.post<CompositeToken>('auth/reset', { token, password }))
+  },
+
+  /** Follows a link confirming an email address. */
+  verifyEmail: (token: string) => http.post('auth/verify-email', { token }),
 
   /** Creates the admin account of a fresh píxiū, and signs in as it. */
   async claim(username: string, password: string) {

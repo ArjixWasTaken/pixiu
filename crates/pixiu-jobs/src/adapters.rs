@@ -4,6 +4,7 @@
 use std::sync::Arc;
 
 use pixiu_browser::{Cookie, LoginDesks, cookie_header};
+use pixiu_core::alerts::AlertSink;
 use pixiu_db::{Album, Job, JobKind, JobState, ReleaseReason, SessionState, Track, Watch};
 use pixiu_enrich::Sources;
 use pixiu_hunt::{
@@ -138,6 +139,8 @@ pub struct HuntExecutor {
     pub wardens: Arc<Wardens>,
     /// MusicBrainz and friends, for enriching albums.
     pub sources: Arc<dyn Sources>,
+    /// Tells owners about watches that keep failing.
+    pub alerts: Arc<dyn AlertSink>,
 }
 
 /// YouTube Music lyrics, through the hunter.
@@ -383,7 +386,14 @@ impl HuntExecutor {
             wardens: Arc::clone(&self.wardens),
             owner: job.user_id,
         };
-        match watch::sync(self.hunter.treasury(), &catalog, payload.watch_id).await {
+        match watch::sync(
+            self.hunter.treasury(),
+            &catalog,
+            self.alerts.as_ref(),
+            payload.watch_id,
+        )
+        .await
+        {
             Ok(Synced::Done(jobs)) => Outcome::Expand(jobs),
             Ok(Synced::NeedsLogin(reason)) => Outcome::Paused(reason),
             Err(reason) => Outcome::Failed(reason),

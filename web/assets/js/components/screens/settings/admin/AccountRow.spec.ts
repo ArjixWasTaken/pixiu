@@ -25,7 +25,7 @@ describe('accountRow.vue', () => {
   const h = createHarness()
 
   it('shows the account and what its library takes up', () => {
-    h.render(Component, { props: { account: account({ role: 'admin' }), isYou: false } })
+    h.render(Component, { props: { account: account({ role: 'admin' }), isYou: false, mailReady: false } })
 
     screen.getByText('bob')
     screen.getByText('Admin')
@@ -33,12 +33,12 @@ describe('accountRow.vue', () => {
   })
 
   it('says why an account is not on', () => {
-    h.render(Component, { props: { account: account({ status: 'disabled' }), isYou: false } })
+    h.render(Component, { props: { account: account({ status: 'disabled' }), isYou: false, mailReady: false } })
     screen.getByText('Off')
   })
 
   it('offers its actions as events', async () => {
-    const { emitted } = h.render(Component, { props: { account: account(), isYou: false } })
+    const { emitted } = h.render(Component, { props: { account: account(), isYou: false, mailReady: false } })
 
     await h.user.click(screen.getByText('Make admin'))
     await h.user.click(screen.getByText('Turn off'))
@@ -53,8 +53,22 @@ describe('accountRow.vue', () => {
     expect(emitted().setPassword).toEqual([['temporary!']])
   })
 
+  it('offers a reset link only when email can reach the account', async () => {
+    const { emitted, rerender } = h.render(Component, {
+      props: { account: account(), isYou: false, mailReady: false },
+    })
+    expect(screen.queryByText('Email a password reset link')).toBeNull()
+
+    await rerender({ account: account(), isYou: false, mailReady: true })
+    await h.user.click(screen.getByText('Email a password reset link'))
+    expect(emitted().sendReset).toHaveLength(1)
+
+    await rerender({ account: account({ email: null }), isYou: false, mailReady: true })
+    expect(screen.queryByText('Email a password reset link')).toBeNull()
+  })
+
   it('does not offer to turn off or delete your own account', () => {
-    h.render(Component, { props: { account: account(), isYou: true } })
+    h.render(Component, { props: { account: account(), isYou: true, mailReady: false } })
 
     screen.getByText('You')
     expect(screen.queryByText('Turn off')).toBeNull()

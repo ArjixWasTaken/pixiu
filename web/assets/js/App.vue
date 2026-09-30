@@ -26,6 +26,7 @@
 
   <Auth v-if="layout === 'auth'" @logged-in="triggerAppInitialization" />
   <Embed v-if="layout === 'embed'" />
+  <EmailLink v-if="layout === 'email-link'" />
 
   <AppInitializer v-if="authenticated" @error="onInitError" @success="onInitSuccess" />
 
@@ -76,6 +77,7 @@ const AiAssistantScreen = defineAsyncComponent(() => import('@/components/ai/AiA
 const DropZone = defineAsyncComponent(() => import('@/components/ui/upload/DropZone.vue'))
 const ChangePasswordRequired = defineAsyncComponent(() => import('@/components/account/ChangePasswordRequired.vue'))
 const Embed = defineAsyncComponent(() => import('@/components/embed/widget/EmbedWidget.vue'))
+const EmailLink = defineAsyncComponent(() => import('@/components/auth/EmailLink.vue'))
 
 const overlay = ref<InstanceType<typeof Overlay>>()
 const dialog = ref<InstanceType<typeof DialogBox>>()

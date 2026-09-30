@@ -261,3 +261,37 @@ async fn deleting_takes_the_library_along() {
             .is_empty()
     );
 }
+
+#[tokio::test]
+async fn names_from_before_the_rules_stay() {
+    let (_dir, mut db) = db().await;
+    // The first account of an older píxiū was named by its email.
+    let old = toasty::create!(User {
+        username: "me@example.com",
+        password_hash: "$argon2id$old",
+        role: Role::Admin,
+        status: UserStatus::Active,
+        password_change_required: false,
+        created_at: now(),
+    })
+    .exec(&mut db)
+    .await
+    .unwrap();
+
+    let old = users::set_profile(&mut db, old, "me@example.com", "me@example.com", true)
+        .await
+        .unwrap();
+    assert_eq!(old.username, "me@example.com");
+    assert_eq!(old.email.as_deref(), Some("me@example.com"));
+    // A new name follows the rules.
+    let id = old.id;
+    assert!(matches!(
+        users::set_profile(&mut db, old, "you@example.com", "", false).await,
+        Err(AccountError::Invalid(_))
+    ));
+    let old = User::get_by_id(&mut db, &id).await.unwrap();
+    let renamed = users::set_profile(&mut db, old, "me", "me@example.com", false)
+        .await
+        .unwrap();
+    assert_eq!(renamed.username, "me");
+}
