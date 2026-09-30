@@ -13,51 +13,51 @@
         <p class="m3-body-medium text-(--schemes-on-surface-variant) truncate">{{ details }}</p>
       </div>
 
-      <div ref="menuAnchor" class="relative">
-        <M3IconButton icon="more_vert" title="Manage this account" @click="menuOpen = !menuOpen" />
-        <M3Menu v-show="menuOpen" class="menu">
-          <M3MenuItem
-            :label="account.role === 'admin' ? 'Remove admin' : 'Make admin'"
-            icon="shield_person"
-            tag="div"
-            @click="choose(() => emit('toggleRole'))"
-          />
-          <M3MenuItem
-            v-if="!isYou"
-            :label="account.status === 'disabled' ? 'Turn on' : 'Turn off'"
-            :icon="account.status === 'disabled' ? 'toggle_on' : 'toggle_off'"
-            tag="div"
-            @click="choose(() => emit('toggleStatus'))"
-          />
-          <M3MenuItem
-            v-if="mailReady && account.email && !account.email_verified"
-            icon="mark_email_unread"
-            label="Send the confirmation link again"
-            tag="div"
-            @click="choose(() => emit('resendVerification'))"
-          />
-          <M3MenuItem
-            v-if="mailReady && account.email"
-            icon="forward_to_inbox"
-            label="Email a password reset link"
-            tag="div"
-            @click="choose(() => emit('sendReset'))"
-          />
-          <M3MenuItem
-            icon="password"
-            label="Set a temporary password"
-            tag="div"
-            @click="choose(() => (settingPassword = true))"
-          />
-          <M3MenuItem
-            v-if="!isYou"
-            icon="delete"
-            label="Delete account…"
-            tag="div"
-            @click="choose(() => emit('remove'))"
-          />
-        </M3Menu>
-      </div>
+      <M3MenuPopover v-model:open="menuOpen" menu-class="account-menu">
+        <template #anchor>
+          <M3IconButton icon="more_vert" title="Manage this account" @click="menuOpen = !menuOpen" />
+        </template>
+        <M3MenuItem
+          :label="account.role === 'admin' ? 'Remove admin' : 'Make admin'"
+          icon="shield_person"
+          tag="div"
+          @click="choose(() => emit('toggleRole'))"
+        />
+        <M3MenuItem
+          v-if="!isYou"
+          :label="account.status === 'disabled' ? 'Turn on' : 'Turn off'"
+          :icon="account.status === 'disabled' ? 'toggle_on' : 'toggle_off'"
+          tag="div"
+          @click="choose(() => emit('toggleStatus'))"
+        />
+        <M3MenuItem
+          v-if="mailReady && account.email && !account.email_verified"
+          icon="mark_email_unread"
+          label="Send the confirmation link again"
+          tag="div"
+          @click="choose(() => emit('resendVerification'))"
+        />
+        <M3MenuItem
+          v-if="mailReady && account.email"
+          icon="forward_to_inbox"
+          label="Email a password reset link"
+          tag="div"
+          @click="choose(() => emit('sendReset'))"
+        />
+        <M3MenuItem
+          icon="password"
+          label="Set a temporary password"
+          tag="div"
+          @click="choose(() => (settingPassword = true))"
+        />
+        <M3MenuItem
+          v-if="!isYou"
+          icon="delete"
+          label="Delete account…"
+          tag="div"
+          @click="choose(() => emit('remove'))"
+        />
+      </M3MenuPopover>
     </div>
 
     <form v-if="settingPassword" class="flex gap-3 items-center mt-4" @submit.prevent="handleSubmit">
@@ -76,8 +76,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, ref, useTemplateRef } from 'vue'
-import { onClickOutside } from '@vueuse/core'
+import { computed, ref } from 'vue'
 import type { ManagedAccount } from '@/services/adminService'
 import { formatBytes, pluralize, timeAgo } from '@/utils/formatters'
 import { useForm } from '@/composables/useForm'
@@ -86,8 +85,8 @@ import M3Avatar from '@/components/m3/M3Avatar.vue'
 import M3Button from '@/components/m3/M3Button.vue'
 import M3Card from '@/components/m3/M3Card.vue'
 import M3IconButton from '@/components/m3/M3IconButton.vue'
-import M3Menu from '@/components/m3/M3Menu.vue'
 import M3MenuItem from '@/components/m3/M3MenuItem.vue'
+import M3MenuPopover from '@/components/m3/M3MenuPopover.vue'
 import M3TextField from '@/components/m3/M3TextField.vue'
 
 const props = defineProps<{
@@ -106,8 +105,6 @@ const emit = defineEmits<{
 }>()
 
 const menuOpen = ref(false)
-const menuAnchor = useTemplateRef('menuAnchor')
-onClickOutside(menuAnchor, () => (menuOpen.value = false))
 
 const settingPassword = ref(false)
 
@@ -176,10 +173,7 @@ const { data, handleSubmit } = useForm<{ password: string }>({
   }
 }
 
-.menu {
-  position: absolute;
-  right: 0;
-  top: 100%;
-  z-index: 10;
+:deep(.account-menu) {
+  min-width: 240px;
 }
 </style>

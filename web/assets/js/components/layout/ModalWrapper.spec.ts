@@ -60,4 +60,28 @@ describe('modalWrapper.vue', () => {
 
     await waitFor(() => expect(screen.queryByTestId('test-modal')).toBeNull())
   })
+
+  it('closes what only shows something on Escape', async () => {
+    h.render(Component)
+    modalOptions.value = {
+      component: markRaw({ template: '<section data-testid="info"><button>Close</button></section>' }),
+      props: {},
+    }
+    await waitFor(() => screen.getByTestId('info'))
+
+    await h.trigger(screen.getByRole('button', { name: 'Close' }), 'keyDown', { key: 'Escape' })
+
+    expect(modalOptions.value.component).toBeNull()
+  })
+
+  it('leaves Escape to forms, which ask before losing changes', async () => {
+    h.render(Component)
+    const form = markRaw({ template: '<form data-testid="a-form"><input aria-label="Name" /></form>' })
+    modalOptions.value = { component: form, props: {} }
+    await waitFor(() => screen.getByTestId('a-form'))
+
+    await h.trigger(screen.getByLabelText('Name'), 'keyDown', { key: 'Escape' })
+
+    expect(modalOptions.value.component).toBe(form)
+  })
 })

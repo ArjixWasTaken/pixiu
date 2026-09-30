@@ -1,5 +1,5 @@
 <template>
-  <ul>
+  <ul role="none">
     <MenuItem @click="onItemClicked('new-playlist')">New Playlist…</MenuItem>
     <MenuItem @click="onItemClicked('new-smart-playlist')">New Smart Playlist…</MenuItem>
     <MenuItem @click="onItemClicked('new-folder')">New Folder…</MenuItem>

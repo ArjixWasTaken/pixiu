@@ -16,9 +16,11 @@ describe('genreListSorter.vue', () => {
 
     screen.getByTitle('Sorting by Name, ascending')
 
+    await h.user.click(screen.getByTitle(/^Sorting by/))
     await h.user.click(screen.getByTitle('Sort by Name'))
     expect(emitted().sort[0]).toEqual(['name', 'desc'])
 
+    await h.user.click(screen.getByTitle(/^Sorting by/))
     await h.user.click(screen.getByTitle('Sort by Song Count'))
     expect(emitted().sort[1]).toEqual(['song_count', 'asc'])
   })

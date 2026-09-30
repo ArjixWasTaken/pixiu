@@ -18,6 +18,9 @@ describe('basicListSorter', () => {
     })
   }
 
+  /** The options show once the chip is clicked. */
+  const open = () => h.user.click(screen.getByRole('button'))
+
   it('renders the current sort label in the button', () => {
     renderComponent('name', 'asc')
     const button = screen.getByRole('button')
@@ -36,15 +39,18 @@ describe('basicListSorter', () => {
     expect(button.getAttribute('title')).toContain('descending')
   })
 
-  it('renders all sort options in dropdown', () => {
+  it('renders all sort options in dropdown', async () => {
     renderComponent()
+    expect(screen.queryByTitle('Sort by Name')).toBeNull()
+    await open()
     screen.getByTitle('Sort by Name')
     screen.getByTitle('Sort by Date')
     screen.getByTitle('Sort by Size')
   })
 
-  it('marks the current field as active', () => {
+  it('marks the current field as active', async () => {
     renderComponent('date', 'asc')
+    await open()
     const dateItem = screen.getByTitle('Sort by Date')
     expect(dateItem.classList.contains('active')).toBe(true)
   })
@@ -52,6 +58,7 @@ describe('basicListSorter', () => {
   it('emits sort with toggled order when clicking current field', async () => {
     const { emitted } = renderComponent('name', 'asc')
 
+    await open()
     await h.user.click(screen.getByTitle('Sort by Name'))
 
     expect(emitted().sort).toBeTruthy()
@@ -61,6 +68,7 @@ describe('basicListSorter', () => {
   it('emits sort with asc when clicking a different field', async () => {
     const { emitted } = renderComponent('name', 'asc')
 
+    await open()
     await h.user.click(screen.getByTitle('Sort by Date'))
 
     expect(emitted().sort).toBeTruthy()

@@ -1,7 +1,7 @@
 <template>
-  <ul>
+  <ul role="none">
     <template v-if="asSheet">
-      <li class="sheet-header" tabindex="-1">
+      <li class="sheet-header" role="none" tabindex="-1">
         <span
           :style="{ backgroundImage: `url(${sheetSong!.album_cover}), url(${defaultCover})` }"
           class="sheet-cover"
@@ -13,7 +13,7 @@
         <FavoriteButton :favorite="sheetSong!.favorite" size="md" @toggle="toggleSheetFavorite" />
         <M3IconButton icon="close" label="Close" @click.stop="closeContextMenu" />
       </li>
-      <li class="separator" />
+      <li class="separator" role="separator" />
       <li class="sheet-tiles" tabindex="-1">
         <button type="button" @click.stop="queueAfterCurrent">
           <span class="tile"><M3Icon :size="26" name="queue_play_next" /></span>
@@ -107,7 +107,7 @@
         </template>
         <Separator v-if="normalPlaylists.length" />
         <template class="block">
-          <ul v-if="normalPlaylists.length" class="scroll-mask-y relative max-h-48 overflow-y-auto">
+          <ul v-if="normalPlaylists.length" class="scroll-mask-y relative max-h-48 overflow-y-auto" role="none">
             <MenuItem v-for="p in normalPlaylists" :key="p.id" @click="addToExistingPlaylist(p)">
               {{ p.name }}
             </MenuItem>

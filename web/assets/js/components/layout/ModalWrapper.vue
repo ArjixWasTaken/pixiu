@@ -2,8 +2,9 @@
   <dialog
     ref="dialog"
     class="modal-wrapper m-auto min-w-full md:min-w-[480px] border-0 p-0 overflow-visible"
+    @cancel.prevent="onEscape"
     @close.prevent
-    @keydown.esc.prevent
+    @keydown.esc.prevent="onEscape"
   >
     <component :is="options.component" v-if="options.component" v-bind="props" @close="close" />
   </dialog>
@@ -31,6 +32,18 @@ const close = () => {
   options.value = {
     component: null,
   }
+}
+
+/**
+ * Escape closes what only shows something (song info, the equalizer). Forms
+ * answer it themselves, asking before unsaved changes are lost.
+ */
+const onEscape = (event: Event) => {
+  const target = event.target instanceof Element ? event.target : null
+  if (target?.closest('form') || dialog.value?.querySelector('form')) {
+    return
+  }
+  close()
 }
 
 watch(

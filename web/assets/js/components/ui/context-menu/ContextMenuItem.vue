@@ -1,8 +1,10 @@
 <template>
   <li
     ref="el"
+    :aria-haspopup="hasSubMenuItems ? 'menu' : undefined"
     :class="cssClasses"
     class="focus:outline-hidden"
+    role="menuitem"
     tabindex="-1"
     @mouseover="focus()"
     @click.prevent="emit('click')"
@@ -15,7 +17,7 @@
       <slot />
     </span>
 
-    <ul v-if="hasSubMenuItems" class="context-menu submenu" tabindex="-1">
+    <ul v-if="hasSubMenuItems" class="context-menu submenu" role="menu" tabindex="-1">
       <slot name="subMenuItems" />
     </ul>
 

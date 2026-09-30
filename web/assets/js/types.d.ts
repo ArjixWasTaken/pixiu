@@ -500,6 +500,8 @@ type CurrentUser = User & {
   /** Signed in with a temporary password: must pick their own first. */
   password_change_required?: boolean
   email_verified?: boolean
+  /** What they sign in with; `name` is what píxiū calls them. */
+  username?: string
 }
 
 type AiProvider = 'openai' | 'anthropic' | 'gemini' | 'deepseek' | 'groq' | 'mistral' | 'openrouter' | 'xai'

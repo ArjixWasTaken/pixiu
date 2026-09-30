@@ -1,5 +1,5 @@
 <template>
-  <ul>
+  <ul role="none">
     <MenuItem @click="togglePlayback">
       {{ station.playback_state === 'Playing' ? 'Stop' : 'Play' }}
     </MenuItem>
