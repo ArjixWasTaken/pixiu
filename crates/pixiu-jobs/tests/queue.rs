@@ -12,6 +12,9 @@ use pixiu_jobs::{
     warden::BoxFuture,
 };
 
+/// The user every test library and job belongs to.
+const OWNER: u64 = 1;
+
 /// Succeeds, fails or expands depending on the video id, and records
 /// what ran.
 #[derive(Default)]
@@ -63,13 +66,16 @@ impl Executor for Shared {
 
 async fn wait_for(jobs: &Jobs, done: impl Fn(&[Job]) -> bool) -> Vec<Job> {
     for _ in 0..200 {
-        let recent = jobs.recent(50).await.unwrap();
+        let recent = jobs.recent(OWNER, 50).await.unwrap();
         if done(&recent) {
             return recent;
         }
         tokio::time::sleep(Duration::from_millis(25)).await;
     }
-    panic!("jobs did not settle: {:#?}", jobs.recent(50).await.unwrap());
+    panic!(
+        "jobs did not settle: {:#?}",
+        jobs.recent(OWNER, 50).await.unwrap()
+    );
 }
 
 fn settled(jobs: &[Job]) -> bool {
@@ -87,16 +93,16 @@ async fn jobs_run_expand_fail_and_retry() {
     let mut updates = jobs.subscribe();
     jobs.start();
 
-    jobs.enqueue(NewJob::track("ok", "Good track", None))
+    jobs.enqueue(OWNER, NewJob::track("ok", "Good track", None))
         .await
         .unwrap();
-    jobs.enqueue(NewJob::track("known", "Hoarded track", None))
+    jobs.enqueue(OWNER, NewJob::track("known", "Hoarded track", None))
         .await
         .unwrap();
-    jobs.enqueue(NewJob::track("flaky", "Flaky track", None))
+    jobs.enqueue(OWNER, NewJob::track("flaky", "Flaky track", None))
         .await
         .unwrap();
-    jobs.enqueue(NewJob::album("album", "An album"))
+    jobs.enqueue(OWNER, NewJob::album("album", "An album"))
         .await
         .unwrap();
 
@@ -127,17 +133,22 @@ async fn jobs_run_expand_fail_and_retry() {
     while let Ok(update) = updates.try_recv() {
         seen.push(update);
     }
-    assert!(
-        seen.iter()
-            .any(|update| matches!(update, JobUpdate::Changed { progress: 50, .. }))
-    );
+    assert!(seen.iter().any(|update| matches!(
+        update,
+        JobUpdate::Changed {
+            owner: OWNER,
+            progress: 50,
+            ..
+        }
+    )));
     assert!(seen.contains(&JobUpdate::Changed {
+        owner: OWNER,
         id: flaky.id,
         state: JobState::Failed,
         progress: 0,
     }));
 
-    jobs.retry(flaky.id).await.unwrap();
+    jobs.retry(OWNER, flaky.id).await.unwrap();
     let all = wait_for(&jobs, |jobs| {
         jobs.iter()
             .any(|job| job.title == "Flaky track" && job.state == JobState::Done)
@@ -148,9 +159,12 @@ async fn jobs_run_expand_fail_and_retry() {
     assert_eq!(flaky.attempts, 2);
 
     let mut updates = jobs.subscribe();
-    jobs.clear_finished().await.unwrap();
-    assert_eq!(updates.try_recv().unwrap(), JobUpdate::Cleared);
-    assert!(jobs.recent(50).await.unwrap().is_empty());
+    jobs.clear_finished(OWNER).await.unwrap();
+    assert_eq!(
+        updates.try_recv().unwrap(),
+        JobUpdate::Cleared { owner: OWNER }
+    );
+    assert!(jobs.recent(OWNER, 50).await.unwrap().is_empty());
 }
 
 #[tokio::test]
@@ -163,7 +177,7 @@ async fn album_grabs_stay_whole_until_their_tracks_finish() {
     );
     jobs.start();
     let album = jobs
-        .enqueue(NewJob::album("stuck", "Stuck album"))
+        .enqueue(OWNER, NewJob::album("stuck", "Stuck album"))
         .await
         .unwrap();
 
@@ -187,13 +201,13 @@ async fn album_grabs_stay_whole_until_their_tracks_finish() {
     assert!((family.fraction() - 0.5).abs() < f64::EPSILON);
 
     // The album is still being grabbed, through its tracks.
-    let pending = pixiu_jobs::pending(&mut db.clone()).await.unwrap();
+    let pending = pixiu_jobs::pending(&mut db.clone(), OWNER).await.unwrap();
     assert!(pending.has_album("stuck"));
     assert!(pending.tracks.contains("hold"));
 
     // Clearing keeps the family while a track waits.
-    jobs.clear_finished().await.unwrap();
-    assert_eq!(jobs.recent(50).await.unwrap().len(), 3);
+    jobs.clear_finished(OWNER).await.unwrap();
+    assert_eq!(jobs.recent(OWNER, 50).await.unwrap().len(), 3);
 }
 
 #[tokio::test]
@@ -208,6 +222,7 @@ async fn interrupted_jobs_run_again_after_a_restart() {
         pixiu_jobs::Wanted::Grab
     );
     toasty::create!(Job {
+        user_id: OWNER,
         kind: JobKind::DownloadTrack,
         payload,
         title: "Interrupted",
@@ -226,4 +241,41 @@ async fn interrupted_jobs_run_again_after_a_restart() {
     let all = wait_for(&jobs, settled).await;
     assert_eq!(all[0].state, JobState::Done);
     assert_eq!(executor.ran.lock().unwrap().as_slice(), ["Interrupted"]);
+}
+
+/// Users take turns: one user's long queue does not hold another's up.
+#[tokio::test]
+async fn users_take_turns() {
+    const OTHER: u64 = 2;
+    let dir = tempfile::tempdir().unwrap();
+    let db = pixiu_db::open(&dir.path().join("pixiu.db")).await.unwrap();
+    let executor = Arc::new(FakeExecutor::default());
+    let jobs = Jobs::new(db.clone(), Box::new(Shared(Arc::clone(&executor))));
+    for n in 1..=3 {
+        jobs.enqueue(
+            OWNER,
+            NewJob::track(&format!("a{n}"), &format!("A{n}"), None),
+        )
+        .await
+        .unwrap();
+    }
+    jobs.enqueue(OTHER, NewJob::track("b1", "B1", None))
+        .await
+        .unwrap();
+    let mut updates = jobs.subscribe();
+    jobs.start();
+
+    wait_for(&jobs, |jobs| jobs.len() == 3 && settled(jobs)).await;
+    let mut started: Vec<Job> = Job::all().exec(&mut db.clone()).await.unwrap();
+    started.sort_by_key(|job| job.started_at);
+    let order: Vec<&str> = started.iter().map(|job| job.title.as_str()).collect();
+    assert_eq!(order, ["A1", "B1", "A2", "A3"]);
+    // Each job's news names its owner.
+    while let Ok(update) = updates.try_recv() {
+        if let JobUpdate::Changed { owner, id, .. } = update {
+            let job = started.iter().find(|job| job.id == id).unwrap();
+            assert_eq!(owner, job.user_id);
+        }
+    }
+    assert_eq!(jobs.recent(OTHER, 50).await.unwrap().len(), 1);
 }

@@ -1,13 +1,11 @@
 //! What píxiū knows about a song beyond its tags: the file, where it came
-//! from, and why the hoard keeps it.
+//! from, and why the library keeps it.
 
 use axum::{
     Json,
     extract::{Path, State},
 };
-use pixiu_db::{
-    ClaimKind, Db, Lyrics, LyricsSource, Playlist, Track, TrackClaim, TrackOrigin, Watch,
-};
+use pixiu_db::{ClaimKind, Library, Lyrics, LyricsSource, Track, TrackClaim, TrackOrigin};
 use pixiu_subsonic::ids;
 use serde_json::{Value as JsonValue, json};
 
@@ -44,42 +42,37 @@ fn lyrics_name(lyrics: Option<&Lyrics>) -> &'static str {
     }
 }
 
-async fn watch_name(db: &mut Db, id: Option<u64>) -> ApiResult<Option<String>> {
+async fn watch_name(lib: &Library, id: Option<u64>) -> ApiResult<Option<String>> {
     Ok(match id {
-        Some(id) => Watch::filter_by_id(id)
-            .first()
-            .exec(db)
-            .await?
-            .map(|watch| watch.name),
+        Some(id) => lib.watch(id).await?.map(|watch| watch.name),
         None => None,
     })
 }
 
-/// Why the hoard keeps the track, for people, each with the watched
+/// Why the library keeps the track, for people, each with the watched
 /// playlist the song could be excluded from.
-async fn kept(db: &mut Db, track: &Track) -> ApiResult<Vec<JsonValue>> {
+async fn kept(lib: &Library, track: &Track) -> ApiResult<Vec<JsonValue>> {
     let mut reasons: Vec<(String, Option<u64>)> = Vec::new();
-    for claim in TrackClaim::filter_by_track_id(track.id).exec(db).await? {
+    for claim in TrackClaim::filter_by_track_id(track.id)
+        .exec(&mut lib.db())
+        .await?
+    {
         let reference: Option<u64> = claim.reference.as_deref().and_then(|id| id.parse().ok());
         let why = match claim.kind {
             ClaimKind::Offering => "You uploaded it".to_owned(),
             ClaimKind::ManualGrab => "You downloaded or kept it".to_owned(),
             ClaimKind::Starred => "Starred in an app".to_owned(),
-            ClaimKind::WatchPlaylist => match watch_name(db, reference).await? {
+            ClaimKind::WatchPlaylist => match watch_name(lib, reference).await? {
                 Some(name) => format!("Watched playlist “{name}”"),
                 None => "A watched playlist".to_owned(),
             },
-            ClaimKind::WatchArtist => match watch_name(db, reference).await? {
+            ClaimKind::WatchArtist => match watch_name(lib, reference).await? {
                 Some(name) => format!("Watched artist “{name}”"),
                 None => "A watched artist".to_owned(),
             },
             ClaimKind::LocalPlaylist => {
                 let name = match reference {
-                    Some(id) => Playlist::filter_by_id(id)
-                        .first()
-                        .exec(db)
-                        .await?
-                        .map(|playlist| playlist.name),
+                    Some(id) => lib.playlist(id).await?.map(|playlist| playlist.name),
                     None => None,
                 };
                 match name {
@@ -103,19 +96,19 @@ async fn kept(db: &mut Db, track: &Track) -> ApiResult<Vec<JsonValue>> {
 /// `GET /api/songs/{id}/info`.
 pub(crate) async fn info(
     State(state): State<ApiState>,
-    _: Session,
+    session: Session,
     Path(id): Path<String>,
 ) -> ApiResult<Json<JsonValue>> {
     let Some(ids::Id::Track(track_id)) = ids::Id::parse(&id) else {
         return Err(ApiError::not_found("song"));
     };
-    let mut db = state.db.clone();
-    let Some(track) = Track::filter_by_id(track_id).first().exec(&mut db).await? else {
+    let lib = session.library(&state);
+    let Some(track) = lib.track(track_id).await? else {
         return Err(ApiError::not_found("song"));
     };
     let lyrics = Lyrics::filter_by_track_id(track.id)
         .first()
-        .exec(&mut db)
+        .exec(&mut lib.db())
         .await?;
     Ok(Json(json!({
         "format": format(&track),
@@ -134,6 +127,6 @@ pub(crate) async fn info(
         "isrc": track.isrc,
         "added_at": track.added_at,
         "lyrics": lyrics_name(lyrics.as_ref()),
-        "kept": kept(&mut db, &track).await?,
+        "kept": kept(&lib, &track).await?,
     })))
 }

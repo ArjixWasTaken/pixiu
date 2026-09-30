@@ -2,27 +2,27 @@
 //! lists them in orders no Subsonic method offers. The web player reads
 //! both APIs, so both describe the library the same way.
 
-use pixiu_db::{Album, Db, Playlist, User, toasty};
+use pixiu_db::{Library, User, toasty};
 use serde_json::Value as Json;
 
 use crate::{annotations, catalog};
 
-/// Songs (Subsonic `Child`), in the order of `ids`.
-pub async fn songs(db: &mut Db, ids: &[u64]) -> Result<Vec<Json>, toasty::Error> {
-    let tracks = catalog::tracks_in_order(db, ids).await?;
-    Ok(catalog::songs(db, "song", &tracks)
+/// The library's songs (Subsonic `Child`), in the order of `ids`.
+pub async fn songs(lib: &Library, ids: &[u64]) -> Result<Vec<Json>, toasty::Error> {
+    let tracks = catalog::tracks_in_order(lib, ids).await?;
+    Ok(catalog::songs(lib, "song", &tracks)
         .await?
         .iter()
         .map(|song| song.to_json())
         .collect())
 }
 
-/// Albums (`AlbumID3`), in the order of `ids`.
-pub async fn albums(db: &mut Db, ids: &[u64]) -> Result<Vec<Json>, toasty::Error> {
-    let albums = catalog::albums_in_order(db, ids).await?;
-    let artists = catalog::artists_by_id(db, albums.iter().map(|album| album.artist_id)).await?;
-    let stats = catalog::album_stats(db).await?;
-    let plays = annotations::for_albums(db, ids.iter().copied()).await?;
+/// The library's albums (`AlbumID3`), in the order of `ids`.
+pub async fn albums(lib: &Library, ids: &[u64]) -> Result<Vec<Json>, toasty::Error> {
+    let albums = catalog::albums_in_order(lib, ids).await?;
+    let artists = catalog::artists_by_id(lib, albums.iter().map(|album| album.artist_id)).await?;
+    let stats = catalog::album_stats(lib).await?;
+    let plays = annotations::for_albums(lib, ids.iter().copied()).await?;
     Ok(albums
         .iter()
         .map(|album| {
@@ -38,18 +38,12 @@ pub async fn albums(db: &mut Db, ids: &[u64]) -> Result<Vec<Json>, toasty::Error
         .collect())
 }
 
-/// Artists (`ArtistID3`), in the order of `ids`.
-pub async fn artists(db: &mut Db, ids: &[u64]) -> Result<Vec<Json>, toasty::Error> {
-    let artists = catalog::artists_in_order(db, ids).await?;
-    let albums = if ids.is_empty() {
-        Vec::new()
-    } else {
-        Album::filter(Album::fields().artist_id().in_list(ids.to_vec()))
-            .exec(db)
-            .await?
-    };
+/// The library's artists (`ArtistID3`), in the order of `ids`.
+pub async fn artists(lib: &Library, ids: &[u64]) -> Result<Vec<Json>, toasty::Error> {
+    let artists = catalog::artists_in_order(lib, ids).await?;
+    let albums = lib.albums_of_artists(ids).await?;
     let summaries = catalog::summarize_artists(&albums);
-    let annotations = annotations::for_artists(db, ids.iter().copied()).await?;
+    let annotations = annotations::for_artists(lib, ids.iter().copied()).await?;
     Ok(artists
         .iter()
         .map(|artist| {
@@ -66,15 +60,14 @@ pub async fn artists(db: &mut Db, ids: &[u64]) -> Result<Vec<Json>, toasty::Erro
         .collect())
 }
 
-/// Every playlist (`Playlist`, without its songs), by name, owned by
-/// `owner`: the only user.
-pub async fn playlists(db: &mut Db, owner: &User) -> Result<Vec<Json>, toasty::Error> {
-    let mut playlists = Playlist::all().exec(db).await?;
+/// Every playlist of `owner`'s (`Playlist`, without its songs), by name.
+pub async fn playlists(lib: &Library, owner: &User) -> Result<Vec<Json>, toasty::Error> {
+    let mut playlists = lib.all_playlists().await?;
     playlists.sort_by_key(|playlist| playlist.name.to_lowercase());
     let mut rendered = Vec::with_capacity(playlists.len());
     for playlist in &playlists {
         rendered.push(
-            crate::playlists::describe(db, playlist, owner, false)
+            crate::playlists::describe(lib, playlist, owner, false)
                 .await?
                 .to_json(),
         );

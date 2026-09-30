@@ -3,9 +3,10 @@
 //!
 //! Syncing is one-way. What a watch brings in is claimed by it. When a
 //! track leaves a watched playlist, the mirror follows and the claim goes;
-//! the file stays, an orphan unless something else claims it. The admin may
+//! the file stays, an orphan unless something else claims it. The user may
 //! also exclude a song from a watched playlist: the watch then neither
-//! keeps, lists nor downloads it, as if it had left.
+//! keeps, lists nor downloads it, as if it had left. Every watch belongs to
+//! a user, and everything it brings in goes to their library.
 
 use std::{
     collections::{HashMap, HashSet},
@@ -78,7 +79,7 @@ fn failed(error: impl ToString) -> String {
 }
 
 /// Brings a watch up to date: a mirror follows its playlist, claims follow
-/// the mirror, and what the hoard lacks is queued. The watch records how
+/// the mirror, and what its owner's library lacks is queued. The watch records how
 /// it went.
 ///
 /// # Errors
@@ -135,6 +136,7 @@ async fn sync_playlist(
     catalog: &dyn Catalog,
     watch: &Watch,
 ) -> Result<Synced, String> {
+    let owner = watch.user_id;
     let liked = watch.kind == WatchKind::LikedMusic;
     if liked && !catalog.logged_in() {
         return Ok(Synced::NeedsLogin(WAITING_FOR_LOGIN.to_owned()));
@@ -169,7 +171,9 @@ async fn sync_playlist(
 
     // The mirror follows the playlist, order included.
     let order: Vec<String> = tracks.iter().map(|track| track.id.clone()).collect();
-    let mirror = mirror(&mut db, watch.id, &name).await.map_err(failed)?;
+    let mirror = mirror(&mut db, owner, watch.id, &name)
+        .await
+        .map_err(failed)?;
     set_entries(&mut db, mirror, &tracks)
         .await
         .map_err(failed)?;
@@ -178,6 +182,7 @@ async fn sync_playlist(
     let reference = watch.id.to_string();
     treasury
         .release(
+            owner,
             ClaimKind::WatchPlaylist,
             &reference,
             Release {
@@ -196,6 +201,7 @@ async fn sync_playlist(
     let listed: HashSet<&str> = order.iter().map(String::as_str).collect();
     treasury
         .release(
+            owner,
             ClaimKind::WatchPlaylist,
             &reference,
             Release {
@@ -214,7 +220,7 @@ async fn sync_playlist(
 
     // ... those in the hoard get it ...
     let wanted = Wanted::Playlist { watch_id: watch.id };
-    let hoarded = hoarded(&mut db, &order).await.map_err(failed)?;
+    let hoarded = hoarded(&mut db, owner, &order).await.map_err(failed)?;
     let claimed = claimed(&mut db, ClaimKind::WatchPlaylist, &reference)
         .await
         .map_err(failed)?;
@@ -228,7 +234,7 @@ async fn sync_playlist(
     }
 
     // ... and the rest is downloaded, unless it already is being.
-    let pending = pending(&mut db).await.map_err(failed)?;
+    let pending = pending(&mut db, owner).await.map_err(failed)?;
     let mut queued = HashSet::new();
     let jobs = tracks
         .iter()
@@ -260,7 +266,7 @@ async fn sync_artist(
     // A watch of new releases only takes note of the old ones at first.
     let skip_old = watch.only_new && watch.last_synced_at.is_none();
     let known: HashSet<&str> = watch.seen.iter().map(String::as_str).collect();
-    let pending = pending(db).await.map_err(failed)?;
+    let pending = pending(db, watch.user_id).await.map_err(failed)?;
     let mut seen = watch.seen.clone();
     let mut jobs = Vec::new();
     for album in &discography.albums {
@@ -285,9 +291,9 @@ async fn sync_artist(
         .await
         .map_err(failed)?
     {
-        // The hoard's artist of that name is this channel.
+        // The library's artist of that name is this channel.
         treasury
-            .learn_artist_channel(&discography.name, &discography.id)
+            .learn_artist_channel(watch.user_id, &discography.name, &discography.id)
             .await
             .map_err(failed)?;
         toasty::update!(watch {
@@ -322,8 +328,8 @@ async fn describe(
     Ok(())
 }
 
-/// The playlist mirroring a watch, made when missing.
-async fn mirror(db: &mut Db, watch_id: u64, name: &str) -> Result<u64, toasty::Error> {
+/// The playlist mirroring a watch, made in `owner`'s library when missing.
+async fn mirror(db: &mut Db, owner: u64, watch_id: u64, name: &str) -> Result<u64, toasty::Error> {
     match Playlist::filter_by_watch_id(Some(watch_id))
         .first()
         .exec(db)
@@ -341,6 +347,7 @@ async fn mirror(db: &mut Db, watch_id: u64, name: &str) -> Result<u64, toasty::E
             Ok(playlist.id)
         }
         None => Ok(toasty::create!(Playlist {
+            user_id: owner,
             name,
             public: false,
             watch_id: Some(watch_id),
@@ -402,13 +409,22 @@ async fn set_entries(
     tx.commit().await
 }
 
-/// The tracks the hoard holds among these videos, by video id.
-async fn hoarded(db: &mut Db, video_ids: &[String]) -> Result<HashMap<String, u64>, toasty::Error> {
+/// The tracks `owner`'s library holds among these videos, by video id.
+async fn hoarded(
+    db: &mut Db,
+    owner: u64,
+    video_ids: &[String],
+) -> Result<HashMap<String, u64>, toasty::Error> {
     let mut hoarded = HashMap::new();
     for chunk in video_ids.chunks(500) {
-        let tracks = Track::filter(Track::fields().ytm_video_id().in_list(chunk.to_vec()))
-            .exec(db)
-            .await?;
+        let tracks = Track::filter(
+            Track::fields()
+                .user_id()
+                .eq(owner)
+                .and(Track::fields().ytm_video_id().in_list(chunk.to_vec())),
+        )
+        .exec(db)
+        .await?;
         for track in tracks {
             if let Some(video_id) = track.ytm_video_id {
                 hoarded.insert(video_id, track.id);
@@ -453,7 +469,7 @@ pub struct NewWatch {
 
 #[derive(Debug, thiserror::Error)]
 pub enum WatchError {
-    #[error("píxiū already watches this")]
+    #[error("You already watch this")]
     Duplicate,
     #[error("database error: {0}")]
     Db(#[from] toasty::Error),
@@ -466,18 +482,23 @@ fn after(interval: Duration) -> Timestamp {
         .unwrap_or(Timestamp::MAX)
 }
 
-/// Adds a watch and queues its first sync.
+/// Adds a watch for `owner` and queues its first sync.
 ///
 /// # Errors
 ///
-/// Fails when the thing is already watched, or on database errors.
-pub async fn add(treasury: &Treasury, jobs: &Jobs, new: NewWatch) -> Result<Watch, WatchError> {
+/// Fails when the owner already watches the thing, or on database errors.
+pub async fn add(
+    treasury: &Treasury,
+    jobs: &Jobs,
+    owner: u64,
+    new: NewWatch,
+) -> Result<Watch, WatchError> {
     let mut db = treasury.db();
     let (remote_id, name) = match new.kind {
         WatchKind::LikedMusic => (LIKED_MUSIC.to_owned(), "Liked music".to_owned()),
         _ => (new.remote_id.clone(), new.remote_id),
     };
-    if Watch::filter_by_remote_id(&remote_id)
+    if Watch::filter_by_user_id_and_remote_id(owner, &remote_id)
         .first()
         .exec(&mut db)
         .await?
@@ -487,6 +508,7 @@ pub async fn add(treasury: &Treasury, jobs: &Jobs, new: NewWatch) -> Result<Watc
     }
     let interval = default_interval(new.kind);
     let watch = toasty::create!(Watch {
+        user_id: owner,
         kind: new.kind,
         remote_id,
         name,
@@ -511,9 +533,10 @@ pub async fn add(treasury: &Treasury, jobs: &Jobs, new: NewWatch) -> Result<Watc
 ///
 /// Fails on database errors.
 pub async fn queue_sync(jobs: &Jobs, watch: &Watch) -> Result<bool, toasty::Error> {
+    let owner = watch.user_id;
     let mut busy = false;
     let mut failed_before = false;
-    for job in jobs.unfinished().await? {
+    for job in jobs.unfinished(owner).await? {
         if synced_watch(&job) == Some(watch.id) {
             if job.state == JobState::Failed {
                 failed_before = true;
@@ -523,14 +546,19 @@ pub async fn queue_sync(jobs: &Jobs, watch: &Watch) -> Result<bool, toasty::Erro
         }
     }
     if failed_before {
-        jobs.forget(|job| synced_watch(job) == Some(watch.id) && job.state == JobState::Failed)
-            .await?;
+        jobs.forget(owner, |job| {
+            synced_watch(job) == Some(watch.id) && job.state == JobState::Failed
+        })
+        .await?;
     }
     if busy {
         return Ok(false);
     }
-    jobs.enqueue(NewJob::sync(watch.id, &format!("Sync {}", watch.name)))
-        .await?;
+    jobs.enqueue(
+        owner,
+        NewJob::sync(watch.id, &format!("Sync {}", watch.name)),
+    )
+    .await?;
     Ok(true)
 }
 
@@ -542,7 +570,11 @@ pub async fn queue_sync(jobs: &Jobs, watch: &Watch) -> Result<bool, toasty::Erro
 /// Fails on database errors.
 pub async fn remove(treasury: &Treasury, jobs: &Jobs, watch_id: u64) -> Result<(), toasty::Error> {
     let mut db = treasury.db();
-    jobs.forget(|job| {
+    let Some(watch) = Watch::filter_by_id(watch_id).first().exec(&mut db).await? else {
+        return Ok(());
+    };
+    let owner = watch.user_id;
+    jobs.forget(owner, |job| {
         synced_watch(job) == Some(watch_id)
             || queue::wanted(job).and_then(Wanted::watch_id) == Some(watch_id)
     })
@@ -559,22 +591,21 @@ pub async fn remove(treasury: &Treasury, jobs: &Jobs, watch_id: u64) -> Result<(
         playlist.delete().exec(&mut db).await?;
     }
     let reference = watch_id.to_string();
-    let watch = Watch::filter_by_id(watch_id).first().exec(&mut db).await?;
     let why = Release {
         reason: ReleaseReason::WatchRemoved,
-        source_name: watch.as_ref().map(|watch| watch.name.as_str()),
+        source_name: Some(watch.name.as_str()),
     };
     for kind in [ClaimKind::WatchPlaylist, ClaimKind::WatchArtist] {
-        treasury.release(kind, &reference, why, |_| false).await?;
+        treasury
+            .release(owner, kind, &reference, why, |_| false)
+            .await?;
     }
     WatchExclusion::filter_by_watch_id(watch_id)
         .delete()
         .exec(&mut db)
         .await?;
-    if let Some(watch) = watch {
-        tracing::info!(watch = watch.id, remote_id = %watch.remote_id, "watch removed");
-        watch.delete().exec(&mut db).await?;
-    }
+    tracing::info!(watch = watch.id, remote_id = %watch.remote_id, "watch removed");
+    watch.delete().exec(&mut db).await?;
     Ok(())
 }
 
@@ -588,7 +619,7 @@ async fn excluded_videos(db: &mut Db, watch_id: u64) -> Result<HashSet<String>, 
         .collect())
 }
 
-/// Whether the admin excluded a video from a watch.
+/// Whether the user excluded a video from a watch.
 ///
 /// # Errors
 ///
@@ -654,7 +685,7 @@ pub async fn exclude(
         .iter()
         .position(|entry| entry.ytm_video_id.as_deref() == Some(video_id))
         .map(|index| entries.remove(index));
-    let track = Track::filter(Track::fields().ytm_video_id().eq(video_id))
+    let track = Track::filter_by_user_id_and_ytm_video_id(watch.user_id, video_id)
         .first()
         .exec(&mut db)
         .await?;
@@ -696,6 +727,7 @@ pub async fn exclude(
 
     treasury
         .release(
+            watch.user_id,
             ClaimKind::WatchPlaylist,
             &watch_id.to_string(),
             Release {
@@ -705,7 +737,7 @@ pub async fn exclude(
             |track| track.ytm_video_id.as_deref() != Some(video_id),
         )
         .await?;
-    jobs.forget(|job| {
+    jobs.forget(watch.user_id, |job| {
         queue::wanted(job).and_then(Wanted::watch_id) == Some(watch_id)
             && job.kind == JobKind::DownloadTrack
             && serde_json::from_str::<TrackJob>(&job.payload)
@@ -743,14 +775,14 @@ pub async fn include(
     Ok(())
 }
 
-/// Watches with a sync queued or under way, and that job's state:
-/// `Queued`, `Running`, or `Paused` while it waits for a login.
+/// `owner`'s watches with a sync queued or under way, and that job's
+/// state: `Queued`, `Running`, or `Paused` while it waits for a login.
 ///
 /// # Errors
 ///
 /// Fails on database errors.
-pub async fn syncing(db: &mut Db) -> Result<HashMap<u64, JobState>, toasty::Error> {
-    Ok(queue::unfinished(db)
+pub async fn syncing(db: &mut Db, owner: u64) -> Result<HashMap<u64, JobState>, toasty::Error> {
+    Ok(queue::unfinished(db, owner)
         .await?
         .iter()
         .filter(|job| job.state != JobState::Failed)
@@ -790,16 +822,17 @@ async fn queue_due(db: &Db, jobs: &Jobs) -> Result<(), toasty::Error> {
     Ok(())
 }
 
-/// Resumes paused work whenever the session starts working, e.g. after
-/// the admin logs in again.
+/// Resumes the owner's paused work whenever their session starts working,
+/// e.g. after they log in again.
 pub fn resume_on_login(warden: &Warden, jobs: Arc<Jobs>) -> tokio::task::JoinHandle<()> {
     let mut health = warden.subscribe();
+    let owner = warden.owner();
     tokio::spawn(async move {
         let mut working = false;
         loop {
             let now_working = health.borrow_and_update().state == Some(SessionState::Valid);
             if now_working && !working {
-                match jobs.resume_paused().await {
+                match jobs.resume_paused(owner).await {
                     Ok(0) => {}
                     Ok(resumed) => tracing::info!(resumed, "login works again; resuming jobs"),
                     Err(error) => tracing::error!(%error, "cannot resume paused jobs"),

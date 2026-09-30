@@ -72,6 +72,8 @@ impl Health {
 pub struct Warden {
     db: Db,
     secrets: SecretBox,
+    /// The user whose session this is.
+    owner: u64,
     platform: Box<dyn Platform>,
     refresher: Box<dyn Refresher>,
     health: watch::Sender<Health>,
@@ -86,19 +88,27 @@ impl Warden {
     pub async fn new(
         db: Db,
         secrets: SecretBox,
+        owner: u64,
         platform: Box<dyn Platform>,
         refresher: Box<dyn Refresher>,
     ) -> Result<Arc<Self>, toasty::Error> {
-        let session = load(&mut db.clone()).await?;
+        let session = load(&mut db.clone(), owner).await?;
         let (health, _) = watch::channel(Health::of(session.as_ref()));
         Ok(Arc::new(Self {
             db,
             secrets,
+            owner,
             platform,
             refresher,
             health,
             lock: tokio::sync::Mutex::new(()),
         }))
+    }
+
+    /// The user whose session this is.
+    #[must_use]
+    pub fn owner(&self) -> u64 {
+        self.owner
     }
 
     #[must_use]
@@ -113,7 +123,7 @@ impl Warden {
 
     /// The session cookies, for tools that need them directly (`yt-dlp`).
     pub async fn cookies(&self) -> Option<String> {
-        let session = load(&mut self.db.clone()).await.ok()??;
+        let session = load(&mut self.db.clone(), self.owner).await.ok()??;
         (session.state != SessionState::Expired)
             .then(|| self.secrets.open_str(&session.cookies).ok())
             .flatten()
@@ -125,7 +135,7 @@ impl Warden {
     ///
     /// Fails on database errors.
     pub async fn events(&self, limit: usize) -> Result<Vec<SessionEvent>, toasty::Error> {
-        let mut events = SessionEvent::filter_by_source(SOURCE)
+        let mut events = SessionEvent::filter_by_user_id_and_source(self.owner, SOURCE)
             .exec(&mut self.db.clone())
             .await?;
         events.sort_by_key(|event| std::cmp::Reverse(event.id));
@@ -150,7 +160,7 @@ impl Warden {
         let mut db = self.db.clone();
         let sealed = self.secrets.seal_str(&cookies);
         let result = async {
-            match load(&mut db).await? {
+            match load(&mut db, self.owner).await? {
                 Some(mut session) => {
                     toasty::update!(session {
                         cookies: sealed,
@@ -165,6 +175,7 @@ impl Warden {
                 }
                 None => {
                     toasty::create!(SourceSession {
+                        user_id: self.owner,
                         source: SOURCE,
                         cookies: sealed,
                         state: SessionState::Valid,
@@ -175,7 +186,13 @@ impl Warden {
                     .await?;
                 }
             }
-            record(&mut db, SessionEventKind::Connected, "Connected").await
+            record(
+                &mut db,
+                self.owner,
+                SessionEventKind::Connected,
+                "Connected",
+            )
+            .await
         }
         .await;
         result.map_err(|error| error.to_string())?;
@@ -187,9 +204,15 @@ impl Warden {
         let _guard = self.lock.lock().await;
         self.platform.forget().await;
         let mut db = self.db.clone();
-        if let Ok(Some(session)) = load(&mut db).await {
+        if let Ok(Some(session)) = load(&mut db, self.owner).await {
             let _ = session.delete().exec(&mut db).await;
-            let _ = record(&mut db, SessionEventKind::Disconnected, "Disconnected").await;
+            let _ = record(
+                &mut db,
+                self.owner,
+                SessionEventKind::Disconnected,
+                "Disconnected",
+            )
+            .await;
         }
         self.publish().await;
     }
@@ -208,7 +231,12 @@ impl Warden {
     /// Asks the platform whether the session still works.
     pub async fn validate(&self) -> Health {
         let _guard = self.lock.lock().await;
-        if load(&mut self.db.clone()).await.ok().flatten().is_none() {
+        if load(&mut self.db.clone(), self.owner)
+            .await
+            .ok()
+            .flatten()
+            .is_none()
+        {
             return self.publish().await;
         }
         let check = self.platform.check().await;
@@ -218,7 +246,12 @@ impl Warden {
     /// Fetches fresh cookies from the browser profile.
     pub async fn refresh(&self) -> Health {
         let _guard = self.lock.lock().await;
-        if load(&mut self.db.clone()).await.ok().flatten().is_none() {
+        if load(&mut self.db.clone(), self.owner)
+            .await
+            .ok()
+            .flatten()
+            .is_none()
+        {
             return self.publish().await;
         }
         self.refresh_locked(None).await
@@ -253,7 +286,7 @@ impl Warden {
         match self.platform.apply(&fresh).await {
             SessionCheck::Valid => {
                 let mut db = self.db.clone();
-                if let Ok(Some(mut session)) = load(&mut db).await {
+                if let Ok(Some(mut session)) = load(&mut db, self.owner).await {
                     let sealed = self.secrets.seal_str(&fresh);
                     let _ = toasty::update!(session {
                         cookies: sealed,
@@ -271,7 +304,7 @@ impl Warden {
 
     async fn mark_valid(&self, refreshed: bool) -> Health {
         let mut db = self.db.clone();
-        if let Ok(Some(mut session)) = load(&mut db).await {
+        if let Ok(Some(mut session)) = load(&mut db, self.owner).await {
             let recovered = session.state != SessionState::Valid;
             let _ = toasty::update!(session {
                 state: SessionState::Valid,
@@ -284,12 +317,19 @@ impl Warden {
             if recovered {
                 let _ = record(
                     &mut db,
+                    self.owner,
                     SessionEventKind::Recovered,
                     "Session working again",
                 )
                 .await;
             } else if refreshed {
-                let _ = record(&mut db, SessionEventKind::Refreshed, "Cookies refreshed").await;
+                let _ = record(
+                    &mut db,
+                    self.owner,
+                    SessionEventKind::Refreshed,
+                    "Cookies refreshed",
+                )
+                .await;
             }
         }
         self.publish().await
@@ -297,7 +337,7 @@ impl Warden {
 
     async fn mark_degraded(&self, reason: &str) -> Health {
         let mut db = self.db.clone();
-        if let Ok(Some(mut session)) = load(&mut db).await {
+        if let Ok(Some(mut session)) = load(&mut db, self.owner).await {
             // An expired session stays expired until the admin logs in.
             if session.state != SessionState::Expired {
                 let worsened = session.state == SessionState::Valid;
@@ -311,6 +351,7 @@ impl Warden {
                 if worsened {
                     let _ = record(
                         &mut db,
+                        self.owner,
                         SessionEventKind::Degraded,
                         &format!("Check failed: {reason}"),
                     )
@@ -324,7 +365,7 @@ impl Warden {
 
     async fn expire(&self, reason: &str) -> Health {
         let mut db = self.db.clone();
-        if let Ok(Some(mut session)) = load(&mut db).await
+        if let Ok(Some(mut session)) = load(&mut db, self.owner).await
             && session.state != SessionState::Expired
         {
             let _ = toasty::update!(session {
@@ -336,6 +377,7 @@ impl Warden {
             .await;
             let _ = record(
                 &mut db,
+                self.owner,
                 SessionEventKind::Expired,
                 &format!("Session expired: {reason}"),
             )
@@ -346,7 +388,7 @@ impl Warden {
     }
 
     async fn publish(&self) -> Health {
-        let session = load(&mut self.db.clone()).await.ok().flatten();
+        let session = load(&mut self.db.clone(), self.owner).await.ok().flatten();
         let health = Health::of(session.as_ref());
         self.health.send_replace(health.clone());
         health
@@ -375,15 +417,21 @@ impl Warden {
     }
 }
 
-async fn load(db: &mut Db) -> Result<Option<SourceSession>, toasty::Error> {
-    SourceSession::filter_by_source(SOURCE)
+async fn load(db: &mut Db, owner: u64) -> Result<Option<SourceSession>, toasty::Error> {
+    SourceSession::filter_by_user_id_and_source(owner, SOURCE)
         .first()
         .exec(db)
         .await
 }
 
-async fn record(db: &mut Db, kind: SessionEventKind, message: &str) -> Result<(), toasty::Error> {
+async fn record(
+    db: &mut Db,
+    owner: u64,
+    kind: SessionEventKind,
+    message: &str,
+) -> Result<(), toasty::Error> {
     toasty::create!(SessionEvent {
+        user_id: owner,
         source: SOURCE,
         kind,
         message,

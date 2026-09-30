@@ -1,17 +1,17 @@
-//! Playlists: the admin's own, made in Subsonic clients; mirrors of
-//! watched YouTube Music playlists; and smart playlists made in the web
-//! player, whose songs follow rules. Clients may play mirrors and smart
-//! playlists but not change their songs.
+//! Playlists, each in its owner's library: made in Subsonic clients or the
+//! web player; mirrors of watched YouTube Music playlists; and smart
+//! playlists made in the web player, whose songs follow rules. Clients may
+//! play mirrors and smart playlists but not change their songs.
 
 use std::collections::{HashMap, HashSet};
 
 use pixiu_db::{
-    Album, ClaimKind, Db, Playlist, PlaylistEntry, ReleaseReason, Track, User, now, toasty,
+    Album, ClaimKind, Db, Library, Playlist, PlaylistEntry, ReleaseReason, Track, User, now, toasty,
 };
 use pixiu_treasury::{Claim, Release};
 
 use crate::{
-    Failure, Params, SubsonicState, catalog,
+    Cx, Failure, Params, catalog,
     ids::{self, Id},
     response::{ApiError, Element, ErrorCode, Payload},
 };
@@ -39,12 +39,8 @@ fn read_only(playlist: &Playlist) -> Option<Failure> {
     Some(ApiError::new(ErrorCode::NotAuthorized, reason).into())
 }
 
-async fn load(db: &mut Db, id: u64) -> Result<Playlist, Failure> {
-    Playlist::filter_by_id(id)
-        .first()
-        .exec(db)
-        .await?
-        .ok_or_else(|| not_found("playlist"))
+async fn load(lib: &Library, id: u64) -> Result<Playlist, Failure> {
+    lib.playlist(id).await?.ok_or_else(|| not_found("playlist"))
 }
 
 /// A playlist's tracks: their ids in order (a track may appear twice), and
@@ -55,10 +51,11 @@ struct Listing {
     tracks: HashMap<u64, Track>,
 }
 
-async fn listing(db: &mut Db, playlist: &Playlist) -> Result<Listing, toasty::Error> {
+async fn listing(lib: &Library, playlist: &Playlist) -> Result<Listing, toasty::Error> {
+    let db = &mut lib.db();
     if let Some(rules) = &playlist.rules {
-        let order = crate::smart::track_ids(db, rules).await?;
-        let tracks = catalog::tracks_in_order(db, &order)
+        let order = crate::smart::track_ids(lib, rules).await?;
+        let tracks = catalog::tracks_in_order(lib, &order)
             .await?
             .into_iter()
             .map(|track| (track.id, track))
@@ -72,7 +69,7 @@ async fn listing(db: &mut Db, playlist: &Playlist) -> Result<Listing, toasty::Er
 
     let mut tracks: HashMap<u64, Track> = HashMap::new();
     let track_ids: Vec<u64> = entries.iter().filter_map(|entry| entry.track_id).collect();
-    for track in catalog::tracks_in_order(db, &track_ids).await? {
+    for track in catalog::tracks_in_order(lib, &track_ids).await? {
         tracks.insert(track.id, track);
     }
     let video_ids: Vec<String> = entries
@@ -80,16 +77,11 @@ async fn listing(db: &mut Db, playlist: &Playlist) -> Result<Listing, toasty::Er
         .filter_map(|entry| entry.ytm_video_id.clone())
         .collect();
     let mut by_video: HashMap<String, u64> = HashMap::new();
-    for chunk in video_ids.chunks(500) {
-        for track in Track::filter(Track::fields().ytm_video_id().in_list(chunk.to_vec()))
-            .exec(db)
-            .await?
-        {
-            if let Some(video_id) = &track.ytm_video_id {
-                by_video.insert(video_id.clone(), track.id);
-            }
-            tracks.insert(track.id, track);
+    for track in lib.tracks_of_videos(&video_ids).await? {
+        if let Some(video_id) = &track.ytm_video_id {
+            by_video.insert(video_id.clone(), track.id);
         }
+        tracks.insert(track.id, track);
     }
     let order = entries
         .iter()
@@ -102,24 +94,21 @@ async fn listing(db: &mut Db, playlist: &Playlist) -> Result<Listing, toasty::Er
     Ok(Listing { order, tracks })
 }
 
-/// The album whose cover stands for a playlist.
+/// The album whose cover stands for one of the library's playlists.
 pub(crate) async fn cover_album(
-    db: &mut Db,
+    lib: &Library,
     playlist_id: u64,
 ) -> Result<Option<Album>, toasty::Error> {
-    let Some(playlist) = Playlist::filter_by_id(playlist_id).first().exec(db).await? else {
+    let Some(playlist) = lib.playlist(playlist_id).await? else {
         return Ok(None);
     };
-    let listing = listing(db, &playlist).await?;
-    cover_of(db, &listing).await
+    let listing = listing(lib, &playlist).await?;
+    cover_of(lib, &listing).await
 }
 
-async fn cover_of(db: &mut Db, listing: &Listing) -> Result<Option<Album>, toasty::Error> {
+async fn cover_of(lib: &Library, listing: &Listing) -> Result<Option<Album>, toasty::Error> {
     for id in &listing.order {
-        if let Some(album) = Album::filter_by_id(listing.tracks[id].album_id)
-            .first()
-            .exec(db)
-            .await?
+        if let Some(album) = lib.album(listing.tracks[id].album_id).await?
             && album.cover.is_some()
         {
             return Ok(Some(album));
@@ -128,19 +117,20 @@ async fn cover_of(db: &mut Db, listing: &Listing) -> Result<Option<Album>, toast
     Ok(None)
 }
 
+/// A playlist of `owner`'s library.
 pub(crate) async fn describe(
-    db: &mut Db,
+    lib: &Library,
     playlist: &Playlist,
     owner: &User,
     with_entries: bool,
 ) -> Result<Element, toasty::Error> {
-    let listing = listing(db, playlist).await?;
+    let listing = listing(lib, playlist).await?;
     let duration: u64 = listing
         .order
         .iter()
         .map(|id| (listing.tracks[id].duration_ms + 500) / 1000)
         .sum();
-    let cover = cover_of(db, &listing).await?;
+    let cover = cover_of(lib, &listing).await?;
     let mut element = Element::new("playlist")
         .attr("id", ids::playlist(playlist.id))
         .attr("name", playlist.name.as_str())
@@ -159,37 +149,32 @@ pub(crate) async fn describe(
         let songs: HashMap<u64, Element> = unique
             .iter()
             .map(|track| track.id)
-            .zip(catalog::songs(db, "entry", &unique).await?)
+            .zip(catalog::songs(lib, "entry", &unique).await?)
             .collect();
         element = element.list("entry", listing.order.iter().map(|id| songs[id].clone()));
     }
     Ok(element)
 }
 
-pub(crate) async fn list(state: &SubsonicState, user: &User) -> Result<Payload, Failure> {
-    let mut db = state.db.clone();
-    let mut playlists = Playlist::all().exec(&mut db).await?;
+/// `getPlaylists`: the caller's.
+pub(crate) async fn list(cx: &Cx<'_>) -> Result<Payload, Failure> {
+    let mut playlists = cx.lib.all_playlists().await?;
     playlists.sort_by_key(|playlist| playlist.name.to_lowercase());
     let mut elements = Vec::with_capacity(playlists.len());
     for playlist in &playlists {
-        elements.push(describe(&mut db, playlist, user, false).await?);
+        elements.push(describe(&cx.lib, playlist, cx.user, false).await?);
     }
     Ok(Element::new("playlists").list("playlist", elements).into())
 }
 
-pub(crate) async fn get(
-    state: &SubsonicState,
-    user: &User,
-    params: &Params,
-) -> Result<Payload, Failure> {
-    let mut db = state.db.clone();
-    let playlist = load(&mut db, playlist_id(params.require("id")?)?).await?;
-    Ok(describe(&mut db, &playlist, user, true).await?.into())
+pub(crate) async fn get(cx: &Cx<'_>, params: &Params) -> Result<Payload, Failure> {
+    let playlist = load(&cx.lib, playlist_id(params.require("id")?)?).await?;
+    Ok(describe(&cx.lib, &playlist, cx.user, true).await?.into())
 }
 
-/// Existing tracks from `songId`-style parameters, in order.
+/// The library's tracks from `songId`-style parameters, in order.
 async fn requested_tracks<'a>(
-    db: &mut Db,
+    lib: &Library,
     ids: impl Iterator<Item = &'a str>,
 ) -> Result<Vec<u64>, Failure> {
     let mut track_ids = Vec::new();
@@ -199,7 +184,7 @@ async fn requested_tracks<'a>(
             _ => return Err(not_found(&format!("song `{id}`"))),
         }
     }
-    let found: HashSet<u64> = catalog::tracks_in_order(db, &track_ids)
+    let found: HashSet<u64> = catalog::tracks_in_order(lib, &track_ids)
         .await?
         .into_iter()
         .map(|track| track.id)
@@ -210,9 +195,10 @@ async fn requested_tracks<'a>(
     Ok(track_ids)
 }
 
-/// Replaces a playlist's tracks, and has the playlist claim them.
+/// Replaces a playlist's tracks (the library's), and has the playlist
+/// claim them.
 async fn set_tracks(
-    state: &SubsonicState,
+    cx: &Cx<'_>,
     db: &mut Db,
     playlist_id: u64,
     track_ids: &[u64],
@@ -235,27 +221,31 @@ async fn set_tracks(
 
     let reference = playlist_id.to_string();
     let listed: HashSet<u64> = track_ids.iter().copied().collect();
-    let name = Playlist::filter_by_id(playlist_id)
-        .first()
-        .exec(db)
+    let name = cx
+        .lib
+        .playlist(playlist_id)
         .await?
         .map(|playlist| playlist.name);
     let why = Release {
         reason: ReleaseReason::PlaylistEdited,
         source_name: name.as_deref(),
     };
-    state
+    cx.state
         .treasury
-        .release(ClaimKind::LocalPlaylist, &reference, why, |track| {
-            listed.contains(&track.id)
-        })
+        .release(
+            cx.lib.owner(),
+            ClaimKind::LocalPlaylist,
+            &reference,
+            why,
+            |track| listed.contains(&track.id),
+        )
         .await?;
     let claim = Claim {
         kind: ClaimKind::LocalPlaylist,
         reference: Some(reference),
     };
     for track_id in listed {
-        state.treasury.claim(track_id, &claim).await?;
+        cx.state.treasury.claim(track_id, &claim).await?;
     }
     Ok(())
 }
@@ -275,16 +265,12 @@ async fn touch(db: &mut Db, mut playlist: Playlist) -> Result<(), toasty::Error>
 }
 
 /// Creates a playlist, or, given `playlistId`, replaces its songs.
-pub(crate) async fn create(
-    state: &SubsonicState,
-    user: &User,
-    params: &Params,
-) -> Result<Payload, Failure> {
-    let mut db = state.db.clone();
-    let track_ids = requested_tracks(&mut db, params.get_all("songId")).await?;
+pub(crate) async fn create(cx: &Cx<'_>, params: &Params) -> Result<Payload, Failure> {
+    let mut db = cx.lib.db();
+    let track_ids = requested_tracks(&cx.lib, params.get_all("songId")).await?;
     let playlist = match params.get("playlistId") {
         Some(id) => {
-            let playlist = load(&mut db, playlist_id(id)?).await?;
+            let playlist = load(&cx.lib, playlist_id(id)?).await?;
             if let Some(refusal) = read_only(&playlist) {
                 return Err(refusal);
             }
@@ -292,6 +278,7 @@ pub(crate) async fn create(
         }
         None => {
             toasty::create!(Playlist {
+                user_id: cx.lib.owner(),
                 name: params.require("name")?,
                 public: false,
                 created_at: now(),
@@ -301,16 +288,16 @@ pub(crate) async fn create(
             .await?
         }
     };
-    set_tracks(state, &mut db, playlist.id, &track_ids).await?;
+    set_tracks(cx, &mut db, playlist.id, &track_ids).await?;
     let id = playlist.id;
     touch(&mut db, playlist).await?;
-    let playlist = load(&mut db, id).await?;
-    Ok(describe(&mut db, &playlist, user, true).await?.into())
+    let playlist = load(&cx.lib, id).await?;
+    Ok(describe(&cx.lib, &playlist, cx.user, true).await?.into())
 }
 
-pub(crate) async fn update(state: &SubsonicState, params: &Params) -> Result<Payload, Failure> {
-    let mut db = state.db.clone();
-    let mut playlist = load(&mut db, playlist_id(params.require("playlistId")?)?).await?;
+pub(crate) async fn update(cx: &Cx<'_>, params: &Params) -> Result<Payload, Failure> {
+    let mut db = cx.lib.db();
+    let mut playlist = load(&cx.lib, playlist_id(params.require("playlistId")?)?).await?;
     if playlist.watch_id.is_some() {
         return Err(read_only(&playlist).expect("a mirror is read-only"));
     }
@@ -328,7 +315,7 @@ pub(crate) async fn update(state: &SubsonicState, params: &Params) -> Result<Pay
         .get_all("songIndexToRemove")
         .filter_map(|index| index.parse().ok())
         .collect();
-    let added = requested_tracks(&mut db, params.get_all("songIdToAdd")).await?;
+    let added = requested_tracks(&cx.lib, params.get_all("songIdToAdd")).await?;
     if !removed.is_empty() || !added.is_empty() {
         // A smart playlist may be renamed, but its songs follow its rules.
         if let Some(refusal) = read_only(&playlist) {
@@ -342,7 +329,7 @@ pub(crate) async fn update(state: &SubsonicState, params: &Params) -> Result<Pay
             .map(|(_, track_id)| track_id)
             .collect();
         track_ids.extend(added);
-        set_tracks(state, &mut db, playlist.id, &track_ids).await?;
+        set_tracks(cx, &mut db, playlist.id, &track_ids).await?;
     }
     toasty::update!(playlist {
         name,
@@ -355,14 +342,14 @@ pub(crate) async fn update(state: &SubsonicState, params: &Params) -> Result<Pay
     Ok(Payload::default())
 }
 
-pub(crate) async fn delete(state: &SubsonicState, params: &Params) -> Result<Payload, Failure> {
-    let mut db = state.db.clone();
-    let playlist = load(&mut db, playlist_id(params.require("id")?)?).await?;
+pub(crate) async fn delete(cx: &Cx<'_>, params: &Params) -> Result<Payload, Failure> {
+    let mut db = cx.lib.db();
+    let playlist = load(&cx.lib, playlist_id(params.require("id")?)?).await?;
     if playlist.watch_id.is_some() {
         return Err(read_only(&playlist).expect("a mirror is read-only"));
     }
     // Its tracks are kept; those nothing else claims become orphans.
-    set_tracks(state, &mut db, playlist.id, &[]).await?;
+    set_tracks(cx, &mut db, playlist.id, &[]).await?;
     playlist.delete().exec(&mut db).await?;
     Ok(Payload::default())
 }

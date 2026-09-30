@@ -145,18 +145,20 @@ impl Treasury {
     }
 
     /// Puts the audio file at `source` into the store and records a track
-    /// playing it. When the store holds the same content already, the
-    /// track shares that file and `source` is removed.
+    /// playing it in `owner`'s library. When the store holds the same
+    /// content already (in anyone's library), the track shares that file
+    /// and `source` is removed.
     ///
     /// `fallback_cover` is used for the album when the file has no embedded
     /// cover. On failure the file is left at `source`.
     ///
     /// # Errors
     ///
-    /// Fails when the library already holds the same track, or on I/O and
-    /// database errors.
+    /// Fails when the owner's library already holds the same track, or on
+    /// I/O and database errors.
     pub async fn ingest(
         &self,
+        owner: u64,
         source: &Path,
         info: &AudioInfo,
         fallback_cover: Option<&Cover>,
@@ -166,75 +168,26 @@ impl Treasury {
         let _guard = self.lock.lock().await;
         let mut db = self.db.clone();
 
-        if let Some(video_id) = &provenance.ytm_video_id
-            && let Some(existing) = Track::filter_by_ytm_video_id(video_id)
-                .first()
-                .exec(&mut db)
-                .await?
-        {
-            return Err(IngestError::Duplicate {
-                track_id: existing.id,
-            });
-        }
-
         let sha256 = store::hash_file(source).await?;
         let stored = AudioFile::filter_by_sha256(&sha256)
             .first()
             .exec(&mut db)
             .await?;
-        if let Some(file) = &stored
-            && let Some(existing) = Track::filter_by_file_id(file.id)
-                .first()
-                .exec(&mut db)
-                .await?
+        if let Some(existing) = self
+            .duplicate(
+                &mut db,
+                owner,
+                &provenance,
+                stored.as_ref().map(|file| file.id),
+            )
+            .await?
         {
             return Err(IngestError::Duplicate {
                 track_id: existing.id,
             });
         }
 
-        let credit = info.artist.as_deref().unwrap_or(UNKNOWN_ARTIST);
-        let primary = info
-            .artists
-            .first()
-            .map_or_else(|| primary_artist(credit), String::as_str);
-        let album_artist_name = info.album_artist.as_deref().unwrap_or(primary);
-        let title = info.title.as_deref().unwrap_or(UNTITLED);
-
-        let album_artist = find_or_create_artist(
-            &mut db,
-            album_artist_name,
-            provenance.ytm_artist_id.as_deref(),
-        )
-        .await?;
-        let artist_id = if name_key(primary) == album_artist.name_key {
-            album_artist.id
-        } else {
-            find_or_create_artist(&mut db, primary, None).await?.id
-        };
-        let album = find_or_create_album(
-            &mut db,
-            &album_artist,
-            info,
-            provenance.ytm_browse_id.as_deref(),
-        )
-        .await?;
-
-        let title_key = name_key(title);
-        if let Some(duplicate) = Track::filter_by_album_id(album.id)
-            .exec(&mut db)
-            .await?
-            .into_iter()
-            .find(|track| {
-                name_key(&track.title) == title_key
-                    && track.track_number == info.track_number
-                    && track.disc_number == info.disc_number
-            })
-        {
-            return Err(IngestError::Duplicate {
-                track_id: duplicate.id,
-            });
-        }
+        let (album, artist_id) = self.find_place(&mut db, owner, info, &provenance).await?;
 
         let file = match stored {
             Some(file) => StoredFile::Shared(file),
@@ -279,6 +232,135 @@ impl Treasury {
             _ => {}
         }
         recorded
+    }
+
+    /// Records a track in `owner`'s library playing `file`, which the store
+    /// holds already (e.g. another user downloaded the same video): nothing
+    /// is downloaded or copied.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the owner's library already holds the same track, or on
+    /// database errors.
+    pub async fn ingest_stored(
+        &self,
+        owner: u64,
+        file: AudioFile,
+        info: &AudioInfo,
+        provenance: Provenance,
+        claim: Claim,
+    ) -> Result<Track, IngestError> {
+        let _guard = self.lock.lock().await;
+        let mut db = self.db.clone();
+        if let Some(existing) = self
+            .duplicate(&mut db, owner, &provenance, Some(file.id))
+            .await?
+        {
+            return Err(IngestError::Duplicate {
+                track_id: existing.id,
+            });
+        }
+        let (album, artist_id) = self.find_place(&mut db, owner, info, &provenance).await?;
+        self.record(
+            &mut db,
+            album,
+            artist_id,
+            StoredFile::Shared(file),
+            info,
+            None,
+            provenance,
+            claim,
+        )
+        .await
+    }
+
+    /// A track of `owner`'s that is the same download, or plays the same
+    /// file.
+    async fn duplicate(
+        &self,
+        db: &mut Db,
+        owner: u64,
+        provenance: &Provenance,
+        file_id: Option<u64>,
+    ) -> Result<Option<Track>, toasty::Error> {
+        if let Some(video_id) = &provenance.ytm_video_id
+            && let Some(existing) = Track::filter_by_user_id_and_ytm_video_id(owner, video_id)
+                .first()
+                .exec(db)
+                .await?
+        {
+            return Ok(Some(existing));
+        }
+        match file_id {
+            Some(file_id) => {
+                Track::filter(
+                    Track::fields()
+                        .file_id()
+                        .eq(file_id)
+                        .and(Track::fields().user_id().eq(owner)),
+                )
+                .first()
+                .exec(db)
+                .await
+            }
+            None => Ok(None),
+        }
+    }
+
+    /// The album (and track artist) a track described by `info` belongs to
+    /// in `owner`'s library, created when missing.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the album holds the same track already.
+    async fn find_place(
+        &self,
+        db: &mut Db,
+        owner: u64,
+        info: &AudioInfo,
+        provenance: &Provenance,
+    ) -> Result<(Album, u64), IngestError> {
+        let credit = info.artist.as_deref().unwrap_or(UNKNOWN_ARTIST);
+        let primary = info
+            .artists
+            .first()
+            .map_or_else(|| primary_artist(credit), String::as_str);
+        let album_artist_name = info.album_artist.as_deref().unwrap_or(primary);
+        let title = info.title.as_deref().unwrap_or(UNTITLED);
+
+        let album_artist = find_or_create_artist(
+            db,
+            owner,
+            album_artist_name,
+            provenance.ytm_artist_id.as_deref(),
+        )
+        .await?;
+        let artist_id = if name_key(primary) == album_artist.name_key {
+            album_artist.id
+        } else {
+            find_or_create_artist(db, owner, primary, None).await?.id
+        };
+        let album =
+            find_or_create_album(db, &album_artist, info, provenance.ytm_browse_id.as_deref())
+                .await?;
+
+        let title_key = name_key(title);
+        if let Some(duplicate) = Track::filter_by_album_id(album.id)
+            .exec(db)
+            .await?
+            .into_iter()
+            .find(|track| {
+                name_key(&track.title) == title_key
+                    && track.track_number == info.track_number
+                    && track.disc_number == info.disc_number
+            })
+        {
+            return Err(IngestError::Duplicate {
+                track_id: duplicate.id,
+            });
+        }
+
+        Ok((album, artist_id))
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -327,6 +409,7 @@ impl Treasury {
             }
         };
         let track = toasty::create!(Track {
+            user_id: album.user_id,
             album_id: album.id,
             artist_id,
             title: info.title.as_deref().unwrap_or(UNTITLED),
@@ -365,7 +448,11 @@ impl Treasury {
         .await?;
         tx.commit().await?;
 
-        tracing::info!(track = track.id, file = file.id, "track added to the library");
+        tracing::info!(
+            track = track.id,
+            file = file.id,
+            "track added to the library"
+        );
         Ok(track)
     }
 }
@@ -383,19 +470,25 @@ enum StoredFile {
 /// artist.
 pub(crate) async fn find_or_create_artist(
     db: &mut Db,
+    owner: u64,
     name: &str,
     channel: Option<&str>,
 ) -> Result<Artist, toasty::Error> {
     if let Some(channel) = channel
-        && let Some(artist) = Artist::filter_by_ytm_channel_id(Some(channel.to_owned()))
-            .first()
-            .exec(db)
-            .await?
+        && let Some(artist) =
+            Artist::filter_by_user_id_and_ytm_channel_id(owner, Some(channel.to_owned()))
+                .first()
+                .exec(db)
+                .await?
     {
         return Ok(artist);
     }
     let key = name_key(name);
-    if let Some(mut artist) = Artist::filter_by_name_key(&key).first().exec(db).await? {
+    if let Some(mut artist) = Artist::filter_by_user_id_and_name_key(owner, &key)
+        .first()
+        .exec(db)
+        .await?
+    {
         if artist.ytm_channel_id.is_none()
             && let Some(channel) = channel
         {
@@ -408,6 +501,7 @@ pub(crate) async fn find_or_create_artist(
         return Ok(artist);
     }
     toasty::create!(Artist {
+        user_id: owner,
         name,
         name_key: key,
         ytm_channel_id: channel.map(str::to_owned),
@@ -418,19 +512,20 @@ pub(crate) async fn find_or_create_artist(
 }
 
 impl Treasury {
-    /// Tells the artist named `name` its YouTube Music channel, if it has
-    /// none yet and no other artist has that channel.
+    /// Tells `owner`'s artist named `name` its YouTube Music channel, if it
+    /// has none yet and no other artist of theirs has that channel.
     ///
     /// # Errors
     ///
     /// Fails on database errors.
     pub async fn learn_artist_channel(
         &self,
+        owner: u64,
         name: &str,
         channel: &str,
     ) -> Result<(), toasty::Error> {
         let mut db = self.db.clone();
-        if Artist::filter_by_ytm_channel_id(Some(channel.to_owned()))
+        if Artist::filter_by_user_id_and_ytm_channel_id(owner, Some(channel.to_owned()))
             .first()
             .exec(&mut db)
             .await?
@@ -438,7 +533,7 @@ impl Treasury {
         {
             return Ok(());
         }
-        if let Some(mut artist) = Artist::filter_by_name_key(name_key(name))
+        if let Some(mut artist) = Artist::filter_by_user_id_and_name_key(owner, name_key(name))
             .first()
             .exec(&mut db)
             .await?
@@ -463,10 +558,11 @@ async fn find_or_create_album(
     ytm_browse_id: Option<&str>,
 ) -> Result<Album, toasty::Error> {
     if let Some(browse_id) = ytm_browse_id
-        && let Some(album) = Album::filter_by_ytm_browse_id(browse_id)
-            .first()
-            .exec(db)
-            .await?
+        && let Some(album) =
+            Album::filter_by_user_id_and_ytm_browse_id(album_artist.user_id, browse_id)
+                .first()
+                .exec(db)
+                .await?
     {
         return Ok(album);
     }
@@ -491,6 +587,7 @@ async fn find_or_create_album(
         return Ok(album);
     }
     toasty::create!(Album {
+        user_id: album_artist.user_id,
         title,
         title_key: key,
         artist_id: album_artist.id,

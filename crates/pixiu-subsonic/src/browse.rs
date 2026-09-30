@@ -3,14 +3,10 @@
 
 use std::collections::BTreeMap;
 
-use pixiu_db::{
-    Album, Artist, Track,
-    toasty::{self, stmt::Value},
-};
+use pixiu_db::{Album, Artist, Track, owned::as_u64};
 
 use crate::{
-    Failure, Params, SubsonicState, annotations,
-    catalog::{self, as_u64},
+    Cx, Failure, Params, annotations, catalog,
     ids::{self, Id},
     response::{ApiError, Element, ErrorCode, Payload},
 };
@@ -18,7 +14,7 @@ use crate::{
 /// Leading words ignored when sorting and indexing artists.
 const IGNORED_ARTICLES: &[&str] = &["The", "El", "La", "Los", "Las", "Le", "Les"];
 
-/// píxiū has one music folder: the treasure.
+/// Every user has one music folder: their library.
 pub(crate) const MUSIC_FOLDER_ID: u32 = 1;
 
 pub(crate) fn not_found(what: &str) -> Failure {
@@ -31,7 +27,7 @@ pub(crate) fn music_folders() -> Payload {
             "musicFolder",
             [Element::new("musicFolder")
                 .attr("id", MUSIC_FOLDER_ID)
-                .attr("name", "Treasure")],
+                .attr("name", "Library")],
         )
         .into()
 }
@@ -57,12 +53,11 @@ fn index_name(name: &str) -> String {
 }
 
 /// `getIndexes` (folder model) and `getArtists` (ID3 model).
-pub(crate) async fn artists(state: &SubsonicState, id3: bool) -> Result<Payload, Failure> {
-    let mut db = state.db.clone();
-    let albums = Album::all().exec(&mut db).await?;
+pub(crate) async fn artists(cx: &Cx<'_>, id3: bool) -> Result<Payload, Failure> {
+    let albums = cx.lib.all_albums().await?;
     let summaries = catalog::summarize_artists(&albums);
-    let artists = catalog::artists_by_id(&mut db, summaries.keys().copied()).await?;
-    let annotations = annotations::for_artists(&mut db, artists.keys().copied()).await?;
+    let artists = catalog::artists_by_id(&cx.lib, summaries.keys().copied()).await?;
+    let annotations = annotations::for_artists(&cx.lib, artists.keys().copied()).await?;
 
     let mut indexes: BTreeMap<String, Vec<&Artist>> = BTreeMap::new();
     for artist in artists.values() {
@@ -113,51 +108,50 @@ fn parse_id(params: &Params) -> Result<Option<Id>, Failure> {
     Ok(Id::parse(params.require("id")?))
 }
 
-async fn load_artist(state: &SubsonicState, id: u64) -> Result<Artist, Failure> {
-    Artist::filter_by_id(id)
-        .first()
-        .exec(&mut state.db.clone())
-        .await?
-        .ok_or_else(|| not_found("artist"))
+async fn load_artist(cx: &Cx<'_>, id: u64) -> Result<Artist, Failure> {
+    cx.lib.artist(id).await?.ok_or_else(|| not_found("artist"))
 }
 
-async fn load_album(state: &SubsonicState, id: u64) -> Result<Album, Failure> {
-    Album::filter_by_id(id)
-        .first()
-        .exec(&mut state.db.clone())
-        .await?
-        .ok_or_else(|| not_found("album"))
+async fn load_album(cx: &Cx<'_>, id: u64) -> Result<Album, Failure> {
+    cx.lib.album(id).await?.ok_or_else(|| not_found("album"))
 }
 
-async fn artist_albums(state: &SubsonicState, artist_id: u64) -> Result<Vec<Album>, Failure> {
-    let mut albums = Album::filter_by_artist_id(artist_id)
-        .exec(&mut state.db.clone())
-        .await?;
+/// The albums of one of the caller's artists.
+async fn artist_albums(cx: &Cx<'_>, artist: &Artist) -> Result<Vec<Album>, Failure> {
+    let mut albums: Vec<Album> = Album::filter_by_artist_id(artist.id)
+        .exec(&mut cx.lib.db())
+        .await?
+        .into_iter()
+        .filter(|album| album.user_id == cx.lib.owner())
+        .collect();
     albums.sort_by(|a, b| (a.year, &a.title_key).cmp(&(b.year, &b.title_key)));
     Ok(albums)
 }
 
-async fn album_tracks(state: &SubsonicState, album_id: u64) -> Result<Vec<Track>, Failure> {
-    let mut tracks = Track::filter_by_album_id(album_id)
-        .exec(&mut state.db.clone())
-        .await?;
+/// The songs of one of the caller's albums.
+async fn album_tracks(cx: &Cx<'_>, album: &Album) -> Result<Vec<Track>, Failure> {
+    let mut tracks: Vec<Track> = Track::filter_by_album_id(album.id)
+        .exec(&mut cx.lib.db())
+        .await?
+        .into_iter()
+        .filter(|track| track.user_id == cx.lib.owner())
+        .collect();
     catalog::sort_album_tracks(&mut tracks);
     Ok(tracks)
 }
 
 /// `getArtist`: an artist with its albums.
-pub(crate) async fn artist(state: &SubsonicState, params: &Params) -> Result<Payload, Failure> {
+pub(crate) async fn artist(cx: &Cx<'_>, params: &Params) -> Result<Payload, Failure> {
     let Some(Id::Artist(id)) = parse_id(params)? else {
         return Err(not_found("artist"));
     };
-    let artist = load_artist(state, id).await?;
-    let albums = artist_albums(state, id).await?;
-    let stats = catalog::album_stats(&mut state.db.clone()).await?;
-    let plays =
-        annotations::for_albums(&mut state.db.clone(), albums.iter().map(|album| album.id)).await?;
+    let artist = load_artist(cx, id).await?;
+    let albums = artist_albums(cx, &artist).await?;
+    let stats = catalog::album_stats(&cx.lib).await?;
+    let plays = annotations::for_albums(&cx.lib, albums.iter().map(|album| album.id)).await?;
 
     let has_cover = albums.iter().any(|album| album.cover.is_some());
-    let annotation = annotations::for_artists(&mut state.db.clone(), [artist.id])
+    let annotation = annotations::for_artists(&cx.lib, [artist.id])
         .await?
         .remove(&artist.id);
     Ok(catalog::artist_id3(
@@ -183,16 +177,16 @@ pub(crate) async fn artist(state: &SubsonicState, params: &Params) -> Result<Pay
 }
 
 /// `getAlbum`: an album with its songs.
-pub(crate) async fn album(state: &SubsonicState, params: &Params) -> Result<Payload, Failure> {
+pub(crate) async fn album(cx: &Cx<'_>, params: &Params) -> Result<Payload, Failure> {
     let Some(Id::Album(id)) = parse_id(params)? else {
         return Err(not_found("album"));
     };
-    let album = load_album(state, id).await?;
-    let artist = load_artist(state, album.artist_id).await.ok();
-    let tracks = album_tracks(state, id).await?;
+    let album = load_album(cx, id).await?;
+    let artist = load_artist(cx, album.artist_id).await.ok();
+    let tracks = album_tracks(cx, &album).await?;
     let duration = tracks.iter().map(|track| track.duration_ms).sum();
-    let songs = catalog::songs(&mut state.db.clone(), "song", &tracks).await?;
-    let plays = annotations::for_albums(&mut state.db.clone(), [album.id]).await?;
+    let songs = catalog::songs(&cx.lib, "song", &tracks).await?;
+    let plays = annotations::for_albums(&cx.lib, [album.id]).await?;
 
     Ok(catalog::album_id3(
         "album",
@@ -206,33 +200,24 @@ pub(crate) async fn album(state: &SubsonicState, params: &Params) -> Result<Payl
 }
 
 /// `getSong`.
-pub(crate) async fn song(state: &SubsonicState, params: &Params) -> Result<Payload, Failure> {
+pub(crate) async fn song(cx: &Cx<'_>, params: &Params) -> Result<Payload, Failure> {
     let Some(Id::Track(id)) = parse_id(params)? else {
         return Err(not_found("song"));
     };
-    let mut db = state.db.clone();
-    let track = Track::filter_by_id(id)
-        .first()
-        .exec(&mut db)
-        .await?
-        .ok_or_else(|| not_found("song"))?;
-    let mut songs = catalog::songs(&mut db, "song", &[track]).await?;
+    let track = cx.lib.track(id).await?.ok_or_else(|| not_found("song"))?;
+    let mut songs = catalog::songs(&cx.lib, "song", &[track]).await?;
     Ok(songs.remove(0).into())
 }
 
 /// `getMusicDirectory`: an artist's albums, or an album's songs.
-pub(crate) async fn music_directory(
-    state: &SubsonicState,
-    params: &Params,
-) -> Result<Payload, Failure> {
+pub(crate) async fn music_directory(cx: &Cx<'_>, params: &Params) -> Result<Payload, Failure> {
     match parse_id(params)? {
         Some(Id::Artist(id)) => {
-            let artist = load_artist(state, id).await?;
-            let albums = artist_albums(state, id).await?;
-            let stats = catalog::album_stats(&mut state.db.clone()).await?;
+            let artist = load_artist(cx, id).await?;
+            let albums = artist_albums(cx, &artist).await?;
+            let stats = catalog::album_stats(&cx.lib).await?;
             let plays =
-                annotations::for_albums(&mut state.db.clone(), albums.iter().map(|album| album.id))
-                    .await?;
+                annotations::for_albums(&cx.lib, albums.iter().map(|album| album.id)).await?;
             Ok(Element::new("directory")
                 .attr("id", ids::artist(artist.id))
                 .attr("name", artist.name.as_str())
@@ -251,9 +236,9 @@ pub(crate) async fn music_directory(
                 .into())
         }
         Some(Id::Album(id)) => {
-            let album = load_album(state, id).await?;
-            let tracks = album_tracks(state, id).await?;
-            let songs = catalog::songs(&mut state.db.clone(), "child", &tracks).await?;
+            let album = load_album(cx, id).await?;
+            let tracks = album_tracks(cx, &album).await?;
+            let songs = catalog::songs(&cx.lib, "child", &tracks).await?;
             Ok(Element::new("directory")
                 .attr("id", ids::album(album.id))
                 .attr("parent", ids::artist(album.artist_id))
@@ -267,11 +252,11 @@ pub(crate) async fn music_directory(
 
 /// `getAlbumInfo` and `getAlbumInfo2`: what píxiū knows about an album.
 /// Notes and images from external sources arrive with enrichment.
-pub(crate) async fn album_info(state: &SubsonicState, params: &Params) -> Result<Payload, Failure> {
+pub(crate) async fn album_info(cx: &Cx<'_>, params: &Params) -> Result<Payload, Failure> {
     let Some(Id::Album(id)) = parse_id(params)? else {
         return Err(not_found("album"));
     };
-    let album = load_album(state, id).await?;
+    let album = load_album(cx, id).await?;
     Ok(Element::new("albumInfo")
         .field_opt("musicBrainzId", album.mbid.as_deref())
         .into())
@@ -279,14 +264,14 @@ pub(crate) async fn album_info(state: &SubsonicState, params: &Params) -> Result
 
 /// `getArtistInfo` and `getArtistInfo2`: what píxiū knows about an artist.
 pub(crate) async fn artist_info(
-    state: &SubsonicState,
+    cx: &Cx<'_>,
     params: &Params,
     id3: bool,
 ) -> Result<Payload, Failure> {
     let Some(Id::Artist(id)) = parse_id(params)? else {
         return Err(not_found("artist"));
     };
-    let artist = load_artist(state, id).await?;
+    let artist = load_artist(cx, id).await?;
     let name = if id3 { "artistInfo2" } else { "artistInfo" };
     Ok(Element::new(name)
         .field_opt("biography", artist.bio.as_deref())
@@ -295,23 +280,22 @@ pub(crate) async fn artist_info(
         .into())
 }
 
-/// `getGenres`.
-pub(crate) async fn genres(state: &SubsonicState) -> Result<Payload, Failure> {
-    let rows = toasty::sql::query(
-        "SELECT genre, COUNT(*), COUNT(DISTINCT album_id) FROM tracks \
-         WHERE genre IS NOT NULL GROUP BY genre ORDER BY genre",
-    )
-    .exec(&mut state.db.clone())
-    .await?;
+/// `getGenres`: the genres of the caller's songs.
+pub(crate) async fn genres(cx: &Cx<'_>) -> Result<Payload, Failure> {
+    let rows = cx
+        .lib
+        .sql(
+            "SELECT genre, COUNT(*), COUNT(DISTINCT album_id) FROM tracks \
+             WHERE tracks.user_id = ?1 AND genre IS NOT NULL GROUP BY genre ORDER BY genre",
+        )
+        .rows(&mut cx.lib.db())
+        .await?;
     let genres = rows.iter().filter_map(|row| {
-        let Value::Record(record) = row else {
-            return None;
-        };
-        let name = record[0].as_str()?;
+        let name = row.first()?.as_str()?;
         Some(
             Element::new("genre")
-                .attr("songCount", as_u64(&record[1]).unwrap_or(0))
-                .attr("albumCount", as_u64(&record[2]).unwrap_or(0))
+                .attr("songCount", row.get(1).and_then(as_u64).unwrap_or(0))
+                .attr("albumCount", row.get(2).and_then(as_u64).unwrap_or(0))
                 .text(name),
         )
     });

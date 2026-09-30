@@ -45,6 +45,8 @@ async fn downloads_a_track_into_the_treasure() {
     let video_id = found.tracks.first().expect("a track").id.clone();
 
     let request = DownloadRequest {
+        owner: 1,
+        job_id: 1,
         video_id: video_id.clone(),
         claim: Claim::offering(),
         cookies: None,
@@ -60,6 +62,21 @@ async fn downloads_a_track_into_the_treasure() {
     assert!(path.is_file());
     let info = tags::read(&path).unwrap();
     assert!(info.title.unwrap().to_lowercase().contains("monkeys"));
+
+    // Someone else grabbing the same video shares the stored file.
+    let theirs = hunter
+        .download(
+            &DownloadRequest {
+                owner: 2,
+                job_id: 2,
+                ..request.clone()
+            },
+            &|_| {},
+        )
+        .await
+        .unwrap();
+    assert_eq!(theirs.file_id, track.file_id);
+    assert_ne!(theirs.album_id, track.album_id);
     assert!(info.duration_ms > 60_000, "{} ms", info.duration_ms);
     assert!(info.cover.is_some(), "the cover is embedded");
     assert!(

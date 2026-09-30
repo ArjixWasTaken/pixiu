@@ -48,18 +48,27 @@ pub struct AlbumEdit {
     pub tracks: Vec<TrackEdit>,
 }
 
-/// The artist `wanted` names: found by MusicBrainz id, then by name, else
-/// created. A found artist learns its MusicBrainz id.
-async fn resolve_artist(db: &mut Db, wanted: &ArtistRef) -> Result<Artist, toasty::Error> {
+/// `owner`'s artist `wanted` names: found by MusicBrainz id, then by name,
+/// else created. A found artist learns its MusicBrainz id.
+async fn resolve_artist(
+    db: &mut Db,
+    owner: u64,
+    wanted: &ArtistRef,
+) -> Result<Artist, toasty::Error> {
     if let Some(mbid) = &wanted.mbid
-        && let Some(artist) = Artist::filter(Artist::fields().mbid().eq(Some(mbid.clone())))
-            .first()
-            .exec(db)
-            .await?
+        && let Some(artist) = Artist::filter(
+            Artist::fields()
+                .user_id()
+                .eq(owner)
+                .and(Artist::fields().mbid().eq(Some(mbid.clone()))),
+        )
+        .first()
+        .exec(db)
+        .await?
     {
         return Ok(artist);
     }
-    let mut artist = find_or_create_artist(db, &wanted.name, None).await?;
+    let mut artist = find_or_create_artist(db, owner, &wanted.name, None).await?;
     if artist.mbid.is_none() && wanted.mbid.is_some() {
         toasty::update!(artist {
             mbid: wanted.mbid.clone(),
@@ -87,12 +96,12 @@ impl Treasury {
         else {
             return Ok(());
         };
-        let old_artist = album.artist_id;
-        let album_artist = resolve_artist(&mut db, &edit.artist).await?;
+        let (owner, old_artist) = (album.user_id, album.artist_id);
+        let album_artist = resolve_artist(&mut db, owner, &edit.artist).await?;
 
         let mut track_artists = Vec::new();
         for track in &edit.tracks {
-            track_artists.push(resolve_artist(&mut db, &track.artist).await?);
+            track_artists.push(resolve_artist(&mut db, owner, &track.artist).await?);
         }
 
         let mut tx = db.transaction().await?;

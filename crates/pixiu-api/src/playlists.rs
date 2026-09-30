@@ -1,6 +1,7 @@
 //! What the player adds to Subsonic's playlists: smart playlists, whose
-//! songs follow rules, and folders to file playlists in. Songs of ordinary
-//! playlists are changed through the Subsonic API.
+//! songs follow rules, and folders to file playlists in, all in the
+//! signed-in user's library. Songs of ordinary playlists are changed
+//! through the Subsonic API.
 
 use std::collections::HashMap;
 
@@ -9,7 +10,7 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
 };
-use pixiu_db::{Db, Playlist, PlaylistFolder, User, now, toasty};
+use pixiu_db::{Library, Playlist, PlaylistFolder, User, now, toasty};
 use pixiu_subsonic::{ids, render, smart};
 use serde::Deserialize;
 use serde_json::{Value as JsonValue, json};
@@ -27,18 +28,14 @@ fn folder_id(id: &str) -> ApiResult<u64> {
     id.parse().map_err(|_| ApiError::not_found("folder"))
 }
 
-async fn load_playlist(db: &mut Db, id: u64) -> ApiResult<Playlist> {
-    Playlist::filter_by_id(id)
-        .first()
-        .exec(db)
+async fn load_playlist(lib: &Library, id: u64) -> ApiResult<Playlist> {
+    lib.playlist(id)
         .await?
         .ok_or_else(|| ApiError::not_found("playlist"))
 }
 
-async fn load_folder(db: &mut Db, id: u64) -> ApiResult<PlaylistFolder> {
-    PlaylistFolder::filter_by_id(id)
-        .first()
-        .exec(db)
+async fn load_folder(lib: &Library, id: u64) -> ApiResult<PlaylistFolder> {
+    lib.folder(id)
         .await?
         .ok_or_else(|| ApiError::not_found("folder"))
 }
@@ -59,10 +56,10 @@ fn describe_folder(folder: &PlaylistFolder) -> JsonValue {
     })
 }
 
-/// Every folder, for the start-up payload.
-pub(crate) async fn folders(db: &mut Db) -> ApiResult<Vec<JsonValue>> {
-    Ok(PlaylistFolder::all()
-        .exec(db)
+/// Every folder of the library, for the start-up payload.
+pub(crate) async fn folders(lib: &Library) -> ApiResult<Vec<JsonValue>> {
+    Ok(lib
+        .all_folders()
         .await?
         .iter()
         .map(describe_folder)
@@ -75,18 +72,17 @@ pub(crate) async fn list(
     State(state): State<ApiState>,
     session: Session,
 ) -> ApiResult<Json<Vec<JsonValue>>> {
-    Ok(Json(all(&state, &session.user).await?))
+    Ok(Json(all(&session.library(&state), &session.user).await?))
 }
 
-async fn all(state: &ApiState, owner: &User) -> ApiResult<Vec<JsonValue>> {
-    let mut db = state.db.clone();
-    let stored: HashMap<String, Playlist> = Playlist::all()
-        .exec(&mut db)
+async fn all(lib: &Library, owner: &User) -> ApiResult<Vec<JsonValue>> {
+    let stored: HashMap<String, Playlist> = lib
+        .all_playlists()
         .await?
         .into_iter()
         .map(|playlist| (ids::playlist(playlist.id), playlist))
         .collect();
-    let mut playlists = render::playlists(&mut db, owner).await?;
+    let mut playlists = render::playlists(lib, owner).await?;
     for playlist in &mut playlists {
         let Some(stored) = playlist["id"].as_str().and_then(|id| stored.get(id)) else {
             continue;
@@ -101,9 +97,9 @@ async fn all(state: &ApiState, owner: &User) -> ApiResult<Vec<JsonValue>> {
     Ok(playlists)
 }
 
-async fn one(state: &ApiState, owner: &User, id: u64) -> ApiResult<JsonValue> {
+async fn one(lib: &Library, owner: &User, id: u64) -> ApiResult<JsonValue> {
     let wanted = ids::playlist(id);
-    all(state, owner)
+    all(lib, owner)
         .await?
         .into_iter()
         .find(|playlist| playlist["id"] == wanted.as_str())
@@ -130,13 +126,14 @@ pub(crate) async fn create(
         return Err(ApiError::unprocessable("Name the playlist."));
     }
     let rules = rules_text(&form.rules)?;
-    let mut db = state.db.clone();
+    let lib = session.library(&state);
     let folder = match form.folder_id.as_deref() {
-        Some(id) => Some(load_folder(&mut db, folder_id(id)?).await?.id),
+        Some(id) => Some(load_folder(&lib, folder_id(id)?).await?.id),
         None => None,
     };
     let comment = Some(form.description.trim().to_owned()).filter(|text| !text.is_empty());
     let playlist = toasty::create!(Playlist {
+        user_id: lib.owner(),
         name,
         comment,
         public: false,
@@ -145,9 +142,9 @@ pub(crate) async fn create(
         created_at: now(),
         changed_at: now(),
     })
-    .exec(&mut db)
+    .exec(&mut lib.db())
     .await?;
-    Ok(Json(one(&state, &session.user, playlist.id).await?))
+    Ok(Json(one(&lib, &session.user, playlist.id).await?))
 }
 
 #[derive(Deserialize)]
@@ -165,8 +162,8 @@ pub(crate) async fn update(
     Path(id): Path<String>,
     Json(changes): Json<PlaylistChanges>,
 ) -> ApiResult<Json<JsonValue>> {
-    let mut db = state.db.clone();
-    let mut playlist = load_playlist(&mut db, playlist_id(&id)?).await?;
+    let lib = session.library(&state);
+    let mut playlist = load_playlist(&lib, playlist_id(&id)?).await?;
     let name = match changes.name.as_deref().map(str::trim) {
         Some("") => return Err(ApiError::unprocessable("Name the playlist.")),
         Some(name) => name.to_owned(),
@@ -187,9 +184,9 @@ pub(crate) async fn update(
         rules,
         changed_at: now(),
     })
-    .exec(&mut db)
+    .exec(&mut lib.db())
     .await?;
-    Ok(Json(one(&state, &session.user, playlist_id).await?))
+    Ok(Json(one(&lib, &session.user, playlist_id).await?))
 }
 
 #[derive(Deserialize)]
@@ -201,19 +198,21 @@ pub(crate) struct NewFolder {
 /// `POST /api/playlist-folders`.
 pub(crate) async fn create_folder(
     State(state): State<ApiState>,
-    _: Session,
+    session: Session,
     Json(form): Json<NewFolder>,
 ) -> ApiResult<Json<JsonValue>> {
     let name = form.name.trim();
     if name.is_empty() {
         return Err(ApiError::unprocessable("Name the folder."));
     }
-    let mut db = state.db.clone();
+    let lib = session.library(&state);
+    let mut db = lib.db();
     let parent = match form.parent_id.as_deref() {
-        Some(id) => Some(load_folder(&mut db, folder_id(id)?).await?.id),
+        Some(id) => Some(load_folder(&lib, folder_id(id)?).await?.id),
         None => None,
     };
     let folder = toasty::create!(PlaylistFolder {
+        user_id: lib.owner(),
         name,
         parent_id: parent,
         created_at: now(),
@@ -239,9 +238,9 @@ fn present<'de, D: serde::Deserializer<'de>>(
 }
 
 /// Whether `candidate` is `folder` or inside it, which would make a loop.
-async fn is_within(db: &mut Db, candidate: u64, folder: u64) -> ApiResult<bool> {
-    let parents: HashMap<u64, Option<u64>> = PlaylistFolder::all()
-        .exec(db)
+async fn is_within(lib: &Library, candidate: u64, folder: u64) -> ApiResult<bool> {
+    let parents: HashMap<u64, Option<u64>> = lib
+        .all_folders()
         .await?
         .into_iter()
         .map(|folder| (folder.id, folder.parent_id))
@@ -264,12 +263,13 @@ async fn is_within(db: &mut Db, candidate: u64, folder: u64) -> ApiResult<bool> 
 /// `PUT` and `PATCH /api/playlist-folders/{id}`: renames or moves a folder.
 pub(crate) async fn update_folder(
     State(state): State<ApiState>,
-    _: Session,
+    session: Session,
     Path(id): Path<String>,
     Json(changes): Json<FolderChanges>,
 ) -> ApiResult<StatusCode> {
-    let mut db = state.db.clone();
-    let mut folder = load_folder(&mut db, folder_id(&id)?).await?;
+    let lib = session.library(&state);
+    let mut db = lib.db();
+    let mut folder = load_folder(&lib, folder_id(&id)?).await?;
     let name = match changes.name.as_deref().map(str::trim) {
         Some("") => return Err(ApiError::unprocessable("Name the folder.")),
         Some(name) => name.to_owned(),
@@ -279,8 +279,8 @@ pub(crate) async fn update_folder(
         None => folder.parent_id,
         Some(None) => None,
         Some(Some(parent)) => {
-            let parent = load_folder(&mut db, folder_id(&parent)?).await?.id;
-            if is_within(&mut db, parent, folder.id).await? {
+            let parent = load_folder(&lib, folder_id(&parent)?).await?.id;
+            if is_within(&lib, parent, folder.id).await? {
                 return Err(ApiError::unprocessable("A folder cannot go inside itself."));
             }
             Some(parent)
@@ -296,11 +296,12 @@ pub(crate) async fn update_folder(
 /// the top.
 pub(crate) async fn delete_folder(
     State(state): State<ApiState>,
-    _: Session,
+    session: Session,
     Path(id): Path<String>,
 ) -> ApiResult<StatusCode> {
-    let mut db = state.db.clone();
-    let folder = load_folder(&mut db, folder_id(&id)?).await?;
+    let lib = session.library(&state);
+    let mut db = lib.db();
+    let folder = load_folder(&lib, folder_id(&id)?).await?;
     for mut child in PlaylistFolder::filter_by_parent_id(Some(folder.id))
         .exec(&mut db)
         .await?
@@ -326,11 +327,11 @@ pub(crate) struct Playlists {
     playlists: Vec<String>,
 }
 
-async fn file_playlists(db: &mut Db, playlists: &[String], folder: Option<u64>) -> ApiResult<()> {
+async fn file_playlists(lib: &Library, playlists: &[String], folder: Option<u64>) -> ApiResult<()> {
     for id in playlists {
-        let mut playlist = load_playlist(db, playlist_id(id)?).await?;
+        let mut playlist = load_playlist(lib, playlist_id(id)?).await?;
         toasty::update!(playlist { folder_id: folder })
-            .exec(db)
+            .exec(&mut lib.db())
             .await?;
     }
     Ok(())
@@ -339,13 +340,13 @@ async fn file_playlists(db: &mut Db, playlists: &[String], folder: Option<u64>) 
 /// `POST /api/playlist-folders/{id}/playlists`: files playlists in it.
 pub(crate) async fn add_playlists(
     State(state): State<ApiState>,
-    _: Session,
+    session: Session,
     Path(id): Path<String>,
     Json(form): Json<Playlists>,
 ) -> ApiResult<StatusCode> {
-    let mut db = state.db.clone();
-    let folder = load_folder(&mut db, folder_id(&id)?).await?;
-    file_playlists(&mut db, &form.playlists, Some(folder.id)).await?;
+    let lib = session.library(&state);
+    let folder = load_folder(&lib, folder_id(&id)?).await?;
+    file_playlists(&lib, &form.playlists, Some(folder.id)).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -353,12 +354,12 @@ pub(crate) async fn add_playlists(
 /// it, to the top.
 pub(crate) async fn remove_playlists(
     State(state): State<ApiState>,
-    _: Session,
+    session: Session,
     Path(id): Path<String>,
     Json(form): Json<Playlists>,
 ) -> ApiResult<StatusCode> {
-    let mut db = state.db.clone();
-    load_folder(&mut db, folder_id(&id)?).await?;
-    file_playlists(&mut db, &form.playlists, None).await?;
+    let lib = session.library(&state);
+    load_folder(&lib, folder_id(&id)?).await?;
+    file_playlists(&lib, &form.playlists, None).await?;
     Ok(StatusCode::NO_CONTENT)
 }

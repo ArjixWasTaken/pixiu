@@ -3,38 +3,37 @@
 
 use std::collections::HashMap;
 
-use pixiu_db::{Annotation, Db, Track, User, now, toasty};
+use pixiu_db::{Annotation, Db, Library, now, toasty};
 
 use crate::{
-    Failure, Params, SubsonicState,
+    Cx, Failure, Params,
     ids::{self, Id},
     playing,
     response::{ApiError, Element, ErrorCode, Payload},
 };
 
+/// The library owner's annotations of `items`, by item.
 async fn by_item(
-    db: &mut Db,
+    lib: &Library,
     items: Vec<String>,
 ) -> Result<HashMap<String, Annotation>, toasty::Error> {
     if items.is_empty() {
         return Ok(HashMap::new());
     }
-    Ok(
-        Annotation::filter(Annotation::fields().item().in_list(items))
-            .exec(db)
-            .await?
-            .into_iter()
-            .map(|annotation| (annotation.item.clone(), annotation))
-            .collect(),
-    )
+    Ok(lib
+        .annotations(&items)
+        .await?
+        .into_iter()
+        .map(|annotation| (annotation.item.clone(), annotation))
+        .collect())
 }
 
 /// Annotations of tracks, by track id.
 pub(crate) async fn for_tracks(
-    db: &mut Db,
+    lib: &Library,
     track_ids: impl IntoIterator<Item = u64>,
 ) -> Result<HashMap<u64, Annotation>, toasty::Error> {
-    let annotations = by_item(db, track_ids.into_iter().map(ids::track).collect()).await?;
+    let annotations = by_item(lib, track_ids.into_iter().map(ids::track).collect()).await?;
     Ok(annotations
         .into_values()
         .filter_map(|annotation| match Id::parse(&annotation.item) {
@@ -46,10 +45,10 @@ pub(crate) async fn for_tracks(
 
 /// Annotations of albums, by album id.
 pub(crate) async fn for_albums(
-    db: &mut Db,
+    lib: &Library,
     album_ids: impl IntoIterator<Item = u64>,
 ) -> Result<HashMap<u64, Annotation>, toasty::Error> {
-    let annotations = by_item(db, album_ids.into_iter().map(ids::album).collect()).await?;
+    let annotations = by_item(lib, album_ids.into_iter().map(ids::album).collect()).await?;
     Ok(annotations
         .into_values()
         .filter_map(|annotation| match Id::parse(&annotation.item) {
@@ -61,10 +60,10 @@ pub(crate) async fn for_albums(
 
 /// Annotations of artists, by artist id.
 pub(crate) async fn for_artists(
-    db: &mut Db,
+    lib: &Library,
     artist_ids: impl IntoIterator<Item = u64>,
 ) -> Result<HashMap<u64, Annotation>, toasty::Error> {
-    let annotations = by_item(db, artist_ids.into_iter().map(ids::artist).collect()).await?;
+    let annotations = by_item(lib, artist_ids.into_iter().map(ids::artist).collect()).await?;
     Ok(annotations
         .into_values()
         .filter_map(|annotation| match Id::parse(&annotation.item) {
@@ -96,8 +95,17 @@ pub(crate) fn annotate(element: Element, annotation: Option<&Annotation>) -> Ele
         .attr_opt("userRating", annotation.rating)
 }
 
-async fn record_play(db: &mut Db, item: String, at: jiff::Timestamp) -> Result<(), toasty::Error> {
-    match Annotation::filter_by_item(&item).first().exec(db).await? {
+async fn record_play(
+    db: &mut Db,
+    owner: u64,
+    item: String,
+    at: jiff::Timestamp,
+) -> Result<(), toasty::Error> {
+    match Annotation::filter_by_user_id_and_item(owner, &item)
+        .first()
+        .exec(db)
+        .await?
+    {
         Some(mut annotation) => {
             let last_played = annotation.last_played.map_or(at, |last| last.max(at));
             toasty::update!(annotation {
@@ -109,6 +117,7 @@ async fn record_play(db: &mut Db, item: String, at: jiff::Timestamp) -> Result<(
         }
         None => {
             toasty::create!(Annotation {
+                user_id: owner,
                 item,
                 play_count: 1,
                 last_played: Some(at),
@@ -122,11 +131,7 @@ async fn record_play(db: &mut Db, item: String, at: jiff::Timestamp) -> Result<(
 
 /// `scrobble`: counts plays of songs and their albums. With
 /// `submission=false` the client says what it is playing now instead.
-pub(crate) async fn scrobble(
-    state: &SubsonicState,
-    user: &User,
-    params: &Params,
-) -> Result<Payload, Failure> {
+pub(crate) async fn scrobble(cx: &Cx<'_>, params: &Params) -> Result<Payload, Failure> {
     let submission = params
         .get("submission")
         .is_none_or(|value| value != "false");
@@ -144,16 +149,16 @@ pub(crate) async fn scrobble(
     if track_ids.is_empty() {
         return Err(ApiError::missing_parameter("id").into());
     }
-    let mut db = state.db.clone();
+    let mut db = cx.lib.db();
     if !submission {
         let playing = track_ids.last().copied().unwrap_or_default();
-        let Some(track) = Track::filter_by_id(playing).first().exec(&mut db).await? else {
+        let Some(track) = cx.lib.track(playing).await? else {
             return Err(crate::browse::not_found("song"));
         };
         let player = params.get("c").unwrap_or("unknown");
-        state
+        cx.state
             .now_playing
-            .announced(&user.username, player, playing::song(&track));
+            .announced(cx.listener(), player, playing::song(&track));
         return Ok(Payload::default());
     }
 
@@ -162,7 +167,7 @@ pub(crate) async fn scrobble(
         .map(|time| time.parse().ok())
         .collect();
     for (index, id) in track_ids.into_iter().enumerate() {
-        let Some(track) = Track::filter_by_id(id).first().exec(&mut db).await? else {
+        let Some(track) = cx.lib.track(id).await? else {
             return Err(crate::browse::not_found("song"));
         };
         let at = times
@@ -171,8 +176,8 @@ pub(crate) async fn scrobble(
             .flatten()
             .and_then(|millis| jiff::Timestamp::from_millisecond(millis).ok())
             .unwrap_or_else(now);
-        record_play(&mut db, ids::track(track.id), at).await?;
-        record_play(&mut db, ids::album(track.album_id), at).await?;
+        record_play(&mut db, cx.lib.owner(), ids::track(track.id), at).await?;
+        record_play(&mut db, cx.lib.owner(), ids::album(track.album_id), at).await?;
     }
     Ok(Payload::default())
 }

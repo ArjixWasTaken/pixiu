@@ -1,8 +1,9 @@
-//! Orphans: tracks nothing keeps any more. píxiū never gives treasure back
-//! on its own; the admin keeps them for good or deletes them.
+//! Orphans: tracks of the signed-in user's that nothing keeps any more.
+//! píxiū never deletes them on its own; the user keeps them for good or
+//! deletes them.
 
 use axum::{Json, extract::State};
-use pixiu_db::{ClaimKind, ReleaseReason, ReleasedClaim, Track};
+use pixiu_db::{ClaimKind, ReleaseReason, ReleasedClaim};
 use pixiu_subsonic::{ids, render};
 use pixiu_treasury::Claim;
 use serde::Deserialize;
@@ -41,11 +42,14 @@ fn why(released: Option<&ReleasedClaim>) -> String {
 
 /// `GET /api/orphans`: each orphan as a Subsonic song with why it became
 /// one, newest orphan first.
-pub(crate) async fn list(State(state): State<ApiState>, _: Session) -> ApiResult<Json<JsonValue>> {
-    let orphans = state.treasury.orphans().await?;
+pub(crate) async fn list(
+    State(state): State<ApiState>,
+    session: Session,
+) -> ApiResult<Json<JsonValue>> {
+    let orphans = state.treasury.orphans(session.owner()).await?;
     let ids: Vec<u64> = orphans.iter().map(|track| track.id).collect();
     let released = state.treasury.released_claims(&ids).await?;
-    let songs = render::songs(&mut state.db.clone(), &ids).await?;
+    let songs = render::songs(&session.library(&state), &ids).await?;
     let mut items: Vec<(Option<jiff::Timestamp>, JsonValue)> = orphans
         .iter()
         .zip(songs)
@@ -88,21 +92,17 @@ fn track_ids(songs: &[String]) -> ApiResult<Vec<u64>> {
 /// `POST /api/orphans/keep`: keeps the songs for good.
 pub(crate) async fn keep(
     State(state): State<ApiState>,
-    _: Session,
+    session: Session,
     Json(form): Json<Songs>,
 ) -> ApiResult<Json<JsonValue>> {
     let keep = Claim {
         kind: ClaimKind::ManualGrab,
         reference: None,
     };
+    let lib = session.library(&state);
     let mut kept = 0;
     for id in track_ids(&form.songs)? {
-        if Track::filter_by_id(id)
-            .first()
-            .exec(&mut state.db.clone())
-            .await?
-            .is_some()
-        {
+        if lib.track(id).await?.is_some() {
             state.treasury.claim(id, &keep).await?;
             kept += 1;
         }
@@ -114,13 +114,14 @@ pub(crate) async fn keep(
 /// keeps are left alone.
 pub(crate) async fn delete(
     State(state): State<ApiState>,
-    _: Session,
+    session: Session,
     Json(form): Json<Songs>,
 ) -> ApiResult<Json<JsonValue>> {
+    let owner = session.owner();
     let ids = if form.all {
         state
             .treasury
-            .orphans()
+            .orphans(owner)
             .await?
             .iter()
             .map(|track| track.id)
@@ -128,6 +129,6 @@ pub(crate) async fn delete(
     } else {
         track_ids(&form.songs)?
     };
-    let deleted = state.treasury.delete_orphans(&ids).await?;
+    let deleted = state.treasury.delete_orphans(owner, &ids).await?;
     Ok(Json(json!({ "deleted": deleted })))
 }

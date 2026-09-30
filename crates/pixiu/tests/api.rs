@@ -14,6 +14,9 @@ use pixiu_treasury::{Claim, Provenance, tags};
 use serde_json::{Value, json};
 use tower::ServiceExt;
 
+/// The account `claim` makes, whose library the tests stock.
+const OWNER: u64 = 1;
+
 const PASSWORD: &str = "gold-and-jade";
 
 struct Api {
@@ -99,6 +102,7 @@ impl Api {
             let info = tags::read(&staged).unwrap();
             treasury
                 .ingest(
+                    OWNER,
                     &staged,
                     &info,
                     None,
@@ -302,6 +306,7 @@ async fn favorites_plays_and_genres_shape_the_lists() {
     api.stock().await;
     let second_wind = api.track_id("Second Wind").await;
     toasty::create!(Annotation {
+        user_id: OWNER,
         item: format!("tr-{second_wind}"),
         play_count: 3,
         last_played: Some(now()),
@@ -423,7 +428,7 @@ async fn watches_are_added_listed_and_removed() {
             StatusCode::CONFLICT,
         )
         .await;
-    assert_eq!(duplicate["message"], "píxiū already watches that.");
+    assert_eq!(duplicate["message"], "You already watch that.");
     api.send(
         &token,
         Method::POST,

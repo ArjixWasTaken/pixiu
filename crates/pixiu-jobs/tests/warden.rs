@@ -10,6 +10,9 @@ use pixiu_db::{Db, SessionEventKind, SessionState};
 use pixiu_hunt::SessionCheck;
 use pixiu_jobs::warden::{BoxFuture, Platform, Refresher, Warden};
 
+/// The user every test library and job belongs to.
+const OWNER: u64 = 1;
+
 #[derive(Default)]
 struct Script {
     applies: Mutex<VecDeque<SessionCheck>>,
@@ -83,6 +86,7 @@ impl Setup {
         Warden::new(
             self.db.clone(),
             self.secrets.clone(),
+            OWNER,
             Box::new(FakePlatform(Arc::clone(&self.script))),
             Box::new(FakeRefresher(Arc::clone(&self.script))),
         )
@@ -300,12 +304,12 @@ async fn logging_in_resumes_paused_jobs() {
     watch::resume_on_login(&warden, Arc::clone(&jobs));
 
     let job = jobs
-        .enqueue(NewJob::sync(1, "Sync liked music"))
+        .enqueue(OWNER, NewJob::sync(1, "Sync liked music"))
         .await
         .unwrap();
     let reaches = async |state: JobState| {
         for _ in 0..200 {
-            let recent = jobs.recent(10).await.unwrap();
+            let recent = jobs.recent(OWNER, 10).await.unwrap();
             if recent
                 .iter()
                 .any(|found| found.id == job.id && found.state == state)

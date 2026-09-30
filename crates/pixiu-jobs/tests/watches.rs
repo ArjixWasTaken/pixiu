@@ -18,6 +18,9 @@ use pixiu_jobs::{
 };
 use pixiu_treasury::{Claim, Treasury};
 
+/// The user every test library and job belongs to.
+const OWNER: u64 = 1;
+
 #[derive(Default)]
 struct FakeCatalog {
     /// Video ids of the playlist, in order.
@@ -143,6 +146,7 @@ async fn setup() -> Setup {
 /// Puts a track in the hoard, without any claim.
 async fn hoard(db: &mut Db, video_id: &str) -> u64 {
     let artist = toasty::create!(Artist {
+        user_id: OWNER,
         name: "Somebody",
         name_key: "somebody",
         created_at: now(),
@@ -151,6 +155,7 @@ async fn hoard(db: &mut Db, video_id: &str) -> u64 {
     .await
     .unwrap();
     let album = toasty::create!(Album {
+        user_id: OWNER,
         title: format!("Album {video_id}"),
         title_key: format!("album {video_id}"),
         artist_id: artist.id,
@@ -160,6 +165,7 @@ async fn hoard(db: &mut Db, video_id: &str) -> u64 {
     .await
     .unwrap();
     toasty::create!(Track {
+        user_id: OWNER,
         album_id: album.id,
         artist_id: artist.id,
         title: format!("Song {video_id}"),
@@ -252,7 +258,7 @@ async fn playlists_are_mirrored_and_claims_follow_them() {
     let b = hoard(&mut db, "b").await;
     *s.catalog.playlist.lock().unwrap() = vec!["a", "b", "c"];
 
-    let watch = watch::add(&s.treasury, &s.jobs, playlist_watch("PLtest"))
+    let watch = watch::add(&s.treasury, &s.jobs, OWNER, playlist_watch("PLtest"))
         .await
         .unwrap();
     // Adding queues the first sync, and only one waits at a time.
@@ -261,10 +267,10 @@ async fn playlists_are_mirrored_and_claims_follow_them() {
             .filter(|job| job.kind == JobKind::SyncWatch)
             .count()
     };
-    assert_eq!(syncs(&s.jobs.unfinished().await.unwrap()), 1);
+    assert_eq!(syncs(&s.jobs.unfinished(OWNER).await.unwrap()), 1);
     assert!(!watch::queue_sync(&s.jobs, &watch).await.unwrap());
     assert!(matches!(
-        watch::add(&s.treasury, &s.jobs, playlist_watch("PLtest")).await,
+        watch::add(&s.treasury, &s.jobs, OWNER, playlist_watch("PLtest")).await,
         Err(watch::WatchError::Duplicate)
     ));
 
@@ -313,7 +319,7 @@ async fn playlists_are_mirrored_and_claims_follow_them() {
 
     // While the downloads are queued, syncing does not queue them again.
     for job in queued {
-        s.jobs.enqueue(job).await.unwrap();
+        s.jobs.enqueue(OWNER, job).await.unwrap();
     }
     assert!(
         done(
@@ -345,7 +351,7 @@ async fn playlists_are_mirrored_and_claims_follow_them() {
     assert!(claims_of(&mut db, b).await.is_empty());
     let orphans: Vec<u64> = s
         .treasury
-        .orphans()
+        .orphans(OWNER)
         .await
         .unwrap()
         .iter()
@@ -361,6 +367,7 @@ async fn liked_music_waits_for_a_login() {
     let watch = watch::add(
         &s.treasury,
         &s.jobs,
+        OWNER,
         NewWatch {
             kind: WatchKind::LikedMusic,
             remote_id: String::new(),
@@ -411,6 +418,7 @@ async fn artists_bring_their_releases() {
         vec![("old", AlbumKind::Album), ("single", AlbumKind::Single)];
     // Already in the hoard, but nothing said which channel is theirs.
     let band = toasty::create!(Artist {
+        user_id: OWNER,
         name: "The Band",
         name_key: "the band",
         created_at: now(),
@@ -423,6 +431,7 @@ async fn artists_bring_their_releases() {
     let newcomer = watch::add(
         &s.treasury,
         &s.jobs,
+        OWNER,
         NewWatch {
             kind: WatchKind::Artist,
             remote_id: "UCnew".to_owned(),
@@ -479,6 +488,7 @@ async fn artists_bring_their_releases() {
     let everything = watch::add(
         &s.treasury,
         &s.jobs,
+        OWNER,
         NewWatch {
             kind: WatchKind::Artist,
             remote_id: "UCall".to_owned(),
@@ -503,7 +513,7 @@ async fn removing_a_watch_lets_go() {
     let mut db = s.db.clone();
     let kept = hoard(&mut db, "kept").await;
     *s.catalog.playlist.lock().unwrap() = vec!["kept", "coming"];
-    let watch = watch::add(&s.treasury, &s.jobs, playlist_watch("PLgone"))
+    let watch = watch::add(&s.treasury, &s.jobs, OWNER, playlist_watch("PLgone"))
         .await
         .unwrap();
     for job in done(
@@ -511,11 +521,11 @@ async fn removing_a_watch_lets_go() {
             .await
             .unwrap(),
     ) {
-        s.jobs.enqueue(job).await.unwrap();
+        s.jobs.enqueue(OWNER, job).await.unwrap();
     }
     // An unrelated grab stays queued.
     s.jobs
-        .enqueue(NewJob::track("mine", "A grab", None))
+        .enqueue(OWNER, NewJob::track("mine", "A grab", None))
         .await
         .unwrap();
 
@@ -547,7 +557,7 @@ async fn removing_a_watch_lets_go() {
     assert_eq!(released[0].source_name.as_deref(), Some("Test playlist"));
     let left: Vec<String> = s
         .jobs
-        .unfinished()
+        .unfinished(OWNER)
         .await
         .unwrap()
         .into_iter()
@@ -562,12 +572,12 @@ async fn paused_jobs_resume_later() {
     s.jobs.start();
     let job = s
         .jobs
-        .enqueue(NewJob::sync(1, "Sync liked music"))
+        .enqueue(OWNER, NewJob::sync(1, "Sync liked music"))
         .await
         .unwrap();
     let state = async |jobs: &Jobs, wanted: JobState| {
         for _ in 0..200 {
-            let found = jobs.recent(10).await.unwrap();
+            let found = jobs.recent(OWNER, 10).await.unwrap();
             if let Some(job) = found.iter().find(|found| found.id == job.id)
                 && job.state == wanted
             {
@@ -581,7 +591,7 @@ async fn paused_jobs_resume_later() {
         state(&s.jobs, JobState::Paused).await.as_deref(),
         Some(WAITING_FOR_LOGIN)
     );
-    assert_eq!(s.jobs.resume_paused().await.unwrap(), 1);
+    assert_eq!(s.jobs.resume_paused(OWNER).await.unwrap(), 1);
     assert_eq!(state(&s.jobs, JobState::Done).await, None);
 }
 
@@ -592,7 +602,7 @@ async fn excluded_songs_are_orphaned_and_skipped() {
     let a = hoard(&mut db, "a").await;
     let b = hoard(&mut db, "b").await;
     *s.catalog.playlist.lock().unwrap() = vec!["a", "b", "c"];
-    let watch = watch::add(&s.treasury, &s.jobs, playlist_watch("PLpick"))
+    let watch = watch::add(&s.treasury, &s.jobs, OWNER, playlist_watch("PLpick"))
         .await
         .unwrap();
     for job in done(
@@ -600,7 +610,7 @@ async fn excluded_songs_are_orphaned_and_skipped() {
             .await
             .unwrap(),
     ) {
-        s.jobs.enqueue(job).await.unwrap();
+        s.jobs.enqueue(OWNER, job).await.unwrap();
     }
     let reference = Some(watch.id.to_string());
     assert_eq!(
@@ -645,7 +655,7 @@ async fn excluded_songs_are_orphaned_and_skipped() {
     assert_eq!(released[0].source_name.as_deref(), Some("Test playlist"));
     let orphans: Vec<u64> = s
         .treasury
-        .orphans()
+        .orphans(OWNER)
         .await
         .unwrap()
         .iter()
@@ -654,7 +664,7 @@ async fn excluded_songs_are_orphaned_and_skipped() {
     assert_eq!(orphans, [a]);
     let downloads = s
         .jobs
-        .unfinished()
+        .unfinished(OWNER)
         .await
         .unwrap()
         .iter()
@@ -686,7 +696,7 @@ async fn excluded_songs_are_orphaned_and_skipped() {
         .unwrap();
     assert!(
         s.jobs
-            .unfinished()
+            .unfinished(OWNER)
             .await
             .unwrap()
             .iter()

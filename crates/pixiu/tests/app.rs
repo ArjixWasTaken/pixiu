@@ -323,6 +323,7 @@ async fn songs_are_excluded_from_watched_playlists() {
     let seeded = std::sync::Arc::clone(&ids);
     let server = TestServer::start_with(async move |db| {
         let artist = toasty::create!(Artist {
+            user_id: 1_u64,
             name: "Somebody",
             name_key: "somebody",
             created_at: now(),
@@ -331,6 +332,7 @@ async fn songs_are_excluded_from_watched_playlists() {
         .await
         .unwrap();
         let album = toasty::create!(Album {
+            user_id: 1_u64,
             title: "Road Songs",
             title_key: "road songs",
             artist_id: artist.id,
@@ -340,6 +342,7 @@ async fn songs_are_excluded_from_watched_playlists() {
         .await
         .unwrap();
         let track = toasty::create!(Track {
+            user_id: 1_u64,
             album_id: album.id,
             artist_id: artist.id,
             title: "Unwanted Song",
@@ -358,6 +361,7 @@ async fn songs_are_excluded_from_watched_playlists() {
         .await
         .unwrap();
         let watch = toasty::create!(Watch {
+            user_id: 1_u64,
             kind: WatchKind::Playlist,
             remote_id: "PLroad",
             name: "Road trip",
@@ -381,6 +385,7 @@ async fn songs_are_excluded_from_watched_playlists() {
         .await
         .unwrap();
         let playlist = toasty::create!(Playlist {
+            user_id: 1_u64,
             name: "Road trip",
             public: false,
             watch_id: Some(watch.id),

@@ -62,6 +62,10 @@ impl Services {
             .await
             .context("failed to clean up the store")?;
         let offerings = Offerings::new(paths.offerings_dir(), treasury.clone());
+        offerings
+            .relocate_legacy()
+            .await
+            .context("failed to move uploads to their owners' directories")?;
         let ytmusic = YtMusic::new(
             &paths.youtube_music_dir(),
             secrets.clone(),
@@ -77,9 +81,18 @@ impl Services {
             profile_dir: paths.browser_profile_dir(),
             no_sandbox: config.browser.no_sandbox,
         });
+        // One YouTube Music session for now: the first account's.
+        let first_user = pixiu_db::User::all()
+            .exec(&mut db.clone())
+            .await?
+            .iter()
+            .map(|user| user.id)
+            .min()
+            .unwrap_or(1);
         let warden = Warden::new(
             db.clone(),
             secrets.clone(),
+            first_user,
             Box::new(YtMusicPlatform(Arc::clone(&hunter))),
             Box::new(BrowserRefresher(Arc::clone(&login_desk))),
         )

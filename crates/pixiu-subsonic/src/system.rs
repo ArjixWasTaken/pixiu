@@ -1,11 +1,10 @@
 //! System endpoints: license, extensions, scanning and users.
 
-use pixiu_db::{User, toasty};
+use pixiu_db::{User, owned::as_u64};
 
 use crate::{
-    Failure, Params, SubsonicState,
+    Cx, Failure, Params,
     browse::MUSIC_FOLDER_ID,
-    catalog,
     response::{ApiError, Element, ErrorCode, Payload},
 };
 
@@ -33,17 +32,18 @@ pub(crate) fn license() -> Payload {
 }
 
 /// `getScanStatus` and `startScan`. píxiū never scans: everything enters
-/// through ingest, so the library is always up to date.
-pub(crate) async fn scan_status(state: &SubsonicState) -> Result<Payload, Failure> {
-    let rows = toasty::sql::query("SELECT COUNT(*) FROM tracks")
-        .exec(&mut state.db.clone())
+/// through ingest, so the library is always up to date. The count is the
+/// caller's songs.
+pub(crate) async fn scan_status(cx: &Cx<'_>) -> Result<Payload, Failure> {
+    let rows = cx
+        .lib
+        .sql("SELECT COUNT(*) FROM tracks WHERE tracks.user_id = ?1")
+        .rows(&mut cx.lib.db())
         .await?;
     let count = rows
         .first()
-        .and_then(|row| match row {
-            toasty::stmt::Value::Record(record) => catalog::as_u64(&record[0]),
-            _ => None,
-        })
+        .and_then(|row| row.first())
+        .and_then(as_u64)
         .unwrap_or(0);
     Ok(Element::new("scanStatus")
         .attr("scanning", false)

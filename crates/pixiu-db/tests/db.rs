@@ -152,7 +152,8 @@ fn fixture_db(name: &str, dir: &Path) -> std::path::PathBuf {
 
 /// A library from before files were shared (schema 0008) upgrades with
 /// nothing lost: its tracks wait for their files to be adopted into the
-/// store, and what belonged to the file layout goes.
+/// store, what belonged to the file layout goes, and everything becomes the
+/// one user's library.
 #[tokio::test]
 async fn upgrade_from_0008() {
     use pixiu_db::{Annotation, AudioFile, Job, JobKind, Playlist, Setting, Track, Watch};
@@ -193,4 +194,47 @@ async fn upgrade_from_0008() {
     assert_eq!(Annotation::all().exec(&mut db).await.unwrap().len(), 2);
     assert_eq!(Playlist::all().exec(&mut db).await.unwrap().len(), 3);
     assert_eq!(Watch::all().exec(&mut db).await.unwrap().len(), 1);
+
+    // Everything was the one user's, and still is: in their library now.
+    let owner = User::all().exec(&mut db).await.unwrap()[0].id;
+    let owners = |table: &str| format!("SELECT DISTINCT user_id FROM {table}");
+    for table in [
+        "artists",
+        "albums",
+        "tracks",
+        "annotations",
+        "playlists",
+        "playlist_folders",
+        "watches",
+        "jobs",
+        "offerings",
+        "source_sessions",
+        "session_events",
+    ] {
+        let rows = toasty::sql::query(owners(table))
+            .exec(&mut db)
+            .await
+            .unwrap();
+        let ids: Vec<_> = rows
+            .into_iter()
+            .map(|row| match row {
+                toasty::stmt::Value::Record(record) => record[0].clone(),
+                other => other,
+            })
+            .collect();
+        assert_eq!(
+            ids,
+            [toasty::stmt::Value::I64(i64::try_from(owner).unwrap())],
+            "{table}"
+        );
+    }
+    // Their liked-music watch and its mirror are found per user.
+    assert!(
+        Watch::filter_by_user_id_and_remote_id(owner, "LM")
+            .first()
+            .exec(&mut db)
+            .await
+            .unwrap()
+            .is_some()
+    );
 }

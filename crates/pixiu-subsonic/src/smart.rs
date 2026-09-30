@@ -4,11 +4,13 @@
 //! worked out whenever it is read.
 
 use jiff::{Timestamp, ToSpan};
-use pixiu_db::{Db, toasty};
+use pixiu_db::{
+    Library,
+    owned::{Bind, Sql},
+    toasty,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::Value as Json;
-
-use crate::catalog::{Bind, select_ids};
 
 /// The most songs a smart playlist lists.
 const MAX_SONGS: i64 = 5000;
@@ -151,15 +153,14 @@ fn escape_like(text: &str) -> String {
         .replace('_', "\\_")
 }
 
-/// SQL with numbered parameters.
-struct Sql {
-    binds: Vec<Bind>,
+/// Rule conditions, as SQL whose parameters `sql` binds.
+struct Conditions<'a> {
+    sql: &'a mut Sql,
 }
 
-impl Sql {
+impl Conditions<'_> {
     fn param(&mut self, bind: Bind) -> String {
-        self.binds.push(bind);
-        format!("?{}", self.binds.len())
+        self.sql.param(bind)
     }
 
     fn condition(&mut self, rule: &Rule, now: Timestamp) -> String {
@@ -234,41 +235,43 @@ impl Sql {
     }
 }
 
-/// The SQL selecting the songs `groups` match, in album order, with its
-/// parameters.
-fn query(groups: &[RuleGroup], now: Timestamp) -> (String, Vec<Bind>) {
-    let mut sql = Sql { binds: Vec::new() };
+/// The SQL selecting the songs of `owner`'s library that `groups` match,
+/// in album order.
+fn query(owner: u64, groups: &[RuleGroup], now: Timestamp) -> Sql {
+    let mut sql = Sql::owned(owner, "");
+    let mut conditions = Conditions { sql: &mut sql };
     let any: Vec<String> = groups
         .iter()
         .map(|group| {
             let all: Vec<String> = group
                 .rules
                 .iter()
-                .map(|rule| sql.condition(rule, now))
+                .map(|rule| conditions.condition(rule, now))
                 .collect();
             format!("({})", all.join(" AND "))
         })
         .collect();
-    let limit = sql.param(Bind::Int(MAX_SONGS));
-    let text = format!(
+    let limit = conditions.param(Bind::Int(MAX_SONGS));
+    sql.push(&format!(
         "SELECT tracks.id FROM tracks \
          JOIN albums ON albums.id = tracks.album_id \
          LEFT JOIN annotations an ON an.item = 'tr-' || tracks.id \
-         WHERE {} \
+         AND an.user_id = tracks.user_id \
+         WHERE tracks.user_id = ?1 AND ({}) \
          ORDER BY albums.title_key, tracks.disc_number, tracks.track_number, tracks.id \
          LIMIT {limit}",
         any.join(" OR ")
-    );
-    (text, sql.binds)
+    ));
+    sql
 }
 
-/// The songs a smart playlist's stored rules match now. Rules that no
-/// longer parse match nothing.
+/// The songs of the library a smart playlist's stored rules match now.
+/// Rules that no longer parse match nothing.
 ///
 /// # Errors
 ///
 /// Fails on database errors.
-pub async fn track_ids(db: &mut Db, rules: &str) -> Result<Vec<u64>, toasty::Error> {
+pub async fn track_ids(lib: &Library, rules: &str) -> Result<Vec<u64>, toasty::Error> {
     let groups = match parse(rules) {
         Ok(groups) => groups,
         Err(error) => {
@@ -276,8 +279,9 @@ pub async fn track_ids(db: &mut Db, rules: &str) -> Result<Vec<u64>, toasty::Err
             return Ok(Vec::new());
         }
     };
-    let (text, binds) = query(&groups, pixiu_db::now());
-    select_ids(db, &text, binds).await
+    query(lib.owner(), &groups, pixiu_db::now())
+        .ids(&mut lib.db())
+        .await
 }
 
 #[cfg(test)]
@@ -321,16 +325,18 @@ mod tests {
         ]))
         .unwrap();
         let now: Timestamp = "2026-09-29T12:00:00Z".parse().unwrap();
-        let (text, binds) = query(&groups, now);
+        let sql = query(7, &groups, now);
+        let (text, binds) = (sql.text(), sql.binds());
         assert!(
             text.contains(
-                "WHERE (tracks.title LIKE ?1 ESCAPE '\\' AND COALESCE(an.play_count, 0) > ?2) \
-                 OR (tracks.added_at >= ?3)"
+                "WHERE tracks.user_id = ?1 AND ((tracks.title LIKE ?2 ESCAPE '\\' \
+                 AND COALESCE(an.play_count, 0) > ?3) OR (tracks.added_at >= ?4))"
             ),
             "{text}"
         );
-        assert!(matches!(&binds[0], Bind::Text(pattern) if pattern == "50\\%%"));
-        assert!(matches!(&binds[2], Bind::Text(cutoff) if cutoff == "2026-09-22T12:00:00Z"));
+        assert_eq!(binds[0], Bind::Int(7));
+        assert!(matches!(&binds[1], Bind::Text(pattern) if pattern == "50\\%%"));
+        assert!(matches!(&binds[3], Bind::Text(cutoff) if cutoff == "2026-09-22T12:00:00Z"));
     }
 
     fn json_rules(rules: &[(&str, &str, &[&str])]) -> serde_json::Value {

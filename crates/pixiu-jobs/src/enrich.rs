@@ -477,11 +477,11 @@ async fn lyrics_for(
 /// The setting that records [`repair_album_artists`] ran.
 const REPAIRED_ALBUM_ARTISTS: &str = "repair.album-artists";
 
-/// Once per hoard: looks up again, from the release they were matched to,
+/// Once per server: looks up again, from the release they were matched to,
 /// the albums an earlier píxiū filed under a shared credit ("A & B") as if
 /// it were an artist. Those album artists are the ones MusicBrainz-matched
 /// albums have without a MusicBrainz id. The lookups move each album to its
-/// first credited artist (tags and files included); the credit's artist
+/// first credited artist; the credit's artist
 /// goes once it has no albums left. Returns how many albums were queued.
 ///
 /// # Errors
@@ -509,12 +509,15 @@ pub async fn repair_album_artists(db: &mut Db, jobs: &Jobs) -> Result<usize, toa
             continue;
         };
         if album.enrichment == Some(Enrichment::Matched) && unnamed.contains(&album.artist_id) {
-            jobs.enqueue(NewJob::enrich(
-                album.id,
-                &format!("Look up {}", album.title),
-                Some(release),
-                false,
-            ))
+            jobs.enqueue(
+                album.user_id,
+                NewJob::enrich(
+                    album.id,
+                    &format!("Look up {}", album.title),
+                    Some(release),
+                    false,
+                ),
+            )
             .await?;
             queued += 1;
         }

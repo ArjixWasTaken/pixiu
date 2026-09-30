@@ -52,15 +52,16 @@ impl Treasury {
         Ok(())
     }
 
-    /// Takes back every claim of `kind` that refers to `reference`, except
-    /// those on tracks `keep` picks, and records `why` for each. Returns the
-    /// tracks that lost one.
+    /// Takes back every claim of `kind` that refers to `reference` on
+    /// `owner`'s tracks, except those on tracks `keep` picks, and records
+    /// `why` for each. Returns the tracks that lost one.
     ///
     /// # Errors
     ///
     /// Fails on database errors.
     pub async fn release(
         &self,
+        owner: u64,
         kind: ClaimKind,
         reference: &str,
         why: Release<'_>,
@@ -79,7 +80,10 @@ impl Treasury {
                 .first()
                 .exec(&mut db)
                 .await?;
-            if track.as_ref().is_some_and(&keep) {
+            if track
+                .as_ref()
+                .is_none_or(|track| track.user_id != owner || keep(track))
+            {
                 continue;
             }
             released.push(claim.track_id);
@@ -97,15 +101,15 @@ impl Treasury {
         Ok(released)
     }
 
-    /// Tracks nothing claims, newest first. They stay until the admin
-    /// deletes them.
+    /// `owner`'s tracks nothing claims, newest first. They stay until the
+    /// owner deletes them.
     ///
     /// # Errors
     ///
     /// Fails on database errors.
-    pub async fn orphans(&self) -> Result<Vec<Track>, toasty::Error> {
+    pub async fn orphans(&self, owner: u64) -> Result<Vec<Track>, toasty::Error> {
         let mut db = self.db.clone();
-        let ids = orphan_ids(&mut db).await?;
+        let ids = orphan_ids(&mut db, owner).await?;
         if ids.is_empty() {
             return Ok(Vec::new());
         }
@@ -144,27 +148,28 @@ impl Treasury {
         Ok(latest)
     }
 
-    /// How many orphans there are.
+    /// How many orphans `owner` has.
     ///
     /// # Errors
     ///
     /// Fails on database errors.
-    pub async fn orphan_count(&self) -> Result<usize, toasty::Error> {
-        Ok(orphan_ids(&mut self.db.clone()).await?.len())
+    pub async fn orphan_count(&self, owner: u64) -> Result<usize, toasty::Error> {
+        Ok(orphan_ids(&mut self.db.clone(), owner).await?.len())
     }
 
-    /// Deletes the orphans among `ids`: their rows, the albums and artists
-    /// they leave empty, and stored files nothing else plays. Claimed
-    /// tracks are left alone. Returns how many tracks were deleted.
+    /// Deletes `owner`'s orphans among `ids`: their rows, the albums and
+    /// artists they leave empty, and stored files nothing else plays.
+    /// Claimed tracks, and other users', are left alone. Returns how many
+    /// tracks were deleted.
     ///
     /// # Errors
     ///
     /// Fails on I/O and database errors; tracks deleted before the failure
     /// stay deleted.
-    pub async fn delete_orphans(&self, ids: &[u64]) -> Result<usize, IngestError> {
+    pub async fn delete_orphans(&self, owner: u64, ids: &[u64]) -> Result<usize, IngestError> {
         let _guard = self.lock.lock().await;
         let mut db = self.db.clone();
-        let orphans = orphan_ids(&mut db).await?;
+        let orphans = orphan_ids(&mut db, owner).await?;
         let mut deleted = 0;
         for &id in ids.iter().filter(|id| orphans.contains(id)) {
             let Some(track) = Track::filter_by_id(id).first().exec(&mut db).await? else {
@@ -178,7 +183,8 @@ impl Treasury {
 
     async fn delete_track(&self, db: &mut Db, track: Track) -> Result<(), IngestError> {
         tracing::info!(track = track.id, "orphan deleted");
-        forget_annotation(db, &format!("tr-{}", track.id)).await?;
+        let owner = track.user_id;
+        forget_annotation(db, owner, &format!("tr-{}", track.id)).await?;
         PlaylistEntry::filter_by_track_id(Some(track.id))
             .delete()
             .exec(db)
@@ -187,7 +193,10 @@ impl Treasury {
             .delete()
             .exec(db)
             .await?;
-        Lyrics::filter_by_track_id(track.id).delete().exec(db).await?;
+        Lyrics::filter_by_track_id(track.id)
+            .delete()
+            .exec(db)
+            .await?;
         let (album_id, artist_id, file_id) = (track.album_id, track.artist_id, track.file_id);
         track.delete().exec(db).await?;
         self.release_file(db, file_id).await?;
@@ -200,7 +209,7 @@ impl Treasury {
             && let Some(album) = Album::filter_by_id(album_id).first().exec(db).await?
         {
             let (album_artist, cover) = (album.artist_id, album.cover.clone());
-            forget_annotation(db, &format!("al-{}", album.id)).await?;
+            forget_annotation(db, owner, &format!("al-{}", album.id)).await?;
             album.delete().exec(db).await?;
             if let Some(cover) = cover {
                 self.release_image(db, &cover).await?;
@@ -228,7 +237,7 @@ impl Treasury {
                 .is_some();
         if !used && let Some(artist) = Artist::filter_by_id(artist_id).first().exec(db).await? {
             let image = artist.image.clone();
-            forget_annotation(db, &format!("ar-{}", artist.id)).await?;
+            forget_annotation(db, artist.user_id, &format!("ar-{}", artist.id)).await?;
             artist.delete().exec(db).await?;
             if let Some(image) = image {
                 self.release_image(db, &image).await?;
@@ -238,13 +247,14 @@ impl Treasury {
     }
 }
 
-async fn orphan_ids(db: &mut Db) -> Result<Vec<u64>, toasty::Error> {
-    let rows = toasty::sql::query(
-        "SELECT id FROM tracks WHERE id NOT IN (SELECT track_id FROM track_claims)",
+async fn orphan_ids(db: &mut Db, owner: u64) -> Result<Vec<u64>, toasty::Error> {
+    pixiu_db::owned::Sql::owned(
+        owner,
+        "SELECT id FROM tracks WHERE tracks.user_id = ?1 \
+         AND id NOT IN (SELECT track_id FROM track_claims)",
     )
-    .exec(db)
-    .await?;
-    Ok(ids(rows))
+    .ids(db)
+    .await
 }
 
 /// The first column of each row, as ids.
@@ -260,8 +270,12 @@ pub(crate) fn ids(rows: impl IntoIterator<Item = toasty::stmt::Value>) -> Vec<u6
         .collect()
 }
 
-async fn forget_annotation(db: &mut Db, item: &str) -> Result<(), toasty::Error> {
-    if let Some(annotation) = Annotation::filter_by_item(item).first().exec(db).await? {
+async fn forget_annotation(db: &mut Db, owner: u64, item: &str) -> Result<(), toasty::Error> {
+    if let Some(annotation) = Annotation::filter_by_user_id_and_item(owner, item)
+        .first()
+        .exec(db)
+        .await?
+    {
         annotation.delete().exec(db).await?;
     }
     Ok(())

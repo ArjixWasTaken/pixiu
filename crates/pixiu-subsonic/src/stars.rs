@@ -6,11 +6,11 @@
 //! while starred, even after leaving a watched playlist.
 
 use jiff::Timestamp;
-use pixiu_db::{Album, Annotation, Artist, ClaimKind, Db, ReleaseReason, Track, now, toasty};
+use pixiu_db::{Annotation, ClaimKind, Db, Library, ReleaseReason, Track, now, toasty};
 use pixiu_treasury::{Claim, Release};
 
 use crate::{
-    Failure, Params, SubsonicState, annotations,
+    Cx, Failure, Params, annotations,
     browse::not_found,
     catalog,
     ids::Id,
@@ -40,23 +40,26 @@ fn items(params: &Params) -> Result<Vec<Id>, Failure> {
     Ok(items)
 }
 
-async fn exists(db: &mut Db, id: Id) -> Result<bool, toasty::Error> {
+/// Whether the caller's library has the item.
+async fn exists(lib: &Library, id: Id) -> Result<bool, toasty::Error> {
     Ok(match id {
-        Id::Track(id) => Track::filter_by_id(id).first().exec(db).await?.is_some(),
-        Id::Album(id) => Album::filter_by_id(id).first().exec(db).await?.is_some(),
-        Id::Artist(id) => Artist::filter_by_id(id).first().exec(db).await?.is_some(),
+        Id::Track(id) => lib.track(id).await?.is_some(),
+        Id::Album(id) => lib.album(id).await?.is_some(),
+        Id::Artist(id) => lib.artist(id).await?.is_some(),
         Id::Playlist(_) => false,
     })
 }
 
-/// Sets an item's star and rating, creating its annotation if needed.
+/// Sets the owner's star and rating of an item, creating their annotation
+/// if needed.
 async fn annotate(
-    db: &mut Db,
+    lib: &Library,
     id: Id,
     change: impl FnOnce(Option<Timestamp>, Option<u8>) -> (Option<Timestamp>, Option<u8>),
 ) -> Result<(), toasty::Error> {
     let item = id.to_string();
-    match Annotation::filter_by_item(&item).first().exec(db).await? {
+    let db = &mut lib.db();
+    match lib.annotation(&item).await? {
         Some(mut annotation) => {
             let (starred_at, rating) = change(annotation.starred_at, annotation.rating);
             toasty::update!(annotation { starred_at, rating })
@@ -66,6 +69,7 @@ async fn annotate(
         None => {
             let (starred_at, rating) = change(None, None);
             toasty::create!(Annotation {
+                user_id: lib.owner(),
                 item,
                 play_count: 0,
                 starred_at,
@@ -93,16 +97,16 @@ async fn kept_tracks(db: &mut Db, id: Id) -> Result<Vec<u64>, toasty::Error> {
 }
 
 /// `star`: stars songs, albums and artists (again: the first star stays).
-pub(crate) async fn star(state: &SubsonicState, params: &Params) -> Result<Payload, Failure> {
+pub(crate) async fn star(cx: &Cx<'_>, params: &Params) -> Result<Payload, Failure> {
     let items = items(params)?;
-    let mut db = state.db.clone();
+    let mut db = cx.lib.db();
     for &id in &items {
-        if !exists(&mut db, id).await? {
+        if !exists(&cx.lib, id).await? {
             return Err(not_found("item"));
         }
     }
     for id in items {
-        annotate(&mut db, id, |starred, rating| {
+        annotate(&cx.lib, id, |starred, rating| {
             (starred.or_else(|| Some(now())), rating)
         })
         .await?;
@@ -111,20 +115,23 @@ pub(crate) async fn star(state: &SubsonicState, params: &Params) -> Result<Paylo
             reference: Some(id.to_string()),
         };
         for track_id in kept_tracks(&mut db, id).await? {
-            state.treasury.claim(track_id, &claim).await?;
+            cx.state.treasury.claim(track_id, &claim).await?;
         }
     }
     Ok(Payload::default())
 }
 
 /// `unstar`: takes stars (and the claims that came with them) back.
-pub(crate) async fn unstar(state: &SubsonicState, params: &Params) -> Result<Payload, Failure> {
-    let mut db = state.db.clone();
+pub(crate) async fn unstar(cx: &Cx<'_>, params: &Params) -> Result<Payload, Failure> {
     for id in items(params)? {
-        annotate(&mut db, id, |_, rating| (None, rating)).await?;
-        state
+        if !exists(&cx.lib, id).await? {
+            continue;
+        }
+        annotate(&cx.lib, id, |_, rating| (None, rating)).await?;
+        cx.state
             .treasury
             .release(
+                cx.lib.owner(),
                 ClaimKind::Starred,
                 &id.to_string(),
                 Release {
@@ -139,7 +146,7 @@ pub(crate) async fn unstar(state: &SubsonicState, params: &Params) -> Result<Pay
 }
 
 /// `setRating`: 1 to 5 stars, or 0 to clear the rating.
-pub(crate) async fn set_rating(state: &SubsonicState, params: &Params) -> Result<Payload, Failure> {
+pub(crate) async fn set_rating(cx: &Cx<'_>, params: &Params) -> Result<Payload, Failure> {
     let value = params.require("id")?;
     let Some(id @ (Id::Track(_) | Id::Album(_) | Id::Artist(_))) = Id::parse(value) else {
         return Err(not_found("item"));
@@ -150,11 +157,10 @@ pub(crate) async fn set_rating(state: &SubsonicState, params: &Params) -> Result
         .ok()
         .filter(|rating| *rating <= 5)
         .ok_or_else(|| ApiError::new(ErrorCode::Generic, "a rating is 0 to 5"))?;
-    let mut db = state.db.clone();
-    if !exists(&mut db, id).await? {
+    if !exists(&cx.lib, id).await? {
         return Err(not_found("item"));
     }
-    annotate(&mut db, id, |starred, _| {
+    annotate(&cx.lib, id, |starred, _| {
         (starred, (rating > 0).then_some(rating))
     })
     .await?;
@@ -163,10 +169,10 @@ pub(crate) async fn set_rating(state: &SubsonicState, params: &Params) -> Result
 
 /// `getStarred` (folder model) and `getStarred2` (ID3 model): what is
 /// starred, the latest first.
-pub(crate) async fn starred(state: &SubsonicState, id3: bool) -> Result<Payload, Failure> {
-    let mut db = state.db.clone();
-    let mut starred: Vec<Annotation> = Annotation::all()
-        .exec(&mut db)
+pub(crate) async fn starred(cx: &Cx<'_>, id3: bool) -> Result<Payload, Failure> {
+    let lib = &cx.lib;
+    let mut starred: Vec<Annotation> = lib
+        .all_annotations()
         .await?
         .into_iter()
         .filter(|annotation| annotation.starred_at.is_some())
@@ -182,9 +188,9 @@ pub(crate) async fn starred(state: &SubsonicState, id3: bool) -> Result<Payload,
         }
     }
 
-    let artists = catalog::artists_in_order(&mut db, &artist_ids).await?;
-    let artist_annotations = annotations::for_artists(&mut db, artist_ids).await?;
-    let all_albums = Album::all().exec(&mut db).await?;
+    let artists = catalog::artists_in_order(lib, &artist_ids).await?;
+    let artist_annotations = annotations::for_artists(lib, artist_ids).await?;
+    let all_albums = lib.all_albums().await?;
     let summaries = catalog::summarize_artists(&all_albums);
     let artist_elements: Vec<Element> = artists
         .iter()
@@ -205,11 +211,11 @@ pub(crate) async fn starred(state: &SubsonicState, id3: bool) -> Result<Payload,
         })
         .collect();
 
-    let albums = catalog::albums_in_order(&mut db, &album_ids).await?;
+    let albums = catalog::albums_in_order(lib, &album_ids).await?;
     let album_artists =
-        catalog::artists_by_id(&mut db, albums.iter().map(|album| album.artist_id)).await?;
-    let stats = catalog::album_stats(&mut db).await?;
-    let album_annotations = annotations::for_albums(&mut db, album_ids).await?;
+        catalog::artists_by_id(lib, albums.iter().map(|album| album.artist_id)).await?;
+    let stats = catalog::album_stats(lib).await?;
+    let album_annotations = annotations::for_albums(lib, album_ids).await?;
     let album_elements: Vec<Element> = albums
         .iter()
         .map(|album| {
@@ -224,8 +230,8 @@ pub(crate) async fn starred(state: &SubsonicState, id3: bool) -> Result<Payload,
         })
         .collect();
 
-    let tracks = catalog::tracks_in_order(&mut db, &track_ids).await?;
-    let songs = catalog::songs(&mut db, "song", &tracks).await?;
+    let tracks = catalog::tracks_in_order(lib, &track_ids).await?;
+    let songs = catalog::songs(lib, "song", &tracks).await?;
 
     Ok(Element::new(if id3 { "starred2" } else { "starred" })
         .list("artist", artist_elements)

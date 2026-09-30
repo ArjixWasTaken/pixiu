@@ -21,6 +21,9 @@ use pixiu_jobs::{
 };
 use pixiu_treasury::{Claim, Provenance, Treasury, tags};
 
+/// The user every test library and job belongs to.
+const OWNER: u64 = 1;
+
 fn fixture(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../fixtures/audio")
@@ -116,6 +119,7 @@ async fn hoard() -> Hoard {
         let info = tags::read(&staged).unwrap();
         album_id = treasury
             .ingest(
+                OWNER,
                 &staged,
                 &info,
                 None,
@@ -521,6 +525,7 @@ async fn albums_under_a_shared_credit_are_repaired_once() {
     let durations: Vec<u64> = before.iter().map(|track| track.duration_ms).collect();
     // What an earlier píxiū made of a match: the credit as an artist.
     let credit_artist = toasty::create!(Artist {
+        user_id: OWNER,
         name: "Test Artist & Guest",
         name_key: "test artist & guest",
         created_at: now(),
@@ -545,7 +550,7 @@ async fn albums_under_a_shared_credit_are_repaired_once() {
         .await
         .unwrap();
     assert_eq!(queued, 1);
-    let job = jobs.unfinished().await.unwrap().remove(0);
+    let job = jobs.unfinished(OWNER).await.unwrap().remove(0);
     assert_eq!(job.kind, JobKind::Enrich);
     let payload: EnrichJob = serde_json::from_str(&job.payload).unwrap();
     assert_eq!(payload.release.as_deref(), Some("rel-duo"));

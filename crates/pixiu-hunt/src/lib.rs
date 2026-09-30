@@ -10,11 +10,11 @@ pub mod ytmusic;
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
-    sync::Mutex,
+    sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
 
-use pixiu_db::{Track, toasty};
+use pixiu_db::{AudioFile, Track, toasty};
 use pixiu_treasury::{Claim, Cover, IngestError, Provenance, Treasury, tags};
 
 pub use model::{
@@ -88,6 +88,10 @@ const ALBUM_CACHE_TTL: Duration = Duration::from_secs(600);
 /// One track to bring home.
 #[derive(Debug, Clone)]
 pub struct DownloadRequest {
+    /// The user whose library the track joins.
+    pub owner: u64,
+    /// The job downloading it, which names its staging directory.
+    pub job_id: u64,
     pub video_id: String,
     pub claim: Claim,
     /// Session cookies, for the `yt-dlp` fallback.
@@ -101,6 +105,9 @@ pub struct Hunter {
     staging: PathBuf,
     http: reqwest::Client,
     albums: Mutex<HashMap<String, (Instant, RemoteAlbum)>>,
+    /// Videos being downloaded: a second download of the same video waits,
+    /// then finds its file stored.
+    videos: Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
 }
 
 impl Hunter {
@@ -118,6 +125,7 @@ impl Hunter {
                 .read_timeout(Duration::from_secs(60))
                 .build()?,
             albums: Mutex::default(),
+            videos: Mutex::default(),
         })
     }
 
@@ -149,22 +157,50 @@ impl Hunter {
         Ok(album)
     }
 
-    /// Downloads a track, tags it and files it into the treasure.
-    /// `progress` receives percentages.
+    /// Downloads a track, tags it and adds it to the owner's library. A
+    /// video the store holds already (someone else downloaded it) is not
+    /// downloaded again: the new track shares the file. `progress`
+    /// receives percentages.
     ///
     /// # Errors
     ///
-    /// Fails when the track is already hoarded, cannot be downloaded (by
-    /// the platform client nor `yt-dlp`), or cannot be filed.
+    /// Fails when the owner has the track already, or it cannot be
+    /// downloaded (by the platform client nor `yt-dlp`) or filed.
     pub async fn download(
         &self,
         request: &DownloadRequest,
         progress: &(dyn Fn(u8) + Send + Sync),
     ) -> Result<Track, HuntError> {
         let video_id = request.video_id.as_str();
-        if let Some(existing) = Track::filter_by_ytm_video_id(video_id)
+        let video = Arc::clone(
+            self.videos
+                .lock()
+                .unwrap()
+                .entry(video_id.to_owned())
+                .or_default(),
+        );
+        let result = {
+            let _one_at_a_time = video.lock().await;
+            self.download_video(request, progress).await
+        };
+        // Forget the lock once nobody else waits on it.
+        let mut videos = self.videos.lock().unwrap();
+        if Arc::strong_count(&video) == 2 {
+            videos.remove(video_id);
+        }
+        result
+    }
+
+    async fn download_video(
+        &self,
+        request: &DownloadRequest,
+        progress: &(dyn Fn(u8) + Send + Sync),
+    ) -> Result<Track, HuntError> {
+        let video_id = request.video_id.as_str();
+        let mut db = self.treasury.db();
+        if let Some(existing) = Track::filter_by_user_id_and_ytm_video_id(request.owner, video_id)
             .first()
-            .exec(&mut self.treasury.db())
+            .exec(&mut db)
             .await?
         {
             return Err(HuntError::AlreadyHoarded {
@@ -186,22 +222,81 @@ impl Hunter {
         };
         progress(5);
 
+        let stored = AudioFile::filter_by_ytm_video_id(Some(video_id.to_owned()))
+            .first()
+            .exec(&mut db)
+            .await?;
+        if let Some(file) = stored
+            && tokio::fs::try_exists(self.treasury.resolve(&file.path)).await?
+        {
+            let filed = self
+                .file_stored(request, &track, album.as_ref(), file)
+                .await?;
+            progress(100);
+            return Ok(filed);
+        }
+
+        let staging = self.staging.join(request.job_id.to_string());
+        tokio::fs::create_dir_all(&staging).await?;
         let result = self
-            .fetch_and_file(request, &track, album.as_ref(), progress)
+            .fetch_and_file(request, &staging, &track, album.as_ref(), progress)
             .await;
-        self.clean_staging(video_id).await;
+        if let Err(error) = tokio::fs::remove_dir_all(&staging).await {
+            tracing::warn!(%error, path = %staging.display(), "cannot clean up staging");
+        }
         result
+    }
+
+    /// Adds a track playing a file the store holds, described as a fresh
+    /// download would be.
+    async fn file_stored(
+        &self,
+        request: &DownloadRequest,
+        track: &RemoteTrack,
+        album: Option<&RemoteAlbum>,
+        file: AudioFile,
+    ) -> Result<Track, HuntError> {
+        let described = describe(&request.video_id, track, album);
+        let path = self.treasury.resolve(&file.path);
+        let mut info = tokio::task::spawn_blocking(move || tags::read(&path))
+            .await?
+            .map_err(|error| HuntError::Tags(error.to_string()))?;
+        info.title = Some(track.title.clone());
+        info.artist = Some(described.credit.clone());
+        info.album = Some(described.album_title.to_owned());
+        info.album_artist = Some(described.album_artist.to_owned());
+        info.track_number = described.track_number;
+        info.year = described.year.map(i32::from);
+        info.artists.clone_from(&track.artists);
+        let file_id = file.id;
+        let stored = self
+            .treasury
+            .ingest_stored(
+                request.owner,
+                file,
+                &info,
+                described.provenance,
+                request.claim.clone(),
+            )
+            .await
+            .map_err(|error| match error {
+                IngestError::Duplicate { track_id } => HuntError::AlreadyHoarded { track_id },
+                other => HuntError::Ingest(other),
+            })?;
+        tracing::info!(video_id = %request.video_id, file = file_id, "reused a stored file");
+        Ok(stored)
     }
 
     async fn fetch_and_file(
         &self,
         request: &DownloadRequest,
+        staging: &Path,
         track: &RemoteTrack,
         album: Option<&RemoteAlbum>,
         progress: &(dyn Fn(u8) + Send + Sync),
     ) -> Result<Track, HuntError> {
         let video_id = request.video_id.as_str();
-        let downloaded = self.fetch_audio(request, progress).await?;
+        let downloaded = self.fetch_audio(request, staging, progress).await?;
         progress(85);
 
         // Opus in WebM becomes Ogg Opus; anything else is kept as served.
@@ -209,7 +304,7 @@ impl Hunter {
             .extension()
             .is_some_and(|extension| extension == "webm");
         let audio = if is_webm {
-            let output = self.staging.join(format!("{video_id}.opus"));
+            let output = staging.join(format!("{video_id}.opus"));
             let (input, target) = (downloaded.clone(), output.clone());
             tokio::task::spawn_blocking(move || pixiu_media::remux(&input, &target)).await??;
             output
@@ -218,44 +313,20 @@ impl Hunter {
         };
         progress(90);
 
-        let cover_url = album
-            .and_then(|album| album.cover_url.as_deref())
-            .or(track.cover_url.as_deref());
-        let cover = match cover_url {
+        let described = describe(video_id, track, album);
+        let cover = match described.cover_url {
             Some(url) => self.fetch_cover(url).await,
             None => None,
         };
-
-        let album_title = album.map_or_else(
-            || {
-                track
-                    .album
-                    .as_ref()
-                    .map_or("Singles", |album| album.title.as_str())
-            },
-            |album| album.title.as_str(),
-        );
-        let album_artist = album
-            .and_then(|album| album.artists.first())
-            .or(track.artists.first())
-            .map_or("Unknown Artist", String::as_str);
-        let track_number = track.track_number.map(u32::from).or_else(|| {
-            let position = album?.tracks.iter().position(|item| item.id == track.id)?;
-            u32::try_from(position + 1).ok()
-        });
-        let credit = track.artist_credit();
-        let source_url = format!("https://music.youtube.com/watch?v={video_id}");
-        let year = album.and_then(|album| album.year);
-
         {
             let tags = tagging::TrackTags {
                 title: &track.title,
-                artist_credit: &credit,
-                album: album_title,
-                album_artist,
-                track_number,
-                year,
-                source_url: &source_url,
+                artist_credit: &described.credit,
+                album: described.album_title,
+                album_artist: described.album_artist,
+                track_number: described.track_number,
+                year: described.year,
+                source_url: &described.source_url,
                 cover: cover.as_ref(),
             };
             let path = audio.clone();
@@ -271,21 +342,16 @@ impl Hunter {
             .map_err(|error| HuntError::Tags(error.to_string()))?;
         info.artists.clone_from(&track.artists);
 
-        // The channel of whichever artist became the album artist above.
-        let album_artist_id = match album {
-            Some(album) if !album.artists.is_empty() => album.artist_id.clone(),
-            _ => track.artist_id.clone(),
-        };
-        let provenance = Provenance::youtube_music(
-            video_id,
-            album
-                .map(|album| album.id.clone())
-                .or_else(|| track.album.as_ref().map(|album| album.id.clone())),
-            album_artist_id,
-        );
         let stored = self
             .treasury
-            .ingest(&audio, &info, None, provenance, request.claim.clone())
+            .ingest(
+                request.owner,
+                &audio,
+                &info,
+                None,
+                described.provenance,
+                request.claim.clone(),
+            )
             .await
             .map_err(|error| match error {
                 IngestError::Duplicate { track_id } => HuntError::AlreadyHoarded { track_id },
@@ -298,12 +364,15 @@ impl Hunter {
     /// Downloads the audio into staging, falling back to `yt-dlp`.
     /// Runs yt-dlp, again after a pause when YouTube refuses or fails it:
     /// that often passes, e.g. once other downloads are done.
-    async fn yt_dlp(&self, request: &DownloadRequest) -> Result<PathBuf, HuntError> {
+    async fn yt_dlp(
+        &self,
+        request: &DownloadRequest,
+        staging: &Path,
+    ) -> Result<PathBuf, HuntError> {
         let video_id = request.video_id.as_str();
         let mut attempt = 0;
         loop {
-            let result =
-                download::yt_dlp(video_id, &self.staging, request.cookies.as_deref()).await;
+            let result = download::yt_dlp(video_id, staging, request.cookies.as_deref()).await;
             match result {
                 Err(HuntError::YtDlp(reason))
                     if attempt < YT_DLP_RETRIES
@@ -322,6 +391,7 @@ impl Hunter {
     async fn fetch_audio(
         &self,
         request: &DownloadRequest,
+        staging: &Path,
         progress: &(dyn Fn(u8) + Send + Sync),
     ) -> Result<PathBuf, HuntError> {
         let video_id = request.video_id.as_str();
@@ -334,9 +404,7 @@ impl Hunter {
 
         let direct = async {
             let source = self.ytm.audio(video_id).await?;
-            let path = self
-                .staging
-                .join(format!("{video_id}.{}", source.extension));
+            let path = staging.join(format!("{video_id}.{}", source.extension));
             download::fetch(&self.http, &source, &path, &report).await?;
             Ok::<_, HuntError>(path)
         }
@@ -346,7 +414,7 @@ impl Hunter {
             Ok(path) => Ok(path),
             Err(error) => {
                 tracing::warn!(%error, video_id, "direct download failed; trying yt-dlp");
-                let path = self.yt_dlp(request).await?;
+                let path = self.yt_dlp(request, staging).await?;
                 progress(80);
                 Ok(path)
             }
@@ -378,25 +446,69 @@ impl Hunter {
         pixiu_treasury::covers::is_displayable(&data).then_some(Cover { data, mime })
     }
 
-    /// Removes whatever a download left in staging.
-    async fn clean_staging(&self, video_id: &str) {
-        let Ok(mut entries) = tokio::fs::read_dir(&self.staging).await else {
-            return;
-        };
-        while let Ok(Some(entry)) = entries.next_entry().await {
-            let leftover = entry
-                .file_name()
-                .to_str()
-                .is_some_and(|name| name.starts_with(&format!("{video_id}.")));
-            if leftover {
-                let _ = tokio::fs::remove_file(entry.path()).await;
-            }
-        }
-    }
-
     /// The staging directory, for tests and diagnostics.
     #[must_use]
     pub fn staging(&self) -> &Path {
         &self.staging
+    }
+}
+
+/// A track as a download files it: tags and provenance, from the
+/// platform's metadata.
+struct Described<'a> {
+    credit: String,
+    album_title: &'a str,
+    album_artist: &'a str,
+    track_number: Option<u32>,
+    year: Option<u16>,
+    source_url: String,
+    cover_url: Option<&'a str>,
+    provenance: Provenance,
+}
+
+fn describe<'a>(
+    video_id: &str,
+    track: &'a RemoteTrack,
+    album: Option<&'a RemoteAlbum>,
+) -> Described<'a> {
+    let album_title = album.map_or_else(
+        || {
+            track
+                .album
+                .as_ref()
+                .map_or("Singles", |album| album.title.as_str())
+        },
+        |album| album.title.as_str(),
+    );
+    let album_artist = album
+        .and_then(|album| album.artists.first())
+        .or(track.artists.first())
+        .map_or("Unknown Artist", String::as_str);
+    let track_number = track.track_number.map(u32::from).or_else(|| {
+        let position = album?.tracks.iter().position(|item| item.id == track.id)?;
+        u32::try_from(position + 1).ok()
+    });
+    // The channel of whichever artist became the album artist above.
+    let album_artist_id = match album {
+        Some(album) if !album.artists.is_empty() => album.artist_id.clone(),
+        _ => track.artist_id.clone(),
+    };
+    Described {
+        credit: track.artist_credit(),
+        album_title,
+        album_artist,
+        track_number,
+        year: album.and_then(|album| album.year),
+        source_url: format!("https://music.youtube.com/watch?v={video_id}"),
+        cover_url: album
+            .and_then(|album| album.cover_url.as_deref())
+            .or(track.cover_url.as_deref()),
+        provenance: Provenance::youtube_music(
+            video_id,
+            album
+                .map(|album| album.id.clone())
+                .or_else(|| track.album.as_ref().map(|album| album.id.clone())),
+            album_artist_id,
+        ),
     }
 }

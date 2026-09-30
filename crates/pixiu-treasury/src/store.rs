@@ -173,7 +173,11 @@ impl Treasury {
 
     /// Deletes a stored picture once no album or artist shows it. Call with
     /// the lock held, after the rows that used it changed.
-    pub(crate) async fn release_image(&self, db: &mut Db, relative: &str) -> Result<(), IngestError> {
+    pub(crate) async fn release_image(
+        &self,
+        db: &mut Db,
+        relative: &str,
+    ) -> Result<(), IngestError> {
         if !relative.starts_with(STORE) || self.image_in_use(db, relative).await? {
             return Ok(());
         }
@@ -281,16 +285,22 @@ impl Treasury {
         }
 
         for mut album in Album::all().exec(&mut db).await? {
-            let Some(cover) = album.cover.clone().filter(|cover| !cover.starts_with(STORE)) else {
+            let Some(cover) = album
+                .cover
+                .clone()
+                .filter(|cover| !cover.starts_with(STORE))
+            else {
                 continue;
             };
-            let cover = self
-                .adopt_picture(&self.resolve(&cover), &mut done)
-                .await?;
+            let cover = self.adopt_picture(&self.resolve(&cover), &mut done).await?;
             toasty::update!(album { cover }).exec(&mut db).await?;
         }
         for mut artist in Artist::all().exec(&mut db).await? {
-            let Some(image) = artist.image.clone().filter(|image| !image.starts_with(STORE)) else {
+            let Some(image) = artist
+                .image
+                .clone()
+                .filter(|image| !image.starts_with(STORE))
+            else {
                 continue;
             };
             let image = self
@@ -441,10 +451,8 @@ impl Treasury {
     }
 
     async fn image_stored(&self, sha256: &str) -> bool {
-        let Ok(mut entries) = tokio::fs::read_dir(
-            self.resolve(&format!("{STORE}/images/{}", &sha256[..2])),
-        )
-        .await
+        let Ok(mut entries) =
+            tokio::fs::read_dir(self.resolve(&format!("{STORE}/images/{}", &sha256[..2]))).await
         else {
             return false;
         };
@@ -535,6 +543,9 @@ mod tests {
             audio_path(&sha, "FLAC"),
             format!(".store/audio/ab/{sha}.flac")
         );
-        assert_eq!(image_path(&sha, "jpg"), format!(".store/images/ab/{sha}.jpg"));
+        assert_eq!(
+            image_path(&sha, "jpg"),
+            format!(".store/images/ab/{sha}.jpg")
+        );
     }
 }

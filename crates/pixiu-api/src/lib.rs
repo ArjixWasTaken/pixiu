@@ -33,7 +33,7 @@ use axum::{
 };
 use pixiu_browser::LoginDesk;
 use pixiu_core::SecretBox;
-use pixiu_db::{ApiKey, Db, User, now, toasty};
+use pixiu_db::{ApiKey, Db, Library, User, now, toasty};
 use pixiu_hunt::Hunter;
 use pixiu_jobs::{Jobs, Warden};
 use pixiu_treasury::{Offerings, Treasury};
@@ -235,6 +235,18 @@ type ApiResult<T> = Result<T, ApiError>;
 pub(crate) struct Session {
     pub user: User,
     pub key: ApiKey,
+}
+
+impl Session {
+    /// The signed-in user's library: all they see and change.
+    pub(crate) fn library(&self, state: &ApiState) -> Library {
+        Library::new(state.db.clone(), self.user.id)
+    }
+
+    /// The signed-in user's id, whose library everything is in.
+    pub(crate) fn owner(&self) -> u64 {
+        self.user.id
+    }
 }
 
 impl FromRequestParts<ApiState> for Session {

@@ -3,31 +3,27 @@
 //! Features píxiū does not have are switched off here, which hides them.
 
 use axum::{Json, extract::State};
-use pixiu_db::toasty::{self, stmt::Value};
+use pixiu_db::{Library, owned::as_u64};
 use serde_json::{Value as JsonValue, json};
 
 use crate::{ApiResult, ApiState, Session};
 
-/// A whole number from a raw SQL result.
-fn as_u64(value: &Value) -> u64 {
-    match value {
-        Value::I64(value) => u64::try_from(*value).unwrap_or(0),
-        Value::U64(value) => *value,
-        Value::I32(value) => u64::try_from(*value).unwrap_or(0),
-        Value::U32(value) => u64::from(*value),
-        _ => 0,
-    }
-}
-
-/// How many songs the hoard holds, and their total length in seconds.
-async fn totals(state: &ApiState) -> ApiResult<(u64, u64)> {
-    let rows = toasty::sql::query("SELECT COUNT(*), COALESCE(SUM(duration_ms), 0) FROM tracks")
-        .exec(&mut state.db.clone())
+/// How many songs the library holds, and their total length in seconds.
+async fn totals(lib: &Library) -> ApiResult<(u64, u64)> {
+    let rows = lib
+        .sql(
+            "SELECT COUNT(*), COALESCE(SUM(duration_ms), 0) FROM tracks \
+             WHERE tracks.user_id = ?1",
+        )
+        .rows(&mut lib.db())
         .await?;
-    Ok(match rows.first() {
-        Some(Value::Record(record)) => (as_u64(&record[0]), as_u64(&record[1]) / 1000),
-        _ => (0, 0),
-    })
+    let number = |index: usize| {
+        rows.first()
+            .and_then(|row| row.get(index))
+            .and_then(as_u64)
+            .unwrap_or(0)
+    };
+    Ok((number(0), number(1) / 1000))
 }
 
 /// `GET /api/bootstrap`.
@@ -35,7 +31,8 @@ pub(crate) async fn bootstrap(
     State(state): State<ApiState>,
     session: Session,
 ) -> ApiResult<Json<JsonValue>> {
-    let (song_count, song_length) = totals(&state).await?;
+    let lib = session.library(&state);
+    let (song_count, song_length) = totals(&lib).await?;
     let user = &session.user;
     Ok(Json(json!({
         "current_user": {
@@ -69,7 +66,7 @@ pub(crate) async fn bootstrap(
         "cdn_url": "",
         "media_path_set": true,
         "playlists": [],
-        "playlist_folders": crate::playlists::folders(&mut state.db.clone()).await?,
+        "playlist_folders": crate::playlists::folders(&lib).await?,
         "settings": {},
         "users": [],
         "queue_state": {
@@ -94,6 +91,6 @@ pub(crate) async fn bootstrap(
         "supports_transcoding": true,
         "dir_separator": "/",
         "current_theme": null,
-        "hunting": crate::jobs::summarize(&state).await?,
+        "hunting": crate::jobs::summarize(&state, &session).await?,
     })))
 }

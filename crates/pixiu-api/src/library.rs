@@ -1,6 +1,7 @@
 //! The library in the orders koel's screens list it: albums, artists and
 //! songs sorted by any column and paged with a cursor, plus recently
-//! played songs. Items are Subsonic JSON (see [`pixiu_subsonic::render`]).
+//! played songs, all of the signed-in user's library. Items are Subsonic
+//! JSON (see [`pixiu_subsonic::render`]).
 
 use axum::{
     Json,
@@ -8,8 +9,9 @@ use axum::{
     http::StatusCode,
 };
 use pixiu_db::{
-    Db,
-    toasty::{self, stmt::Value},
+    Library,
+    owned::{Bind, Sql, as_u64},
+    toasty,
 };
 use pixiu_subsonic::{ids, render};
 use serde::Deserialize;
@@ -54,60 +56,6 @@ impl ListQuery {
     }
 }
 
-/// SQL with numbered parameters.
-#[derive(Default)]
-struct Sql {
-    text: String,
-    binds: Vec<Bind>,
-}
-
-enum Bind {
-    Int(i64),
-    Text(String),
-}
-
-impl Sql {
-    fn new(text: &str) -> Self {
-        Self {
-            text: text.to_owned(),
-            binds: Vec::new(),
-        }
-    }
-
-    fn param(&mut self, bind: Bind) -> String {
-        self.binds.push(bind);
-        format!("?{}", self.binds.len())
-    }
-
-    fn push(&mut self, text: &str) {
-        self.text.push_str(text);
-    }
-
-    /// Runs the query, whose first column is an id.
-    async fn ids(self, db: &mut Db) -> Result<Vec<u64>, toasty::Error> {
-        let mut query = toasty::sql::query(&self.text);
-        for bind in self.binds {
-            query = match bind {
-                Bind::Int(value) => query.bind(value),
-                Bind::Text(value) => query.bind(value),
-            };
-        }
-        Ok(query
-            .exec(db)
-            .await?
-            .iter()
-            .filter_map(|row| match row {
-                Value::Record(record) => match &record[0] {
-                    Value::I64(id) => u64::try_from(*id).ok(),
-                    Value::U64(id) => Some(*id),
-                    _ => None,
-                },
-                _ => None,
-            })
-            .collect())
-    }
-}
-
 fn bad_sort(field: &str) -> ApiError {
     ApiError::new(
         StatusCode::UNPROCESSABLE_ENTITY,
@@ -118,13 +66,13 @@ fn bad_sort(field: &str) -> ApiError {
 /// Runs a page of `sql` (ordered, without `LIMIT`), rendering the ids it
 /// selects, as koel's cursor pages: `{data, meta: {next_cursor}}`.
 async fn page<F>(
-    state: &ApiState,
+    lib: &Library,
     mut sql: Sql,
     query: &ListQuery,
     render: F,
 ) -> ApiResult<Json<JsonValue>>
 where
-    F: AsyncFnOnce(&mut Db, &[u64]) -> Result<Vec<JsonValue>, toasty::Error>,
+    F: AsyncFnOnce(&Library, &[u64]) -> Result<Vec<JsonValue>, toasty::Error>,
 {
     let (offset, limit) = (query.offset(), query.limit());
     // One more than asked, to tell whether another page follows.
@@ -132,11 +80,10 @@ where
     let offset_param = sql.param(Bind::Int(i64::from(offset)));
     sql.push(&format!(" LIMIT {limit_param} OFFSET {offset_param}"));
 
-    let mut db = state.db.clone();
-    let mut ids = sql.ids(&mut db).await?;
+    let mut ids = sql.ids(&mut lib.db()).await?;
     let more = ids.len() > limit as usize;
     ids.truncate(limit as usize);
-    let data = render(&mut db, &ids).await?;
+    let data = render(lib, &ids).await?;
     let next_cursor = more.then(|| (offset + limit).to_string());
     Ok(Json(json!({
         "data": data,
@@ -147,7 +94,7 @@ where
 /// `GET /api/albums`.
 pub(crate) async fn albums(
     State(state): State<ApiState>,
-    _: Session,
+    session: Session,
     Query(query): Query<ListQuery>,
 ) -> ApiResult<Json<JsonValue>> {
     let field = query.sort.as_deref().unwrap_or("name");
@@ -162,24 +109,27 @@ pub(crate) async fn albums(
         other => return Err(bad_sort(other)),
     };
     let order = if query.descending() { "DESC" } else { "ASC" };
-    let mut sql = Sql::new(
+    let lib = session.library(&state);
+    let mut sql = lib.sql(
         "SELECT albums.id FROM albums \
          JOIN artists ON artists.id = albums.artist_id \
-         LEFT JOIN annotations an ON an.item = 'al-' || albums.id",
+         LEFT JOIN annotations an ON an.item = 'al-' || albums.id \
+         AND an.user_id = albums.user_id \
+         WHERE albums.user_id = ?1",
     );
     if query.favorites_only {
-        sql.push(" WHERE an.starred_at IS NOT NULL");
+        sql.push(" AND an.starred_at IS NOT NULL");
     }
     sql.push(&format!(
         " ORDER BY {key} {order}, albums.title_key, albums.id"
     ));
-    page(&state, sql, &query, render::albums).await
+    page(&lib, sql, &query, render::albums).await
 }
 
 /// `GET /api/artists`: album artists, as the Subsonic API lists them.
 pub(crate) async fn artists(
     State(state): State<ApiState>,
-    _: Session,
+    session: Session,
     Query(query): Query<ListQuery>,
 ) -> ApiResult<Json<JsonValue>> {
     let field = query.sort.as_deref().unwrap_or("name");
@@ -191,10 +141,13 @@ pub(crate) async fn artists(
         other => return Err(bad_sort(other)),
     };
     let order = if query.descending() { "DESC" } else { "ASC" };
-    let mut sql = Sql::new(
+    let lib = session.library(&state);
+    let mut sql = lib.sql(
         "SELECT artists.id FROM artists \
          LEFT JOIN annotations an ON an.item = 'ar-' || artists.id \
-         WHERE EXISTS (SELECT 1 FROM albums WHERE albums.artist_id = artists.id)",
+         AND an.user_id = artists.user_id \
+         WHERE artists.user_id = ?1 \
+         AND EXISTS (SELECT 1 FROM albums WHERE albums.artist_id = artists.id)",
     );
     if query.favorites_only {
         sql.push(" AND an.starred_at IS NOT NULL");
@@ -202,13 +155,13 @@ pub(crate) async fn artists(
     sql.push(&format!(
         " ORDER BY {key} {order}, artists.name_key, artists.id"
     ));
-    page(&state, sql, &query, render::artists).await
+    page(&lib, sql, &query, render::artists).await
 }
 
 /// `GET /api/songs`: every song, or a genre's, or an artist's.
 pub(crate) async fn songs(
     State(state): State<ApiState>,
-    _: Session,
+    session: Session,
     Query(query): Query<ListQuery>,
 ) -> ApiResult<Json<JsonValue>> {
     let field = query.sort.as_deref().unwrap_or("title");
@@ -228,11 +181,13 @@ pub(crate) async fn songs(
         other => return Err(bad_sort(other)),
     };
     let order = if query.descending() { "DESC" } else { "ASC" };
-    let mut sql = Sql::new(
+    let lib = session.library(&state);
+    let mut sql = lib.sql(
         "SELECT tracks.id FROM tracks \
          JOIN albums ON albums.id = tracks.album_id \
          LEFT JOIN annotations an ON an.item = 'tr-' || tracks.id \
-         WHERE 1",
+         AND an.user_id = tracks.user_id \
+         WHERE tracks.user_id = ?1",
     );
     if query.favorites_only {
         sql.push(" AND an.starred_at IS NOT NULL");
@@ -253,7 +208,7 @@ pub(crate) async fn songs(
     sql.push(&format!(
         " ORDER BY {key} {order}, albums.title_key, tracks.disc_number, tracks.track_number, tracks.id"
     ));
-    page(&state, sql, &query, render::songs).await
+    page(&lib, sql, &query, render::songs).await
 }
 
 #[derive(Deserialize)]
@@ -264,55 +219,53 @@ pub(crate) struct RecentQuery {
 /// `GET /api/songs/recently-played`: the latest plays first.
 pub(crate) async fn recently_played(
     State(state): State<ApiState>,
-    _: Session,
+    session: Session,
     Query(query): Query<RecentQuery>,
 ) -> ApiResult<Json<Vec<JsonValue>>> {
-    let mut sql = Sql::new(
+    let lib = session.library(&state);
+    let mut sql = lib.sql(
         "SELECT tracks.id FROM tracks \
          JOIN annotations an ON an.item = 'tr-' || tracks.id \
-         WHERE an.last_played IS NOT NULL \
+         AND an.user_id = tracks.user_id \
+         WHERE tracks.user_id = ?1 AND an.last_played IS NOT NULL \
          ORDER BY an.last_played DESC",
     );
     let limit = sql.param(Bind::Int(i64::from(
         query.limit.unwrap_or(PAGE).clamp(1, MAX_LIMIT),
     )));
     sql.push(&format!(" LIMIT {limit}"));
-    let mut db = state.db.clone();
-    let ids = sql.ids(&mut db).await?;
-    Ok(Json(render::songs(&mut db, &ids).await?))
+    let ids = sql.ids(&mut lib.db()).await?;
+    Ok(Json(render::songs(&lib, &ids).await?))
 }
 
 /// `GET /api/genres`: every genre with its song count and length, which
 /// Subsonic's `getGenres` lacks. A genre's name is its id.
 pub(crate) async fn genres(
     State(state): State<ApiState>,
-    _: Session,
+    session: Session,
 ) -> ApiResult<Json<Vec<JsonValue>>> {
-    let rows = toasty::sql::query(
-        "SELECT genre, COUNT(*), COALESCE(SUM(duration_ms), 0) FROM tracks \
-         WHERE genre IS NOT NULL AND genre != '' GROUP BY genre ORDER BY genre",
-    )
-    .exec(&mut state.db.clone())
-    .await?;
-    let number = |value: &Value| match value {
-        Value::I64(value) => u64::try_from(*value).unwrap_or(0),
-        Value::U64(value) => *value,
-        _ => 0,
-    };
+    let lib = session.library(&state);
+    let rows = lib
+        .sql(
+            "SELECT genre, COUNT(*), COALESCE(SUM(duration_ms), 0) FROM tracks \
+             WHERE tracks.user_id = ?1 AND genre IS NOT NULL AND genre != '' \
+             GROUP BY genre ORDER BY genre",
+        )
+        .rows(&mut lib.db())
+        .await?;
+    let number =
+        |row: &[toasty::stmt::Value], index: usize| row.get(index).and_then(as_u64).unwrap_or(0);
     Ok(Json(
         rows.iter()
-            .filter_map(|row| match row {
-                Value::Record(record) => match &record[0] {
-                    Value::String(name) => Some(json!({
-                        "type": "genres",
-                        "id": name,
-                        "name": name,
-                        "song_count": number(&record[1]),
-                        "length": number(&record[2]) / 1000,
-                    })),
-                    _ => None,
-                },
-                _ => None,
+            .filter_map(|row| {
+                let name = row.first()?.as_str()?;
+                Some(json!({
+                    "type": "genres",
+                    "id": name,
+                    "name": name,
+                    "song_count": number(row, 1),
+                    "length": number(row, 2) / 1000,
+                }))
             })
             .collect(),
     ))

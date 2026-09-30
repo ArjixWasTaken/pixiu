@@ -5,7 +5,7 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
 };
-use pixiu_db::{Album, ApiKey, now, toasty};
+use pixiu_db::{ApiKey, now, toasty};
 use pixiu_jobs::NewJob;
 use serde::Deserialize;
 use serde_json::{Value as JsonValue, json};
@@ -22,8 +22,9 @@ pub(crate) async fn show(
         .exec(&mut db)
         .await?;
     keys.sort_by_key(|key| key.created_at);
-    let unlooked = Album::all()
-        .exec(&mut db)
+    let unlooked = session
+        .library(&state)
+        .all_albums()
         .await?
         .iter()
         .filter(|album| album.enrichment.is_none())
@@ -40,18 +41,22 @@ pub(crate) async fn show(
     })))
 }
 
-/// `POST /api/settings/lookup-all`: looks up every album never looked up.
+/// `POST /api/settings/lookup-all`: looks up every album of the user's
+/// never looked up.
 pub(crate) async fn lookup_all(
     State(state): State<ApiState>,
-    _: Session,
+    session: Session,
 ) -> ApiResult<Json<JsonValue>> {
-    let albums = Album::all().exec(&mut state.db.clone()).await?;
+    let albums = session.library(&state).all_albums().await?;
     let mut queued = 0;
     for album in albums.iter().filter(|album| album.enrichment.is_none()) {
         let title = format!("Look up {}", album.title);
         state
             .jobs
-            .enqueue(NewJob::enrich(album.id, &title, None, false))
+            .enqueue(
+                session.owner(),
+                NewJob::enrich(album.id, &title, None, false),
+            )
             .await?;
         queued += 1;
     }

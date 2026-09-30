@@ -120,7 +120,10 @@ impl HuntExecutor {
             Err(error) => return Outcome::Failed(format!("invalid job: {error}")),
         };
         let claim = payload.wanted.claim(payload.reference);
+        let owner = job.user_id;
         let request = DownloadRequest {
+            owner,
+            job_id: job.id,
             video_id: payload.video_id.clone(),
             claim: claim.clone(),
             cookies: self.warden.cookies().await,
@@ -140,6 +143,7 @@ impl HuntExecutor {
                 {
                     let released = treasury
                         .release(
+                            owner,
                             claim.kind,
                             reference,
                             Release {
@@ -160,6 +164,7 @@ impl HuntExecutor {
                 {
                     let released = treasury
                         .release(
+                            owner,
                             claim.kind,
                             reference,
                             Release {
@@ -175,7 +180,7 @@ impl HuntExecutor {
                 }
                 Outcome::DoneWith {
                     track_id: Some(track.id),
-                    then: self.enrich_later(track.album_id).await,
+                    then: self.enrich_later(owner, track.album_id).await,
                 }
             }
             // Already here: whoever wants it now keeps it too.
@@ -206,7 +211,7 @@ impl HuntExecutor {
         let mut db = treasury.db();
         let claim = payload.wanted.claim(Some(album.id.clone()));
         for track in &album.tracks {
-            let hoarded = match Track::filter_by_ytm_video_id(&track.id)
+            let hoarded = match Track::filter_by_user_id_and_ytm_video_id(job.user_id, &track.id)
                 .first()
                 .exec(&mut db)
                 .await
@@ -232,10 +237,10 @@ impl HuntExecutor {
         Outcome::Expand(jobs)
     }
 
-    /// An enrich job for the album, unless one is already waiting.
-    async fn enrich_later(&self, album_id: u64) -> Vec<NewJob> {
+    /// An enrich job for `owner`'s album, unless one is already waiting.
+    async fn enrich_later(&self, owner: u64, album_id: u64) -> Vec<NewJob> {
         let mut db = self.hunter.treasury().db();
-        let waiting = queue::unfinished(&mut db).await.is_ok_and(|jobs| {
+        let waiting = queue::unfinished(&mut db, owner).await.is_ok_and(|jobs| {
             jobs.iter()
                 .any(|job| job.state == JobState::Queued && enriched_album(job) == Some(album_id))
         });
@@ -262,7 +267,11 @@ impl HuntExecutor {
         // Downloads of the album still to come would each ask again; the
         // last one's request does the work.
         let automatic = payload.release.is_none() && !payload.fresh;
-        if automatic && self.album_downloads_pending(payload.album_id).await {
+        if automatic
+            && self
+                .album_downloads_pending(job.user_id, payload.album_id)
+                .await
+        {
             return Outcome::Done { track_id: None };
         }
         let request = enrich::Request {
@@ -280,8 +289,9 @@ impl HuntExecutor {
         }
     }
 
-    /// Whether downloads for the album (grabbed as an album) are queued.
-    async fn album_downloads_pending(&self, album_id: u64) -> bool {
+    /// Whether downloads for `owner`'s album (grabbed as an album) are
+    /// queued.
+    async fn album_downloads_pending(&self, owner: u64, album_id: u64) -> bool {
         let mut db = self.hunter.treasury().db();
         let Ok(Some(album)) = Album::filter_by_id(album_id).first().exec(&mut db).await else {
             return false;
@@ -289,7 +299,7 @@ impl HuntExecutor {
         let Some(browse_id) = album.ytm_browse_id else {
             return false;
         };
-        queue::unfinished(&mut db).await.is_ok_and(|jobs| {
+        queue::unfinished(&mut db, owner).await.is_ok_and(|jobs| {
             jobs.iter().any(|job| {
                 matches!(job.state, JobState::Queued | JobState::Running)
                     && job.kind == JobKind::DownloadTrack

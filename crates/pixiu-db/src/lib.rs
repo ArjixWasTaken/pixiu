@@ -5,10 +5,12 @@
 //! the server, which applies them on startup.
 
 mod models;
+pub mod owned;
 
 use std::path::Path;
 
 pub use models::*;
+pub use owned::Library;
 pub use toasty::{self, Db};
 
 static MIGRATIONS: toasty::migration::MigrationSet = toasty::embed_migrations!();
