@@ -19,6 +19,7 @@ describe('footerPlayableInfo.vue', () => {
       playback_state: 'Playing',
       artist_id: 'led-zeppelin',
       artist_name: 'Led Zeppelin',
+      favorite: false,
     })
 
     expect(
