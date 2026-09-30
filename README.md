@@ -17,7 +17,7 @@ that downloads music from YouTube Music into a library it owns.
 
 | | |
 |---|---|
-| **Web player** | Forked from [koel](https://koel.dev): library, search, queue synced across devices, likes, ratings, synced lyrics, equalizer, playlists, smart playlists, folders. |
+| **Web player** | Material 3, light and dark schemes, phone layout: library, search, queue synced across devices, likes, ratings, synced lyrics, equalizer, playlists, smart playlists, folders. |
 | **Discover** | Search YouTube Music; download songs or albums. Opus remuxed losslessly, tagged, filed with its cover; `yt-dlp` as fallback. |
 | **Watches** | Playlists (mirrored read-only), liked music, and artists' new releases, synced one-way on a schedule. |
 | **Jobs** | Downloads, syncs and lookups, live. |
@@ -95,11 +95,11 @@ Defaults, then `pixiu.toml` (or `PIXIU_CONFIG`), then `PIXIU_` environment varia
 | `pixiu-media` | Remuxing and transcoding (FFmpeg) |
 | `pixiu-subsonic` | OpenSubsonic API (`/rest`) |
 | `pixiu-treasury` | Library on disk: tags, layout, ingest, uploads |
-| `web/` | Web player (Vue, TypeScript, Vite+) |
+| `web/` | Web player (Vue, TypeScript, Vite+, Material 3) |
 
 ## Credits
 
-The web player is a fork of [koel](https://github.com/koel/koel)'s frontend, used under the MIT License.
+Parts of the web player's code come from [koel](https://github.com/koel/koel), used under the MIT License.
 
 <details>
 <summary>koel's license</summary>
