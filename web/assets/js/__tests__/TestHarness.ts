@@ -22,6 +22,7 @@ class TestHarness {
   public router: Router
   public user: UserEvent
   private backupMethods = new Map()
+  private realFetch = globalThis.fetch
 
   public constructor() {
     this.router = new Router()
@@ -35,6 +36,10 @@ class TestHarness {
   public beforeEach(cb?: Closure) {
     beforeEach(() => {
       this.mock(http, 'request').mockResolvedValue({}) // prevent actual HTTP requests from being made
+      // The Subsonic client uses fetch: answer every call with an empty success. Kept out of the
+      // mock registry, so specs that swap fetch themselves and call restoreAllMocks() keep theirs.
+      this.realFetch = globalThis.fetch
+      globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({ 'subsonic-response': { status: 'ok' } })))
 
       commonStore.state.song_length = 10
       commonStore.state.allows_download = true
@@ -56,6 +61,7 @@ class TestHarness {
       cache.clear()
       cleanup()
       this.restoreAllMocks()
+      globalThis.fetch = this.realFetch
       eventBus.removeAllListeners()
       cb?.()
     })

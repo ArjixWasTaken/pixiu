@@ -39,7 +39,7 @@ describe('albumGrid.vue', () => {
   })
 
   it('forwards scrolled-to-end from the underlying scroller', async () => {
-    const { emitted } = renderComponent(1)
+    const { emitted } = renderComponent()
 
     screen.getByTestId('album-grid').dispatchEvent(new CustomEvent('scrolled-to-end'))
 

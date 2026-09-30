@@ -39,7 +39,7 @@ describe('artistGrid.vue', () => {
   })
 
   it('forwards scrolled-to-end from the underlying scroller', async () => {
-    const { emitted } = renderComponent(1)
+    const { emitted } = renderComponent()
 
     screen.getByTestId('artist-grid').dispatchEvent(new CustomEvent('scrolled-to-end'))
 

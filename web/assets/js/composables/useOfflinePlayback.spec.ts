@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import { createHarness } from '@/__tests__/TestHarness'
 import { playableStore } from '@/stores/playableStore'
 import { offlineManifest } from '@/services/offlineManifest'
+import { logger } from '@/utils/logger'
 import { useOfflinePlayback } from './useOfflinePlayback'
 
 vi.mock('@/services/offlineManifest', () => ({
@@ -143,6 +144,7 @@ describe('useOfflinePlayback', () => {
 
   it('cleans up progress on CACHE_AUDIO_ERROR', () => {
     const song = h.factory('song').make()
+    const errorMock = h.mock(logger, 'error')
 
     cachingProgress.value.set(song.id, 0.3)
 
@@ -153,6 +155,7 @@ describe('useOfflinePlayback', () => {
     })
 
     expect(isCaching(song)).toBe(false)
+    expect(errorMock).toHaveBeenCalledWith(`Failed to cache song ${song.id}: Network error`)
   })
 
   it('sends GET_CACHE_STATUS message to SW', () => {
