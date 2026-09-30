@@ -150,27 +150,14 @@ impl Library {
             .await
     }
 
-    /// The owner's tracks downloaded from any of `videos` (YouTube Music
-    /// video ids).
+    /// The owner's tracks of any of `videos` (YouTube Music video ids):
+    /// downloaded from them, or found to be them.
     ///
     /// # Errors
     ///
     /// Fails on database errors.
-    pub async fn tracks_of_videos(&self, videos: &[String]) -> toasty::Result<Vec<Track>> {
-        let mut tracks = Vec::new();
-        for chunk in videos.chunks(500) {
-            tracks.extend(
-                Track::filter(
-                    Track::fields()
-                        .user_id()
-                        .eq(self.owner)
-                        .and(Track::fields().ytm_video_id().in_list(chunk.to_vec())),
-                )
-                .exec(&mut self.db.clone())
-                .await?,
-            );
-        }
-        Ok(tracks)
+    pub async fn tracks_of_videos(&self, videos: &[String]) -> toasty::Result<crate::videos::Held> {
+        crate::videos::tracks_of_videos(&mut self.db.clone(), self.owner, videos).await
     }
 
     /// The owner's tracks by any of `artists`.

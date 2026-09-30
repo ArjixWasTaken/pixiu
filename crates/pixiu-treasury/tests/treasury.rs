@@ -5,7 +5,7 @@ use std::{
 
 use pixiu_db::{
     Album, Artist, AudioFile, ClaimKind, Db, OfferingStatus, ReleaseReason, ReleasedClaim, Track,
-    TrackClaim,
+    TrackAlias, TrackClaim, videos,
 };
 use pixiu_treasury::{
     Claim, IngestError, OfferingError, Offerings, Provenance, Release, Treasury, tags,
@@ -500,6 +500,95 @@ async fn downloads_dedupe_by_platform_ids() {
         .unwrap();
     let third_album = Album::get_by_id(&mut db, &third.album_id).await.unwrap();
     assert_eq!(third_album.artist_id, artist.id);
+}
+
+#[tokio::test]
+async fn another_video_of_a_track_is_noted_as_it() {
+    let hoard = Hoard::new().await;
+    let mut db = hoard.db.clone();
+    let youtube = |video: &str| Provenance::youtube_music(video, None, None);
+
+    let staged = hoard.stage("02-second-wind.mp3");
+    let info = tags::read(&staged).unwrap();
+    let first = hoard
+        .treasury
+        .ingest(
+            OWNER,
+            &staged,
+            &info,
+            None,
+            youtube("video-1"),
+            Claim::offering(),
+        )
+        .await
+        .unwrap();
+    assert!(
+        videos::track_of_video(&mut db, OWNER, "video-2")
+            .await
+            .unwrap()
+            .is_none()
+    );
+
+    // YouTube Music lists the song under another video too: its download
+    // is the same file.
+    let staged = hoard.stage("02-second-wind.mp3");
+    let error = hoard
+        .treasury
+        .ingest(
+            OWNER,
+            &staged,
+            &info,
+            None,
+            youtube("video-2"),
+            Claim::offering(),
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(error, IngestError::Duplicate { track_id } if track_id == first.id));
+
+    // The library holds that video now.
+    let noted = videos::track_of_video(&mut db, OWNER, "video-2")
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(noted.id, first.id);
+    let held = videos::tracks_of_videos(
+        &mut db,
+        OWNER,
+        &[
+            "video-1".to_owned(),
+            "video-2".to_owned(),
+            "video-3".to_owned(),
+        ],
+    )
+    .await
+    .unwrap();
+    assert_eq!(held.track("video-1").unwrap().id, first.id);
+    assert_eq!(held.track("video-2").unwrap().id, first.id);
+    assert!(!held.contains("video-3"));
+    // Only for its owner.
+    assert!(
+        videos::track_of_video(&mut db, OWNER + 1, "video-2")
+            .await
+            .unwrap()
+            .is_none()
+    );
+
+    // Noting it again changes nothing.
+    let staged = hoard.stage("02-second-wind.mp3");
+    hoard
+        .treasury
+        .ingest(
+            OWNER,
+            &staged,
+            &info,
+            None,
+            youtube("video-2"),
+            Claim::offering(),
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(TrackAlias::all().exec(&mut db).await.unwrap().len(), 1);
 }
 
 #[tokio::test]

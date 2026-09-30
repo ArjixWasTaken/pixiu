@@ -157,6 +157,7 @@ fn release(id: &str, title: &str, tracks: &[(&str, u64)]) -> Release {
         date: Some("2024-05-01".to_owned()),
         country: None,
         release_group_id: Some(format!("rg-{id}")),
+        genre: Some("Electronic".to_owned()),
         has_front_cover: true,
         tracks: tracks
             .iter()
@@ -234,6 +235,7 @@ async fn a_certain_match_rewrites_the_album() {
         album_id: hoard.album_id,
         release: None,
         fresh: false,
+        genres_only: false,
     };
     let summary = enrich::enrich(&hoard.treasury, &sources, &NoPlatformLyrics, &request)
         .await
@@ -247,6 +249,8 @@ async fn a_certain_match_rewrites_the_album() {
     assert_eq!(album.enrichment, Some(Enrichment::Matched));
     assert_eq!(album.mbid.as_deref(), Some("rel-test"));
     assert_eq!(album.rg_mbid.as_deref(), Some("rg-rel-test"));
+    // The files' tags name a genre: MusicBrainz's does not replace it.
+    assert_eq!(album.genre.as_deref(), Some("Ambient"));
     // The Cover Art Archive's cover is larger, so it replaced the file's,
     // which nothing shows any more.
     let cover = album.cover.as_deref().unwrap();
@@ -255,6 +259,11 @@ async fn a_certain_match_rewrites_the_album() {
     assert!(!hoard.treasury.resolve(&old_cover).exists());
 
     let tracks = tracks(&mut hoard.db, hoard.album_id).await;
+    assert!(
+        tracks
+            .iter()
+            .all(|track| track.genre.as_deref() == Some("Ambient"))
+    );
     assert_eq!(tracks[1].mbid.as_deref(), Some("rec-Second Wind"));
     assert_eq!(tracks[1].artist_credit, "Test Artist feat. Guest");
     // Only the database changed: the stored files are as they arrived.
@@ -313,6 +322,7 @@ async fn doubtful_matches_wait_for_the_admin() {
         album_id: hoard.album_id,
         release: None,
         fresh: false,
+        genres_only: false,
     };
     let summary = enrich::enrich(&hoard.treasury, &sources, &YouTubeLyrics, &automatic)
         .await
@@ -333,6 +343,7 @@ async fn doubtful_matches_wait_for_the_admin() {
         album_id: hoard.album_id,
         release: Some("rel-partial".to_owned()),
         fresh: false,
+        genres_only: false,
     };
     enrich::enrich(&hoard.treasury, &sources, &YouTubeLyrics, &picked)
         .await
@@ -355,6 +366,7 @@ async fn unknown_albums_stay_as_they_are() {
         album_id: hoard.album_id,
         release: None,
         fresh: false,
+        genres_only: false,
     };
     let summary = enrich::enrich(&hoard.treasury, &sources, &YouTubeLyrics, &request)
         .await
@@ -401,6 +413,7 @@ async fn instrumentals_are_known_as_such() {
         album_id: hoard.album_id,
         release: None,
         fresh: false,
+        genres_only: false,
     };
     let summary = enrich::enrich(&hoard.treasury, &sources, &YouTubeLyrics, &request)
         .await
@@ -447,6 +460,7 @@ async fn instrumentals_are_known_as_such() {
     );
     let asked = Request {
         fresh: true,
+        genres_only: false,
         ..request
     };
     enrich::enrich(&hoard.treasury, &sources, &YouTubeLyrics, &asked)
@@ -482,6 +496,7 @@ async fn shared_credits_file_albums_under_the_first_artist() {
         album_id: hoard.album_id,
         release: Some("rel-duo".to_owned()),
         fresh: false,
+        genres_only: false,
     };
     enrich::enrich(&hoard.treasury, &sources, &NoPlatformLyrics, &request)
         .await
@@ -516,6 +531,80 @@ impl Executor for Idle {
     ) -> pixiu_jobs::warden::BoxFuture<'a, Outcome> {
         Box::pin(async { Outcome::Failed("idle".to_owned()) })
     }
+}
+
+#[tokio::test]
+async fn matched_albums_take_their_genre_once() {
+    let mut hoard = hoard().await;
+    let before = tracks(&mut hoard.db, hoard.album_id).await;
+    let durations: Vec<(&str, u64)> = before
+        .iter()
+        .map(|track| (track.title.as_str(), track.duration_ms))
+        .collect();
+    // Matched before genres came from MusicBrainz, from files without a
+    // genre; the user gave one track a genre since.
+    let mut album = Album::get_by_id(&mut hoard.db, &hoard.album_id)
+        .await
+        .unwrap();
+    let title = album.title.clone();
+    toasty::update!(album {
+        mbid: Some("rel-test".to_owned()),
+        enrichment: Some(Enrichment::Matched),
+        genre: Option::<String>::None,
+    })
+    .exec(&mut hoard.db)
+    .await
+    .unwrap();
+    for (track, genre) in before.iter().zip([Some("Mine".to_owned()), None]) {
+        let mut track = Track::get_by_id(&mut hoard.db, &track.id).await.unwrap();
+        toasty::update!(track { genre })
+            .exec(&mut hoard.db)
+            .await
+            .unwrap();
+    }
+
+    let jobs = Jobs::new(hoard.db.clone(), Box::new(Idle));
+    assert_eq!(
+        enrich::backfill_genres(&mut hoard.db, &jobs).await.unwrap(),
+        1
+    );
+    assert_eq!(
+        enrich::backfill_genres(&mut hoard.db, &jobs).await.unwrap(),
+        0
+    );
+    let job = jobs.unfinished(OWNER).await.unwrap().remove(0);
+    let payload: EnrichJob = serde_json::from_str(&job.payload).unwrap();
+    assert!(payload.genres_only);
+    assert_eq!(payload.release.as_deref(), Some("rel-test"));
+
+    let mut renamed = release("rel-test", "Renamed on MusicBrainz", &durations);
+    renamed.genre = Some("Electronic".to_owned());
+    let sources = FakeSources {
+        releases: HashMap::from([("rel-test".to_owned(), renamed)]),
+        ..FakeSources::default()
+    };
+    let request = Request {
+        album_id: payload.album_id,
+        release: payload.release,
+        fresh: payload.fresh,
+        genres_only: payload.genres_only,
+    };
+    let summary = enrich::enrich(&hoard.treasury, &sources, &NoPlatformLyrics, &request)
+        .await
+        .unwrap();
+    assert_eq!(summary, "Genre: Electronic.");
+
+    // Only the genre changed, and not where the user set one.
+    let album = Album::get_by_id(&mut hoard.db, &hoard.album_id)
+        .await
+        .unwrap();
+    assert_eq!(album.genre.as_deref(), Some("Electronic"));
+    assert_eq!(album.title, title);
+    let after = tracks(&mut hoard.db, hoard.album_id).await;
+    assert_eq!(after[0].genre.as_deref(), Some("Mine"));
+    assert_eq!(after[1].genre.as_deref(), Some("Electronic"));
+    assert_eq!(after[1].title, before[1].title);
+    assert_eq!(*sources.searches.lock().unwrap(), 0);
 }
 
 #[tokio::test]
@@ -572,6 +661,7 @@ async fn albums_under_a_shared_credit_are_repaired_once() {
         album_id: payload.album_id,
         release: payload.release,
         fresh: payload.fresh,
+        genres_only: false,
     };
     enrich::enrich(&hoard.treasury, &sources, &NoPlatformLyrics, &request)
         .await

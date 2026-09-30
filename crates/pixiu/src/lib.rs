@@ -203,6 +203,9 @@ impl Services {
             if let Err(error) = pixiu_jobs::enrich::repair_album_artists(&mut db, &jobs).await {
                 tracing::error!(%error, "cannot repair album artists");
             }
+            if let Err(error) = pixiu_jobs::enrich::backfill_genres(&mut db, &jobs).await {
+                tracing::error!(%error, "cannot queue the genres of matched albums");
+            }
         });
     }
 }

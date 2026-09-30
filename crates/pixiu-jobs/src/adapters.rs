@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use pixiu_browser::{Cookie, LoginDesks, cookie_header};
 use pixiu_core::alerts::AlertSink;
-use pixiu_db::{Album, Job, JobKind, JobState, ReleaseReason, SessionState, Track, Watch};
+use pixiu_db::{Album, Job, JobKind, JobState, ReleaseReason, SessionState, Watch};
 use pixiu_enrich::Sources;
 use pixiu_hunt::{
     Discography, DownloadRequest, HuntError, Hunter, RemotePlaylist, SessionCheck, YtMusic,
@@ -277,14 +277,11 @@ impl HuntExecutor {
         let mut db = treasury.db();
         let claim = payload.wanted.claim(Some(album.id.clone()));
         for track in &album.tracks {
-            let hoarded = match Track::filter_by_user_id_and_ytm_video_id(job.user_id, &track.id)
-                .first()
-                .exec(&mut db)
-                .await
-            {
-                Ok(hoarded) => hoarded,
-                Err(error) => return Outcome::Failed(error.to_string()),
-            };
+            let hoarded =
+                match pixiu_db::videos::track_of_video(&mut db, job.user_id, &track.id).await {
+                    Ok(hoarded) => hoarded,
+                    Err(error) => return Outcome::Failed(error.to_string()),
+                };
             match hoarded {
                 // Already here: whoever wants the album keeps it too.
                 Some(hoarded) => {
@@ -344,6 +341,7 @@ impl HuntExecutor {
             album_id: payload.album_id,
             release: payload.release,
             fresh: payload.fresh,
+            genres_only: payload.genres_only,
         };
         let lyrics = HunterLyrics(Arc::clone(&self.hunter));
         match enrich::enrich(treasury, self.sources.as_ref(), &lyrics, &request).await {

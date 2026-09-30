@@ -8,7 +8,7 @@ use std::{
 use pixiu_core::alerts::{Alert, AlertSink, NoAlerts};
 use pixiu_db::{
     Album, Artist, ClaimKind, Db, Job, JobKind, JobState, Playlist, PlaylistEntry, ReleaseReason,
-    ReleasedClaim, Track, TrackClaim, TrackOrigin, Watch, WatchKind, now, toasty,
+    ReleasedClaim, Track, TrackClaim, TrackOrigin, Watch, WatchKind, now, toasty, videos,
 };
 use pixiu_hunt::{AlbumKind, Discography, RemoteAlbum, RemotePlaylist, RemoteTrack};
 use pixiu_jobs::{
@@ -365,6 +365,35 @@ async fn playlists_are_mirrored_and_claims_follow_them() {
         .map(|t| t.id)
         .collect();
     assert_eq!(orphans, [b]);
+}
+
+#[tokio::test]
+async fn songs_held_under_another_video_are_not_fetched_again() {
+    let s = setup().await;
+    let mut db = s.db.clone();
+    // YouTube Music lists the library's "b" as "b2" in the playlist; a
+    // download of "b2" turned out to be it.
+    let b = hoard(&mut db, "b").await;
+    let track = Track::get_by_id(&mut db, &b).await.unwrap();
+    videos::alias(&mut db, &track, "b2").await.unwrap();
+    *s.catalog.playlist.lock().unwrap() = vec!["a", "b2"];
+
+    let watch = watch::add(&s.treasury, &s.jobs, OWNER, playlist_watch("PLtest"))
+        .await
+        .unwrap();
+    let queued = done(
+        watch::sync(&s.treasury, &s.catalog, &NoAlerts, watch.id)
+            .await
+            .unwrap(),
+    );
+
+    let wanted = Wanted::Playlist { watch_id: watch.id };
+    assert_eq!(videos(&queued), [("a".to_owned(), wanted)]);
+    // The watch keeps the track it holds as "b2".
+    assert_eq!(
+        claims_of(&mut db, b).await,
+        [(ClaimKind::WatchPlaylist, Some(watch.id.to_string()))]
+    );
 }
 
 #[tokio::test]

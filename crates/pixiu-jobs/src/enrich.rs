@@ -51,6 +51,9 @@ pub struct Request {
     pub release: Option<String>,
     /// Search again even if the album is matched.
     pub fresh: bool,
+    /// Only the genre, from the release the album is matched to: for
+    /// albums matched before píxiū took genres from MusicBrainz.
+    pub genres_only: bool,
 }
 
 fn failed(error: impl ToString) -> String {
@@ -83,6 +86,20 @@ pub async fn enrich(
     else {
         return Ok("The album is gone.".to_owned());
     };
+
+    if request.genres_only {
+        let Some(id) = request.release.clone().or_else(|| album.mbid.clone()) else {
+            return Ok("The album is not matched.".to_owned());
+        };
+        let release = sources.release(&id).await.map_err(failed)?;
+        let genre = set_genre(&mut db, album.id, release.genre.as_deref())
+            .await
+            .map_err(failed)?;
+        return Ok(genre.map_or_else(
+            || "MusicBrainz has no genre for it.".to_owned(),
+            |genre| format!("Genre: {genre}."),
+        ));
+    }
 
     let mut summary = identify(treasury, sources, &mut db, album, request).await?;
     // A lookup the admin asked for may have fixed the titles: look again.
@@ -291,6 +308,9 @@ async fn apply(
     record(db, album_id, Enrichment::Matched, None)
         .await
         .map_err(failed)?;
+    set_genre(db, album_id, release.genre.as_deref())
+        .await
+        .map_err(failed)?;
 
     if release.has_front_cover {
         better_cover(treasury, sources, db, album_id, &release.id).await;
@@ -300,6 +320,40 @@ async fn apply(
         .map_err(failed)?;
     artist_info(treasury, sources, db, album.artist_id).await;
     Ok(())
+}
+
+/// Gives the album and its tracks `genre`, except those that have one
+/// (their tags', or the user's). Returns the genre when any took it.
+async fn set_genre(
+    db: &mut Db,
+    album_id: u64,
+    genre: Option<&str>,
+) -> Result<Option<String>, toasty::Error> {
+    let Some(genre) = genre else {
+        return Ok(None);
+    };
+    let unset = |current: &Option<String>| current.as_deref().is_none_or(|g| g.trim().is_empty());
+    let mut changed = false;
+    let mut album = Album::get_by_id(&mut *db, &album_id).await?;
+    if unset(&album.genre) {
+        toasty::update!(album {
+            genre: Some(genre.to_owned())
+        })
+        .exec(&mut *db)
+        .await?;
+        changed = true;
+    }
+    for mut track in Track::filter_by_album_id(album_id).exec(&mut *db).await? {
+        if unset(&track.genre) {
+            toasty::update!(track {
+                genre: Some(genre.to_owned())
+            })
+            .exec(&mut *db)
+            .await?;
+            changed = true;
+        }
+    }
+    Ok(changed.then(|| genre.to_owned()))
 }
 
 /// Takes the Cover Art Archive's front cover when it is larger than the
@@ -533,6 +587,53 @@ pub async fn repair_album_artists(db: &mut Db, jobs: &Jobs) -> Result<usize, toa
             albums = queued,
             "re-filing albums credited to several artists"
         );
+    }
+    Ok(queued)
+}
+
+const BACKFILLED_GENRES: &str = "backfill.genres";
+
+/// Once per server: takes the genres of the releases albums were matched to
+/// before píxiū took genres from MusicBrainz, without matching them again.
+/// Returns how many albums were queued.
+///
+/// # Errors
+///
+/// Fails on database errors.
+pub async fn backfill_genres(db: &mut Db, jobs: &Jobs) -> Result<usize, toasty::Error> {
+    if Setting::filter_by_key(BACKFILLED_GENRES)
+        .first()
+        .exec(&mut *db)
+        .await?
+        .is_some()
+    {
+        return Ok(0);
+    }
+    let mut queued = 0;
+    for album in Album::all().exec(&mut *db).await? {
+        let without = album
+            .genre
+            .as_deref()
+            .is_none_or(|genre| genre.trim().is_empty());
+        if let (Some(Enrichment::Matched), Some(release), true) =
+            (album.enrichment, album.mbid.clone(), without)
+        {
+            jobs.enqueue(
+                album.user_id,
+                NewJob::enrich_genre(album.id, &format!("Genre of {}", album.title), release),
+            )
+            .await?;
+            queued += 1;
+        }
+    }
+    toasty::create!(Setting {
+        key: BACKFILLED_GENRES,
+        value: now().to_string(),
+    })
+    .exec(&mut *db)
+    .await?;
+    if queued > 0 {
+        tracing::info!(albums = queued, "taking genres from MusicBrainz");
     }
     Ok(queued)
 }

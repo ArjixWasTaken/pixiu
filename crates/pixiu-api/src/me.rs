@@ -24,6 +24,7 @@ pub(crate) fn describe(user: &User) -> JsonValue {
     json!({
         "id": user.id,
         "username": user.username,
+        "display_name": user.display_name,
         "email": user.email,
         "email_verified": user.email.is_some() && user.email_verified_at.is_some(),
         "role": match user.role {
@@ -53,10 +54,12 @@ pub(crate) struct Profile {
     username: String,
     #[serde(default)]
     email: String,
+    /// Left as it is when absent; blank clears it.
+    display_name: Option<String>,
 }
 
-/// `PUT /api/me`: a new username or email. A new email waits to be
-/// confirmed; píxiū sends the link when it can.
+/// `PUT /api/me`: a new username, display name or email. A new email waits
+/// to be confirmed; píxiū sends the link when it can.
 pub(crate) async fn update(
     State(state): State<ApiState>,
     session: Session,
@@ -64,6 +67,10 @@ pub(crate) async fn update(
 ) -> ApiResult<Json<JsonValue>> {
     let mut db = state.db.clone();
     let before = session.user.email.clone();
+    // Checked first, so a bad name changes nothing.
+    if let Some(name) = &profile.display_name {
+        users::check_display_name(name)?;
+    }
     let user = users::set_profile(
         &mut db,
         session.user,
@@ -72,6 +79,10 @@ pub(crate) async fn update(
         false,
     )
     .await?;
+    let user = match &profile.display_name {
+        Some(name) => users::set_display_name(&mut db, user, name).await?,
+        None => user,
+    };
     if user.email.is_some() && user.email != before && state.mailer.ready() {
         state
             .throttle

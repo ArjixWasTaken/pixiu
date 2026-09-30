@@ -44,7 +44,9 @@ pub(crate) async fn bootstrap(
         "current_user": {
             "type": "users",
             "id": user.id.to_string(),
-            "name": user.username,
+            "name": pixiu_accounts::users::shown_name(user),
+            "username": user.username,
+            "display_name": user.display_name,
             "email": user.email.as_deref().unwrap_or_default(),
             "email_verified": user.email_verified_at.is_some(),
             "is_prospect": false,

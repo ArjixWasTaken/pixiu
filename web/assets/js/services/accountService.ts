@@ -9,6 +9,8 @@ export type AccountStatus = 'pending' | 'unverified' | 'active' | 'disabled'
 export interface Account {
   id: number
   username: string
+  /** What the player calls the user; the username when unset. */
+  display_name?: string | null
   email: string | null
   email_verified: boolean
   role: Role
@@ -46,7 +48,8 @@ export interface LinkedAccount {
 
 export const accountService = {
   me: () => http.get<Account>('me'),
-  updateProfile: (profile: { username: string; email: string }) => http.put<Account>('me', profile),
+  updateProfile: (profile: { username: string; email: string; display_name: string }) =>
+    http.put<Account>('me', profile),
   changePassword: (password: string, currentPassword = '') =>
     http.put('me/password', { current_password: currentPassword, password }),
   resendVerification: () => http.post('me/email/resend', {}),

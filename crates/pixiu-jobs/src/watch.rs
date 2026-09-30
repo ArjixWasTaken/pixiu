@@ -18,7 +18,7 @@ use jiff::{SignedDuration, Timestamp};
 use pixiu_core::alerts::{Alert, AlertSink};
 use pixiu_db::{
     ClaimKind, Db, Job, JobKind, JobState, Playlist, PlaylistEntry, ReleaseReason, SessionState,
-    Track, TrackClaim, User, UserStatus, Watch, WatchExclusion, WatchKind, now, toasty,
+    TrackClaim, User, UserStatus, Watch, WatchExclusion, WatchKind, now, toasty, videos,
 };
 use pixiu_hunt::{AlbumKind, Discography, LIKED_MUSIC, RemotePlaylist, RemoteTrack};
 use pixiu_treasury::{Release, Treasury};
@@ -447,23 +447,11 @@ async fn hoarded(
     owner: u64,
     video_ids: &[String],
 ) -> Result<HashMap<String, u64>, toasty::Error> {
-    let mut hoarded = HashMap::new();
-    for chunk in video_ids.chunks(500) {
-        let tracks = Track::filter(
-            Track::fields()
-                .user_id()
-                .eq(owner)
-                .and(Track::fields().ytm_video_id().in_list(chunk.to_vec())),
-        )
-        .exec(db)
-        .await?;
-        for track in tracks {
-            if let Some(video_id) = track.ytm_video_id {
-                hoarded.insert(video_id, track.id);
-            }
-        }
-    }
-    Ok(hoarded)
+    let held = videos::tracks_of_videos(db, owner, video_ids).await?;
+    Ok(held
+        .videos()
+        .filter_map(|video_id| Some((video_id.to_owned(), held.track(video_id)?.id)))
+        .collect())
 }
 
 /// The tracks that hold a claim of `kind` on `reference`.
@@ -718,10 +706,7 @@ pub async fn exclude(
         .iter()
         .position(|entry| entry.ytm_video_id.as_deref() == Some(video_id))
         .map(|index| entries.remove(index));
-    let track = Track::filter_by_user_id_and_ytm_video_id(watch.user_id, video_id)
-        .first()
-        .exec(&mut db)
-        .await?;
+    let track = videos::track_of_video(&mut db, watch.user_id, video_id).await?;
 
     if !is_excluded(&mut db, watch_id, video_id).await? {
         let (title, artist) = match (&entry, &track) {

@@ -37,6 +37,9 @@ pub struct User {
     #[unique]
     pub username: String,
 
+    /// What the player calls the user; the username when unset.
+    pub display_name: Option<String>,
+
     /// Lowercase; for signing in, password resets and alerts. Unique among
     /// those set.
     #[unique]
@@ -911,6 +914,25 @@ pub struct Setting {
     pub key: String,
 
     pub value: String,
+}
+
+/// Another YouTube Music video of a track the library holds: YouTube
+/// Music lists some songs under several videos, and a download of one of
+/// them turned out to be a track the library had. The library holds that
+/// video too, so watches and searches do not fetch it again.
+#[derive(Debug, toasty::Model)]
+#[unique(user_id, ytm_video_id)]
+pub struct TrackAlias {
+    #[key]
+    #[auto]
+    pub id: u64,
+
+    pub user_id: u64,
+
+    #[index]
+    pub track_id: u64,
+
+    pub ytm_video_id: String,
 }
 
 /// A song the admin excluded from a watched playlist: the watch neither

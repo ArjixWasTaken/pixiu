@@ -76,13 +76,12 @@ async fn listing(lib: &Library, playlist: &Playlist) -> Result<Listing, toasty::
         .iter()
         .filter_map(|entry| entry.ytm_video_id.clone())
         .collect();
-    let mut by_video: HashMap<String, u64> = HashMap::new();
-    for track in lib.tracks_of_videos(&video_ids).await? {
-        if let Some(video_id) = &track.ytm_video_id {
-            by_video.insert(video_id.clone(), track.id);
-        }
-        tracks.insert(track.id, track);
-    }
+    let held = lib.tracks_of_videos(&video_ids).await?;
+    let by_video: HashMap<String, u64> = held
+        .videos()
+        .filter_map(|video_id| Some((video_id.to_owned(), held.track(video_id)?.id)))
+        .collect();
+    tracks.extend(held.into_tracks());
     let order = entries
         .iter()
         .filter_map(|entry| match (&entry.track_id, &entry.ytm_video_id) {

@@ -75,6 +75,9 @@ pub struct Release {
     pub date: Option<String>,
     pub country: Option<String>,
     pub release_group_id: Option<String>,
+    /// The genre MusicBrainz users voted for most: the release's, else its
+    /// release group's.
+    pub genre: Option<String>,
     pub has_front_cover: bool,
     pub tracks: Vec<ReleaseTrack>,
 }
@@ -290,6 +293,7 @@ mod tests {
             date: Some("2023-08-01".to_owned()),
             country: Some("XW".to_owned()),
             release_group_id: Some("rg-1".to_owned()),
+            genre: None,
             has_front_cover: true,
             tracks: vec![
                 remote("Evening", 187, 1),

@@ -68,6 +68,31 @@ pub fn check_username(name: &str) -> Result<String, AccountError> {
     Ok(name.to_owned())
 }
 
+/// Checks a display name: `None` when blank, which leaves the username to
+/// stand for the user.
+///
+/// # Errors
+///
+/// Fails, with a message for people, when it is too long or holds
+/// invisible characters.
+pub fn check_display_name(name: &str) -> Result<Option<String>, AccountError> {
+    let name = name.trim();
+    if name.is_empty() {
+        return Ok(None);
+    }
+    if name.chars().count() > 64 {
+        return Err(AccountError::Invalid(
+            "A display name is at most 64 characters.".to_owned(),
+        ));
+    }
+    if name.chars().any(char::is_control) {
+        return Err(AccountError::Invalid(
+            "A display name cannot contain invisible characters.".to_owned(),
+        ));
+    }
+    Ok(Some(name.to_owned()))
+}
+
 /// Checks a new password against the rules.
 ///
 /// # Errors
@@ -346,6 +371,29 @@ pub async fn set_profile(
     Ok(user)
 }
 
+/// Changes what the player calls a user; blank clears it.
+///
+/// # Errors
+///
+/// Fails when the name breaks the rules, or on database errors.
+pub async fn set_display_name(
+    db: &mut Db,
+    mut user: User,
+    name: &str,
+) -> Result<User, AccountError> {
+    let display_name = check_display_name(name)?;
+    if display_name != user.display_name {
+        toasty::update!(user { display_name }).exec(db).await?;
+    }
+    Ok(user)
+}
+
+/// The name the player shows for a user.
+#[must_use]
+pub fn shown_name(user: &User) -> &str {
+    user.display_name.as_deref().unwrap_or(&user.username)
+}
+
 /// Active admins, but `except`.
 async fn other_active_admins(
     db: &mut dyn toasty::Executor,
@@ -438,6 +486,7 @@ pub async fn delete(db: &mut Db, id: u64) -> Result<(), AccountError> {
         "DELETE FROM track_claims WHERE track_id IN (SELECT id FROM tracks WHERE user_id = ?1)",
         "DELETE FROM released_claims WHERE track_id IN (SELECT id FROM tracks WHERE user_id = ?1)",
         "DELETE FROM lyrics WHERE track_id IN (SELECT id FROM tracks WHERE user_id = ?1)",
+        "DELETE FROM track_aliases WHERE user_id = ?1",
         "DELETE FROM playlist_entries WHERE playlist_id IN \
          (SELECT id FROM playlists WHERE user_id = ?1)",
         "DELETE FROM watch_exclusions WHERE watch_id IN (SELECT id FROM watches WHERE user_id = ?1)",

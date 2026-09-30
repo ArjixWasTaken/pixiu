@@ -210,10 +210,8 @@ impl Hunter {
     ) -> Result<Track, HuntError> {
         let video_id = request.video_id.as_str();
         let mut db = self.treasury.db();
-        if let Some(existing) = Track::filter_by_user_id_and_ytm_video_id(request.owner, video_id)
-            .first()
-            .exec(&mut db)
-            .await?
+        if let Some(existing) =
+            pixiu_db::videos::track_of_video(&mut db, request.owner, video_id).await?
         {
             return Err(HuntError::AlreadyHoarded {
                 track_id: existing.id,

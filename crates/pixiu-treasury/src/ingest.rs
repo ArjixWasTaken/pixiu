@@ -7,7 +7,7 @@ use std::{
 };
 
 use pixiu_db::{
-    Album, Artist, AudioFile, ClaimKind, Db, Track, TrackClaim, TrackOrigin, now, toasty,
+    Album, Artist, AudioFile, ClaimKind, Db, Track, TrackClaim, TrackOrigin, now, toasty, videos,
 };
 use tokio::sync::Mutex;
 
@@ -182,12 +182,10 @@ impl Treasury {
             )
             .await?
         {
-            return Err(IngestError::Duplicate {
-                track_id: existing.id,
-            });
+            return Err(note_video(&mut db, existing, &provenance).await?);
         }
 
-        let (album, artist_id) = self.find_place(&mut db, owner, info, &provenance).await?;
+        let (album, artist_id) = self.place(&mut db, owner, info, &provenance).await?;
 
         let file = match stored {
             Some(file) => StoredFile::Shared(file),
@@ -256,11 +254,9 @@ impl Treasury {
             .duplicate(&mut db, owner, &provenance, Some(file.id))
             .await?
         {
-            return Err(IngestError::Duplicate {
-                track_id: existing.id,
-            });
+            return Err(note_video(&mut db, existing, &provenance).await?);
         }
-        let (album, artist_id) = self.find_place(&mut db, owner, info, &provenance).await?;
+        let (album, artist_id) = self.place(&mut db, owner, info, &provenance).await?;
         self.record(
             &mut db,
             album,
@@ -274,8 +270,8 @@ impl Treasury {
         .await
     }
 
-    /// A track of `owner`'s that is the same download, or plays the same
-    /// file.
+    /// A track of `owner`'s that is the same download (or another video
+    /// found to be it), or plays the same file.
     async fn duplicate(
         &self,
         db: &mut Db,
@@ -284,10 +280,7 @@ impl Treasury {
         file_id: Option<u64>,
     ) -> Result<Option<Track>, toasty::Error> {
         if let Some(video_id) = &provenance.ytm_video_id
-            && let Some(existing) = Track::filter_by_user_id_and_ytm_video_id(owner, video_id)
-                .first()
-                .exec(db)
-                .await?
+            && let Some(existing) = videos::track_of_video(db, owner, video_id).await?
         {
             return Ok(Some(existing));
         }
@@ -304,6 +297,26 @@ impl Treasury {
                 .await
             }
             None => Ok(None),
+        }
+    }
+
+    /// [`Self::find_place`], noting the download's video when the album
+    /// holds the same track already.
+    async fn place(
+        &self,
+        db: &mut Db,
+        owner: u64,
+        info: &AudioInfo,
+        provenance: &Provenance,
+    ) -> Result<(Album, u64), IngestError> {
+        match self.find_place(db, owner, info, provenance).await {
+            Err(IngestError::Duplicate { track_id }) => {
+                match Track::filter_by_id(track_id).first().exec(&mut *db).await? {
+                    Some(existing) => Err(note_video(db, existing, provenance).await?),
+                    None => Err(IngestError::Duplicate { track_id }),
+                }
+            }
+            placed => placed,
         }
     }
 
@@ -547,6 +560,21 @@ impl Treasury {
         }
         Ok(())
     }
+}
+
+/// A download that turned out to be `existing`: its video is the track's
+/// too, so it is not fetched again.
+async fn note_video(
+    db: &mut Db,
+    existing: Track,
+    provenance: &Provenance,
+) -> Result<IngestError, toasty::Error> {
+    if let Some(video_id) = &provenance.ytm_video_id {
+        videos::alias(db, &existing, video_id).await?;
+    }
+    Ok(IngestError::Duplicate {
+        track_id: existing.id,
+    })
 }
 
 /// The album a track belongs to: by platform id when known (names can

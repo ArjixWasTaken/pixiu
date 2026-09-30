@@ -5,7 +5,7 @@ use std::{io, path::Path};
 
 use pixiu_db::{
     Album, Annotation, Artist, ClaimKind, Db, Lyrics, PlaylistEntry, ReleaseReason, ReleasedClaim,
-    Track, TrackClaim, now, toasty,
+    Track, TrackAlias, TrackClaim, now, toasty,
 };
 
 use crate::ingest::{Claim, IngestError, Treasury};
@@ -194,6 +194,10 @@ impl Treasury {
             .exec(db)
             .await?;
         Lyrics::filter_by_track_id(track.id)
+            .delete()
+            .exec(db)
+            .await?;
+        TrackAlias::filter_by_track_id(track.id)
             .delete()
             .exec(db)
             .await?;

@@ -47,13 +47,17 @@ fn standing(job: &Job, family: Option<&Family>) -> JobState {
     }
 }
 
-/// `GET /api/jobs`: the latest jobs. Tracks of an album on the board show
-/// through their album, unless they failed and need the user.
+/// `GET /api/jobs`: every job still to do or failed, and the latest done,
+/// newest first. Tracks of an album on the board show through their album,
+/// unless they failed and need the user.
 pub(crate) async fn board(
     State(state): State<ApiState>,
     session: Session,
 ) -> ApiResult<Json<JsonValue>> {
-    let recent = state.jobs.recent(session.owner(), BOARD_SIZE).await?;
+    let mut recent = state.jobs.unfinished(session.owner()).await?;
+    recent.extend(state.jobs.recent(session.owner(), BOARD_SIZE).await?);
+    recent.sort_by_key(|job| std::cmp::Reverse(job.id));
+    recent.dedup_by_key(|job| job.id);
     let parents: Vec<u64> = recent
         .iter()
         .filter(|job| job.kind == JobKind::GrabAlbum)

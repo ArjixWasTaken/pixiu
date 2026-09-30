@@ -94,6 +94,9 @@ pub struct EnrichJob {
     /// Search again, even if the album is matched already.
     #[serde(default)]
     pub fresh: bool,
+    /// Only the genre, from the release the album is matched to.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub genres_only: bool,
 }
 
 /// What a job wants, from its payload: `None` for jobs that want nothing
@@ -295,6 +298,19 @@ impl NewJob {
             album_id,
             release,
             fresh,
+            genres_only: false,
+        };
+        Self::new(JobKind::Enrich, &payload, title)
+    }
+
+    /// Takes the genre of the release an album is matched to.
+    #[must_use]
+    pub fn enrich_genre(album_id: u64, title: &str, release: String) -> Self {
+        let payload = EnrichJob {
+            album_id,
+            release: Some(release),
+            fresh: false,
+            genres_only: true,
         };
         Self::new(JobKind::Enrich, &payload, title)
     }

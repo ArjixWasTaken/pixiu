@@ -287,6 +287,95 @@ async fn admins_make_and_manage_accounts() {
 }
 
 #[tokio::test]
+async fn display_names_stand_in_for_usernames() {
+    let server = Server::new().await;
+    let admin = server.setup().await;
+    let name = |bootstrap: &Value| {
+        bootstrap["current_user"]["name"]
+            .as_str()
+            .map(str::to_owned)
+    };
+    let (_, bootstrap) = server
+        .call(Some(&admin), Method::GET, "/api/bootstrap", None)
+        .await;
+    let username = bootstrap["current_user"]["username"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    assert_eq!(name(&bootstrap), Some(username.clone()));
+
+    let (status, me) = server
+        .call(
+            Some(&admin),
+            Method::PUT,
+            "/api/me",
+            Some(json!({ "username": username, "display_name": "  Arjix  " })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{me}");
+    assert_eq!(me["display_name"], "Arjix");
+    let (_, bootstrap) = server
+        .call(Some(&admin), Method::GET, "/api/bootstrap", None)
+        .await;
+    assert_eq!(name(&bootstrap).as_deref(), Some("Arjix"));
+    assert_eq!(bootstrap["current_user"]["username"], username.as_str());
+
+    // Leaving it out keeps it; a bad one changes nothing; blank clears it.
+    let (_, me) = server
+        .call(
+            Some(&admin),
+            Method::PUT,
+            "/api/me",
+            Some(json!({ "username": username })),
+        )
+        .await;
+    assert_eq!(me["display_name"], "Arjix");
+    let (status, _) = server
+        .call(
+            Some(&admin),
+            Method::PUT,
+            "/api/me",
+            Some(json!({ "username": "renamed", "display_name": "x".repeat(65) })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    let (_, me) = server
+        .call(Some(&admin), Method::GET, "/api/me", None)
+        .await;
+    assert_eq!(me["username"], username.as_str());
+    let (_, me) = server
+        .call(
+            Some(&admin),
+            Method::PUT,
+            "/api/me",
+            Some(json!({ "username": username, "display_name": " " })),
+        )
+        .await;
+    assert_eq!(me["display_name"], Value::Null);
+
+    // Admins name others too.
+    let (_, bob) = server
+        .call(
+            Some(&admin),
+            Method::POST,
+            "/api/admin/users",
+            Some(json!({ "username": "bob", "password": "temporary!" })),
+        )
+        .await;
+    let (status, bob) = server
+        .call(
+            Some(&admin),
+            Method::PATCH,
+            &format!("/api/admin/users/{}", bob["id"]),
+            Some(json!({ "display_name": "Bob B." })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{bob}");
+    assert_eq!(bob["display_name"], "Bob B.");
+    assert_eq!(bob["username"], "bob");
+}
+
+#[tokio::test]
 async fn turned_off_accounts_are_signed_out_everywhere() {
     let server = Server::new().await;
     let admin = server.setup().await;

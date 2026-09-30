@@ -131,6 +131,8 @@ pub(crate) struct Changes {
     status: Option<String>,
     username: Option<String>,
     email: Option<String>,
+    /// Blank clears it.
+    display_name: Option<String>,
 }
 
 async fn load(state: &ApiState, id: u64) -> ApiResult<User> {
@@ -150,7 +152,14 @@ pub(crate) async fn update(
     Json(changes): Json<Changes>,
 ) -> ApiResult<Json<JsonValue>> {
     let mut db = state.db.clone();
+    if let Some(name) = &changes.display_name {
+        users::check_display_name(name)?;
+    }
     let user = load(&state, id).await?;
+    let user = match &changes.display_name {
+        Some(name) => users::set_display_name(&mut db, user, name).await?,
+        None => user,
+    };
     if changes.username.is_some() || changes.email.is_some() {
         let username = changes
             .username

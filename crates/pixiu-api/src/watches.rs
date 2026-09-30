@@ -47,8 +47,8 @@ async fn videos_held(lib: &Library, videos: &[String]) -> ApiResult<HashSet<Stri
     Ok(lib
         .tracks_of_videos(videos)
         .await?
-        .into_iter()
-        .filter_map(|track| track.ytm_video_id)
+        .videos()
+        .map(str::to_owned)
         .collect())
 }
 

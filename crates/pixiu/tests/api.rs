@@ -9,7 +9,7 @@ use axum::{
     http::{Method, Request, StatusCode, header},
 };
 use pixiu_core::{Config, SecretBox};
-use pixiu_db::{Annotation, ApiKey, Db, Track, User, now, toasty};
+use pixiu_db::{Annotation, ApiKey, Db, Job, JobKind, JobState, Track, User, now, toasty};
 use pixiu_treasury::{Claim, Provenance, tags};
 use serde_json::{Value, json};
 use tower::ServiceExt;
@@ -489,6 +489,47 @@ async fn grabs_show_on_the_job_board() {
         .request(Method::DELETE, "/api/jobs/finished", Some(&token), None)
         .await;
     assert_eq!(status, StatusCode::NO_CONTENT);
+}
+
+#[tokio::test]
+async fn failed_jobs_stay_on_the_board_however_old() {
+    let api = Api::new().await;
+    let token = api.claim().await;
+    let mut db = api.db.clone();
+    let job = |title: String, state: JobState| {
+        toasty::create!(Job {
+            user_id: 1_u64,
+            kind: JobKind::DownloadTrack,
+            payload: json!({ "video_id": "abcdefghijk" }).to_string(),
+            title,
+            state,
+            progress: 0_u8,
+            attempts: 0_u32,
+            created_at: now(),
+        })
+    };
+    job("Somebody — Unavailable".to_owned(), JobState::Failed)
+        .exec(&mut db)
+        .await
+        .unwrap();
+    // More finished since than the board shows.
+    for n in 0..160 {
+        job(format!("Somebody — Song {n}"), JobState::Done)
+            .exec(&mut db)
+            .await
+            .unwrap();
+    }
+
+    let board = api.get(&token, "/api/jobs").await;
+    let board = board.as_array().unwrap();
+    assert_eq!(board.len(), 151);
+    assert_eq!(board[0]["title"], "Somebody — Song 159");
+    let failed: Vec<&Value> = board
+        .iter()
+        .filter(|job| job["state"] == "failed")
+        .collect();
+    assert_eq!(failed.len(), 1);
+    assert_eq!(failed[0]["title"], "Somebody — Unavailable");
 }
 
 #[tokio::test]

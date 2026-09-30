@@ -2,11 +2,21 @@
   <SettingGroup>
     <template #title>Profile</template>
     <template #subtitle>
-      You sign in with your username or email. píxiū sends password resets and alerts to the email.
+      You sign in with your username or email. píxiū calls you by your display name, and sends password resets and
+      alerts to the email.
     </template>
 
     <form v-if="account" class="flex flex-col gap-4" data-testid="profile-form" @submit.prevent="handleSubmit">
-      <M3TextField v-model="data.username" autocomplete="username" label="Username" name="username" required />
+      <div class="grid md:grid-cols-2 gap-4">
+        <M3TextField
+          v-model="data.display_name"
+          autocomplete="nickname"
+          label="Display name"
+          name="display_name"
+          supporting-text="Optional; your username stands in for it."
+        />
+        <M3TextField v-model="data.username" autocomplete="username" label="Username" name="username" required />
+      </div>
       <M3TextField
         v-model="data.email"
         :supporting-text="emailNote"
@@ -77,14 +87,16 @@ const emailNote = computed(() => {
   return canResend.value ? undefined : 'Not confirmed yet.'
 })
 
-const { data, loading, handleSubmit } = useForm<{ username: string; email: string }>({
-  initialValues: { username: '', email: '' },
-  onSubmit: async ({ username, email }) => await accountService.updateProfile({ username, email }),
+const { data, loading, handleSubmit } = useForm<{ username: string; email: string; display_name: string }>({
+  initialValues: { username: '', email: '', display_name: '' },
+  onSubmit: async profile => await accountService.updateProfile({ ...profile }),
   onSuccess: (updated: Account) => {
     const newEmail = updated.email !== account.value?.email
     account.value = updated
+    data.display_name = updated.display_name ?? ''
     if (userStore.state.current) {
-      userStore.state.current.name = updated.username
+      userStore.state.current.name = updated.display_name || updated.username
+      userStore.state.current.username = updated.username
       userStore.state.current.email = updated.email ?? ''
     }
     toastSuccess(
@@ -100,6 +112,7 @@ onMounted(async () => {
     account.value = await accountService.me()
     data.username = account.value.username
     data.email = account.value.email ?? ''
+    data.display_name = account.value.display_name ?? ''
   } catch (error: unknown) {
     handleHttpError(error)
   }

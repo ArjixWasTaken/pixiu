@@ -6,6 +6,7 @@
 
 mod models;
 pub mod owned;
+pub mod videos;
 
 use std::path::Path;
 

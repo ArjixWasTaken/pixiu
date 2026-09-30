@@ -91,11 +91,10 @@ async fn hoarded(
         .iter()
         .map(|album| album.id.clone())
         .collect();
-    let tracks = lib
-        .tracks_of_videos(&videos)
-        .await?
-        .into_iter()
-        .filter_map(|track| Some((track.ytm_video_id?, ids::album(track.album_id))))
+    let held = lib.tracks_of_videos(&videos).await?;
+    let tracks = held
+        .videos()
+        .filter_map(|video| Some((video.to_owned(), ids::album(held.track(video)?.album_id))))
         .collect();
     let albums = lib
         .albums_of_browse_ids(&browses)
