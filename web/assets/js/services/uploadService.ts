@@ -3,9 +3,9 @@ import { http } from '@/services/http'
 import { postWithProgress } from '@/services/http'
 import { postJson, putToStorageWithProgress } from '@/services/httpUpload'
 import type { UploadResponse } from '@/services/httpUpload'
-import { albumStore } from '@/stores/albumStore'
-import { commonStore } from '@/stores/commonStore'
-import { playableStore } from '@/stores/playableStore'
+import { useAlbumStore } from '@/stores/albumStore'
+import { useCommonStore } from '@/stores/commonStore'
+import { usePlayableStore } from '@/stores/playableStore'
 import { eventBus } from '@/utils/eventBus'
 import { logger } from '@/utils/logger'
 
@@ -164,7 +164,7 @@ export const uploadService = {
     let response: UploadResponse<UploadResult | null>
 
     try {
-      response = commonStore.state.supports_presigned_uploads
+      response = useCommonStore().state.supports_presigned_uploads
         ? await this.uploadViaPresignedUrl(file, trackProgress)
         : await this.uploadDirectlyToServer(file, trackProgress)
     } catch (error: unknown) {
@@ -310,10 +310,10 @@ export const uploadService = {
   },
 
   handleUploadResult(result: UploadResult, uploadedFile?: UploadFile) {
-    playableStore.syncWithVault(result.song)
-    playableStore.invalidateAlbumAndArtistSongCaches(result.song)
-    albumStore.syncWithVault(result.album)
-    commonStore.state.song_length += 1
+    usePlayableStore().syncWithVault(result.song)
+    usePlayableStore().invalidateAlbumAndArtistSongCaches(result.song)
+    useAlbumStore().syncWithVault(result.album)
+    useCommonStore().state.song_length += 1
     eventBus.emit('SONG_UPLOADED', result.song)
 
     const file = uploadedFile ?? this.findByUploadKey(result.upload_key)

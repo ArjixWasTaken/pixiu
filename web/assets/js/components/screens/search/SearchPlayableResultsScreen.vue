@@ -26,7 +26,7 @@
 
 <script lang="ts" setup>
 import { onMounted, ref, toRef } from 'vue'
-import { searchStore } from '@/stores/searchStore'
+import { useSearchStore } from '@/stores/searchStore'
 import { usePlayableList } from '@/composables/usePlayableList'
 import { usePlayableListControls } from '@/composables/usePlayableListControls'
 import { useRouter } from '@/composables/useRouter'
@@ -35,6 +35,8 @@ import { pluralize } from '@/utils/formatters'
 import ScreenHeader from '@/components/ui/ScreenHeader.vue'
 import PlayableListSkeleton from '@/components/playable/playable-list/PlayableListSkeleton.vue'
 import ScreenBase from '@/components/screens/ScreenBase.vue'
+
+const searchStore = useSearchStore()
 
 const { getRouteParam } = useRouter()
 const q = ref('')

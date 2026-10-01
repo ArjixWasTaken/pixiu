@@ -31,11 +31,12 @@
 <script lang="ts" setup>
 import { ref, toRef } from 'vue'
 import { equalizerPresets as builtInPresets } from '@/config/audio'
-import { equalizerStore } from '@/stores/equalizerStore'
-
+import { useEqualizerStore } from '@/stores/equalizerStore'
 import M3Button from '@/components/m3/M3Button.vue'
 import M3Select from '@/components/m3/M3Select.vue'
 import EqualizerSavePresetForm from '@/components/ui/equalizer/EqualizerSavePresetForm.vue'
+
+const equalizerStore = useEqualizerStore()
 
 defineProps<{
   selectedId: string | null

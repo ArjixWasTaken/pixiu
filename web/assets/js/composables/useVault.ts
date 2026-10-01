@@ -1,6 +1,6 @@
 import { merge } from 'lodash-es'
 import type { Reactive } from 'vue'
-import { reactive } from 'vue'
+import { markRaw, reactive } from 'vue'
 import { arrayify } from '@/utils/helpers'
 
 interface UseVaultOptions<T> {
@@ -9,7 +9,8 @@ interface UseVaultOptions<T> {
 }
 
 export const useVault = <T extends object & { id: PropertyKey }>(options: UseVaultOptions<T> = {}) => {
-  const vault = new Map<T['id'], Reactive<T>>()
+  // Raw: its entries are reactive each, and a store holding it must not wrap it again.
+  const vault = markRaw(new Map<T['id'], Reactive<T>>())
 
   return {
     vault,

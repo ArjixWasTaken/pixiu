@@ -2,23 +2,23 @@ import { reactive } from 'vue'
 import { describe, expect, it } from 'vite-plus/test'
 import isMobile from 'ismobilejs'
 import { createHarness } from '@/__tests__/TestHarness'
-import { cache } from '@/services/cache'
+import { queryClient } from '@/services/queryClient'
 import { http } from '@/services/http'
 import type { SongUpdateResult } from '@/stores/playableStore'
-import { playableStore } from '@/stores/playableStore'
-import { albumStore } from '@/stores/albumStore'
-import { artistStore } from '@/stores/artistStore'
-import { overviewStore } from '@/stores/overviewStore'
-import { preferenceStore } from '@/stores/preferenceStore'
-import { playlistStore } from '@/stores/playlistStore'
+import { usePlayableStore } from '@/stores/playableStore'
+import { useAlbumStore } from '@/stores/albumStore'
+import { useArtistStore } from '@/stores/artistStore'
+import { useOverviewStore } from '@/stores/overviewStore'
+import { usePreferenceStore } from '@/stores/preferenceStore'
+import { usePlaylistStore } from '@/stores/playlistStore'
 import { subsonic } from '@/services/subsonic'
 
 describe('playableStore', () => {
   const h = createHarness({
     afterEach: () => {
       isMobile.any = false
-      preferenceStore.temporary.transcode_on_mobile = false
-      playlistStore.state.playlists = []
+      usePreferenceStore().transcode_on_mobile = false
+      usePlaylistStore().state.playlists = []
     },
   })
 
@@ -26,7 +26,7 @@ describe('playableStore', () => {
     const scrobble = h.mock(subsonic, 'scrobble').mockResolvedValue({})
     const song = h.factory('song').make({ play_count: 2, played_at: null })
 
-    await playableStore.registerPlay(song)
+    await usePlayableStore().registerPlay(song)
 
     expect(scrobble).toHaveBeenCalledWith(song.id, true, undefined)
     expect(song.play_count).toBe(3)
@@ -35,26 +35,26 @@ describe('playableStore', () => {
 
   it('gets a song by ID', () => {
     const song = reactive(h.factory('song').make({ id: 'foo' }))
-    playableStore.vault.set('foo', reactive(song))
-    playableStore.vault.set('bar', reactive(h.factory('song').make({ id: 'bar' })))
+    usePlayableStore().vault.set('foo', reactive(song))
+    usePlayableStore().vault.set('bar', reactive(h.factory('song').make({ id: 'bar' })))
 
-    expect(playableStore.byId('foo')).toBe(song)
+    expect(usePlayableStore().byId('foo')).toBe(song)
   })
 
   it('gets songs by IDs', () => {
     const foo = reactive(h.factory('song').make({ id: 'foo' }))
     const bar = reactive(h.factory('song').make({ id: 'bar' }))
-    playableStore.vault.set('foo', foo)
-    playableStore.vault.set('bar', bar)
-    playableStore.vault.set('baz', reactive(h.factory('song').make({ id: 'baz' })))
+    usePlayableStore().vault.set('foo', foo)
+    usePlayableStore().vault.set('bar', bar)
+    usePlayableStore().vault.set('baz', reactive(h.factory('song').make({ id: 'baz' })))
 
-    expect(playableStore.byIds(['foo', 'bar'])).toEqual([foo, bar])
+    expect(usePlayableStore().byIds(['foo', 'bar'])).toEqual([foo, bar])
   })
 
   it('gets formatted length', () => {
-    expect(playableStore.getFormattedLength(h.factory('song').make({ length: 123 }))).toBe('2 min 3 sec')
+    expect(usePlayableStore().getFormattedLength(h.factory('song').make({ length: 123 }))).toBe('2 min 3 sec')
     expect(
-      playableStore.getFormattedLength([
+      usePlayableStore().getFormattedLength([
         h.factory('song').make({ length: 122 }),
         h.factory('song').make({ length: 123 }),
       ]),
@@ -63,20 +63,20 @@ describe('playableStore', () => {
 
   it('gets songs by album', () => {
     const songs = reactive(h.factory('song').make({ album_id: 'iv' }, 2))
-    playableStore.vault.set(songs[0].id, songs[0])
-    playableStore.vault.set(songs[1].id, songs[1])
+    usePlayableStore().vault.set(songs[0].id, songs[0])
+    usePlayableStore().vault.set(songs[1].id, songs[1])
     const album = h.factory('album').make({ id: 'iv' })
 
-    expect(playableStore.byAlbum(album)).toEqual(songs)
+    expect(usePlayableStore().byAlbum(album)).toEqual(songs)
   })
 
   it('matches a song by title', () => {
     const song = h.factory('song').make({ title: 'An amazing song' })
     const songs = [song, ...h.factory('song').make(3)]
 
-    expect(playableStore.matchSongsByTitle('An amazing song', songs)).toEqual(song)
-    expect(playableStore.matchSongsByTitle('An Amazing Song', songs)).toEqual(song)
-    expect(playableStore.matchSongsByTitle('Nonexistent song', songs)).toBeNull()
+    expect(usePlayableStore().matchSongsByTitle('An amazing song', songs)).toEqual(song)
+    expect(usePlayableStore().matchSongsByTitle('An Amazing Song', songs)).toEqual(song)
+    expect(usePlayableStore().matchSongsByTitle('Nonexistent song', songs)).toBeNull()
   })
 
   it('updates songs', async () => {
@@ -92,14 +92,13 @@ describe('playableStore', () => {
       },
     }
 
-    const syncSongsMock = h.mock(playableStore, 'syncWithVault')
-    const syncAlbumsMock = h.mock(albumStore, 'syncWithVault')
-    const syncArtistsMock = h.mock(artistStore, 'syncWithVault')
-    const removeAlbumsMock = h.mock(albumStore, 'removeByIds')
-    const removeArtistsMock = h.mock(artistStore, 'removeByIds')
+    const syncAlbumsMock = h.mock(useAlbumStore(), 'syncWithVault')
+    const syncArtistsMock = h.mock(useArtistStore(), 'syncWithVault')
+    const removeAlbumsMock = h.mock(useAlbumStore(), 'removeByIds')
+    const removeArtistsMock = h.mock(useArtistStore(), 'removeByIds')
     const putMock = h.mock(http, 'put').mockResolvedValueOnce(result)
 
-    await playableStore.updateSongs(songs, {
+    await usePlayableStore().updateSongs(songs, {
       album_name: 'Updated Album',
       artist_name: 'Updated Artist',
     })
@@ -112,7 +111,7 @@ describe('playableStore', () => {
       songs: songs.map(song => song.id),
     })
 
-    expect(syncSongsMock).toHaveBeenCalledWith(result.songs)
+    result.songs.forEach(song => expect(usePlayableStore().byId(song.id)).toMatchObject({ id: song.id }))
     expect(syncAlbumsMock).toHaveBeenCalledWith(result.albums)
     expect(syncArtistsMock).toHaveBeenCalledWith(result.artists)
     expect(removeAlbumsMock).toHaveBeenCalledWith(['iv'])
@@ -124,77 +123,72 @@ describe('playableStore', () => {
       playback_state: null,
     })
 
-    const [synced] = playableStore.syncWithVault(song)
+    const [synced] = usePlayableStore().syncWithVault(song)
 
-    expect(playableStore.vault.has(song.id)).toBe(true)
+    expect(usePlayableStore().vault.has(song.id)).toBe(true)
     expect(synced.playback_state).toBe('Stopped')
 
     // re-syncing the same song reuses the existing reactive entry
-    const [resynced] = playableStore.syncWithVault(song)
+    const [resynced] = usePlayableStore().syncWithVault(song)
     expect(resynced).toBe(synced)
   })
 
   it('refreshes play stats when a vaulted song play count changes', async () => {
-    const refreshMock = h.mock(overviewStore, 'refreshPlayStats')
+    const refreshMock = h.mock(useOverviewStore(), 'refreshPlayStats')
 
-    const [synced] = playableStore.syncWithVault(h.factory('song').make({ play_count: 98 }))
+    const [synced] = usePlayableStore().syncWithVault(h.factory('song').make({ play_count: 98 }))
     synced.play_count = 100
 
     await h.tick()
     expect(refreshMock).toHaveBeenCalledTimes(1)
 
     // re-syncing the same song does not double up the watcher
-    playableStore.syncWithVault({ ...synced, play_count: 101 } as Song)
+    usePlayableStore().syncWithVault({ ...synced, play_count: 101 } as Song)
     synced.play_count = 102
 
     await h.tick()
     expect(refreshMock).toHaveBeenCalledTimes(2)
   })
 
-  it('invalidates the album and artist song caches for a song', () => {
+  it('makes the song lists of its album and artist stale, for an edited song', async () => {
     const song = h.factory('song').make({ album_id: 'album-1', artist_id: 'artist-1' })
-    const removeMock = h.mock(cache, 'remove')
+    queryClient.setQueryData(['album', 'album-1', 'songs'], [])
+    queryClient.setQueryData(['artist', 'artist-1', 'songs'], [])
 
-    playableStore.invalidateAlbumAndArtistSongCaches(song)
+    await usePlayableStore().invalidateAlbumAndArtistSongCaches(song)
 
-    expect(removeMock).toHaveBeenCalledWith(['album.songs', 'album-1'])
-    expect(removeMock).toHaveBeenCalledWith(['artist.songs', 'artist-1'])
+    expect(queryClient.getQueryState(['album', 'album-1', 'songs'])?.isInvalidated).toBe(true)
+    expect(queryClient.getQueryState(['artist', 'artist-1', 'songs'])?.isInvalidated).toBe(true)
   })
 
-  it('fetches for playlist with cache', async () => {
+  it('fetches the songs of a playlist once while they are fresh', async () => {
     const songs = h.factory('song').make(3)
     const playlist = h.factory('playlist').make()
-    h.mock(playlistStore, 'byId').mockReturnValueOnce(playlist)
-    cache.set(['playlist.songs', playlist.id], songs)
+    h.mock(usePlaylistStore(), 'byId').mockReturnValue(playlist)
+    const fetchMock = h.mock(subsonic, 'playlistSongs').mockResolvedValue(songs)
 
-    const getMock = h.mock(http, 'get')
+    await usePlayableStore().fetchForPlaylist(playlist)
+    const fetched = await usePlayableStore().fetchForPlaylist(playlist)
 
-    const fetched = await playableStore.fetchForPlaylist(playlist)
-
-    expect(getMock).not.toHaveBeenCalled()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(fetched).toEqual(songs)
     expect(playlist.playables).toEqual(songs)
   })
 
   it('fetches and deduplicates songs for playlists', async () => {
     const playlists = h.factory('playlist').make(3)
-    const sharedSong = h.factory('song').make()
-    const firstSong = h.factory('song').make()
-    const secondSong = h.factory('song').make()
-    const thirdSong = h.factory('song').make()
+    usePlaylistStore().state.playlists = playlists
+    const [sharedSong, firstSong, secondSong, thirdSong] = h.factory('song').make(4)
     const fetchMock = h
-      .mock(playableStore, 'fetchForPlaylist')
+      .mock(subsonic, 'playlistSongs')
       .mockResolvedValueOnce([sharedSong, firstSong])
       .mockResolvedValueOnce([secondSong, sharedSong])
       .mockResolvedValueOnce([thirdSong])
 
-    const songs = await playableStore.fetchForPlaylists(playlists)
+    const songs = await usePlayableStore().fetchForPlaylists(playlists)
 
-    expect(fetchMock).toHaveBeenNthCalledWith(1, playlists[0])
-    expect(fetchMock).toHaveBeenNthCalledWith(2, playlists[1])
-    expect(fetchMock).toHaveBeenNthCalledWith(3, playlists[2])
-    expect(fetchMock).toHaveBeenCalledTimes(3)
-    expect(songs).toEqual([sharedSong, firstSong, secondSong, thirdSong])
+    expect(fetchMock.mock.calls).toEqual([[playlists[0].id], [playlists[1].id], [playlists[2].id]])
+    expect(songs.map(({ id }) => id)).toEqual([sharedSong.id, firstSong.id, secondSong.id, thirdSong.id])
   })
 
   it('syncs album properties', () => {
@@ -206,17 +200,19 @@ describe('playableStore', () => {
       3,
     )
 
-    playableStore.syncWithVault(songs)
+    usePlayableStore().syncWithVault(songs)
 
     album.name = 'New Album Name'
     album.cover = 'https://test/new-album-cover.jpg'
 
-    playableStore.syncAlbumProperties(album)
+    usePlayableStore().syncAlbumProperties(album)
 
-    playableStore.byIds<Song>(songs.map(song => song.id)).forEach(song => {
-      expect(song.album_name).toBe('New Album Name')
-      expect(song.album_cover).toBe('https://test/new-album-cover.jpg')
-    })
+    usePlayableStore()
+      .byIds<Song>(songs.map(song => song.id))
+      .forEach(song => {
+        expect(song.album_name).toBe('New Album Name')
+        expect(song.album_cover).toBe('https://test/new-album-cover.jpg')
+      })
   })
 
   it('syncs artist properties', () => {
@@ -236,10 +232,10 @@ describe('playableStore', () => {
       2,
     )
 
-    playableStore.syncWithVault([...songsFromArtist, ...songsContributedByArtist])
+    usePlayableStore().syncWithVault([...songsFromArtist, ...songsContributedByArtist])
 
     artist.name = 'New Artist Name'
-    playableStore.syncArtistProperties(artist)
+    usePlayableStore().syncArtistProperties(artist)
 
     songsFromArtist.forEach(({ artist_name }) => expect(artist_name).toBe('New Artist Name'))
     songsContributedByArtist.forEach(({ album_artist_name }) => expect(album_artist_name).toBe('New Artist Name'))

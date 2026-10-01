@@ -1,33 +1,36 @@
+import { defineStore } from 'pinia'
 import { reactive } from 'vue'
 import { library } from '@/services/library'
-import { playableStore } from '@/stores/playableStore'
+import { usePlayableStore } from '@/stores/playableStore'
 
 const EXCERPT_COUNT = 6
 
-export const recentlyPlayedStore = {
-  excerptState: reactive({
+export const useRecentlyPlayedStore = defineStore('recentlyPlayed', () => {
+  const excerptState = reactive({
     playables: [] as Playable[],
-  }),
+  })
 
-  state: reactive({
+  const state = reactive({
     playables: [] as Playable[],
-  }),
+  })
 
-  async fetch() {
-    this.state.playables = playableStore.syncWithVault(await library.recentlyPlayed(100))
-    return this.state.playables
-  },
+  const fetch = async () => {
+    state.playables = usePlayableStore().syncWithVault(await library.recentlyPlayed(100))
+    return state.playables
+  }
 
-  async add(playable: Playable) {
-    if (!this.state.playables.length) {
-      await this.fetch()
+  const add = async (playable: Playable) => {
+    if (!state.playables.length) {
+      await fetch()
     }
 
-    ;[this.state, this.excerptState].forEach(state => {
-      state.playables = state.playables.filter(s => s.id !== playable.id)
-      state.playables.unshift(playable)
+    ;[state, excerptState].forEach(each => {
+      each.playables = each.playables.filter(s => s.id !== playable.id)
+      each.playables.unshift(playable)
     })
 
-    this.excerptState.playables.splice(EXCERPT_COUNT)
-  },
-}
+    excerptState.playables.splice(EXCERPT_COUNT)
+  }
+
+  return { excerptState, state, fetch, add }
+})

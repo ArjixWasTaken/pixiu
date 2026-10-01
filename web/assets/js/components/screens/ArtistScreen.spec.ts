@@ -1,9 +1,9 @@
 import { screen, waitFor } from '@testing-library/vue'
 import { describe, expect, it, vi } from 'vite-plus/test'
 import { createHarness } from '@/__tests__/TestHarness'
-import { albumStore } from '@/stores/albumStore'
-import { artistStore } from '@/stores/artistStore'
-import { playableStore } from '@/stores/playableStore'
+import { useAlbumStore } from '@/stores/albumStore'
+import { useArtistStore } from '@/stores/artistStore'
+import { usePlayableStore } from '@/stores/playableStore'
 import Component from './ArtistScreen.vue'
 
 vi.mock('@/composables/useContextMenu')
@@ -13,9 +13,9 @@ describe('artistScreen.vue', () => {
 
   const renderComponent = async (path: string) => {
     const artist = h.factory('artist').make({ id: 'ar-1', name: 'Kevin MacLeod' })
-    h.mock(artistStore, 'resolve').mockResolvedValue(artist)
-    h.mock(albumStore, 'fetchForArtist').mockResolvedValue(h.factory('album').make(2))
-    const fetchSongs = h.mock(playableStore, 'fetchSongsForArtist').mockResolvedValue(h.factory('song').make(3))
+    h.mock(useArtistStore(), 'resolve').mockResolvedValue(artist)
+    h.mock(useAlbumStore(), 'fetchForArtist').mockResolvedValue(h.factory('album').make(2))
+    const fetchSongs = h.mock(usePlayableStore(), 'fetchSongsForArtist').mockResolvedValue(h.factory('song').make(3))
 
     await h.visit(path)
     h.render(Component, { global: { stubs: { AlbumCard: h.stub('album-card') } } })

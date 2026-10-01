@@ -2,9 +2,9 @@ import { screen, waitFor } from '@testing-library/vue'
 import { afterEach, beforeEach, describe, expect, it } from 'vite-plus/test'
 import { createHarness } from '@/__tests__/TestHarness'
 import { setViewport } from '@/composables/useViewport'
-import { albumStore } from '@/stores/albumStore'
-import { commonStore } from '@/stores/commonStore'
-import { preferenceStore as preferences } from '@/stores/preferenceStore'
+import { useAlbumStore } from '@/stores/albumStore'
+import { useCommonStore } from '@/stores/commonStore'
+import { usePreferenceStore } from '@/stores/preferenceStore'
 import Component from './AlbumListScreen.vue'
 
 const albumGridStub = {
@@ -25,8 +25,10 @@ describe('albumListScreen.vue', () => {
   afterEach(() => setViewport({ mobile: true, wide: true }))
 
   const renderComponent = async () => {
-    const paginateMock = h.mock(albumStore, 'paginate').mockResolvedValueOnce('next-cursor-token')
-    albumStore.state.albums = h.factory('album').make(9)
+    const albums = h.factory('album').make(9)
+    const paginateMock = h
+      .mock(useAlbumStore(), 'paginate')
+      .mockResolvedValue({ items: useAlbumStore().syncWithVault(albums), nextCursor: 'next-cursor-token' })
 
     const rendered = h.render(Component, {
       global: {
@@ -37,6 +39,8 @@ describe('albumListScreen.vue', () => {
       },
     })
 
+    // An empty library has nothing to fetch.
+    useCommonStore().state.song_length && (await waitFor(() => expect(paginateMock).toHaveBeenCalled()))
     await h.tick(2)
 
     return {
@@ -51,14 +55,14 @@ describe('albumListScreen.vue', () => {
   })
 
   it('shows a message when the library is empty', async () => {
-    commonStore.state.song_length = 0
+    useCommonStore().state.song_length = 0
     await renderComponent()
 
     await waitFor(() => screen.getByTestId('screen-empty-state'))
   })
 
   it('renders the table when the view mode is table', async () => {
-    preferences.temporary.albums_view_mode = 'table'
+    usePreferenceStore().albums_view_mode = 'table'
     await renderComponent()
 
     expect(screen.queryByTestId('album-grid')).toBeNull()
@@ -66,7 +70,7 @@ describe('albumListScreen.vue', () => {
   })
 
   it('switches between grid and table via the view mode toggle', async () => {
-    preferences.temporary.albums_view_mode = 'grid'
+    usePreferenceStore().albums_view_mode = 'grid'
     await renderComponent()
 
     screen.getByTestId('album-grid')
@@ -99,23 +103,16 @@ describe('albumListScreen.vue', () => {
       }),
     )
 
+    // Back to all of them: the list kept from before, not fetched again.
     await h.user.click(screen.getByRole('button', { name: 'Favorites only' }))
+    await h.tick(2)
 
-    await waitFor(() =>
-      expect(paginateMock).toHaveBeenNthCalledWith(3, {
-        favorites_only: false,
-        cursor: '',
-        order: 'asc',
-        sort: 'name',
-      }),
-    )
+    expect(paginateMock).toHaveBeenCalledTimes(2)
   })
 
   it('filters out unfavorited albums in favorites mode', async () => {
-    const albums = h.factory('album').make({ favorite: true }, 5)
-    albumStore.state.albums = albums
-
-    h.mock(albumStore, 'paginate').mockResolvedValue(null)
+    const albums = useAlbumStore().syncWithVault(h.factory('album').make({ favorite: true }, 5))
+    h.mock(useAlbumStore(), 'paginate').mockResolvedValue({ items: albums, nextCursor: null })
 
     h.render(Component, {
       global: {
@@ -128,22 +125,19 @@ describe('albumListScreen.vue', () => {
 
     await h.tick(2)
 
-    preferences.albums_favorites_only = true
-    await h.tick()
+    usePreferenceStore().albums_favorites_only = true
 
-    expect(screen.getAllByTestId('album-card')).toHaveLength(5)
+    await waitFor(() => expect(screen.getAllByTestId('album-card')).toHaveLength(5))
 
-    albumStore.state.albums[0].favorite = false
+    albums[0].favorite = false
     await h.tick()
 
     expect(screen.getAllByTestId('album-card')).toHaveLength(4)
   })
 
   it('shows empty state when no favorite albums', async () => {
-    albumStore.state.albums = []
-
-    h.mock(albumStore, 'paginate').mockResolvedValue(null)
-    preferences.albums_favorites_only = true
+    h.mock(useAlbumStore(), 'paginate').mockResolvedValue({ items: [], nextCursor: null })
+    usePreferenceStore().albums_favorites_only = true
 
     h.render(Component, {
       global: {

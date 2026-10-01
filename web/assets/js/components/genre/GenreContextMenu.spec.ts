@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vite-plus/test'
 import { screen } from '@testing-library/vue'
 import { createHarness } from '@/__tests__/TestHarness'
 import { playbackService } from '@/services/QueuePlaybackService'
-import { playableStore } from '@/stores/playableStore'
-import { queueStore } from '@/stores/queueStore'
+import { usePlayableStore } from '@/stores/playableStore'
+import { useQueueStore } from '@/stores/queueStore'
 import Router from '@/router'
 import Component from './GenreContextMenu.vue'
 
@@ -38,7 +38,7 @@ describe('genreContextMenu.vue', () => {
     h.createAudioPlayer()
 
     const songs = h.factory('song').make(10)
-    const fetchMock = h.mock(playableStore, 'fetchSongsByGenre').mockResolvedValue(songs)
+    const fetchMock = h.mock(usePlayableStore(), 'fetchSongsByGenre').mockResolvedValue(songs)
     const playMock = h.mock(playbackService, 'queueAndPlay')
     const goMock = h.mock(Router, 'go')
 
@@ -55,7 +55,7 @@ describe('genreContextMenu.vue', () => {
     h.createAudioPlayer()
 
     const songs = h.factory('song').make(10)
-    const fetchMock = h.mock(playableStore, 'fetchSongsByGenre').mockResolvedValue(songs)
+    const fetchMock = h.mock(usePlayableStore(), 'fetchSongsByGenre').mockResolvedValue(songs)
     const playMock = h.mock(playbackService, 'queueAndPlay')
     const goMock = h.mock(Router, 'go')
 
@@ -70,8 +70,8 @@ describe('genreContextMenu.vue', () => {
 
   it('adds to queue', async () => {
     const songs = h.factory('song').make(10)
-    const fetchMock = h.mock(playableStore, 'fetchSongsByGenre').mockResolvedValue(songs)
-    const queueMock = h.mock(queueStore, 'queue')
+    const fetchMock = h.mock(usePlayableStore(), 'fetchSongsByGenre').mockResolvedValue(songs)
+    const queueMock = h.mock(useQueueStore(), 'queue')
 
     const { genre } = await renderComponent()
     await h.user.click(screen.getByText('Add to queue'))

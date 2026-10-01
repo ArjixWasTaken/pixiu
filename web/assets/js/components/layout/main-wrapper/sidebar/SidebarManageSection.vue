@@ -27,11 +27,12 @@ import type { RouteName } from '@/config/routes'
 import { useRouter } from '@/composables/useRouter'
 import { usePolicies } from '@/composables/usePolicies'
 import { uploadService } from '@/services/uploadService'
-import { huntingStore } from '@/stores/huntingStore'
-
+import { useHuntingStore } from '@/stores/huntingStore'
 import SidebarSection from '@/components/layout/main-wrapper/sidebar/SidebarSection.vue'
 import SidebarSectionHeader from '@/components/layout/main-wrapper/sidebar/SidebarSectionHeader.vue'
 import SidebarItem from '@/components/layout/main-wrapper/sidebar/SidebarItem.vue'
+
+const huntingStore = useHuntingStore()
 
 export interface ManageSidebarItem {
   label: string

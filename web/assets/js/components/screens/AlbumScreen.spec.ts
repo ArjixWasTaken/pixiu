@@ -1,8 +1,8 @@
 import { screen, waitFor } from '@testing-library/vue'
 import { describe, expect, it, vi } from 'vite-plus/test'
 import { createHarness } from '@/__tests__/TestHarness'
-import { albumStore } from '@/stores/albumStore'
-import { playableStore } from '@/stores/playableStore'
+import { useAlbumStore } from '@/stores/albumStore'
+import { usePlayableStore } from '@/stores/playableStore'
 import Component from './AlbumScreen.vue'
 
 vi.mock('@/composables/useContextMenu')
@@ -12,9 +12,9 @@ describe('albumScreen.vue', () => {
 
   const renderComponent = async (path: string) => {
     const album = h.factory('album').make({ id: 'al-1', name: 'Groovy' })
-    h.mock(albumStore, 'resolve').mockResolvedValue(album)
-    const fetchForArtist = h.mock(albumStore, 'fetchForArtist').mockResolvedValue([album])
-    const fetchSongs = h.mock(playableStore, 'fetchSongsForAlbum').mockResolvedValue(h.factory('song').make(3))
+    h.mock(useAlbumStore(), 'resolve').mockResolvedValue(album)
+    const fetchForArtist = h.mock(useAlbumStore(), 'fetchForArtist').mockResolvedValue([album])
+    const fetchSongs = h.mock(usePlayableStore(), 'fetchSongsForAlbum').mockResolvedValue(h.factory('song').make(3))
 
     await h.visit(path)
     h.render(Component, { global: { stubs: { AlbumCard: h.stub('album-card') } } })

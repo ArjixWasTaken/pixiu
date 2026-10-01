@@ -1,5 +1,5 @@
 import { useEventListener, useResizeObserver } from '@vueuse/core'
-import { onMounted, ref, shallowRef, useTemplateRef } from 'vue'
+import { onBeforeUnmount, onMounted, ref, shallowRef, useTemplateRef } from 'vue'
 
 /**
  * What scrolls a virtual list (its element is the `list` template ref). On a
@@ -35,7 +35,14 @@ export const useScrollContainer = () => {
 
   // What is above the list can change height as the screen scrolls (its header shrinks).
   useEventListener(scroller, 'scroll', measure, { passive: true })
-  useResizeObserver(list, measure)
+
+  // On the next frame: changing the list's size within the observer's own round is a loop.
+  let frame = 0
+  useResizeObserver(list, () => {
+    cancelAnimationFrame(frame)
+    frame = requestAnimationFrame(measure)
+  })
+  onBeforeUnmount(() => cancelAnimationFrame(frame))
 
   return { list, scroller, nested, margin, width }
 }

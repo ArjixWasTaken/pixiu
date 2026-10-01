@@ -1,8 +1,7 @@
 import { screen } from '@testing-library/vue'
 import { describe, expect, it, vi } from 'vite-plus/test'
 import { createHarness } from '@/__tests__/TestHarness'
-import { playableStore } from '@/stores/playableStore'
-
+import { usePlayableStore } from '@/stores/playableStore'
 const isCachedMock = vi.fn().mockReturnValue(false)
 const isCachingMock = vi.fn().mockReturnValue(false)
 const hasCachingErrorMock = vi.fn().mockReturnValue(false)
@@ -102,7 +101,7 @@ describe('playableCard.vue', () => {
   })
 
   it('toggles favorite state when the Favorite button is clicked', async () => {
-    const toggleFavoriteMock = h.mock(playableStore, 'toggleFavorite')
+    const toggleFavoriteMock = h.mock(usePlayableStore(), 'toggleFavorite')
     const { props } = renderCard({ favorite: false })
 
     await h.user.click(screen.getByRole('button', { name: 'Add to favorites' }))
@@ -111,7 +110,7 @@ describe('playableCard.vue', () => {
   })
 
   it('toggles favorite without starting playback when the button is activated with Enter', async () => {
-    const toggleFavoriteMock = h.mock(playableStore, 'toggleFavorite')
+    const toggleFavoriteMock = h.mock(usePlayableStore(), 'toggleFavorite')
     const { props } = renderCard({ favorite: false })
 
     screen.getByRole('button', { name: 'Add to favorites' }).focus()

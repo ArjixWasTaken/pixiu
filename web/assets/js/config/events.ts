@@ -20,7 +20,6 @@ export type Events = {
   SONGS_DELETED: Song[]
   SONG_UPLOADED: Song
   /** The job board changed on the server. */
-  HUNT_JOBS_CHANGED: undefined
   /** Uploaded files wait for review. */
   OFFERINGS_UPLOADED: undefined
   /** Songs were excluded from a watched playlist, or let back in. */

@@ -15,10 +15,11 @@
 
 <script lang="ts" setup>
 import { eventBus } from '@/utils/eventBus'
-import { userStore } from '@/stores/userStore'
-
+import { useUserStore } from '@/stores/userStore'
 import M3Button from '@/components/m3/M3Button.vue'
 import PasswordGroup from '@/components/account/PasswordGroup.vue'
+
+const userStore = useUserStore()
 
 const done = () => {
   if (userStore.state.current) {

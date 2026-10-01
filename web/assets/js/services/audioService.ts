@@ -1,5 +1,5 @@
-import { equalizerStore } from '@/stores/equalizerStore'
-import { preferenceStore } from '@/stores/preferenceStore'
+import { useEqualizerStore } from '@/stores/equalizerStore'
+import { usePreferenceStore } from '@/stores/preferenceStore'
 import { frequencies } from '@/config/audio'
 
 export const dbToGain = (db: number) => 10 ** (db / 20) || 0
@@ -54,11 +54,11 @@ export const audioService = {
     this.preampGainNode = this.context.createGain()
     this.source = this.context.createMediaElementSource(this.element)
     this.analyzer = this.context.createAnalyser()
-    this.bypassed = !preferenceStore.equalizer_enabled
+    this.bypassed = !usePreferenceStore().equalizer_enabled
 
     this.source.connect(this.entry())
 
-    const config = equalizerStore.getConfig()
+    const config = useEqualizerStore().getConfig()
 
     this.changePreampGain(config.preamp)
 

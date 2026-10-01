@@ -44,11 +44,12 @@
 <script lang="ts" setup>
 import { isEqual } from 'lodash-es'
 import { computed, ref } from 'vue'
-import { preferenceStore } from '@/stores/preferenceStore'
-
+import { usePreferenceStore } from '@/stores/preferenceStore'
 import M3Button from '@/components/m3/M3Button.vue'
 import M3Checkbox from '@/components/m3/M3Checkbox.vue'
 import M3Icon from '@/components/m3/M3Icon.vue'
+
+const preferenceStore = usePreferenceStore()
 
 interface BlockSummary {
   id: string

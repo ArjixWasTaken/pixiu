@@ -27,9 +27,9 @@
 
 <script lang="ts" setup>
 import { computed, toRef, toRefs } from 'vue'
-import { artistStore } from '@/stores/artistStore'
-import { commonStore } from '@/stores/commonStore'
-import { playableStore } from '@/stores/playableStore'
+import { useArtistStore } from '@/stores/artistStore'
+import { useCommonStore } from '@/stores/commonStore'
+import { usePlayableStore } from '@/stores/playableStore'
 import { useDownload } from '@/composables/useDownload'
 import { defineAsyncComponent } from '@/utils/helpers'
 import { useContextMenu } from '@/composables/useContextMenu'
@@ -39,6 +39,10 @@ import { playback } from '@/services/playbackManager'
 import { useThirdPartyServices } from '@/composables/useThirdPartyServices'
 
 import StarRating from '@/components/ui/StarRating.vue'
+
+const artistStore = useArtistStore()
+const commonStore = useCommonStore()
+const playableStore = usePlayableStore()
 
 const props = defineProps<{ artist: Artist }>()
 const { artist } = toRefs(props)

@@ -1,4 +1,6 @@
-import { reactive, ref } from 'vue'
+import { defineStore } from 'pinia'
+import type { WritableComputedRef } from 'vue'
+import { computed, reactive, ref } from 'vue'
 
 export const defaultPreferences: UserPreferences = {
   volume: 7,
@@ -51,82 +53,50 @@ const load = (): Partial<UserPreferences> => {
   }
 }
 
-const preferenceStore = {
-  isTemporary: false,
-  initialized: ref(false),
+/**
+ * The user's preferences, kept in this browser (píxiū keeps none on the
+ * server). Each is also read and written by its name: `preferenceStore.volume = 5`
+ * saves it.
+ */
+export const usePreferenceStore = defineStore('preference', () => {
+  const state = reactive<UserPreferences>(structuredClone(defaultPreferences))
+  const initialized = ref(false)
 
-  state: reactive<UserPreferences>(defaultPreferences),
+  const get = <K extends keyof UserPreferences>(key: K) => state[key]
 
-  init(preferences: UserPreferences = defaultPreferences) {
-    // Preferences live in the browser: píxiū keeps none on the server.
-    Object.assign(this.state, preferences, load())
-
-    for (const key of ['albums_view_mode', 'artists_view_mode'] as const) {
-      if ((this.state[key] as string) === 'thumbnails') {
-        this.state[key] = 'grid'
-      }
-    }
-    if (this.state.albums_view_mode === 'list') {
-      this.state.albums_view_mode = 'table'
-    }
-    if (this.state.artists_view_mode === 'list') {
-      this.state.artists_view_mode = 'table'
-    }
-
-    this.setupProxy()
-
-    this.initialized.value = true
-  },
-
-  /**
-   * Proxy the state properties, so that each can be directly accessed using the key.
-   */
-  setupProxy() {
-    Object.keys(this.state).forEach(key => {
-      Object.defineProperty(this, key, {
-        get: (): any => this.get(key),
-        set: (value: any): void => this.set(key, value),
-        configurable: true,
-      })
-    })
-  },
-
-  set(key: keyof UserPreferences, value: any) {
-    if (this.state[key] === value) {
+  const set = <K extends keyof UserPreferences>(key: K, value: UserPreferences[K]) => {
+    if (state[key] === value) {
       return
     }
 
-    this.state[key] = value
-
-    if (!this.isTemporary) {
-      this.update(key, value)
-    } else {
-      this.isTemporary = false
-    }
-  },
-
-  get(key: keyof UserPreferences) {
-    return this.state?.[key]
-  },
-
-  async update(key: keyof UserPreferences, value: any) {
+    state[key] = value
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...load(), [key]: value }))
+  }
 
-    if (key === 'include_public_media') {
-      window.location.reload()
+  const init = (preferences: UserPreferences = defaultPreferences) => {
+    Object.assign(state, preferences, load())
+
+    for (const key of ['albums_view_mode', 'artists_view_mode'] as const) {
+      if ((state[key] as string) === 'thumbnails') {
+        state[key] = 'grid'
+      }
     }
-  },
+    if (state.albums_view_mode === 'list') {
+      state.albums_view_mode = 'table'
+    }
+    if (state.artists_view_mode === 'list') {
+      state.artists_view_mode = 'table'
+    }
 
-  // Calling preferenceStore.temporary.volume = 7 won't trigger saving.
-  // This is useful in tests as it doesn't create stray HTTP requests.
-  get temporary() {
-    this.isTemporary = true
-    return this as unknown as ExportedType
-  },
-}
+    initialized.value = true
+  }
 
-type ExportedType = Omit<typeof preferenceStore, 'setupProxy' | 'isTemporary'> & UserPreferences
+  const byName = Object.fromEntries(
+    (Object.keys(defaultPreferences) as (keyof UserPreferences)[]).map(key => [
+      key,
+      computed({ get: () => get(key), set: value => set(key, value) }),
+    ]),
+  ) as { [K in keyof UserPreferences]-?: WritableComputedRef<UserPreferences[K]> }
 
-const exported = preferenceStore as unknown as ExportedType
-
-export { exported as preferenceStore }
+  return { state, initialized, get, set, init, ...byName }
+})

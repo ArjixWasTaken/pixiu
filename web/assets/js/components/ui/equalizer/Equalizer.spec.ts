@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vite-plus/test'
 import { fireEvent, screen } from '@testing-library/vue'
 import { createHarness } from '@/__tests__/TestHarness'
-import { equalizerStore } from '@/stores/equalizerStore'
-import { preferenceStore } from '@/stores/preferenceStore'
+import { useEqualizerStore } from '@/stores/equalizerStore'
+import { usePreferenceStore } from '@/stores/preferenceStore'
 import { audioService } from '@/services/audioService'
 import Component from './Equalizer.vue'
 
@@ -23,9 +23,9 @@ vi.mock('@/services/audioService', () => ({
 describe('equalizer.vue', () => {
   const h = createHarness({
     beforeEach: () => {
-      preferenceStore.temporary.equalizer_enabled = true
-      h.mock(equalizerStore, 'init')
-      h.mock(equalizerStore, 'getConfig').mockReturnValue({
+      usePreferenceStore().equalizer_enabled = true
+      h.mock(useEqualizerStore(), 'init')
+      h.mock(useEqualizerStore(), 'getConfig').mockReturnValue({
         id: undefined,
         name: 'Default',
         preamp: 0,
@@ -58,12 +58,12 @@ describe('equalizer.vue', () => {
     screen.getByText('On')
 
     await h.user.click(toggle)
-    expect(preferenceStore.equalizer_enabled).toBe(false)
+    expect(usePreferenceStore().equalizer_enabled).toBe(false)
     expect(audioService.setBypassed).toHaveBeenLastCalledWith(true)
     screen.getByText('Off')
 
     await h.user.click(toggle)
-    expect(preferenceStore.equalizer_enabled).toBe(true)
+    expect(usePreferenceStore().equalizer_enabled).toBe(true)
     expect(audioService.setBypassed).toHaveBeenLastCalledWith(false)
   })
 })

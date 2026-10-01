@@ -24,8 +24,8 @@
 
 <script lang="ts" setup>
 import { computed, toRefs } from 'vue'
-import { albumStore } from '@/stores/albumStore'
-import { playableStore } from '@/stores/playableStore'
+import { useAlbumStore } from '@/stores/albumStore'
+import { usePlayableStore } from '@/stores/playableStore'
 import { useViewport } from '@/composables/useViewport'
 import { useDraggable } from '@/composables/useDragAndDrop'
 import { useRouter } from '@/composables/useRouter'
@@ -35,6 +35,9 @@ import { defineAsyncComponent } from '@/utils/helpers'
 
 import BaseCard from '@/components/ui/album-artist/AlbumOrArtistCard.vue'
 import CardThumbnail from '@/components/ui/album-artist/AlbumOrArtistCardThumbnail.vue'
+
+const albumStore = useAlbumStore()
+const playableStore = usePlayableStore()
 
 const props = withDefaults(
   defineProps<{

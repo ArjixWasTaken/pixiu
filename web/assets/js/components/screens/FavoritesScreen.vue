@@ -60,7 +60,7 @@
 <script lang="ts" setup>
 import { computed, ref } from 'vue'
 import { pluralize } from '@/utils/formatters'
-import { playableStore } from '@/stores/playableStore'
+import { usePlayableStore } from '@/stores/playableStore'
 import { useDownload } from '@/composables/useDownload'
 import { useOfflinePlayback } from '@/composables/useOfflinePlayback'
 import { useMessageToaster } from '@/composables/useMessageToaster'
@@ -74,6 +74,8 @@ import ScreenEmptyState from '@/components/ui/ScreenEmptyState.vue'
 import ScreenBase from '@/components/screens/ScreenBase.vue'
 import PlayableListSkeleton from '@/components/playable/playable-list/PlayableListSkeleton.vue'
 import M3Icon from '@/components/m3/M3Icon.vue'
+
+const playableStore = usePlayableStore()
 
 const allPlayables = ref<Playable[]>([])
 

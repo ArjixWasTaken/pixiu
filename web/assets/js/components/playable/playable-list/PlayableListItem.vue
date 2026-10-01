@@ -64,7 +64,7 @@ import { useTableColumnVisibility } from '@/composables/useTableColumnVisibility
 import { useOfflinePlayback } from '@/composables/useOfflinePlayback'
 import { PlayableListConfigKey, PlayableListContextKey } from '@/config/symbols'
 import { playableListColumnConfig } from '@/config/tables'
-import { playableStore } from '@/stores/playableStore'
+import { usePlayableStore } from '@/stores/playableStore'
 import { useViewport } from '@/composables/useViewport'
 
 import PlayableThumbnail from '@/components/playable/PlayableThumbnail.vue'
@@ -73,6 +73,8 @@ import M3IconButton from '@/components/m3/M3IconButton.vue'
 import OfflineMark from '@/components/ui/OfflineMark.vue'
 import FavoriteButton from '@/components/ui/FavoriteButton.vue'
 import StarRating from '@/components/ui/StarRating.vue'
+
+const playableStore = usePlayableStore()
 
 const props = withDefaults(defineProps<{ item: PlayableRow; showDisc?: boolean }>(), {
   showDisc: false,

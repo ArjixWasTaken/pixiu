@@ -34,14 +34,20 @@ import { useModal } from '@/composables/useModal'
 import { useMessageToaster } from '@/composables/useMessageToaster'
 import { useOfflinePlayback } from '@/composables/useOfflinePlayback'
 import { usePolicies } from '@/composables/usePolicies'
-import { queueStore } from '@/stores/queueStore'
-import { playableStore } from '@/stores/playableStore'
+import { useQueueStore } from '@/stores/queueStore'
+import { usePlayableStore } from '@/stores/playableStore'
 import { playback } from '@/services/playbackManager'
-import { playlistFolderStore } from '@/stores/playlistFolderStore'
-import { playlistStore } from '@/stores/playlistStore'
+import { usePlaylistFolderStore } from '@/stores/playlistFolderStore'
+import { usePlaylistStore } from '@/stores/playlistStore'
 import { useDialogBox } from '@/composables/useDialogBox'
-import { commonStore } from '@/stores/commonStore'
+import { useCommonStore } from '@/stores/commonStore'
 import { useDownload } from '@/composables/useDownload'
+
+const queueStore = useQueueStore()
+const playableStore = usePlayableStore()
+const playlistFolderStore = usePlaylistFolderStore()
+const playlistStore = usePlaylistStore()
+const commonStore = useCommonStore()
 
 const props = defineProps<{ playlist: Playlist }>()
 const { playlist } = toRefs(props)

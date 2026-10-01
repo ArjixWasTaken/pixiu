@@ -64,7 +64,8 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, onBeforeUnmount, onMounted, ref, toRef } from 'vue'
+import { useQuery } from '@tanstack/vue-query'
+import { computed, onBeforeUnmount, ref, toRef, watch } from 'vue'
 import { isDirectoryReadingSupported as canDropFolders } from '@/utils/supports'
 import { acceptedExtensions } from '@/utils/mediaHelper'
 import { pluralize } from '@/utils/formatters'
@@ -72,7 +73,7 @@ import { eventBus } from '@/utils/eventBus'
 import { uploadService } from '@/services/uploadService'
 import { huntingService } from '@/services/huntingService'
 import type { OfferingBatch, OfferingFile } from '@/services/huntingService'
-import { huntingStore } from '@/stores/huntingStore'
+import { useHuntingStore } from '@/stores/huntingStore'
 import { useUpload } from '@/composables/useUpload'
 import { useDialogBox } from '@/composables/useDialogBox'
 import { useMessageToaster } from '@/composables/useMessageToaster'
@@ -86,6 +87,8 @@ import UploadItem from '@/components/ui/upload/UploadItem.vue'
 import UploadSummary from '@/components/ui/upload/UploadSummary.vue'
 import OfferingBatchCard from '@/components/screens/hunting/OfferingBatchCard.vue'
 
+const huntingStore = useHuntingStore()
+
 const acceptAttribute = acceptedExtensions.map(ext => `.${ext}`).join(',')
 
 const { allowsUpload, queueFilesForUpload, handleDropEvent } = useUpload()
@@ -95,16 +98,15 @@ const { handleHttpError } = useErrorHandler('dialog')
 
 const files = toRef(uploadService.state, 'files')
 const hasFailures = computed(() => files.value.some(({ status }) => status === 'Errored' || status === 'Canceled'))
-const batches = ref<OfferingBatch[]>([])
 const droppable = ref(false)
 
-const fetchBatches = async () => {
-  try {
-    batches.value = await huntingService.offerings()
-  } catch (error: unknown) {
-    handleHttpError(error)
-  }
-}
+const { data, error, refetch } = useQuery({
+  queryKey: ['hunting', 'offerings'],
+  queryFn: () => huntingService.offerings(),
+})
+watch(error, error => error && handleHttpError(error))
+
+const batches = computed(() => data.value ?? [])
 
 const onDragEnter = () => (droppable.value = allowsUpload.value)
 
@@ -133,7 +135,7 @@ const retryAll = () => uploadService.retryAll()
 const removeFailed = () => uploadService.removeFailed()
 
 const changed = async () => {
-  await fetchBatches()
+  await refetch()
   await huntingStore.refresh()
 }
 
@@ -175,7 +177,6 @@ const discardFile = async (file: OfferingFile) => {
   }
 }
 
-onMounted(fetchBatches)
 eventBus.on('OFFERINGS_UPLOADED', changed)
 onBeforeUnmount(() => eventBus.off('OFFERINGS_UPLOADED', changed))
 </script>

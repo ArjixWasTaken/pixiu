@@ -1,104 +1,107 @@
-import { reactive } from 'vue'
-import { preferenceStore as preferences } from '@/stores/preferenceStore'
+import { defineStore } from 'pinia'
+import { computed, reactive } from 'vue'
+import { usePreferenceStore } from '@/stores/preferenceStore'
 import themes from '@/config/themes'
 
 const DARK_QUERY = '(prefers-color-scheme: dark)'
 
 const systemPrefersDark = () => typeof window.matchMedia === 'function' && window.matchMedia(DARK_QUERY).matches
 
-export const themeStore = {
-  state: reactive({
+export const useThemeStore = defineStore('theme', () => {
+  const preferences = usePreferenceStore()
+
+  const state = reactive({
     themes,
     /** Whether the dark variant shows, as `applyMode` last set it. */
     dark: true,
-  }),
+  })
 
-  init() {
-    this.setTheme(this.getCurrentTheme())
+  const all = computed(() => state.themes)
 
-    // Following the system: follow it when it changes, too.
-    window.matchMedia?.(DARK_QUERY).addEventListener?.('change', () => {
-      if (preferences.dark_mode === null) {
-        this.applyMode()
-      }
-    })
-  },
+  const getThemeById = (id: Theme['id']) => state.themes.find(theme => theme.id === id)
 
-  get all() {
-    return this.state.themes
-  },
+  const getDefaultTheme = () => getThemeById('cover')!
 
-  setTheme(theme?: Theme | Theme['id']) {
-    if (theme === undefined) {
-      this.setTheme(this.getCurrentTheme())
-      return
-    }
+  const getCurrentTheme = () =>
+    preferences.theme ? (getThemeById(preferences.theme) ?? getDefaultTheme()) : getDefaultTheme()
 
-    if (typeof theme === 'string') {
-      theme = this.getThemeById(theme) ?? this.getDefaultTheme()
-    }
+  /** Dark as chosen, or as the system prefers (`null`); read afresh, as the system may change. */
+  const prefersDark = () => (preferences.dark_mode === null ? systemPrefersDark() : (preferences.dark_mode ?? true))
 
-    preferences.theme = theme.id
-    this.applyMode()
-  },
-
-  get darkMode() {
-    const chosen = preferences.dark_mode
-    if (chosen === null) {
-      return systemPrefersDark()
-    }
-    return chosen ?? true
-  },
-
-  /** Dark, light, or `null` to follow the system. */
-  setDarkMode(dark: boolean | null) {
-    preferences.dark_mode = dark
-    this.applyMode()
-  },
+  /** Whether the colors come from the cover playing. */
+  const followsCover = computed(() => getCurrentTheme().id === 'cover')
 
   /**
    * Selects the scheme's tokens: `data-mode="<scheme>-dt|-lt"` on the root,
    * except for Baseline, whose tokens hang off `data-theme="dark|light"`.
    * The cover's scheme stands on Orange's.
    */
-  applyMode() {
+  const applyMode = () => {
     const root = document.documentElement
-    const current = this.getCurrentTheme().id
+    const current = getCurrentTheme().id
     const scheme = current === 'cover' ? 'orange' : current
-    this.state.dark = this.darkMode
+    const dark = prefersDark()
+    state.dark = dark
 
     if (scheme === 'baseline') {
       root.removeAttribute('data-mode')
-      root.setAttribute('data-theme', this.darkMode ? 'dark' : 'light')
+      root.setAttribute('data-theme', dark ? 'dark' : 'light')
     } else {
       root.removeAttribute('data-theme')
-      root.setAttribute('data-mode', `${scheme}-${this.darkMode ? 'dt' : 'lt'}`)
+      root.setAttribute('data-mode', `${scheme}-${dark ? 'dt' : 'lt'}`)
     }
-  },
+  }
 
-  isCurrentTheme(theme: Theme | Theme['id']) {
-    const currentTheme = this.getCurrentTheme()
+  const setTheme = (theme?: Theme | Theme['id']) => {
+    if (theme === undefined) {
+      setTheme(getCurrentTheme())
+      return
+    }
+
+    if (typeof theme === 'string') {
+      theme = getThemeById(theme) ?? getDefaultTheme()
+    }
+
+    preferences.theme = theme.id
+    applyMode()
+  }
+
+  /** Dark, light, or `null` to follow the system. */
+  const setDarkMode = (dark: boolean | null) => {
+    preferences.dark_mode = dark
+    applyMode()
+  }
+
+  const init = () => {
+    setTheme(getCurrentTheme())
+
+    // Following the system: follow it when it changes, too.
+    window.matchMedia?.(DARK_QUERY).addEventListener?.('change', () => {
+      if (preferences.dark_mode === null) {
+        applyMode()
+      }
+    })
+  }
+
+  const isCurrentTheme = (theme: Theme | Theme['id']) => {
+    const currentTheme = getCurrentTheme()
     return typeof theme === 'string' ? currentTheme.id === theme : currentTheme.id === theme.id
-  },
+  }
 
-  getThemeById(id: Theme['id']) {
-    return this.state.themes.find(theme => theme.id === id)
-  },
+  const isValidTheme = (id: Theme['id']) => getThemeById(id) !== undefined
 
-  getDefaultTheme() {
-    return this.getThemeById('cover')!
-  },
-
-  /** Whether the colors come from the cover playing. */
-  get followsCover() {
-    return this.getCurrentTheme().id === 'cover'
-  },
-
-  getCurrentTheme() {
-    return preferences.theme ? (this.getThemeById(preferences.theme) ?? this.getDefaultTheme()) : this.getDefaultTheme()
-  },
-
-  isValidTheme(id: Theme['id']) {
-    return this.getThemeById(id) !== undefined
-  },
-}
+  return {
+    state,
+    all,
+    followsCover,
+    init,
+    setTheme,
+    setDarkMode,
+    applyMode,
+    isCurrentTheme,
+    getThemeById,
+    getDefaultTheme,
+    getCurrentTheme,
+    isValidTheme,
+  }
+})

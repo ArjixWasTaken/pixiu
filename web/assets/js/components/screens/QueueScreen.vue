@@ -54,9 +54,9 @@
 import { computed, nextTick, onMounted, ref, toRef } from 'vue'
 import { until } from '@vueuse/core'
 import { pluralize } from '@/utils/formatters'
-import { commonStore } from '@/stores/commonStore'
-import { queueStore } from '@/stores/queueStore'
-import { playableStore } from '@/stores/playableStore'
+import { useCommonStore } from '@/stores/commonStore'
+import { useQueueStore } from '@/stores/queueStore'
+import { usePlayableStore } from '@/stores/playableStore'
 import { useRouter } from '@/composables/useRouter'
 import { useErrorHandler } from '@/composables/useErrorHandler'
 import { usePlayableList } from '@/composables/usePlayableList'
@@ -70,6 +70,10 @@ import ScreenEmptyState from '@/components/ui/ScreenEmptyState.vue'
 import ScreenBase from '@/components/screens/ScreenBase.vue'
 import PlayableListSkeleton from '@/components/playable/playable-list/PlayableListSkeleton.vue'
 import M3Icon from '@/components/m3/M3Icon.vue'
+
+const commonStore = useCommonStore()
+const queueStore = useQueueStore()
+const playableStore = usePlayableStore()
 
 const { getRouteParam, go, onScreenActivated, replace, url } = useRouter()
 

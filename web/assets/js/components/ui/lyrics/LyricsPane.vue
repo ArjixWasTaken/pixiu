@@ -28,10 +28,12 @@
 
 <script lang="ts" setup>
 import { computed, ref, toRefs, watch } from 'vue'
-import { preferenceStore as preferences } from '@/stores/preferenceStore'
+import { usePreferenceStore } from '@/stores/preferenceStore'
 import { defineAsyncComponent } from '@/utils/helpers'
 import { useLyrics } from '@/composables/useLyrics'
 import { useModal } from '@/composables/useModal'
+
+const preferences = usePreferenceStore()
 
 const props = defineProps<{ song: Song }>()
 const LrcLyricsPane = defineAsyncComponent(() => import('@/components/ui/lyrics/LrcLyricsPane.vue'))

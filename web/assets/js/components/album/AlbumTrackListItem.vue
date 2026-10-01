@@ -14,11 +14,13 @@
 <script lang="ts" setup>
 import type { Ref } from 'vue'
 import { computed, toRefs } from 'vue'
-import { playableStore } from '@/stores/playableStore'
+import { usePlayableStore } from '@/stores/playableStore'
 import { requireInjection } from '@/utils/helpers'
 import { secondsToHis } from '@/utils/formatters'
 import { PlayablesKey } from '@/config/symbols'
 import { playback } from '@/services/playbackManager'
+
+const playableStore = usePlayableStore()
 
 const props = defineProps<{ album: Album; track: AlbumTrack }>()
 

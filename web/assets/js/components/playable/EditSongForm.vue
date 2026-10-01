@@ -116,7 +116,7 @@ import { computed, ref } from 'vue'
 import { pluralize } from '@/utils/formatters'
 import { eventBus } from '@/utils/eventBus'
 import type { SongUpdateData, SongUpdateResult } from '@/stores/playableStore'
-import { playableStore as songStore } from '@/stores/playableStore'
+import { usePlayableStore } from '@/stores/playableStore'
 import { useDialogBox } from '@/composables/useDialogBox'
 import { useMessageToaster } from '@/composables/useMessageToaster'
 import { genres } from '@/config/genres'
@@ -126,6 +126,8 @@ import { useBranding } from '@/composables/useBranding'
 import M3Button from '@/components/m3/M3Button.vue'
 import M3Tabs from '@/components/m3/M3Tabs.vue'
 import M3TextField from '@/components/m3/M3TextField.vue'
+
+const songStore = usePlayableStore()
 
 const props = withDefaults(defineProps<{ songs: Song[]; initialTab?: EditSongFormTabName }>(), {
   initialTab: 'details',

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vite-plus/test'
 import { fireEvent, screen } from '@testing-library/vue'
 import { createHarness } from '@/__tests__/TestHarness'
 import { equalizerPresets as builtInPresets } from '@/config/audio'
-import { equalizerStore } from '@/stores/equalizerStore'
+import { useEqualizerStore } from '@/stores/equalizerStore'
 import Component from './EqualizerHeader.vue'
 
 const rock = builtInPresets.find(preset => preset.name === 'Rock')!
@@ -11,7 +11,7 @@ const customPreset: EqualizerPreset = { id: '01HFCUSTOM01', name: 'My Bass', pre
 describe('equalizerHeader.vue', () => {
   const h = createHarness({
     beforeEach: () => {
-      equalizerStore.state.customPresets = [customPreset]
+      useEqualizerStore().state.customPresets = [customPreset]
     },
   })
 
@@ -39,7 +39,7 @@ describe('equalizerHeader.vue', () => {
   })
 
   it('omits the Custom optgroup when there are no custom presets', () => {
-    equalizerStore.state.customPresets = []
+    useEqualizerStore().state.customPresets = []
     renderHeader()
 
     expect(screen.queryByText('My Bass')).toBeNull()

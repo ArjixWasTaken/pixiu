@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vite-plus/test'
 import { screen } from '@testing-library/vue'
 import { createHarness } from '@/__tests__/TestHarness'
-import { albumStore } from '@/stores/albumStore'
-import { artistStore } from '@/stores/artistStore'
-import { playableStore } from '@/stores/playableStore'
+import { useAlbumStore } from '@/stores/albumStore'
+import { useArtistStore } from '@/stores/artistStore'
+import { usePlayableStore } from '@/stores/playableStore'
 import Component from './StarRating.vue'
 
 describe('starRating.vue', () => {
@@ -49,9 +49,9 @@ describe('starRating.vue', () => {
     expect(emitted('rate')?.[0]).toEqual([0])
   })
 
-  it('dispatches to albumStore.rate when given an album rateable', async () => {
+  it('dispatches to useAlbumStore().rate when given an album rateable', async () => {
     const album = h.factory('album').make({ rating: 0 })
-    const spy = vi.spyOn(albumStore, 'rate').mockResolvedValue()
+    const spy = vi.spyOn(useAlbumStore(), 'rate').mockResolvedValue()
 
     h.render(Component, { props: { rateable: album } })
     await h.user.click(screen.getByRole('radio', { name: 'Rate 5 of 5' }))
@@ -59,9 +59,9 @@ describe('starRating.vue', () => {
     expect(spy).toHaveBeenCalledWith(album, 5)
   })
 
-  it('dispatches to artistStore.rate when given an artist rateable', async () => {
+  it('dispatches to useArtistStore().rate when given an artist rateable', async () => {
     const artist = h.factory('artist').make({ rating: 0 })
-    const spy = vi.spyOn(artistStore, 'rate').mockResolvedValue()
+    const spy = vi.spyOn(useArtistStore(), 'rate').mockResolvedValue()
 
     h.render(Component, { props: { rateable: artist } })
     await h.user.click(screen.getByRole('radio', { name: 'Rate 2 of 5' }))
@@ -69,9 +69,9 @@ describe('starRating.vue', () => {
     expect(spy).toHaveBeenCalledWith(artist, 2)
   })
 
-  it('dispatches to playableStore.rate when given a song rateable', async () => {
+  it('dispatches to usePlayableStore().rate when given a song rateable', async () => {
     const song = h.factory('song').make({ rating: 0 })
-    const spy = vi.spyOn(playableStore, 'rate').mockResolvedValue()
+    const spy = vi.spyOn(usePlayableStore(), 'rate').mockResolvedValue()
 
     h.render(Component, { props: { rateable: song } })
     await h.user.click(screen.getByRole('radio', { name: 'Rate 3 of 5' }))

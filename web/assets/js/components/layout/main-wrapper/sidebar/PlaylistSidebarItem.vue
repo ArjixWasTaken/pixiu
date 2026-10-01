@@ -21,8 +21,8 @@
 import { useViewport } from '@/composables/useViewport'
 import { computed, inject, ref, toRefs } from 'vue'
 import { defineAsyncComponent } from '@/utils/helpers'
-import { playableStore } from '@/stores/playableStore'
-import { recentlyPlayedStore } from '@/stores/recentlyPlayedStore'
+import { usePlayableStore } from '@/stores/playableStore'
+import { useRecentlyPlayedStore } from '@/stores/recentlyPlayedStore'
 import { useRouter } from '@/composables/useRouter'
 import { useDraggable, useDroppable } from '@/composables/useDragAndDrop'
 import { usePlaylistContentManagement } from '@/composables/usePlaylistContentManagement'
@@ -31,6 +31,9 @@ import { playback } from '@/services/playbackManager'
 import { DraggedPlaylistKey } from '@/config/symbols'
 
 import SidebarItem from '@/components/layout/main-wrapper/sidebar/SidebarItem.vue'
+
+const playableStore = usePlayableStore()
+const recentlyPlayedStore = useRecentlyPlayedStore()
 
 const { isTouch } = useViewport()
 

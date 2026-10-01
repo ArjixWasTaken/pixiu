@@ -33,6 +33,8 @@ const virtualizer = useVirtualizer(
     estimateSize: () => itemHeight.value,
     overscan: 5,
     scrollMargin: margin.value,
+    // Rows measured on the next frame: no "ResizeObserver loop" notices as heights settle.
+    useAnimationFrameWithResizeObserver: true,
   })),
 )
 

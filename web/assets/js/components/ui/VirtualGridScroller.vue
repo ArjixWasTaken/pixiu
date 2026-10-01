@@ -1,8 +1,9 @@
 <template>
   <div ref="list" :class="{ nested }" class="scroll-mask-y virtual-grid-scroller overflow-scroll h-full">
-    <!-- Measuring phase: one item, as wide as in the grid, for its height, the gaps and the padding. -->
+    <!-- Measuring phase: an item, as wide as in the grid, for its height, the gaps and the padding.
+         A few are offered, in case the first shows nothing. -->
     <div v-if="measuring && items.length" ref="measureContainer" v-bind="$attrs" class="grid measuring">
-      <slot :item="items[0]" />
+      <slot v-for="item in items.slice(0, 5)" :item />
     </div>
 
     <template v-else>

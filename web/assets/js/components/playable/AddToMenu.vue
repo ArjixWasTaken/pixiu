@@ -54,11 +54,14 @@
 <script lang="ts" setup>
 import { computed, toRef, toRefs, watch } from 'vue'
 import { pluralize } from '@/utils/formatters'
-import { playlistStore } from '@/stores/playlistStore'
-import { queueStore } from '@/stores/queueStore'
+import { usePlaylistStore } from '@/stores/playlistStore'
+import { useQueueStore } from '@/stores/queueStore'
 import { usePlayableMenuMethods } from '@/composables/usePlayableMenuMethods'
 
 import M3Button from '@/components/m3/M3Button.vue'
+
+const playlistStore = usePlaylistStore()
+const queueStore = useQueueStore()
 
 const props = defineProps<{ playables: Playable[]; config: AddToMenuConfig }>()
 const emit = defineEmits<{ (e: 'closing'): void }>()

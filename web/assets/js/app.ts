@@ -1,12 +1,17 @@
+import { VueQueryPlugin } from '@tanstack/vue-query'
+import { createPinia } from 'pinia'
 import { createApp } from 'vue'
 import { focus } from '@/directives/focus'
 import { hideBrokenIcon } from '@/directives/hideBrokenIcon'
 import { newTab } from '@/directives/newTab'
 import { createAppRouter } from '@/router'
+import { queryClient } from '@/services/queryClient'
 import '@/../css/app.pcss'
 import App from './App.vue'
 
 const app = createApp(App)
+  .use(createPinia())
+  .use(VueQueryPlugin, { queryClient })
   .use(createAppRouter())
   .directive('koel-focus', focus)
   .directive('koel-hide-broken-icon', hideBrokenIcon)

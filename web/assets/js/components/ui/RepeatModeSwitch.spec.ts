@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vite-plus/test'
 import { screen } from '@testing-library/vue'
 import { createHarness } from '@/__tests__/TestHarness'
-import { preferenceStore } from '@/stores/preferenceStore'
+import { usePreferenceStore } from '@/stores/preferenceStore'
 import { playbackService } from '@/services/QueuePlaybackService'
 import Component from './RepeatModeSwitch.vue'
 
@@ -12,7 +12,7 @@ describe('repeatModeSwitch.vue', () => {
     h.createAudioPlayer()
 
     const mock = h.mock(playbackService, 'rotateRepeatMode')
-    preferenceStore.state.repeat_mode = 'NO_REPEAT'
+    usePreferenceStore().state.repeat_mode = 'NO_REPEAT'
     h.render(Component)
 
     await h.user.click(screen.getByRole('button'))

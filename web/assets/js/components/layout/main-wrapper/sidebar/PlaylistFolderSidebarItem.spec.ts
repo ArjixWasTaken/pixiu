@@ -6,8 +6,8 @@ import { createHarness } from '@/__tests__/TestHarness'
 import { assertOpenContextMenu } from '@/__tests__/assertions'
 import { useContextMenu } from '@/composables/useContextMenu'
 import { DraggedPlaylistFolderKey, PlaylistFolderDropTargetKey } from '@/config/symbols'
-import { playlistFolderStore } from '@/stores/playlistFolderStore'
-import { playlistStore } from '@/stores/playlistStore'
+import { usePlaylistFolderStore } from '@/stores/playlistFolderStore'
+import { usePlaylistStore } from '@/stores/playlistStore'
 import PlaylistFolderContextMenu from '@/components/playlist/PlaylistFolderContextMenu.vue'
 import PlaylistContextMenu from '@/components/playlist/PlaylistContextMenu.vue'
 import Component from './PlaylistFolderSidebarItem.vue'
@@ -31,8 +31,8 @@ describe('playlistFolderSidebarItem.vue', () => {
     const root = h.factory('playlist-folder').make({ name: 'Root Folder', parent_id: null })
     const child = h.factory('playlist-folder').make({ name: 'Child Folder', parent_id: root.id })
     const playlist = h.factory('playlist').make({ name: 'Playlist', folder_id: root.id })
-    playlistFolderStore.state.folders = [root, child]
-    playlistStore.state.playlists = [playlist]
+    usePlaylistFolderStore().state.folders = [root, child]
+    usePlaylistStore().state.playlists = [playlist]
     const { openContextMenu } = useContextMenu()
 
     h.render(Component, {
@@ -64,7 +64,7 @@ describe('playlistFolderSidebarItem.vue', () => {
     const root = h.factory('playlist-folder').make({ name: 'Root Folder', parent_id: null })
     const child = h.factory('playlist-folder').make({ name: 'Child Folder', parent_id: root.id })
     const grandchild = h.factory('playlist-folder').make({ name: 'Grandchild Folder', parent_id: child.id })
-    playlistFolderStore.state.folders = [root, child, grandchild]
+    usePlaylistFolderStore().state.folders = [root, child, grandchild]
 
     h.render(Component, {
       props: { folder: root },
@@ -83,8 +83,8 @@ describe('playlistFolderSidebarItem.vue', () => {
   it('moves a dropped folder under this folder', async () => {
     const target = h.factory('playlist-folder').make({ name: 'Target Folder', parent_id: null })
     const dragged = h.factory('playlist-folder').make({ parent_id: null })
-    playlistFolderStore.state.folders = [target, dragged]
-    const moveMock = h.mock(playlistFolderStore, 'moveFolderToFolder')
+    usePlaylistFolderStore().state.folders = [target, dragged]
+    const moveMock = h.mock(usePlaylistFolderStore(), 'moveFolderToFolder')
 
     h.render(Component, {
       props: { folder: target },
@@ -121,7 +121,7 @@ describe('playlistFolderSidebarItem.vue', () => {
   it('does not expose a descendant as a folder drop target', async () => {
     const root = h.factory('playlist-folder').make({ parent_id: null })
     const child = h.factory('playlist-folder').make({ name: 'Child Folder', parent_id: root.id })
-    playlistFolderStore.state.folders = [root, child]
+    usePlaylistFolderStore().state.folders = [root, child]
     const ancestorDragOver = vi.fn()
     const dropTargetId = ref<string | null>(root.id)
     const { container } = h.render(Component, {
@@ -150,7 +150,7 @@ describe('playlistFolderSidebarItem.vue', () => {
   it('keeps the ancestor path visible for a nested drop target', () => {
     const root = h.factory('playlist-folder').make({ name: 'Root Folder', parent_id: null })
     const child = h.factory('playlist-folder').make({ parent_id: root.id })
-    playlistFolderStore.state.folders = [root, child]
+    usePlaylistFolderStore().state.folders = [root, child]
 
     h.render(Component, {
       props: { folder: root },
@@ -167,7 +167,7 @@ describe('playlistFolderSidebarItem.vue', () => {
   it('keeps a nested folder as the drag payload without letting an ancestor replace it', async () => {
     const root = h.factory('playlist-folder').make({ name: 'Root Folder', parent_id: null })
     const child = h.factory('playlist-folder').make({ name: 'Child Folder', parent_id: root.id })
-    playlistFolderStore.state.folders = [root, child]
+    usePlaylistFolderStore().state.folders = [root, child]
     const setData = vi.fn()
     const draggedFolder = ref<PlaylistFolder | null>(null)
 

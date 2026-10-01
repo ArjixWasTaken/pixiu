@@ -36,7 +36,7 @@
 import { defineAsyncComponent } from '@/utils/helpers'
 import { computed, onMounted, provide, ref, shallowRef, watch } from 'vue'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
-import { queueStore } from '@/stores/queueStore'
+import { useQueueStore } from '@/stores/queueStore'
 import { authService } from '@/services/authService'
 import {
   ContextMenuKey,
@@ -48,7 +48,7 @@ import {
 } from '@/config/symbols'
 import { useRouter } from '@/composables/useRouter'
 import { useViewport } from '@/composables/useViewport'
-import { userStore } from '@/stores/userStore'
+import { useUserStore } from '@/stores/userStore'
 import { activeRouter } from '@/router'
 
 import DialogBox from '@/components/ui/DialogBox.vue'
@@ -66,6 +66,9 @@ import MobileNavigationBar from '@/components/layout/MobileNavigationBar.vue'
 import GlobalEventListeners from '@/components/utils/GlobalEventListeners.vue'
 import AppInitializer from '@/components/utils/AppInitializer.vue'
 import ContextMenu from '@/components/ui/context-menu/ContextMenu.vue'
+
+const queueStore = useQueueStore()
+const userStore = useUserStore()
 
 const HotkeyListener = defineAsyncComponent(() => import('@/components/utils/HotkeyListener.vue'))
 const Auth = defineAsyncComponent(() => import('@/components/auth/Auth.vue'))

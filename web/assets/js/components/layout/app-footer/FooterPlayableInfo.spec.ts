@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vite-plus/test'
 import { ref } from 'vue'
 import { createHarness } from '@/__tests__/TestHarness'
 import { CurrentStreamableKey } from '@/config/symbols'
-import { cache } from '@/services/cache'
 import Router from '@/router'
 import { useNowPlaying } from '@/composables/useNowPlaying'
 import Component from './FooterPlayableInfo.vue'
@@ -54,9 +53,8 @@ describe('footerPlayableInfo.vue', () => {
     close()
   })
 
-  it('does not navigate or set scroll intent when no playable', async () => {
+  it('does not navigate when no playable', async () => {
     const goMock = h.mock(Router, 'go')
-    const setMock = h.mock(cache, 'set')
 
     const { container } = h.render(Component)
 
@@ -64,6 +62,5 @@ describe('footerPlayableInfo.vue', () => {
     await h.user.click(thumb)
 
     expect(goMock).not.toHaveBeenCalled()
-    expect(setMock).not.toHaveBeenCalled()
   })
 })

@@ -3,15 +3,6 @@ import { createHarness } from '@/__tests__/TestHarness'
 
 const mockManageSettings = vi.fn()
 
-vi.mock('@/stores/commonStore', () => ({
-  commonStore: {
-    state: {
-      latest_version: '7.0.0',
-      current_version: '6.5.0',
-    },
-  },
-}))
-
 vi.mock('@/composables/usePolicies', () => ({
   usePolicies: () => ({
     currentUserCan: {
@@ -20,14 +11,14 @@ vi.mock('@/composables/usePolicies', () => ({
   }),
 }))
 
-import { commonStore } from '@/stores/commonStore'
+import { useCommonStore } from '@/stores/commonStore'
 import { useNewVersionNotification } from './useNewVersionNotification'
 
 describe('useNewVersionNotification', () => {
   createHarness({
     beforeEach: () => {
-      commonStore.state.latest_version = '7.0.0'
-      commonStore.state.current_version = '6.5.0'
+      useCommonStore().state.latest_version = '7.0.0'
+      useCommonStore().state.current_version = '6.5.0'
       mockManageSettings.mockReturnValue(true)
     },
   })
@@ -38,13 +29,13 @@ describe('useNewVersionNotification', () => {
   })
 
   it('does not notify when versions are equal', () => {
-    commonStore.state.latest_version = '6.5.0'
+    useCommonStore().state.latest_version = '6.5.0'
     const { shouldNotifyNewVersion } = useNewVersionNotification()
     expect(shouldNotifyNewVersion.value).toBe(false)
   })
 
   it('does not notify when current is newer', () => {
-    commonStore.state.current_version = '8.0.0'
+    useCommonStore().state.current_version = '8.0.0'
     const { shouldNotifyNewVersion } = useNewVersionNotification()
     expect(shouldNotifyNewVersion.value).toBe(false)
   })
@@ -62,22 +53,22 @@ describe('useNewVersionNotification', () => {
   })
 
   it('handles leading v prefix on either side', () => {
-    commonStore.state.latest_version = 'v9.2.1'
-    commonStore.state.current_version = 'v9.2.0'
+    useCommonStore().state.latest_version = 'v9.2.1'
+    useCommonStore().state.current_version = 'v9.2.0'
     const { shouldNotifyNewVersion } = useNewVersionNotification()
     expect(shouldNotifyNewVersion.value).toBe(true)
   })
 
   it('compares double-digit segments numerically, not lexicographically', () => {
-    commonStore.state.latest_version = '9.10.0'
-    commonStore.state.current_version = '9.9.0'
+    useCommonStore().state.latest_version = '9.10.0'
+    useCommonStore().state.current_version = '9.9.0'
     const { shouldNotifyNewVersion } = useNewVersionNotification()
     expect(shouldNotifyNewVersion.value).toBe(true)
   })
 
   it('treats pre-release suffix as not newer than the base release', () => {
-    commonStore.state.latest_version = '9.2.0-beta.1'
-    commonStore.state.current_version = '9.2.0'
+    useCommonStore().state.latest_version = '9.2.0-beta.1'
+    useCommonStore().state.current_version = '9.2.0'
     const { shouldNotifyNewVersion } = useNewVersionNotification()
     expect(shouldNotifyNewVersion.value).toBe(false)
   })

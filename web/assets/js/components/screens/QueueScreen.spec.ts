@@ -3,8 +3,8 @@ import { describe, expect, it, vi } from 'vite-plus/test'
 import { defineComponent, ref } from 'vue'
 import { CurrentStreamableKey } from '@/config/symbols'
 import { createHarness } from '@/__tests__/TestHarness'
-import { commonStore } from '@/stores/commonStore'
-import { queueStore } from '@/stores/queueStore'
+import { useCommonStore } from '@/stores/commonStore'
+import { useQueueStore } from '@/stores/queueStore'
 import { playbackService } from '@/services/QueuePlaybackService'
 import Component from './QueueScreen.vue'
 
@@ -12,7 +12,7 @@ describe('queueScreen.vue', () => {
   const h = createHarness()
 
   const renderComponent = (playables: Playable[] = []) => {
-    queueStore.state.playables = playables
+    useQueueStore().state.playables = playables
 
     h.render(Component, {
       global: {
@@ -40,8 +40,8 @@ describe('queueScreen.vue', () => {
   it('has an option to plays some random songs if the library is not empty', async () => {
     h.createAudioPlayer()
 
-    commonStore.state.song_count = 300
-    const fetchRandomMock = h.mock(queueStore, 'fetchRandom')
+    useCommonStore().state.song_count = 300
+    const fetchRandomMock = h.mock(useQueueStore(), 'fetchRandom')
     const playMock = h.mock(playbackService, 'playFirstInQueue')
 
     renderComponent()
@@ -67,7 +67,7 @@ describe('queueScreen.vue', () => {
   it('opens where it is playing, not at its top', async () => {
     const songs = h.factory('song').make(30)
     const scrollToPlayable = vi.fn()
-    queueStore.state.playables = songs
+    useQueueStore().state.playables = songs
 
     h.render(Component, {
       global: {

@@ -1,187 +1,210 @@
-import { reactive } from 'vue'
+import { defineStore } from 'pinia'
+import { computed, reactive } from 'vue'
 import { differenceBy, unionBy } from 'lodash-es'
 import { arrayify, moveItemsInList } from '@/utils/helpers'
 import { logger } from '@/utils/logger'
 import { library } from '@/services/library'
 import { subsonic } from '@/services/subsonic'
-import { playableStore } from '@/stores/playableStore'
+import { usePlayableStore } from '@/stores/playableStore'
 
-export const queueStore = {
-  state: reactive<{ playables: Playable[] }>({
+/** What plays next, and where playback is; saved on the server (Subsonic's play queue). */
+export const useQueueStore = defineStore('queue', () => {
+  const state = reactive<{ playables: Playable[] }>({
     playables: [],
-  }),
+  })
 
-  init(savedState: QueueState) {
-    // don't set this.all here, as it would trigger saving state
-    this.state.playables = playableStore.syncWithVault(savedState.songs)
-    this.playback = { current: savedState.current_song?.id ?? null, position: savedState.playback_position }
+  /** What is playing and where, saved with the queue. */
+  let playback = { current: null as Playable['id'] | null, position: 0 }
 
-    if (!this.state.playables.length) {
+  const saveState = () => {
+    subsonic
+      .savePlayQueue(
+        state.playables.map(({ id }) => id),
+        playback.current,
+        playback.position,
+      )
+      .catch(error => logger.error(error))
+  }
+
+  /** The queue; setting it saves it. */
+  const all = computed<Playable[]>({
+    get: () => state.playables,
+    set: playables => {
+      state.playables = playables
+      usePlayableStore().syncWithVault(playables)
+      saveState()
+    },
+  })
+
+  const first = computed(() => all.value[0])
+  const last = computed(() => all.value[all.value.length - 1])
+
+  const indexOf = (playable: Playable) => all.value.indexOf(reactive(playable))
+
+  const current = computed(
+    () =>
+      // Search the queue first (reactive array — triggers Vue computed re-evaluation).
+      // Fall back to the vault for songs removed from the queue (e.g. after replaceQueueWith).
+      all.value.find(({ playback_state }) => playback_state !== 'Stopped') || usePlayableStore().findPlaying(),
+  )
+
+  const next = computed(() => {
+    if (!current.value) {
+      return first.value
+    }
+
+    const index = indexOf(current.value) + 1
+
+    return index >= all.value.length ? undefined : all.value[index]
+  })
+
+  const previous = computed(() => {
+    if (!current.value) {
+      return last.value
+    }
+
+    const index = indexOf(current.value) - 1
+
+    return index < 0 ? undefined : all.value[index]
+  })
+
+  const init = (savedState: QueueState) => {
+    const playableStore = usePlayableStore()
+
+    // Not through `all`: that would save the state just loaded.
+    state.playables = playableStore.syncWithVault(savedState.songs)
+    playback = { current: savedState.current_song?.id ?? null, position: savedState.playback_position }
+
+    if (!state.playables.length) {
       return
     }
 
     if (savedState.current_song) {
       playableStore.syncWithVault(savedState.current_song)[0].playback_state = 'Paused'
     } else {
-      this.all[0].playback_state = 'Paused'
+      all.value[0].playback_state = 'Paused'
     }
-  },
+  }
 
-  get all() {
-    return this.state.playables
-  },
+  const contains = (playable: Playable) => all.value.includes(reactive(playable))
 
-  set all(playables: Playable[]) {
-    this.state.playables = playables
-    playableStore.syncWithVault(playables)
-    this.saveState()
-  },
-
-  get first() {
-    return this.all[0]
-  },
-
-  get last() {
-    return this.all[this.all.length - 1]
-  },
-
-  contains(playable: Playable) {
-    return this.all.includes(reactive(playable))
-  },
+  const unqueue = (playables: MaybeArray<Playable>) => {
+    playables = arrayify(playables)
+    playables.forEach(song => (song.playback_state = 'Stopped'))
+    all.value = differenceBy(all.value, playables, 'id')
+  }
 
   /**
    * Add playable(s) to the end of the current queue.
    */
-  queue(playables: MaybeArray<Playable>) {
-    this.unqueue(playables)
-    this.all = unionBy(this.all, arrayify(playables), 'id')
-  },
+  const queue = (playables: MaybeArray<Playable>) => {
+    unqueue(playables)
+    all.value = unionBy(all.value, arrayify(playables), 'id')
+  }
 
-  queueIfNotQueued(playable: Playable, position: 'top' | 'bottom' | 'after-current' = 'after-current') {
-    if (this.contains(playable)) {
+  const queueToTop = (playables: MaybeArray<Playable>) => {
+    all.value = unionBy(arrayify(playables), all.value, 'id')
+  }
+
+  const replaceQueueWith = (playables: MaybeArray<Playable>) => {
+    all.value = arrayify(playables)
+  }
+
+  const queueAfterCurrent = (playables: MaybeArray<Playable>) => {
+    playables = arrayify(playables)
+
+    if (!current.value || !all.value.length) {
+      return queue(playables)
+    }
+
+    // First we unqueue the songs to make sure there are no duplicates.
+    unqueue(playables)
+
+    const rest = [...all.value]
+    const head = rest.splice(0, indexOf(current.value) + 1)
+    all.value = head.concat(reactive(playables), rest)
+  }
+
+  const queueIfNotQueued = (playable: Playable, position: 'top' | 'bottom' | 'after-current' = 'after-current') => {
+    if (contains(playable)) {
       return
     }
 
     switch (position) {
       case 'top':
-        this.queueToTop(playable)
+        queueToTop(playable)
         break
       case 'bottom':
-        this.queue(playable)
+        queue(playable)
         break
       case 'after-current':
-        this.queueAfterCurrent(playable)
+        queueAfterCurrent(playable)
         break
     }
-  },
-
-  queueToTop(playables: MaybeArray<Playable>) {
-    this.all = unionBy(arrayify(playables), this.all, 'id')
-  },
-
-  replaceQueueWith(playables: MaybeArray<Playable>) {
-    this.all = arrayify(playables)
-  },
-
-  queueAfterCurrent(playables: MaybeArray<Playable>) {
-    playables = arrayify(playables)
-
-    if (!this.current || !this.all.length) {
-      return this.queue(playables)
-    }
-
-    // First we unqueue the songs to make sure there are no duplicates.
-    this.unqueue(playables)
-
-    const head = this.all.splice(0, this.indexOf(this.current) + 1)
-    this.all = head.concat(reactive(playables), this.all)
-  },
-
-  unqueue(playables: MaybeArray<Playable>) {
-    playables = arrayify(playables)
-    playables.forEach(song => (song.playback_state = 'Stopped'))
-    this.all = differenceBy(this.all, playables, 'id')
-  },
+  }
 
   /**
    * Move some songs to after a target.
    */
-  move(playables: MaybeArray<Playable>, target: Playable, placement: Placement) {
-    this.state.playables = moveItemsInList(this.state.playables, playables, target, placement)
-    this.saveState()
-  },
+  const move = (playables: MaybeArray<Playable>, target: Playable, placement: Placement) => {
+    state.playables = moveItemsInList(state.playables, playables, target, placement)
+    saveState()
+  }
 
-  clear() {
-    this.all = []
-  },
+  const clear = () => {
+    all.value = []
+  }
 
   /**
    * Clear the queue without saving the state.
    */
-  clearSilently() {
-    this.state.playables = []
-  },
+  const clearSilently = () => {
+    state.playables = []
+  }
 
-  indexOf(playable: Playable) {
-    return this.all.indexOf(reactive(playable))
-  },
+  const fetchRandom = async (limit = 500) => {
+    all.value = await subsonic.randomSongs(limit)
+    return all.value
+  }
 
-  get next() {
-    if (!this.current) {
-      return this.first
-    }
-
-    const index = this.indexOf(this.current) + 1
-
-    return index >= this.all.length ? undefined : this.all[index]
-  },
-
-  get previous() {
-    if (!this.current) {
-      return this.last
-    }
-
-    const index = this.indexOf(this.current) - 1
-
-    return index < 0 ? undefined : this.all[index]
-  },
-
-  get current() {
-    // Search the queue first (reactive array — triggers Vue computed re-evaluation).
-    // Fall back to the vault for songs removed from the queue (e.g. after replaceQueueWith).
-    return this.all.find(({ playback_state }) => playback_state !== 'Stopped') || playableStore.findPlaying()
-  },
-
-  async fetchRandom(limit = 500) {
-    this.all = await subsonic.randomSongs(limit)
-    return this.all
-  },
-
-  async fetchInOrder(sortField: PlayableListSortField, order: SortOrder, limit = 500) {
-    this.all = (await library.songs({ sort: sortField, order, limit })).items
-    return this.all
-  },
-
-  /** What is playing and where, saved with the queue. */
-  playback: { current: null as Playable['id'] | null, position: 0 },
-
-  saveState() {
-    subsonic
-      .savePlayQueue(
-        this.state.playables.map(({ id }) => id),
-        this.playback.current,
-        this.playback.position,
-      )
-      .catch(error => logger.error(error))
-  },
+  const fetchInOrder = async (sortField: PlayableListSortField, order: SortOrder, limit = 500) => {
+    all.value = (await library.songs({ sort: sortField, order, limit })).items
+    return all.value
+  }
 
   /** Saves the queue with the playing song and its position (seconds). */
-  savePlaybackStatus(playable: Playable, position: number) {
-    if (this.playback.current === playable.id && this.playback.position === position) {
+  const savePlaybackStatus = (playable: Playable, position: number) => {
+    if (playback.current === playable.id && playback.position === position) {
       return
     }
 
-    this.playback = { current: playable.id, position }
-    this.saveState()
-  },
-}
+    playback = { current: playable.id, position }
+    saveState()
+  }
+
+  return {
+    state,
+    all,
+    first,
+    last,
+    current,
+    next,
+    previous,
+    init,
+    contains,
+    queue,
+    queueIfNotQueued,
+    queueToTop,
+    replaceQueueWith,
+    queueAfterCurrent,
+    unqueue,
+    move,
+    clear,
+    clearSilently,
+    indexOf,
+    fetchRandom,
+    fetchInOrder,
+    saveState,
+    savePlaybackStatus,
+  }
+})

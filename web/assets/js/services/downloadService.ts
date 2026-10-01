@@ -1,6 +1,6 @@
 import { subsonic } from '@/services/subsonic'
 import { zipDownloadService } from '@/services/zipDownloadService'
-import { playableStore } from '@/stores/playableStore'
+import { usePlayableStore } from '@/stores/playableStore'
 import { arrayify } from '@/utils/helpers'
 
 export const downloadService = {
@@ -16,23 +16,23 @@ export const downloadService = {
   },
 
   async fromAlbum(album: Album) {
-    await zipDownloadService.start(await playableStore.fetchSongsForAlbum(album), album.name, 'track')
+    await zipDownloadService.start(await usePlayableStore().fetchSongsForAlbum(album), album.name, 'track')
   },
 
   async fromArtist(artist: Artist) {
-    await zipDownloadService.start(await playableStore.fetchSongsForArtist(artist), artist.name, 'none')
+    await zipDownloadService.start(await usePlayableStore().fetchSongsForArtist(artist), artist.name, 'none')
   },
 
   async fromPlaylist(playlist: Playlist) {
-    await zipDownloadService.start(await playableStore.fetchForPlaylist(playlist), playlist.name, 'position')
+    await zipDownloadService.start(await usePlayableStore().fetchForPlaylist(playlist), playlist.name, 'position')
   },
 
   async fromFavorites() {
-    if (!playableStore.state.favorites.length) {
+    if (!usePlayableStore().state.favorites.length) {
       return
     }
 
-    await zipDownloadService.start(playableStore.state.favorites, 'Favorites', 'none')
+    await zipDownloadService.start(usePlayableStore().state.favorites, 'Favorites', 'none')
   },
 
   trigger: (playable: Playable) => {

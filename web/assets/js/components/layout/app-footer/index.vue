@@ -46,8 +46,8 @@ import { defineAsyncComponent, requireInjection } from '@/utils/helpers'
 import { logger } from '@/utils/logger'
 import { useBranding } from '@/composables/useBranding'
 import { CurrentStreamableKey } from '@/config/symbols'
-import { artistStore } from '@/stores/artistStore'
-import { preferenceStore } from '@/stores/preferenceStore'
+import { useArtistStore } from '@/stores/artistStore'
+import { usePreferenceStore } from '@/stores/preferenceStore'
 import { audioService } from '@/services/audioService'
 import { playback } from '@/services/playbackManager'
 import { useContextMenu } from '@/composables/useContextMenu'
@@ -58,6 +58,9 @@ import ExtraControls from '@/components/layout/app-footer/FooterExtraControls.vu
 import PlaybackControls from '@/components/layout/app-footer/FooterPlaybackControls.vue'
 import MiniPlayer from '@/components/layout/app-footer/MiniPlayer.vue'
 import NowPlayingSheet from '@/components/layout/now-playing/NowPlayingSheet.vue'
+
+const artistStore = useArtistStore()
+const preferenceStore = usePreferenceStore()
 
 const SongInfo = defineAsyncComponent(() => import('@/components/layout/app-footer/FooterPlayableInfo.vue'))
 const UpNext = defineAsyncComponent(() => import('@/components/layout/app-footer/UpNext.vue'))
@@ -134,7 +137,7 @@ const initPlaybackRelatedServices = async () => {
 }
 
 watch(
-  preferenceStore.initialized,
+  () => preferenceStore.initialized,
   async initialized => {
     if (!initialized) {
       return

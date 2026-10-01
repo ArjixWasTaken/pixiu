@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vite-plus/test'
 import { ref } from 'vue'
 import { waitFor } from '@testing-library/vue'
 import { createHarness } from '@/__tests__/TestHarness'
-import { commonStore } from '@/stores/commonStore'
+import { useCommonStore } from '@/stores/commonStore'
 import Component from './AppInitializer.vue'
 
 vi.mock('@/services/socketService', () => ({
@@ -46,19 +46,19 @@ describe('appInitializer.vue', () => {
   const h = createHarness()
 
   it('emits success after init', async () => {
-    h.mock(commonStore, 'init').mockResolvedValue(undefined)
+    h.mock(useCommonStore(), 'init').mockResolvedValue(undefined)
 
     const { emitted } = h.render(Component)
 
     await waitFor(() => {
-      expect(commonStore.init).toHaveBeenCalled()
+      expect(useCommonStore().init).toHaveBeenCalled()
       expect(emitted().success).toBeTruthy()
     })
   })
 
   it('emits error when init fails', async () => {
     const error = new Error('Init failed')
-    h.mock(commonStore, 'init').mockRejectedValue(error)
+    h.mock(useCommonStore(), 'init').mockRejectedValue(error)
 
     const { emitted } = h.render(Component)
 

@@ -1,7 +1,7 @@
 import { screen } from '@testing-library/vue'
 import { describe, expect, it } from 'vite-plus/test'
 import { createHarness } from '@/__tests__/TestHarness'
-import { playableStore } from '@/stores/playableStore'
+import { usePlayableStore } from '@/stores/playableStore'
 import Component from './AlbumTrackList.vue'
 
 describe('albumTrackList.vue', () => {
@@ -9,7 +9,7 @@ describe('albumTrackList.vue', () => {
 
   it('displays the tracks', async () => {
     const album = h.factory('album').make()
-    const fetchMock = h.mock(playableStore, 'fetchSongsForAlbum').mockResolvedValue(h.factory('song').make(5))
+    const fetchMock = h.mock(usePlayableStore(), 'fetchSongsForAlbum').mockResolvedValue(h.factory('song').make(5))
 
     h.render(Component, {
       props: {

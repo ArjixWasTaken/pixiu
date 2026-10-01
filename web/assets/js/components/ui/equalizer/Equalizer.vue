@@ -35,16 +35,18 @@
 
 <script lang="ts" setup>
 import { computed, onMounted, ref } from 'vue'
-import { equalizerStore } from '@/stores/equalizerStore'
+import { useEqualizerStore } from '@/stores/equalizerStore'
 import { audioService } from '@/services/audioService'
 import { equalizerPresets as builtInPresets } from '@/config/audio'
 import { useDialogBox } from '@/composables/useDialogBox'
-import { preferenceStore } from '@/stores/preferenceStore'
-
+import { usePreferenceStore } from '@/stores/preferenceStore'
 import M3Button from '@/components/m3/M3Button.vue'
 import M3Switch from '@/components/m3/M3Switch.vue'
 import EqualizerBands from '@/components/ui/equalizer/EqualizerBands.vue'
 import EqualizerHeader from '@/components/ui/equalizer/EqualizerHeader.vue'
+
+const equalizerStore = useEqualizerStore()
+const preferenceStore = usePreferenceStore()
 
 const emit = defineEmits<{ (e: 'close'): void }>()
 

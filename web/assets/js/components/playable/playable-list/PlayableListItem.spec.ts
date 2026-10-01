@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vite-plus/test'
 import { screen } from '@testing-library/vue'
-import { playableStore } from '@/stores/playableStore'
+import { usePlayableStore } from '@/stores/playableStore'
 import { createHarness } from '@/__tests__/TestHarness'
 
 const isCachedMock = vi.fn().mockReturnValue(false)
@@ -140,7 +140,7 @@ describe('playableListItem.vue', () => {
   })
 
   it('toggles favorite state when the Favorite button is clicked', async () => {
-    const toggleFavoriteMock = h.mock(playableStore, 'toggleFavorite')
+    const toggleFavoriteMock = h.mock(usePlayableStore(), 'toggleFavorite')
     const { row } = renderComponent()
 
     await h.user.click(screen.getByRole('button', { name: 'Add to favorites' }))

@@ -1,4 +1,4 @@
-import { playableStore } from '@/stores/playableStore'
+import { usePlayableStore } from '@/stores/playableStore'
 import { logger } from '@/utils/logger'
 
 interface CrossfadeState {
@@ -30,7 +30,7 @@ export const crossfadeService = {
     try {
       const incomingAudio = document.createElement('audio')
       incomingAudio.crossOrigin = 'anonymous'
-      incomingAudio.src = playableStore.getSourceUrl(nextPlayable)
+      incomingAudio.src = usePlayableStore().getSourceUrl(nextPlayable)
       incomingAudio.volume = 0
 
       const state: CrossfadeState = {

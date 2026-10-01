@@ -36,11 +36,12 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useQuery } from '@tanstack/vue-query'
+import { computed, watch } from 'vue'
 import { huntingService } from '@/services/huntingService'
 import type { HuntJob, JobState } from '@/services/huntingService'
-import { huntingStore } from '@/stores/huntingStore'
-import { eventBus } from '@/utils/eventBus'
+import { queryClient } from '@/services/queryClient'
+import { useHuntingStore } from '@/stores/huntingStore'
 import { useRouter } from '@/composables/useRouter'
 import { useErrorHandler } from '@/composables/useErrorHandler'
 
@@ -51,11 +52,20 @@ import ScreenHeader from '@/components/ui/ScreenHeader.vue'
 import ScreenEmptyState from '@/components/ui/ScreenEmptyState.vue'
 import JobGroup from '@/components/screens/hunting/JobGroup.vue'
 
+const huntingStore = useHuntingStore()
+
 const { url } = useRouter()
 const { handleHttpError } = useErrorHandler('dialog')
 
-const jobs = ref<HuntJob[]>([])
-const loaded = ref(false)
+// Fetched again whenever the server says the job board changed (see huntingStore).
+const {
+  data,
+  isSuccess: loaded,
+  error,
+} = useQuery({ queryKey: ['hunting', 'jobs'], queryFn: () => huntingService.jobs() })
+watch(error, error => error && handleHttpError(error))
+
+const jobs = computed(() => data.value ?? [])
 
 const inState = (...states: JobState[]) => computed(() => jobs.value.filter(job => states.includes(job.state)))
 
@@ -65,15 +75,6 @@ const running = inState('running')
 const queued = inState('queued', 'paused')
 const waiting = computed(() => [...queued.value].reverse())
 const done = inState('done')
-
-const fetchJobs = async () => {
-  try {
-    jobs.value = await huntingService.jobs()
-    loaded.value = true
-  } catch (error: unknown) {
-    handleHttpError(error)
-  }
-}
 
 const retry = async (job: HuntJob) => {
   try {
@@ -86,14 +87,10 @@ const retry = async (job: HuntJob) => {
 const clearFinished = async () => {
   try {
     await huntingService.clearFinishedJobs()
-    await fetchJobs()
+    await queryClient.invalidateQueries({ queryKey: ['hunting', 'jobs'] })
     await huntingStore.refresh()
   } catch (error: unknown) {
     handleHttpError(error)
   }
 }
-
-onMounted(fetchJobs)
-eventBus.on('HUNT_JOBS_CHANGED', fetchJobs)
-onBeforeUnmount(() => eventBus.off('HUNT_JOBS_CHANGED', fetchJobs))
 </script>

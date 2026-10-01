@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vite-plus/test'
 import { defineComponent, nextTick, ref } from 'vue'
 import { createHarness } from '@/__tests__/TestHarness'
-import { preferenceStore } from '@/stores/preferenceStore'
-import { queueStore } from '@/stores/queueStore'
-import { themeStore } from '@/stores/themeStore'
+import { usePreferenceStore } from '@/stores/preferenceStore'
+import { useQueueStore } from '@/stores/queueStore'
+import { useThemeStore } from '@/stores/themeStore'
 import { useCoverTheme, useCoverTint } from '@/composables/useCoverTheme'
 
 const paintRoot = vi.fn()
@@ -22,7 +22,7 @@ describe('useCoverTheme', () => {
       sourceColorOf.mockReset()
     },
     afterEach: () => {
-      preferenceStore.state.theme = 'cover'
+      usePreferenceStore().state.theme = 'cover'
     },
   })
 
@@ -35,12 +35,12 @@ describe('useCoverTheme', () => {
 
   const playing = (cover: string) => {
     const song = h.factory('song').make({ album_cover: cover, playback_state: 'Playing' })
-    queueStore.state.playables = [song]
+    useQueueStore().state.playables = [song]
     return song
   }
 
   it('paints the colors of the cover playing', async () => {
-    themeStore.setTheme('cover')
+    useThemeStore().setTheme('cover')
     sourceColorOf.mockResolvedValue(42)
     playing('http://test/cover.jpg')
 
@@ -49,12 +49,12 @@ describe('useCoverTheme', () => {
 
     expect(sourceColorOf).toHaveBeenCalledWith('http://test/cover.jpg')
     expect(paintRoot).toHaveBeenLastCalledWith({
-      '--schemes-primary': `42-${themeStore.state.dark ? 'dark' : 'light'}`,
+      '--schemes-primary': `42-${useThemeStore().state.dark ? 'dark' : 'light'}`,
     })
   })
 
   it('falls back to the fixed colors when the cover cannot be read', async () => {
-    themeStore.setTheme('cover')
+    useThemeStore().setTheme('cover')
     sourceColorOf.mockResolvedValue(null)
     playing('http://test/broken.jpg')
 
@@ -65,7 +65,7 @@ describe('useCoverTheme', () => {
   })
 
   it('leaves the colors alone with a fixed scheme chosen', async () => {
-    themeStore.setTheme('pink')
+    useThemeStore().setTheme('pink')
     playing('http://test/cover.jpg')
 
     mount(useCoverTheme)
@@ -84,6 +84,6 @@ describe('useCoverTheme', () => {
     })
     await settle()
 
-    expect(tint.value).toBe(`7-${themeStore.state.dark ? 'dark' : 'light'}`)
+    expect(tint.value).toBe(`7-${useThemeStore().state.dark ? 'dark' : 'light'}`)
   })
 })

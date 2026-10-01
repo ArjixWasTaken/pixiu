@@ -72,18 +72,18 @@
           @toggle-favorite="toggleFavorite"
           @scrolled-to-end="fetchArtists"
         />
-        <ArtistGrid v-else ref="grid" :artists="displayedArtists" @scrolled-to-end="fetchArtists" />
+        <ArtistGrid v-else ref="grid" :artists="gridArtists" @scrolled-to-end="fetchArtists" />
       </div>
     </template>
   </ScreenBase>
 </template>
 
 <script lang="ts" setup>
-import { computed, nextTick, onMounted, ref, toRef } from 'vue'
-import { artistStore } from '@/stores/artistStore'
-import { commonStore } from '@/stores/commonStore'
-import { preferenceStore as preferences } from '@/stores/preferenceStore'
-import { useErrorHandler } from '@/composables/useErrorHandler'
+import { computed, ref } from 'vue'
+import { useArtistStore } from '@/stores/artistStore'
+import { useCommonStore } from '@/stores/commonStore'
+import { usePreferenceStore } from '@/stores/preferenceStore'
+import { useListPages } from '@/composables/useListPages'
 import { useViewport } from '@/composables/useViewport'
 
 import ArtistCardSkeleton from '@/components/ui/album-artist/ArtistAlbumCardSkeleton.vue'
@@ -99,18 +99,45 @@ import M3Chip from '@/components/m3/M3Chip.vue'
 import EmptyLibraryHint from '@/components/ui/EmptyLibraryHint.vue'
 import M3Icon from '@/components/m3/M3Icon.vue'
 
+const artistStore = useArtistStore()
+const commonStore = useCommonStore()
+const preferences = usePreferenceStore()
+
 const { isMobile } = useViewport()
 const grid = ref<InstanceType<typeof ArtistGrid>>()
-const artists = toRef(artistStore.state, 'artists')
-
-const loading = ref(false)
-const cursor = ref<string | null>('')
-
 const libraryEmpty = computed(() => commonStore.state.song_length === 0)
+
+// Each sort and filter is a list of its own; changing one starts it from its first page.
+const {
+  items: artists,
+  isFetching: loading,
+  hasNextPage: moreArtistsAvailable,
+  fetchMore: fetchArtists,
+} = useListPages(
+  () => [
+    'artists',
+    {
+      sort: preferences.artists_sort_field,
+      order: preferences.artists_sort_order,
+      favoritesOnly: preferences.artists_favorites_only,
+    },
+  ],
+  cursor =>
+    artistStore.paginate({
+      favorites_only: preferences.artists_favorites_only,
+      cursor,
+      sort: preferences.artists_sort_field,
+      order: preferences.artists_sort_order,
+    }),
+  { enabled: () => !libraryEmpty.value },
+)
 
 const displayedArtists = computed(() =>
   preferences.artists_favorites_only ? artists.value.filter((a: Artist) => a.favorite) : artists.value,
 )
+
+// Unknown and Various Artists have no card (ArtistCard shows none), so they take no place in the grid; the table lists them.
+const gridArtists = computed(() => displayedArtists.value.filter(artist => artistStore.isStandard(artist)))
 
 const noFavoriteArtists = computed(
   () =>
@@ -119,59 +146,18 @@ const noFavoriteArtists = computed(
     displayedArtists.value.length === 0 &&
     !moreArtistsAvailable.value,
 )
-const moreArtistsAvailable = computed(() => cursor.value !== null)
 const showSkeletons = computed(() => loading.value && artists.value.length === 0)
 
-const fetchArtists = async () => {
-  if (loading.value || !moreArtistsAvailable.value) {
-    return
-  }
-
-  loading.value = true
-
-  try {
-    cursor.value = await artistStore.paginate({
-      favorites_only: preferences.artists_favorites_only,
-      cursor: cursor.value,
-      sort: preferences.artists_sort_field,
-      order: preferences.artists_sort_order,
-    })
-  } catch (error: unknown) {
-    useErrorHandler().handleHttpError(error)
-  } finally {
-    loading.value = false
-  }
-}
-
-const resetState = async () => {
-  cursor.value = ''
-
-  artistStore.reset()
-  grid.value?.scrollToTop()
-}
-
-const sort = async (field: ArtistListSortField, order: SortOrder) => {
+const sort = (field: ArtistListSortField, order: SortOrder) => {
   preferences.artists_sort_field = field
   preferences.artists_sort_order = order
-
-  await resetState()
-  await nextTick()
-  await fetchArtists()
+  grid.value?.scrollToTop()
 }
 
 const toggleFavorite = (artist: Artist) => artistStore.toggleFavorite(artist)
 
-const toggleFavoritesOnly = async () => {
+const toggleFavoritesOnly = () => {
   preferences.artists_favorites_only = !preferences.artists_favorites_only
-
-  await resetState()
-  await nextTick()
-  await fetchArtists()
+  grid.value?.scrollToTop()
 }
-
-onMounted(() => {
-  if (!libraryEmpty.value) {
-    fetchArtists()
-  }
-})
 </script>

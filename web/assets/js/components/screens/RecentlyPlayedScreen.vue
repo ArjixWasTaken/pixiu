@@ -42,7 +42,7 @@
 <script lang="ts" setup>
 import { ref, toRef } from 'vue'
 import { pluralize } from '@/utils/formatters'
-import { recentlyPlayedStore } from '@/stores/recentlyPlayedStore'
+import { useRecentlyPlayedStore } from '@/stores/recentlyPlayedStore'
 import { useRouter } from '@/composables/useRouter'
 import { usePlayableList } from '@/composables/usePlayableList'
 import { usePlayableListControls } from '@/composables/usePlayableListControls'
@@ -52,6 +52,8 @@ import ScreenEmptyState from '@/components/ui/ScreenEmptyState.vue'
 import ScreenBase from '@/components/screens/ScreenBase.vue'
 import PlayableListSkeleton from '@/components/playable/playable-list/PlayableListSkeleton.vue'
 import M3Icon from '@/components/m3/M3Icon.vue'
+
+const recentlyPlayedStore = useRecentlyPlayedStore()
 
 const recentlyPlayedSongs = toRef(recentlyPlayedStore.state, 'playables')
 

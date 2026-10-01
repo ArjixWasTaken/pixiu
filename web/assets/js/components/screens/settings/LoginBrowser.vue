@@ -51,7 +51,8 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, onBeforeUnmount, onMounted, reactive, useTemplateRef } from 'vue'
+import { useQuery } from '@tanstack/vue-query'
+import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef } from 'vue'
 import { authService } from '@/services/authService'
 import { huntingService } from '@/services/huntingService'
 import { startLoginScreen, supportsMirrors } from '@/utils/loginScreen'
@@ -68,31 +69,32 @@ const mirrorForm = useTemplateRef<HTMLFormElement>('mirrorForm')
 const mirrors = supportsMirrors()
 const origin = window.location.origin
 
-const status = reactive({ open: true, logged_in: false, host: null as string | null })
+// Asked every two seconds while the browser shows, so "Done" turns on once it holds a login.
+// A failed ask is tried again at the next.
+const polling = ref(true)
+
+const { data } = useQuery({
+  queryKey: ['hunting', 'login-status'],
+  queryFn: () => huntingService.loginStatus(),
+  refetchInterval: 2000,
+  staleTime: 0,
+  enabled: polling,
+})
+
+const status = computed(() => data.value ?? { open: true, logged_in: false, host: null })
 
 const statusLabel = computed(() => {
-  if (status.logged_in) {
+  if (status.value.logged_in) {
     return 'Signed in: press Done'
   }
 
-  return status.open ? 'Not signed in yet' : 'The login browser closed'
+  return status.value.open ? 'Not signed in yet' : 'The login browser closed'
 })
 
 let stopScreen: (() => void) | null = null
-let pollTimer: number | undefined
-
-// Enable "Done" once the browser holds a login.
-const poll = async () => {
-  try {
-    Object.assign(status, await huntingService.loginStatus())
-  } catch {
-    // The next poll tries again.
-  }
-}
 
 const stop = () => {
-  window.clearInterval(pollTimer)
-  pollTimer = undefined
+  polling.value = false
   stopScreen?.()
   stopScreen = null
 }
@@ -123,8 +125,6 @@ onMounted(() => {
   const url = `${scheme}//${window.location.host}${window.KOEL.base_url}api/sources/login/ws?api_key=${key}`
 
   stopScreen = startLoginScreen(canvas.value!, mirrorForm.value!, url)
-  pollTimer = window.setInterval(poll, 2000)
-  poll()
 })
 
 onBeforeUnmount(stop)

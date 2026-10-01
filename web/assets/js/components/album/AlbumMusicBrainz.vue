@@ -57,9 +57,9 @@
 </template>
 
 <script lang="ts" setup>
-import { onMounted, ref, watch } from 'vue'
+import { useQuery } from '@tanstack/vue-query'
+import { computed, watch } from 'vue'
 import { huntingService } from '@/services/huntingService'
-import type { AlbumDetails } from '@/services/huntingService'
 import { pluralize, timeAgo } from '@/utils/formatters'
 import { useForm } from '@/composables/useForm'
 import { useMessageToaster } from '@/composables/useMessageToaster'
@@ -73,15 +73,12 @@ const props = defineProps<{ album: Album }>()
 const { toastSuccess } = useMessageToaster()
 const { handleHttpError } = useErrorHandler('dialog')
 
-const details = ref<AlbumDetails | null>(null)
-
-const fetchDetails = async () => {
-  try {
-    details.value = await huntingService.albumDetails(props.album)
-  } catch (error: unknown) {
-    handleHttpError(error)
-  }
-}
+// Under the album's key: editing the album makes it stale.
+const { data: details, error } = useQuery({
+  queryKey: computed(() => ['album', props.album.id, 'details']),
+  queryFn: () => huntingService.albumDetails(props.album),
+})
+watch(error, error => error && handleHttpError(error))
 
 const queued = () => toastSuccess('Looking it up. Jobs shows when it is done.')
 
@@ -102,7 +99,4 @@ const { data, handleSubmit } = useForm<{ release: string }>({
     queued()
   },
 })
-
-onMounted(fetchDetails)
-watch(() => props.album.id, fetchDetails)
 </script>

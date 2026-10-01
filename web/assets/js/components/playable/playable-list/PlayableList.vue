@@ -41,8 +41,8 @@ import { useViewport } from '@/composables/useViewport'
 import type { Ref } from 'vue'
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { defineAsyncComponent, requireInjection } from '@/utils/helpers'
-import { preferenceStore as preferences } from '@/stores/preferenceStore'
-import { queueStore } from '@/stores/queueStore'
+import { usePreferenceStore } from '@/stores/preferenceStore'
+import { useQueueStore } from '@/stores/queueStore'
 import { useDraggable, useDroppable } from '@/composables/useDragAndDrop'
 import { useListSelection } from '@/composables/useListSelection'
 import { playback } from '@/services/playbackManager'
@@ -60,6 +60,9 @@ import {
 import PlayableListItem from '@/components/playable/playable-list/PlayableListItem.vue'
 import VirtualScroller from '@/components/ui/VirtualScroller.vue'
 import PlayableListHeader from '@/components/playable/playable-list/PlayableListHeader.vue'
+
+const preferences = usePreferenceStore()
+const queueStore = useQueueStore()
 
 const { isTouch } = useViewport()
 

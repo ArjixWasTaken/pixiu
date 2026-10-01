@@ -14,14 +14,17 @@
 <script lang="ts" setup>
 import { orderBy } from 'lodash-es'
 import { computed, toRefs } from 'vue'
-import { queueStore } from '@/stores/queueStore'
-import { playableStore } from '@/stores/playableStore'
+import { useQueueStore } from '@/stores/queueStore'
+import { usePlayableStore } from '@/stores/playableStore'
 import { useRouter } from '@/composables/useRouter'
 import { useMessageToaster } from '@/composables/useMessageToaster'
 import { playback } from '@/services/playbackManager'
 import { useBranding } from '@/composables/useBranding'
 
 import M3IconButton from '@/components/m3/M3IconButton.vue'
+
+const queueStore = useQueueStore()
+const playableStore = usePlayableStore()
 
 const props = defineProps<{ entity: Album | Artist }>()
 const { entity } = toRefs(props)

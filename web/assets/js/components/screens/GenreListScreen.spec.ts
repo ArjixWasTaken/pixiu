@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vite-plus/test'
 import { screen, waitFor } from '@testing-library/vue'
 import { createHarness } from '@/__tests__/TestHarness'
-import { commonStore } from '@/stores/commonStore'
-import { genreStore } from '@/stores/genreStore'
+import { useCommonStore } from '@/stores/commonStore'
+import { useGenreStore } from '@/stores/genreStore'
 import Component from './GenreListScreen.vue'
 
 describe('genreListScreen', () => {
@@ -10,7 +10,7 @@ describe('genreListScreen', () => {
 
   const renderComponent = async (genres?: Genre[]) => {
     genres = genres || h.factory('genre').make(5)
-    const fetchMock = h.mock(genreStore, 'fetchAll').mockResolvedValue(genres)
+    const fetchMock = h.mock(useGenreStore(), 'fetchAll').mockResolvedValue(genres)
 
     const rendered = h.render(Component, {
       global: {
@@ -33,7 +33,7 @@ describe('genreListScreen', () => {
   })
 
   it('shows a message when the library is empty', async () => {
-    commonStore.state.song_length = 0
+    useCommonStore().state.song_length = 0
     const { fetchMock } = await renderComponent()
 
     await waitFor(() => {
@@ -43,7 +43,7 @@ describe('genreListScreen', () => {
   })
 
   it('says so when the library has no genres yet', async () => {
-    commonStore.state.song_length = 10
+    useCommonStore().state.song_length = 10
     await renderComponent([])
 
     await screen.findByText('No genres yet.')

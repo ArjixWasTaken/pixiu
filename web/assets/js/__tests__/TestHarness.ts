@@ -4,29 +4,40 @@ import userEvent from '@testing-library/user-event'
 import type { UserEvent } from '@testing-library/user-event'
 import { afterEach, beforeEach, vi } from 'vite-plus/test'
 import { defineComponent, h, nextTick, shallowRef } from 'vue'
+import type { Pinia } from 'pinia'
+import { createPinia, setActivePinia } from 'pinia'
 import { DropdownMenuContent, DropdownMenuRoot } from 'reka-ui'
 import factory from '@/__tests__/factory'
 import { DialogBoxStub, MessageToasterStub, OverlayStub } from '@/__tests__/stubs'
-import { commonStore } from '@/stores/commonStore'
-import { userStore } from '@/stores/userStore'
+import { useCommonStore } from '@/stores/commonStore'
+import { useUserStore } from '@/stores/userStore'
 import { http } from '@/services/http'
 import type { Router } from 'vue-router'
 import { createMemoryHistory } from 'vue-router'
 import { ContextMenuKey, DialogBoxKey, MessageToasterKey, ModalKey, OverlayKey } from '@/config/symbols'
 import { createAppRouter, resetRouting } from '@/router'
-import { preferenceStore } from '@/stores/preferenceStore'
+import { usePreferenceStore } from '@/stores/preferenceStore'
 import { noop } from '@/utils/helpers'
 import { deepMerge, setPropIfNotExists } from '@/__tests__/utils'
 import { eventBus } from '@/utils/eventBus'
-import { cache } from '@/services/cache'
+import { VueQueryPlugin } from '@tanstack/vue-query'
+import { queryClient } from '@/services/queryClient'
 import { setViewport } from '@/composables/useViewport'
 
 // Specs see a phone-sized, wide window with a mouse unless they say otherwise.
 setViewport({ mobile: true, wide: true })
 
+// A request that fails in a spec fails at once.
+queryClient.setDefaultOptions({
+  ...queryClient.getDefaultOptions(),
+  queries: { ...queryClient.getDefaultOptions().queries, retry: false },
+})
+
 class TestHarness {
   /** A fresh one for each spec, in memory, starting at Home. */
   public router!: Router
+  /** The stores, fresh for each spec. */
+  public pinia!: Pinia
   public user: UserEvent
   private backupMethods = new Map()
   private realFetch = globalThis.fetch
@@ -34,6 +45,8 @@ class TestHarness {
   public constructor() {
     // One from the start, for specs that render before the hooks run; each spec gets its own.
     this.router = createAppRouter(createMemoryHistory())
+    this.pinia = createPinia()
+    setActivePinia(this.pinia)
     this.user = userEvent.setup({ delay: null }) // @see https://github.com/testing-library/user-event/issues/833
 
     this.setReadOnlyProperty(navigator, 'clipboard', {
@@ -41,8 +54,14 @@ class TestHarness {
     })
   }
 
+  /** Whether each spec starts signed in (as a user, not an admin). */
+  public signedInByDefault = true
+
   public beforeEach(cb?: Closure) {
     beforeEach(async () => {
+      this.pinia = createPinia()
+      setActivePinia(this.pinia)
+      this.signedInByDefault && this.actingAsUser()
       this.router = createAppRouter(createMemoryHistory())
       await this.router.push('/home')
 
@@ -52,10 +71,10 @@ class TestHarness {
       this.realFetch = globalThis.fetch
       globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({ 'subsonic-response': { status: 'ok' } })))
 
-      commonStore.state.song_length = 10
-      commonStore.state.allows_download = true
-      commonStore.state.supports_batch_downloading = true
-      commonStore.state.supports_transcoding = true
+      useCommonStore().state.song_length = 10
+      useCommonStore().state.allows_download = true
+      useCommonStore().state.supports_batch_downloading = true
+      useCommonStore().state.supports_transcoding = true
 
       this.setDefaultBranding()
       cb?.()
@@ -68,8 +87,8 @@ class TestHarness {
       cleanup()
       document.body.innerHTML = ''
       setViewport({ mobile: true, wide: true })
-      commonStore.state.song_length = 10
-      cache.clear()
+      localStorage.clear()
+      queryClient.clear()
       this.restoreAllMocks()
       globalThis.fetch = this.realFetch
       eventBus.all.clear()
@@ -89,8 +108,8 @@ class TestHarness {
   public readonly auth = (user?: CurrentUser) => this.actingAsUser(user)
 
   public actingAsUser(user?: CurrentUser) {
-    userStore.state.current = user || (factory('user').state('current').make() as CurrentUser)
-    preferenceStore.init(userStore.state.current.preferences)
+    useUserStore().state.current = user || (factory('user').state('current').make() as CurrentUser)
+    usePreferenceStore().init(useUserStore().state.current.preferences)
     return this
   }
 
@@ -214,8 +233,13 @@ class TestHarness {
   private supplyRequiredProvides(options: RenderOptions) {
     options.global = options.global || {}
     options.global.provide = options.global.provide || {}
-    // RouterView and the like find the spec's router.
-    options.global.plugins = [...(options.global.plugins ?? []), this.router]
+    // RouterView and the like find the spec's router; components, its stores.
+    options.global.plugins = [
+      ...(options.global.plugins ?? []),
+      this.router,
+      this.pinia,
+      [VueQueryPlugin, { queryClient }],
+    ]
 
     setPropIfNotExists(options.global.provide, DialogBoxKey, DialogBoxStub)
     setPropIfNotExists(options.global.provide, MessageToasterKey, MessageToasterStub)
@@ -286,8 +310,10 @@ export function createHarness(overrides?: {
   authenticated?: boolean
 }) {
   const h = new TestHarness()
+  h.signedInByDefault = overrides?.authenticated ?? true
 
-  if (overrides?.authenticated ?? true) {
+  // Signed in from the start too, for what specs do before their hooks run.
+  if (h.signedInByDefault) {
     h.actingAsUser()
   }
 

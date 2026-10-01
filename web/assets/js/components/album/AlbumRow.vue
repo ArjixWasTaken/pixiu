@@ -38,7 +38,7 @@
 </template>
 
 <script lang="ts" setup>
-import { artistStore } from '@/stores/artistStore'
+import { useArtistStore } from '@/stores/artistStore'
 import { useDraggable } from '@/composables/useDragAndDrop'
 import { useRouter } from '@/composables/useRouter'
 import { useContextMenu } from '@/composables/useContextMenu'
@@ -51,6 +51,8 @@ import M3IconButton from '@/components/m3/M3IconButton.vue'
 import StarRating from '@/components/ui/StarRating.vue'
 import FavoriteButton from '@/components/ui/FavoriteButton.vue'
 import AlbumOrArtistThumbnail from '@/components/ui/album-artist/AlbumOrArtistThumbnail.vue'
+
+const artistStore = useArtistStore()
 
 const props = defineProps<{ album: Album }>()
 

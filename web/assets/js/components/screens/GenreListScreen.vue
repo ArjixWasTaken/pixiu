@@ -48,10 +48,10 @@
 
 <script lang="ts" setup>
 import { computed, onMounted, provide, ref } from 'vue'
-import { commonStore } from '@/stores/commonStore'
-import { genreStore } from '@/stores/genreStore'
+import { useCommonStore } from '@/stores/commonStore'
+import { useGenreStore } from '@/stores/genreStore'
 import { useErrorHandler } from '@/composables/useErrorHandler'
-import { preferenceStore as preferences } from '@/stores/preferenceStore'
+import { usePreferenceStore } from '@/stores/preferenceStore'
 import { useFuzzySearch } from '@/composables/useFuzzySearch'
 import { FilterKeywordsKey } from '@/config/symbols'
 import { orderBy } from 'lodash-es'
@@ -65,6 +65,10 @@ import ListFilter from '@/components/ui/ListFilter.vue'
 import GenreListSorter from '@/components/genre/GenreListSorter.vue'
 import EmptyLibraryHint from '@/components/ui/EmptyLibraryHint.vue'
 import M3Icon from '@/components/m3/M3Icon.vue'
+
+const commonStore = useCommonStore()
+const genreStore = useGenreStore()
+const preferences = usePreferenceStore()
 
 const { handleHttpError } = useErrorHandler()
 

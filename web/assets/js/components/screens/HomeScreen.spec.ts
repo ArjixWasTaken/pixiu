@@ -1,9 +1,9 @@
 import { fireEvent, screen } from '@testing-library/vue'
 import { describe, expect, it, vi } from 'vite-plus/test'
 import { createHarness } from '@/__tests__/TestHarness'
-import { commonStore } from '@/stores/commonStore'
-import { overviewStore } from '@/stores/overviewStore'
-import { preferenceStore } from '@/stores/preferenceStore'
+import { useCommonStore } from '@/stores/commonStore'
+import { useOverviewStore } from '@/stores/overviewStore'
+import { usePreferenceStore } from '@/stores/preferenceStore'
 import type { Events } from '@/config/events'
 import { eventBus } from '@/utils/eventBus'
 import Component from './HomeScreen.vue'
@@ -25,8 +25,8 @@ describe('homeScreen.vue', () => {
   }
 
   it('renders an empty state if no songs found', async () => {
-    commonStore.state.song_length = 0
-    h.mock(overviewStore, 'fetch')
+    useCommonStore().state.song_length = 0
+    h.mock(useOverviewStore(), 'fetch')
 
     h.render(Component)
 
@@ -34,9 +34,9 @@ describe('homeScreen.vue', () => {
   })
 
   it('renders overview components if applicable', async () => {
-    commonStore.state.song_length = 100
+    useCommonStore().state.song_length = 100
     // Still loading: every section shows, its skeleton in place (an empty one hides once loaded).
-    const fetchOverviewMock = h.mock(overviewStore, 'fetch').mockReturnValue(new Promise(() => {}))
+    const fetchOverviewMock = h.mock(useOverviewStore(), 'fetch').mockReturnValue(new Promise(() => {}))
 
     await renderComponent()
 
@@ -57,7 +57,7 @@ describe('homeScreen.vue', () => {
   it.each<[keyof Events]>([['SONGS_UPDATED'], ['SONGS_DELETED'], ['SONG_UPLOADED']])(
     'refreshes the overviews on %s event',
     async eventName => {
-      const fetchOverviewMock = h.mock(overviewStore, 'fetch')
+      const fetchOverviewMock = h.mock(useOverviewStore(), 'fetch')
       await renderComponent()
 
       eventBus.emit(eventName)
@@ -67,8 +67,8 @@ describe('homeScreen.vue', () => {
   )
 
   it('renders the reorder trigger button when the library is not empty', () => {
-    commonStore.state.song_length = 100
-    h.mock(overviewStore, 'fetch')
+    useCommonStore().state.song_length = 100
+    h.mock(useOverviewStore(), 'fetch')
 
     h.render(Component)
 
@@ -76,8 +76,8 @@ describe('homeScreen.vue', () => {
   })
 
   it('hides the reorder trigger button on the empty state', () => {
-    commonStore.state.song_length = 0
-    h.mock(overviewStore, 'fetch')
+    useCommonStore().state.song_length = 0
+    h.mock(useOverviewStore(), 'fetch')
 
     h.render(Component)
 
@@ -85,8 +85,8 @@ describe('homeScreen.vue', () => {
   })
 
   it('opens the ReorderBlocksModal with the canonical block summaries when the trigger is clicked', async () => {
-    commonStore.state.song_length = 100
-    h.mock(overviewStore, 'fetch')
+    useCommonStore().state.song_length = 100
+    h.mock(useOverviewStore(), 'fetch')
     openModalSpy.mockClear()
 
     h.render(Component)
@@ -103,10 +103,10 @@ describe('homeScreen.vue', () => {
     )
   })
 
-  it('honors preferenceStore.home_blocks_order when rendering blocks', () => {
-    commonStore.state.song_length = 100
-    h.mock(overviewStore, 'fetch')
-    preferenceStore.temporary.home_blocks_order = ['random-songs', 'recently-added-albums']
+  it('honors usePreferenceStore().home_blocks_order when rendering blocks', () => {
+    useCommonStore().state.song_length = 100
+    h.mock(useOverviewStore(), 'fetch')
+    usePreferenceStore().home_blocks_order = ['random-songs', 'recently-added-albums']
 
     const { container } = h.render(Component)
     const ids = blockIdsInDom(container)
@@ -116,17 +116,17 @@ describe('homeScreen.vue', () => {
     expect(ids).toContain('most-played-songs')
   })
 
-  it('leaves out the blocks hidden in preferenceStore.home_blocks_hidden', () => {
-    commonStore.state.song_length = 100
-    h.mock(overviewStore, 'fetch')
-    preferenceStore.temporary.home_blocks_order = []
-    preferenceStore.temporary.home_blocks_hidden = ['random-songs']
+  it('leaves out the blocks hidden in usePreferenceStore().home_blocks_hidden', () => {
+    useCommonStore().state.song_length = 100
+    h.mock(useOverviewStore(), 'fetch')
+    usePreferenceStore().home_blocks_order = []
+    usePreferenceStore().home_blocks_hidden = ['random-songs']
 
     const { container } = h.render(Component)
     const ids = blockIdsInDom(container)
 
     expect(ids).not.toContain('random-songs')
     expect(ids).toContain('recently-added-albums')
-    preferenceStore.temporary.home_blocks_hidden = []
+    usePreferenceStore().home_blocks_hidden = []
   })
 })

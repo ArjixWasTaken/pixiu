@@ -9,7 +9,7 @@
       playlists as read-only playlists.
     </p>
 
-    <AddWatchForm class="mb-5" @added="fetchWatches" />
+    <AddWatchForm class="mb-5" @added="refetch" />
 
     <ScreenEmptyState v-if="loaded && !watches.length">
       <template #icon>
@@ -26,10 +26,10 @@
 </template>
 
 <script lang="ts" setup>
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { useQuery } from '@tanstack/vue-query'
+import { computed, watch as watchRef } from 'vue'
 import { huntingService } from '@/services/huntingService'
 import type { Watch } from '@/services/huntingService'
-import { eventBus } from '@/utils/eventBus'
 import { useDialogBox } from '@/composables/useDialogBox'
 import { useMessageToaster } from '@/composables/useMessageToaster'
 import { useErrorHandler } from '@/composables/useErrorHandler'
@@ -45,23 +45,22 @@ const { showConfirmDialog } = useDialogBox()
 const { toastSuccess } = useMessageToaster()
 const { handleHttpError } = useErrorHandler('dialog')
 
-const watches = ref<Watch[]>([])
-const loaded = ref(false)
+// Fetched again whenever the server says the job board changed (see huntingStore).
+const {
+  data,
+  isSuccess: loaded,
+  error,
+  refetch,
+} = useQuery({ queryKey: ['hunting', 'watches'], queryFn: () => huntingService.watches() })
+watchRef(error, error => error && handleHttpError(error))
 
-const fetchWatches = async () => {
-  try {
-    watches.value = await huntingService.watches()
-    loaded.value = true
-  } catch (error: unknown) {
-    handleHttpError(error)
-  }
-}
+const watches = computed(() => data.value ?? [])
 
 const sync = async (watch: Watch) => {
   try {
     await huntingService.syncWatch(watch.id)
     toastSuccess(`Syncing “${watch.name}”.`)
-    await fetchWatches()
+    await refetch()
   } catch (error: unknown) {
     handleHttpError(error)
   }
@@ -80,13 +79,9 @@ const remove = async (watch: Watch) => {
   try {
     await huntingService.removeWatch(watch.id)
     toastSuccess(`No longer watching “${watch.name}”.`)
-    await fetchWatches()
+    await refetch()
   } catch (error: unknown) {
     handleHttpError(error)
   }
 }
-
-onMounted(fetchWatches)
-eventBus.on('HUNT_JOBS_CHANGED', fetchWatches)
-onBeforeUnmount(() => eventBus.off('HUNT_JOBS_CHANGED', fetchWatches))
 </script>

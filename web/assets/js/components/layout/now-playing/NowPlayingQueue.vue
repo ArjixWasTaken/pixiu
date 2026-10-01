@@ -39,7 +39,7 @@
 
 <script lang="ts" setup>
 import { computed } from 'vue'
-import { queueStore } from '@/stores/queueStore'
+import { useQueueStore } from '@/stores/queueStore'
 import { playback } from '@/services/playbackManager'
 import { defineAsyncComponent } from '@/utils/helpers'
 import { pluralize, secondsToHis, secondsToHumanReadable } from '@/utils/formatters'
@@ -48,6 +48,8 @@ import { useModal } from '@/composables/useModal'
 
 import M3IconButton from '@/components/m3/M3IconButton.vue'
 import PlayableThumbnail from '@/components/playable/PlayableThumbnail.vue'
+
+const queueStore = useQueueStore()
 
 const PlayableContextMenu = defineAsyncComponent(() => import('@/components/playable/PlayableContextMenu.vue'))
 const CreatePlaylistForm = defineAsyncComponent(() => import('@/components/playlist/CreatePlaylistForm.vue'))

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vite-plus/test'
 import { screen, waitFor } from '@testing-library/vue'
 import { createHarness } from '@/__tests__/TestHarness'
-import { genreStore } from '@/stores/genreStore'
-import { playableStore } from '@/stores/playableStore'
+import { useGenreStore } from '@/stores/genreStore'
+import { usePlayableStore } from '@/stores/playableStore'
 import Component from './GenreScreen.vue'
 
 describe('genreScreen', () => {
@@ -11,10 +11,10 @@ describe('genreScreen', () => {
   const renderComponent = async (genre?: Genre, songs?: Song[]) => {
     genre = genre || h.factory('genre').make()
 
-    const fetchGenreMock = h.mock(genreStore, 'fetchOne').mockResolvedValue(genre)
-    const paginateMock = h.mock(playableStore, 'paginateSongsByGenre').mockResolvedValue({
+    const fetchGenreMock = h.mock(useGenreStore(), 'fetchOne').mockResolvedValue(genre)
+    const paginateMock = h.mock(usePlayableStore(), 'paginateSongsByGenre').mockResolvedValue({
       nextCursor: 'next-token',
-      songs: songs || h.factory('song').make(13),
+      items: songs || h.factory('song').make(13),
     })
 
     const rendered = (await h.visit(`genres/${genre.id}`)).render(Component, {

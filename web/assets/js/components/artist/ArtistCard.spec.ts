@@ -3,7 +3,7 @@ import type { Mock } from 'vite-plus/test'
 import { describe, expect, it, vi } from 'vite-plus/test'
 import { createHarness } from '@/__tests__/TestHarness'
 import { playbackService } from '@/services/QueuePlaybackService'
-import { playableStore } from '@/stores/playableStore'
+import { usePlayableStore } from '@/stores/playableStore'
 import { useContextMenu } from '@/composables/useContextMenu'
 import { assertOpenContextMenu } from '@/__tests__/assertions'
 import Router from '@/router'
@@ -41,7 +41,7 @@ describe('artistCard.vue', () => {
     h.mock(Router, 'go')
 
     const songs = h.factory('song').make(16)
-    const fetchMock = h.mock(playableStore, 'fetchSongsForArtist').mockResolvedValue(songs)
+    const fetchMock = h.mock(usePlayableStore(), 'fetchSongsForArtist').mockResolvedValue(songs)
     const playMock = h.mock(playbackService, 'queueAndPlay')
     const { artist } = renderComponent()
 

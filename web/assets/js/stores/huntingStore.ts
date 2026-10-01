@@ -3,74 +3,86 @@
  * session's state and the counts the sidebar shows. A server-sent event
  * stream keeps it live, and tells screens when the job board changed.
  */
+import { defineStore } from 'pinia'
 import { reactive } from 'vue'
 import { authService } from '@/services/authService'
 import { huntingService } from '@/services/huntingService'
 import type { HuntingSummary, PlaylistWatch, SessionStateName } from '@/services/huntingService'
-import { cache } from '@/services/cache'
-import { playlistStore } from '@/stores/playlistStore'
+import { queryClient } from '@/services/queryClient'
+import { usePlaylistStore } from '@/stores/playlistStore'
 import { eventBus } from '@/utils/eventBus'
 import { logger } from '@/utils/logger'
 
-let source: EventSource | null = null
+export const useHuntingStore = defineStore('hunting', () => {
+  let source: EventSource | null = null
 
-export const huntingStore = {
-  state: reactive<HuntingSummary>({
+  const state = reactive<HuntingSummary>({
     session: 'none',
     orphans: 0,
     offerings: 0,
     jobs: { running: 0, waiting: 0, failed: 0 },
     registrations: 0,
-  }),
+  })
 
   /** What each playlist mirrors, by playlist id; `null` for playlists of the admin's own. */
-  playlistWatches: reactive<Record<Playlist['id'], PlaylistWatch | null>>({}),
+  const playlistWatches = reactive<Record<Playlist['id'], PlaylistWatch | null>>({})
 
-  async fetchPlaylistWatch(playlist: Playlist) {
+  const fetchPlaylistWatch = async (playlist: Playlist) => {
     // The admin's own playlists mirror nothing.
     if (playlist.permissions.edit) {
-      this.playlistWatches[playlist.id] = null
+      playlistWatches[playlist.id] = null
       return null
     }
 
-    this.playlistWatches[playlist.id] = await huntingService.playlistWatch(playlist.id)
-    return this.playlistWatches[playlist.id]
-  },
+    playlistWatches[playlist.id] = await huntingService.playlistWatch(playlist.id)
+    return playlistWatches[playlist.id]
+  }
+
+  const refresh = async () => {
+    try {
+      Object.assign(state, await huntingService.summary())
+    } catch (error: unknown) {
+      logger.error(error)
+    }
+  }
+
+  const exclusionsChanged = async () => {
+    // The mirrors of watched playlists change with their exclusions.
+    await Promise.all(
+      usePlaylistStore()
+        .state.playlists.filter(playlist => !playlist.permissions.edit)
+        .map(playlist => queryClient.invalidateQueries({ queryKey: ['playlist', playlist.id, 'songs'] })),
+    )
+
+    eventBus.emit('WATCH_EXCLUSIONS_CHANGED')
+    await refresh()
+  }
 
   /**
    * Excludes songs from a watched playlist: they leave its mirror and
    * become orphans unless something else keeps them.
    */
-  async exclude(watchId: number, songs: Song[]) {
+  const exclude = async (watchId: number, songs: Song[]) => {
     for (const song of songs) {
       await huntingService.exclude(watchId, song.id)
     }
 
-    await this.exclusionsChanged()
-  },
+    await exclusionsChanged()
+  }
 
-  async include(watchId: number, videoId: string) {
+  const include = async (watchId: number, videoId: string) => {
     await huntingService.include(watchId, videoId)
-    await this.exclusionsChanged()
-  },
+    await exclusionsChanged()
+  }
 
-  async exclusionsChanged() {
-    playlistStore.state.playlists
-      .filter(playlist => !playlist.permissions.edit)
-      .forEach(playlist => cache.remove(['playlist.songs', playlist.id]))
-
-    eventBus.emit('WATCH_EXCLUSIONS_CHANGED')
-    await this.refresh()
-  },
-
-  init(summary?: HuntingSummary) {
-    summary && Object.assign(this.state, summary)
-    this.connect()
-  },
+  const disconnect = () => {
+    source?.close()
+    source = null
+  }
 
   /** Listens to the server's events; the browser reconnects on its own. */
-  connect() {
-    this.disconnect()
+  const connect = () => {
+    disconnect()
 
     if (typeof EventSource === 'undefined') {
       return
@@ -79,26 +91,32 @@ export const huntingStore = {
     const token = encodeURIComponent(authService.getApiToken() ?? '')
     source = new EventSource(`${window.KOEL.base_url}api/events?api_key=${token}`)
 
+    // The job board changed: what the hunting screens show is stale.
     source.addEventListener('jobs', () => {
-      eventBus.emit('HUNT_JOBS_CHANGED')
-      this.refresh()
+      queryClient.invalidateQueries({ queryKey: ['hunting'] })
+      refresh()
     })
 
     source.addEventListener('session', event => {
-      this.state.session = (event as MessageEvent<string>).data as SessionStateName
+      state.session = (event as MessageEvent<string>).data as SessionStateName
     })
-  },
+  }
 
-  disconnect() {
-    source?.close()
-    source = null
-  },
+  const init = (summary?: HuntingSummary) => {
+    summary && Object.assign(state, summary)
+    connect()
+  }
 
-  async refresh() {
-    try {
-      Object.assign(this.state, await huntingService.summary())
-    } catch (error: unknown) {
-      logger.error(error)
-    }
-  },
-}
+  return {
+    state,
+    playlistWatches,
+    fetchPlaylistWatch,
+    exclude,
+    include,
+    exclusionsChanged,
+    init,
+    connect,
+    disconnect,
+    refresh,
+  }
+})

@@ -7,9 +7,9 @@ import factory from '@/__tests__/factory'
 import { ContextMenuKey } from '@/config/symbols'
 import { downloadService } from '@/services/downloadService'
 import { playbackService } from '@/services/QueuePlaybackService'
-import { albumStore } from '@/stores/albumStore'
-import { commonStore } from '@/stores/commonStore'
-import { playableStore } from '@/stores/playableStore'
+import { useAlbumStore } from '@/stores/albumStore'
+import { useCommonStore } from '@/stores/commonStore'
+import { usePlayableStore } from '@/stores/playableStore'
 import EditAlbumForm from '@/components/album/EditAlbumForm.vue'
 
 const openModalMock = vi.fn()
@@ -28,8 +28,8 @@ describe('albumContextMenu.vue', () => {
   })
 
   const renderComponent = async (album?: Album) => {
-    if (!vi.isMockFunction(playableStore.fetchSongsForAlbum)) {
-      h.mock(playableStore, 'fetchSongsForAlbum').mockResolvedValue([])
+    if (!vi.isMockFunction(usePlayableStore().fetchSongsForAlbum)) {
+      h.mock(usePlayableStore(), 'fetchSongsForAlbum').mockResolvedValue([])
     }
 
     album =
@@ -56,7 +56,7 @@ describe('albumContextMenu.vue', () => {
     h.createAudioPlayer()
 
     const songs = h.factory('song').make(10)
-    const fetchMock = h.mock(playableStore, 'fetchSongsForAlbum').mockResolvedValue(songs)
+    const fetchMock = h.mock(usePlayableStore(), 'fetchSongsForAlbum').mockResolvedValue(songs)
     const playMock = h.mock(playbackService, 'queueAndPlay')
 
     const { album } = await renderComponent()
@@ -71,7 +71,7 @@ describe('albumContextMenu.vue', () => {
     h.createAudioPlayer()
 
     const songs = h.factory('song').make(10)
-    const fetchMock = h.mock(playableStore, 'fetchSongsForAlbum').mockResolvedValue(songs)
+    const fetchMock = h.mock(usePlayableStore(), 'fetchSongsForAlbum').mockResolvedValue(songs)
     const playMock = h.mock(playbackService, 'queueAndPlay')
 
     const { album } = await renderComponent()
@@ -92,7 +92,7 @@ describe('albumContextMenu.vue', () => {
   })
 
   it('does not have an option to download if downloading is disabled', async () => {
-    commonStore.state.allows_download = false
+    useCommonStore().state.allows_download = false
     await renderComponent()
 
     expect(screen.queryByText('Download')).toBeNull()
@@ -115,7 +115,7 @@ describe('albumContextMenu.vue', () => {
   })
 
   it('links to MusicBrainz', async () => {
-    commonStore.state.uses_musicbrainz = true
+    useCommonStore().state.uses_musicbrainz = true
     const openMock = h.mock(window, 'open')
     const { album } = await renderComponent(h.factory('album').make())
 
@@ -125,22 +125,22 @@ describe('albumContextMenu.vue', () => {
   })
 
   it('does not link to MusicBrainz when MusicBrainz is disabled', async () => {
-    commonStore.state.uses_musicbrainz = false
+    useCommonStore().state.uses_musicbrainz = false
     await renderComponent()
 
     expect(screen.queryByText('View on MusicBrainz')).toBeNull()
   })
 
   it('does not link to MusicBrainz when the album has no identifier', async () => {
-    commonStore.state.uses_musicbrainz = true
+    useCommonStore().state.uses_musicbrainz = true
     await renderComponent(h.factory('album').make({ mbid: null }))
 
     expect(screen.queryByText('View on MusicBrainz')).toBeNull()
   })
 
   it('closes the menu after rating', async () => {
-    h.mock(playableStore, 'fetchSongsForAlbum').mockResolvedValue([])
-    h.mock(albumStore, 'rate')
+    h.mock(usePlayableStore(), 'fetchSongsForAlbum').mockResolvedValue([])
+    h.mock(useAlbumStore(), 'rate')
     const menu = shallowRef<any>({ component: Component, position: { top: 0, left: 0 } })
     const album = h.factory('album').make({ rating: 0 })
 

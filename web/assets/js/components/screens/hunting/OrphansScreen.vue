@@ -42,10 +42,10 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { useQuery } from '@tanstack/vue-query'
+import { computed, reactive, watch } from 'vue'
 import { huntingService } from '@/services/huntingService'
-import type { Orphan } from '@/services/huntingService'
-import { huntingStore } from '@/stores/huntingStore'
+import { useHuntingStore } from '@/stores/huntingStore'
 import { formatBytes, pluralize } from '@/utils/formatters'
 import { useDialogBox } from '@/composables/useDialogBox'
 import { useMessageToaster } from '@/composables/useMessageToaster'
@@ -59,14 +59,29 @@ import ScreenHeader from '@/components/ui/ScreenHeader.vue'
 import ScreenEmptyState from '@/components/ui/ScreenEmptyState.vue'
 import OrphanRow from '@/components/screens/hunting/OrphanRow.vue'
 
+const huntingStore = useHuntingStore()
+
 const { showConfirmDialog } = useDialogBox()
 const { toastSuccess } = useMessageToaster()
 const { handleHttpError } = useErrorHandler('dialog')
 
-const orphans = ref<Orphan[]>([])
-const totalSize = ref(0)
-const loaded = ref(false)
+const {
+  data,
+  isSuccess: loaded,
+  error,
+  refetch,
+} = useQuery({
+  queryKey: ['hunting', 'orphans'],
+  queryFn: () => huntingService.orphans(),
+})
+watch(error, error => error && handleHttpError(error))
+
+const orphans = computed(() => data.value?.orphans ?? [])
+const totalSize = computed(() => data.value?.totalSize ?? 0)
 const selectedIds = reactive<Record<string, boolean>>({})
+
+// A new list: nothing in it is chosen yet.
+watch(data, () => Object.keys(selectedIds).forEach(id => delete selectedIds[id]))
 
 const selected = computed(() => orphans.value.filter(({ song }) => selectedIds[song.id]).map(({ song }) => song))
 
@@ -75,21 +90,9 @@ const allSelected = computed({
   set: value => orphans.value.forEach(({ song }) => (selectedIds[song.id] = value)),
 })
 
-const fetchOrphans = async () => {
-  try {
-    const result = await huntingService.orphans()
-    orphans.value = result.orphans
-    totalSize.value = result.totalSize
-    loaded.value = true
-    Object.keys(selectedIds).forEach(id => delete selectedIds[id])
-  } catch (error: unknown) {
-    handleHttpError(error)
-  }
-}
-
 const after = async (message: string) => {
   toastSuccess(message)
-  await fetchOrphans()
+  await refetch()
   await huntingStore.refresh()
 }
 
@@ -117,8 +120,6 @@ const remove = async (songs: Song[] | 'all', count: number) => {
 
 const deleteSelected = () => remove(selected.value, selected.value.length)
 const deleteAll = () => remove('all', orphans.value.length)
-
-onMounted(fetchOrphans)
 </script>
 
 <style scoped>

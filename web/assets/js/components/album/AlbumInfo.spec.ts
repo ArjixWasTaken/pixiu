@@ -1,7 +1,7 @@
 import { screen } from '@testing-library/vue'
 import { describe, expect, it } from 'vite-plus/test'
 import { createHarness } from '@/__tests__/TestHarness'
-import { commonStore } from '@/stores/commonStore'
+import { useCommonStore } from '@/stores/commonStore'
 import { encyclopediaService } from '@/services/encyclopediaService'
 import Component from './AlbumInfo.vue'
 
@@ -9,7 +9,7 @@ describe('albumInfo.vue', () => {
   const h = createHarness()
 
   const renderComponent = async (mode: EncyclopediaDisplayMode = 'aside', info?: AlbumInfo) => {
-    commonStore.state.uses_musicbrainz = true
+    useCommonStore().state.uses_musicbrainz = true
 
     if (info === undefined) {
       info = h.factory('album-info').make()
@@ -55,7 +55,7 @@ describe('albumInfo.vue', () => {
   })
 
   it('says when Wikipedia has nothing, without a source', async () => {
-    commonStore.state.uses_musicbrainz = true
+    useCommonStore().state.uses_musicbrainz = true
     h.mock(encyclopediaService, 'fetchForAlbum').mockResolvedValue(null)
     h.render(Component, {
       props: { album: h.factory('album').make({ name: 'IV' }), mode: 'full' },

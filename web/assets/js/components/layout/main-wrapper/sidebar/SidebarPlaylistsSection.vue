@@ -20,9 +20,9 @@
 
 <script lang="ts" setup>
 import { computed, onBeforeUnmount, onMounted, provide, ref, toRef } from 'vue'
-import { playlistFolderStore } from '@/stores/playlistFolderStore'
-import { playlistStore } from '@/stores/playlistStore'
-import { playableStore } from '@/stores/playableStore'
+import { usePlaylistFolderStore } from '@/stores/playlistFolderStore'
+import { usePlaylistStore } from '@/stores/playlistStore'
+import { usePlayableStore } from '@/stores/playableStore'
 import { currentDragType, setDragText, useDroppable } from '@/composables/useDragAndDrop'
 import { DraggedPlaylistFolderKey, DraggedPlaylistKey, PlaylistFolderDropTargetKey } from '@/config/symbols'
 
@@ -31,6 +31,10 @@ import PlaylistFolderSidebarItem from './PlaylistFolderSidebarItem.vue'
 import CreatePlaylistContextMenuButton from '@/components/playlist/CreatePlaylistContextMenuButton.vue'
 import SidebarSectionHeader from '@/components/layout/main-wrapper/sidebar/SidebarSectionHeader.vue'
 import SidebarSection from '@/components/layout/main-wrapper/sidebar/SidebarSection.vue'
+
+const playlistFolderStore = usePlaylistFolderStore()
+const playlistStore = usePlaylistStore()
+const playableStore = usePlayableStore()
 
 const folders = toRef(playlistFolderStore.state, 'folders')
 const playlists = toRef(playlistStore.state, 'playlists')

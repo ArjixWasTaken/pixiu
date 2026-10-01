@@ -33,9 +33,9 @@
 
 <script lang="ts" setup>
 import { computed, onMounted, ref, toRef, toRefs } from 'vue'
-import { albumStore } from '@/stores/albumStore'
-import { commonStore } from '@/stores/commonStore'
-import { playableStore } from '@/stores/playableStore'
+import { useAlbumStore } from '@/stores/albumStore'
+import { useCommonStore } from '@/stores/commonStore'
+import { usePlayableStore } from '@/stores/playableStore'
 import { useDownload } from '@/composables/useDownload'
 import { useOfflinePlayback } from '@/composables/useOfflinePlayback'
 import { useMessageToaster } from '@/composables/useMessageToaster'
@@ -49,6 +49,10 @@ import { useThirdPartyServices } from '@/composables/useThirdPartyServices'
 import { playback } from '@/services/playbackManager'
 
 import StarRating from '@/components/ui/StarRating.vue'
+
+const albumStore = useAlbumStore()
+const commonStore = useCommonStore()
+const playableStore = usePlayableStore()
 
 const props = defineProps<{ album: Album }>()
 const { album } = toRefs(props)

@@ -2,9 +2,9 @@ import { differenceBy, orderBy } from 'lodash-es'
 import { useThrottleFn } from '@vueuse/core'
 import type { Ref } from 'vue'
 import { computed, provide, reactive, ref } from 'vue'
-import { commonStore } from '@/stores/commonStore'
-import { queueStore } from '@/stores/queueStore'
-import { playableStore } from '@/stores/playableStore'
+import { useCommonStore } from '@/stores/commonStore'
+import { useQueueStore } from '@/stores/queueStore'
+import { usePlayableStore } from '@/stores/playableStore'
 import { arrayify, defineAsyncComponent, provideReadonly } from '@/utils/helpers'
 import { eventBus } from '@/utils/eventBus'
 import { useFuzzySearch } from '@/composables/useFuzzySearch'
@@ -99,10 +99,10 @@ export const usePlayableList = (
     headerLayout.value = direction === 'down' ? 'collapsed' : 'expanded'
   }
 
-  const duration = computed(() => playableStore.getFormattedLength(playables.value))
+  const duration = computed(() => usePlayableStore().getFormattedLength(playables.value))
 
   const downloadable = computed(() => {
-    if (!commonStore.state.allows_download) {
+    if (!useCommonStore().state.allows_download) {
       return false
     }
 
@@ -110,7 +110,7 @@ export const usePlayableList = (
       return false
     }
 
-    return playables.value.length === 1 || commonStore.state.supports_batch_downloading
+    return playables.value.length === 1 || useCommonStore().state.supports_batch_downloading
   })
 
   const thumbnails = computed(() => {
@@ -173,7 +173,9 @@ export const usePlayableList = (
     //  • Shift+Enter: Queues to top
     //  • Cmd/Ctrl+Enter: Queues to bottom and play the first selected item
     //  • Cmd/Ctrl+Shift+Enter: Queue to top and play the first queued item
-    event.shiftKey ? queueStore.queueToTop(selectedPlayables.value) : queueStore.queue(selectedPlayables.value)
+    event.shiftKey
+      ? useQueueStore().queueToTop(selectedPlayables.value)
+      : useQueueStore().queue(selectedPlayables.value)
 
     if (event.ctrlKey || event.metaKey) {
       await playback().play(selectedPlayables.value[0])

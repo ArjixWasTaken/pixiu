@@ -75,7 +75,7 @@
         <AlbumGrid
           v-else
           ref="grid"
-          :albums="displayedAlbums"
+          :albums="gridAlbums"
           :show-release-year="preferences.albums_sort_field === 'year'"
           @scrolled-to-end="fetchAlbums"
         />
@@ -85,11 +85,11 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, nextTick, onMounted, ref, toRef } from 'vue'
-import { albumStore } from '@/stores/albumStore'
-import { commonStore } from '@/stores/commonStore'
-import { preferenceStore as preferences } from '@/stores/preferenceStore'
-import { useErrorHandler } from '@/composables/useErrorHandler'
+import { computed, ref } from 'vue'
+import { useAlbumStore } from '@/stores/albumStore'
+import { useCommonStore } from '@/stores/commonStore'
+import { usePreferenceStore } from '@/stores/preferenceStore'
+import { useListPages } from '@/composables/useListPages'
 import { useViewport } from '@/composables/useViewport'
 
 import AlbumCardSkeleton from '@/components/ui/album-artist/ArtistAlbumCardSkeleton.vue'
@@ -105,18 +105,45 @@ import M3Chip from '@/components/m3/M3Chip.vue'
 import EmptyLibraryHint from '@/components/ui/EmptyLibraryHint.vue'
 import M3Icon from '@/components/m3/M3Icon.vue'
 
+const albumStore = useAlbumStore()
+const commonStore = useCommonStore()
+const preferences = usePreferenceStore()
+
 const { isMobile } = useViewport()
 const grid = ref<InstanceType<typeof AlbumGrid>>()
-const albums = toRef(albumStore.state, 'albums')
-
-const loading = ref(false)
-const cursor = ref<string | null>('')
-
 const libraryEmpty = computed(() => commonStore.state.song_length === 0)
+
+// Each sort and filter is a list of its own; changing one starts it from its first page.
+const {
+  items: albums,
+  isFetching: loading,
+  hasNextPage: moreAlbumsAvailable,
+  fetchMore: fetchAlbums,
+} = useListPages(
+  () => [
+    'albums',
+    {
+      sort: preferences.albums_sort_field,
+      order: preferences.albums_sort_order,
+      favoritesOnly: preferences.albums_favorites_only,
+    },
+  ],
+  cursor =>
+    albumStore.paginate({
+      favorites_only: preferences.albums_favorites_only,
+      cursor,
+      sort: preferences.albums_sort_field,
+      order: preferences.albums_sort_order,
+    }),
+  { enabled: () => !libraryEmpty.value },
+)
 
 const displayedAlbums = computed(() =>
   preferences.albums_favorites_only ? albums.value.filter((a: Album) => a.favorite) : albums.value,
 )
+
+// Unknown Album has no card (AlbumCard shows none), so it takes no place in the grid; the table lists it.
+const gridAlbums = computed(() => displayedAlbums.value.filter(album => !albumStore.isUnknown(album)))
 
 const noFavoriteAlbums = computed(
   () =>
@@ -125,59 +152,18 @@ const noFavoriteAlbums = computed(
     displayedAlbums.value.length === 0 &&
     !moreAlbumsAvailable.value,
 )
-const moreAlbumsAvailable = computed(() => cursor.value !== null)
 const showSkeletons = computed(() => loading.value && albums.value.length === 0)
 
-const fetchAlbums = async () => {
-  if (loading.value || !moreAlbumsAvailable.value) {
-    return
-  }
-
-  loading.value = true
-
-  try {
-    cursor.value = await albumStore.paginate({
-      favorites_only: preferences.albums_favorites_only,
-      cursor: cursor.value,
-      sort: preferences.albums_sort_field,
-      order: preferences.albums_sort_order,
-    })
-  } catch (error: unknown) {
-    useErrorHandler().handleHttpError(error)
-  } finally {
-    loading.value = false
-  }
-}
-
-const resetState = async () => {
-  cursor.value = ''
-
-  albumStore.reset()
-  grid.value?.scrollToTop()
-}
-
-const sort = async (field: AlbumListSortField, order: SortOrder) => {
+const sort = (field: AlbumListSortField, order: SortOrder) => {
   preferences.albums_sort_field = field
   preferences.albums_sort_order = order
-
-  await resetState()
-  await nextTick()
-  await fetchAlbums()
+  grid.value?.scrollToTop()
 }
 
 const toggleFavorite = (album: Album) => albumStore.toggleFavorite(album)
 
-const toggleFavoritesOnly = async () => {
+const toggleFavoritesOnly = () => {
   preferences.albums_favorites_only = !preferences.albums_favorites_only
-
-  await resetState()
-  await nextTick()
-  await fetchAlbums()
+  grid.value?.scrollToTop()
 }
-
-onMounted(() => {
-  if (!libraryEmpty.value) {
-    fetchAlbums()
-  }
-})
 </script>

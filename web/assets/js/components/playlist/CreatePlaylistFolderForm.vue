@@ -16,13 +16,15 @@
 </template>
 
 <script lang="ts" setup>
-import { playlistFolderStore } from '@/stores/playlistFolderStore'
+import { usePlaylistFolderStore } from '@/stores/playlistFolderStore'
 import { useDialogBox } from '@/composables/useDialogBox'
 import { useMessageToaster } from '@/composables/useMessageToaster'
 import { useForm } from '@/composables/useForm'
 
 import M3Button from '@/components/m3/M3Button.vue'
 import M3TextField from '@/components/m3/M3TextField.vue'
+
+const playlistFolderStore = usePlaylistFolderStore()
 
 const emit = defineEmits<{ (e: 'close'): void }>()
 const props = withDefaults(defineProps<{ parent?: PlaylistFolder | null }>(), {

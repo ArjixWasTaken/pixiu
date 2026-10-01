@@ -49,13 +49,14 @@ import { useDraggable } from '@/composables/useDragAndDrop'
 import { useContextMenu } from '@/composables/useContextMenu'
 import { useOfflinePlayback } from '@/composables/useOfflinePlayback'
 import { playback } from '@/services/playbackManager'
-import { playableStore } from '@/stores/playableStore'
-
+import { usePlayableStore } from '@/stores/playableStore'
 import PlayableThumbnail from '@/components/playable/PlayableThumbnail.vue'
 import OfflineMark from '@/components/ui/OfflineMark.vue'
 import FavoriteButton from '@/components/ui/FavoriteButton.vue'
 import M3Icon from '@/components/m3/M3Icon.vue'
 import M3IconButton from '@/components/m3/M3IconButton.vue'
+
+const playableStore = usePlayableStore()
 
 const PlayableContextMenu = defineAsyncComponent(() => import('@/components/playable/PlayableContextMenu.vue'))
 

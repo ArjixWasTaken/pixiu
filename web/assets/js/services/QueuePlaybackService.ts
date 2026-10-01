@@ -1,11 +1,11 @@
 import type { Ref } from 'vue'
 import { ref } from 'vue'
 import { shuffle } from 'lodash-es'
-import { commonStore } from '@/stores/commonStore'
-import { preferenceStore as preferences } from '@/stores/preferenceStore'
-import { queueStore } from '@/stores/queueStore'
-import { recentlyPlayedStore } from '@/stores/recentlyPlayedStore'
-import { playableStore } from '@/stores/playableStore'
+import { useCommonStore } from '@/stores/commonStore'
+import { usePreferenceStore } from '@/stores/preferenceStore'
+import { useQueueStore } from '@/stores/queueStore'
+import { useRecentlyPlayedStore } from '@/stores/recentlyPlayedStore'
+import { usePlayableStore } from '@/stores/playableStore'
 import { logger } from '@/utils/logger'
 import { arrayify } from '@/utils/helpers'
 import { isAudioContextSupported } from '@/utils/supports'
@@ -31,11 +31,11 @@ export class QueuePlaybackService extends BasePlaybackService {
    * If we're in REPEAT_ALL mode and there's no next item, just get the first item.
    */
   public get next() {
-    if (queueStore.next) {
-      return queueStore.next
+    if (useQueueStore().next) {
+      return useQueueStore().next
     }
 
-    return preferences.repeat_mode === 'REPEAT_ALL' ? queueStore.first : undefined
+    return usePreferenceStore().repeat_mode === 'REPEAT_ALL' ? useQueueStore().first : undefined
   }
 
   /**
@@ -43,16 +43,16 @@ export class QueuePlaybackService extends BasePlaybackService {
    * If we're in REPEAT_ALL mode and there's no prev item, get the last item.
    */
   public get previous() {
-    if (queueStore.previous) {
-      return queueStore.previous
+    if (useQueueStore().previous) {
+      return useQueueStore().previous
     }
 
-    return preferences.repeat_mode === 'REPEAT_ALL' ? queueStore.last : undefined
+    return usePreferenceStore().repeat_mode === 'REPEAT_ALL' ? useQueueStore().last : undefined
   }
 
   public registerPlay(playable: Playable) {
-    recentlyPlayedStore.add(playable)
-    playableStore.registerPlay(playable)
+    useRecentlyPlayedStore().add(playable)
+    usePlayableStore().registerPlay(playable)
     playable.play_count_registered = true
 
     if (!playable.album_cover) {
@@ -62,7 +62,7 @@ export class QueuePlaybackService extends BasePlaybackService {
 
   public preload(playable: Playable) {
     const audioElement = document.createElement('audio')
-    audioElement.setAttribute('src', playableStore.getSourceUrl(playable))
+    audioElement.setAttribute('src', usePlayableStore().getSourceUrl(playable))
     audioElement.setAttribute('preload', 'auto')
     audioElement.load()
     playable.preloaded = true
@@ -84,7 +84,7 @@ export class QueuePlaybackService extends BasePlaybackService {
       this.cancelCrossfade()
     }
 
-    queueStore.queueIfNotQueued(playable, 'after-current')
+    useQueueStore().queueIfNotQueued(playable, 'after-current')
 
     // If for any reason (most likely a bug), the requested playable has been deleted, attempt the next item in the queue.
     if (playable.deleted) {
@@ -97,8 +97,10 @@ export class QueuePlaybackService extends BasePlaybackService {
       return
     }
 
-    if (queueStore.current) {
-      queueStore.current.playback_state = 'Stopped'
+    const current = useQueueStore().current
+
+    if (current) {
+      current.playback_state = 'Stopped'
     }
 
     playable.playback_state = 'Playing'
@@ -131,7 +133,7 @@ export class QueuePlaybackService extends BasePlaybackService {
       this.showNotification(playable)
     } else {
       // Normal playback: set src and start
-      this.media.src = playableStore.getSourceUrl(playable)
+      this.media.src = usePlayableStore().getSourceUrl(playable)
 
       if (position === 0) {
         await this.restart()
@@ -145,7 +147,7 @@ export class QueuePlaybackService extends BasePlaybackService {
   }
 
   public showNotification(playable: Playable) {
-    if (preferences.show_now_playing_notification && window.Notification?.permission === 'granted') {
+    if (usePreferenceStore().show_now_playing_notification && window.Notification?.permission === 'granted') {
       try {
         const notification = new window.Notification(`♫ ${playable.title}`, {
           icon: playable.album_cover,
@@ -180,7 +182,7 @@ export class QueuePlaybackService extends BasePlaybackService {
   }
 
   public async restart() {
-    const playable = queueStore.current!
+    const playable = useQueueStore().current!
 
     // Reset the "up next" value to let subscribers know that the next item is cleared
     // (because another playable, likely the "next" one, is being played)
@@ -188,7 +190,7 @@ export class QueuePlaybackService extends BasePlaybackService {
 
     this.recordStartTime(playable)
 
-    queueStore.savePlaybackStatus(playable, 0)
+    useQueueStore().savePlaybackStatus(playable, 0)
     subsonic.scrobble(playable.id, false).catch(error => logger.error(error))
 
     this.media.currentTime = 0
@@ -204,13 +206,13 @@ export class QueuePlaybackService extends BasePlaybackService {
   }
 
   public rotateRepeatMode() {
-    let index = this.repeatModes.indexOf(preferences.repeat_mode) + 1
+    let index = this.repeatModes.indexOf(usePreferenceStore().repeat_mode) + 1
 
     if (index >= this.repeatModes.length) {
       index = 0
     }
 
-    preferences.repeat_mode = this.repeatModes[index]
+    usePreferenceStore().repeat_mode = this.repeatModes[index]
   }
 
   /**
@@ -220,13 +222,13 @@ export class QueuePlaybackService extends BasePlaybackService {
   public async playPrev() {
     // If the item's duration is greater than 5 seconds, and we've passed 5 seconds into it,
     // restart playing instead.
-    if (this.media.currentTime > 5 && queueStore.current!.length > 5) {
+    if (this.media.currentTime > 5 && useQueueStore().current!.length > 5) {
       this.media.currentTime = 0
 
       return
     }
 
-    if (!this.previous && preferences.repeat_mode === 'NO_REPEAT') {
+    if (!this.previous && usePreferenceStore().repeat_mode === 'NO_REPEAT') {
       await this.stop()
     } else {
       this.previous && (await this.play(this.previous))
@@ -238,7 +240,7 @@ export class QueuePlaybackService extends BasePlaybackService {
    * If there's no next item and the current mode is NO_REPEAT, we stop completely.
    */
   public async playNext() {
-    if (!this.next && preferences.repeat_mode === 'NO_REPEAT') {
+    if (!this.next && usePreferenceStore().repeat_mode === 'NO_REPEAT') {
       await this.stop() //  Nothing lasts forever, even cold November rain.
     } else {
       this.next && (await this.play(this.next))
@@ -255,7 +257,8 @@ export class QueuePlaybackService extends BasePlaybackService {
 
     document.title = useBranding().name
 
-    queueStore.current && (queueStore.current.playback_state = 'Stopped')
+    const current = useQueueStore().current
+    current && (current.playback_state = 'Stopped')
 
     navigator.mediaSession && (navigator.mediaSession.playbackState = 'none')
   }
@@ -264,22 +267,22 @@ export class QueuePlaybackService extends BasePlaybackService {
     this.cancelCrossfade()
     this.media.pause()
 
-    queueStore.current!.playback_state = 'Paused'
+    useQueueStore().current!.playback_state = 'Paused'
     navigator.mediaSession && (navigator.mediaSession.playbackState = 'paused')
     // The tab names the song only while it plays.
     document.title = useBranding().name
   }
 
   public async resume() {
-    const playable = queueStore.current!
+    const playable = useQueueStore().current!
 
     if (!this.media.src) {
       // on first load when the queue is loaded from saved state, the player's src is empty
       // we need to properly set it as well as any kind of playback metadata
-      this.media.src = playableStore.getSourceUrl(playable)
-      this.seekTo(commonStore.state.queue_state.playback_position)
+      this.media.src = usePlayableStore().getSourceUrl(playable)
+      this.seekTo(useCommonStore().state.queue_state.playback_position)
 
-      await this.setNowPlayingMeta(queueStore.current!)
+      await this.setNowPlayingMeta(useQueueStore().current!)
       this.recordStartTime(playable)
     }
 
@@ -289,18 +292,18 @@ export class QueuePlaybackService extends BasePlaybackService {
       logger.error(error)
     }
 
-    queueStore.current!.playback_state = 'Playing'
+    useQueueStore().current!.playback_state = 'Playing'
     navigator.mediaSession && (navigator.mediaSession.playbackState = 'playing')
     document.title = `${playable.title} ♫ ${useBranding().name}`
   }
 
   public async toggle() {
-    if (!queueStore.current) {
+    if (!useQueueStore().current) {
       await this.playFirstInQueue()
       return
     }
 
-    if (queueStore.current.playback_state !== 'Playing') {
+    if (useQueueStore().current?.playback_state !== 'Playing') {
       await this.resume()
       return
     }
@@ -319,12 +322,12 @@ export class QueuePlaybackService extends BasePlaybackService {
     }
 
     await this.stop()
-    queueStore.replaceQueueWith(playables)
-    await this.play(queueStore.first)
+    useQueueStore().replaceQueueWith(playables)
+    await this.play(useQueueStore().first)
   }
 
   public async playFirstInQueue() {
-    queueStore.all.length && (await this.play(queueStore.first))
+    useQueueStore().all.length && (await this.play(useQueueStore().first))
   }
 
   private async setNowPlayingMeta(playable: Playable) {
@@ -354,7 +357,7 @@ export class QueuePlaybackService extends BasePlaybackService {
       return
     }
 
-    preferences.repeat_mode === 'REPEAT_ONE' ? this.restart() : this.playNext()
+    usePreferenceStore().repeat_mode === 'REPEAT_ONE' ? this.restart() : this.playNext()
   }
 
   protected onError(error: ErrorEvent): void {
@@ -363,7 +366,7 @@ export class QueuePlaybackService extends BasePlaybackService {
   }
 
   protected onTimeUpdate(): void {
-    const currentPlayable = queueStore.current
+    const currentPlayable = useQueueStore().current
 
     if (!currentPlayable) {
       return
@@ -379,10 +382,10 @@ export class QueuePlaybackService extends BasePlaybackService {
 
     if (Math.ceil(media.currentTime) % 5 === 0) {
       // every 5 seconds, we save the current playback position to the server
-      queueStore.savePlaybackStatus(currentPlayable, Math.ceil(media.currentTime))
+      useQueueStore().savePlaybackStatus(currentPlayable, Math.ceil(media.currentTime))
     }
 
-    const nextPlayable = queueStore.next
+    const nextPlayable = useQueueStore().next
 
     if (!nextPlayable) {
       return
@@ -397,18 +400,18 @@ export class QueuePlaybackService extends BasePlaybackService {
     }
 
     // Initiate crossfade if enabled and near the end of the track
-    const crossfadeDuration = preferences.crossfade_duration
+    const crossfadeDuration = usePreferenceStore().crossfade_duration
 
     if (
       crossfadeDuration > 0 &&
       !crossfadeService.active &&
-      preferences.repeat_mode !== 'REPEAT_ONE' &&
+      usePreferenceStore().repeat_mode !== 'REPEAT_ONE' &&
       media.duration > crossfadeDuration * 2 && // skip for short tracks
       media.currentTime + crossfadeDuration >= media.duration
     ) {
       if (crossfadeService.start(nextPlayable, crossfadeDuration, volumeManager.get())) {
         // Show the incoming track as "now playing" immediately
-        queueStore.current!.playback_state = 'Stopped'
+        useQueueStore().current!.playback_state = 'Stopped'
         nextPlayable.playback_state = 'Playing'
         this.setNowPlayingMeta(nextPlayable)
         this.showNotification(nextPlayable)

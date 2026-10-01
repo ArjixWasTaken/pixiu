@@ -80,10 +80,10 @@ import { eventBus } from '@/utils/eventBus'
 import { pluralize } from '@/utils/formatters'
 import { logger } from '@/utils/logger'
 import type { ExcludedSong } from '@/services/huntingService'
-import { huntingStore } from '@/stores/huntingStore'
+import { useHuntingStore } from '@/stores/huntingStore'
 import { useMessageToaster } from '@/composables/useMessageToaster'
-import { playlistStore } from '@/stores/playlistStore'
-import { playableStore } from '@/stores/playableStore'
+import { usePlaylistStore } from '@/stores/playlistStore'
+import { usePlayableStore } from '@/stores/playableStore'
 import { defineAsyncComponent } from '@/utils/helpers'
 import { useRouter } from '@/composables/useRouter'
 import { useErrorHandler } from '@/composables/useErrorHandler'
@@ -103,6 +103,10 @@ import ScreenHeaderSkeleton from '@/components/ui/ScreenHeaderSkeleton.vue'
 import PlayableListSkeleton from '@/components/playable/playable-list/PlayableListSkeleton.vue'
 import MirroredWatchPanel from '@/components/playlist/MirroredWatchPanel.vue'
 import M3Icon from '@/components/m3/M3Icon.vue'
+
+const huntingStore = useHuntingStore()
+const playlistStore = usePlaylistStore()
+const playableStore = usePlayableStore()
 
 const ContextMenu = defineAsyncComponent(() => import('@/components/playlist/PlaylistContextMenu.vue'))
 const EditPlaylistForm = defineAsyncComponent(() => import('@/components/playlist/EditPlaylistForm.vue'))

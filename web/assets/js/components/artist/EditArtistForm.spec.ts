@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vite-plus/test'
 import { createHarness } from '@/__tests__/TestHarness'
 import { screen, waitFor } from '@testing-library/vue'
-import { artistStore } from '@/stores/artistStore'
+import { useArtistStore } from '@/stores/artistStore'
 import Component from './EditArtistForm.vue'
 
 describe('editArtistForm.vue', () => {
@@ -9,7 +9,7 @@ describe('editArtistForm.vue', () => {
 
   const renderComponent = (artist?: Artist) => {
     artist = artist ?? h.factory('artist').make()
-    artistStore.state.artists = [artist]
+    useArtistStore().syncWithVault(artist)
 
     const rendered = h.render(Component, {
       props: {
@@ -24,7 +24,7 @@ describe('editArtistForm.vue', () => {
   }
 
   it('submits with no image change', async () => {
-    const updateMock = h.mock(artistStore, 'update')
+    const updateMock = h.mock(useArtistStore(), 'update')
     const { artist } = renderComponent()
 
     // there should be a "remove cover" button, though we're not clicking it
@@ -38,7 +38,7 @@ describe('editArtistForm.vue', () => {
   })
 
   it('submits with a new image', async () => {
-    const updateMock = h.mock(artistStore, 'update')
+    const updateMock = h.mock(useArtistStore(), 'update')
     const { artist } = renderComponent(h.factory('artist').make({ image: '' }))
 
     await h.type(screen.getByRole('textbox', { name: 'Name' }), 'Dude')
@@ -60,7 +60,7 @@ describe('editArtistForm.vue', () => {
 
   it('removes image and submits', async () => {
     const { artist } = renderComponent(h.factory('artist').make())
-    const updateMock = h.mock(artistStore, 'update')
+    const updateMock = h.mock(useArtistStore(), 'update')
 
     await h.user.click(screen.getByRole('button', { name: 'Remove' }))
 

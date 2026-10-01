@@ -2,10 +2,10 @@ import { screen } from '@testing-library/vue'
 import { describe, expect, it, vi } from 'vite-plus/test'
 import { createHarness } from '@/__tests__/TestHarness'
 import { assertOpenModal } from '@/__tests__/assertions'
-import { playlistStore } from '@/stores/playlistStore'
-import { queueStore } from '@/stores/queueStore'
+import { usePlaylistStore } from '@/stores/playlistStore'
+import { useQueueStore } from '@/stores/queueStore'
 import { arrayify } from '@/utils/helpers'
-import { playableStore } from '@/stores/playableStore'
+import { usePlayableStore } from '@/stores/playableStore'
 import CreatePlaylistForm from '@/components/playlist/CreatePlaylistForm.vue'
 
 const openModalMock = vi.fn()
@@ -46,7 +46,7 @@ describe('addToMenu.vue', () => {
   }
 
   it('renders', () => {
-    playlistStore.state.playlists = [
+    usePlaylistStore().state.playlists = [
       h.factory('playlist').make({ name: 'Foo' }),
       h.factory('playlist').make({ name: 'Bar' }),
       h.factory('playlist').make({ name: 'Baz' }),
@@ -63,25 +63,28 @@ describe('addToMenu.vue', () => {
     arrayify(testIds).forEach(id => expect(screen.queryByTestId(id)).toBeNull())
   })
 
-  it.each<[string, string, MethodOf<typeof queueStore>]>([
+  it.each<[string, string, MethodOf<Required<ReturnType<typeof useQueueStore>>>]>([
     ['after current', 'queue-after-current', 'queueAfterCurrent'],
     ['to top', 'queue-top', 'queueToTop'],
     ['to bottom', 'queue-bottom', 'queue'],
-  ])('queues songs %s', async (_: string, testId: string, queueMethod: MethodOf<typeof queueStore>) => {
-    queueStore.state.playables = h.factory('song').make(5)
-    playableStore.syncWithVault(queueStore.state.playables)
-    queueStore.state.playables[2].playback_state = 'Playing'
+  ])(
+    'queues songs %s',
+    async (_: string, testId: string, queueMethod: MethodOf<Required<ReturnType<typeof useQueueStore>>>) => {
+      useQueueStore().state.playables = h.factory('song').make(5)
+      usePlayableStore().syncWithVault(useQueueStore().state.playables)
+      useQueueStore().state.playables[2].playback_state = 'Playing'
 
-    const mock = h.mock(queueStore, queueMethod)
-    const { playables } = renderComponent()
+      const mock = h.mock(useQueueStore(), queueMethod)
+      const { playables } = renderComponent()
 
-    await h.user.click(screen.getByTestId(testId))
+      await h.user.click(screen.getByTestId(testId))
 
-    expect(mock).toHaveBeenCalledWith(playables)
-  })
+      expect(mock).toHaveBeenCalledWith(playables)
+    },
+  )
 
   it('adds songs to Favorites', async () => {
-    const mock = h.mock(playableStore, 'favorite')
+    const mock = h.mock(usePlayableStore(), 'favorite')
     const { playables } = renderComponent()
 
     await h.user.click(screen.getByTestId('add-to-favorites'))
@@ -90,7 +93,7 @@ describe('addToMenu.vue', () => {
   })
 
   it('chooses with Enter, as with a click', async () => {
-    const mock = h.mock(playableStore, 'favorite')
+    const mock = h.mock(usePlayableStore(), 'favorite')
     const { playables } = renderComponent()
 
     screen.getByTestId('add-to-favorites').focus()
@@ -100,13 +103,13 @@ describe('addToMenu.vue', () => {
   })
 
   it('adds songs to existing playlist', async () => {
-    const mock = h.mock(playlistStore, 'addContent')
-    playlistStore.state.playlists = h.factory('playlist').make(3)
+    const mock = h.mock(usePlaylistStore(), 'addContent')
+    usePlaylistStore().state.playlists = h.factory('playlist').make(3)
     const { playables } = renderComponent()
 
     await h.user.click(screen.getAllByTestId('add-to-playlist')[1])
 
-    expect(mock).toHaveBeenCalledWith(playlistStore.state.playlists[1], playables)
+    expect(mock).toHaveBeenCalledWith(usePlaylistStore().state.playlists[1], playables)
   })
 
   it('creates playlist from selected songs', async () => {

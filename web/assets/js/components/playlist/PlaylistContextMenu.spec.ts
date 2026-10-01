@@ -4,12 +4,12 @@ import { assertOpenModal } from '@/__tests__/assertions'
 import factory from '@/__tests__/factory'
 import { MessageToasterStub } from '@/__tests__/stubs'
 import { screen, waitFor } from '@testing-library/vue'
-import { queueStore } from '@/stores/queueStore'
-import { playableStore } from '@/stores/playableStore'
-import { userStore } from '@/stores/userStore'
+import { useQueueStore } from '@/stores/queueStore'
+import { usePlayableStore } from '@/stores/playableStore'
+import { useUserStore } from '@/stores/userStore'
 import { playbackService } from '@/services/QueuePlaybackService'
 import Router from '@/router'
-import { playlistStore } from '@/stores/playlistStore'
+import { usePlaylistStore } from '@/stores/playlistStore'
 import EditPlaylistForm from '@/components/playlist/EditPlaylistForm.vue'
 import EditSmartPlaylistForm from '@/components/playlist/smart-playlist/EditSmartPlaylistForm.vue'
 
@@ -26,19 +26,19 @@ import Component from './PlaylistContextMenu.vue'
 describe('playlistContextMenu.vue', () => {
   const h = createHarness({
     beforeEach: () => {
-      queueStore.state.playables = []
+      useQueueStore().state.playables = []
       openModalMock.mockClear()
     },
   })
 
   const renderComponent = async (playlist: Playlist, user: CurrentUser | null = null) => {
-    if (!vi.isMockFunction(playableStore.fetchForPlaylist)) {
-      h.mock(playableStore, 'fetchForPlaylist').mockResolvedValue([])
+    if (!vi.isMockFunction(usePlayableStore().fetchForPlaylist)) {
+      h.mock(usePlayableStore(), 'fetchForPlaylist').mockResolvedValue([])
     }
 
     user = user || (h.factory('user').state('current').make() as CurrentUser)
 
-    userStore.state.current = user
+    useUserStore().state.current = user
 
     const rendered = h.renderMenu(Component, {
       props: {
@@ -82,7 +82,7 @@ describe('playlistContextMenu.vue', () => {
   })
 
   it('deletes a playlist', async () => {
-    const deleteMock = h.mock(playlistStore, 'delete')
+    const deleteMock = h.mock(usePlaylistStore(), 'delete')
     const { playlist } = await renderComponent(makeDeletablePlaylist())
 
     await h.user.click(screen.getByText('Delete'))
@@ -106,7 +106,7 @@ describe('playlistContextMenu.vue', () => {
     h.createAudioPlayer()
 
     const songs = h.factory('song').make(3)
-    const fetchMock = h.mock(playableStore, 'fetchForPlaylist').mockResolvedValue(songs)
+    const fetchMock = h.mock(usePlayableStore(), 'fetchForPlaylist').mockResolvedValue(songs)
     const queueMock = h.mock(playbackService, 'queueAndPlay')
     const goMock = h.mock(Router, 'go')
     const { playlist } = await renderComponent(h.factory('playlist').make())
@@ -123,7 +123,7 @@ describe('playlistContextMenu.vue', () => {
   it('warns if attempting to play an empty playlist', async () => {
     h.createAudioPlayer()
 
-    const fetchMock = h.mock(playableStore, 'fetchForPlaylist').mockResolvedValue([])
+    const fetchMock = h.mock(usePlayableStore(), 'fetchForPlaylist').mockResolvedValue([])
     const queueMock = h.mock(playbackService, 'queueAndPlay')
     const goMock = h.mock(Router, 'go')
     const warnMock = h.mock(MessageToasterStub.value, 'warning')
@@ -144,7 +144,7 @@ describe('playlistContextMenu.vue', () => {
     h.createAudioPlayer()
 
     const songs = h.factory('song').make(3)
-    const fetchMock = h.mock(playableStore, 'fetchForPlaylist').mockResolvedValue(songs)
+    const fetchMock = h.mock(usePlayableStore(), 'fetchForPlaylist').mockResolvedValue(songs)
     const queueMock = h.mock(playbackService, 'queueAndPlay')
     const goMock = h.mock(Router, 'go')
     const { playlist } = await renderComponent(h.factory('playlist').make())
@@ -161,7 +161,7 @@ describe('playlistContextMenu.vue', () => {
   it('warns if attempting to shuffle an empty playlist', async () => {
     h.createAudioPlayer()
 
-    const fetchMock = h.mock(playableStore, 'fetchForPlaylist').mockResolvedValue([])
+    const fetchMock = h.mock(usePlayableStore(), 'fetchForPlaylist').mockResolvedValue([])
     const queueMock = h.mock(playbackService, 'queueAndPlay')
     const goMock = h.mock(Router, 'go')
     const warnMock = h.mock(MessageToasterStub.value, 'warning')
@@ -182,8 +182,8 @@ describe('playlistContextMenu.vue', () => {
     h.createAudioPlayer()
 
     const songs = h.factory('song').make(3)
-    const fetchMock = h.mock(playableStore, 'fetchForPlaylist').mockResolvedValue(songs)
-    const queueMock = h.mock(queueStore, 'queueAfterCurrent')
+    const fetchMock = h.mock(usePlayableStore(), 'fetchForPlaylist').mockResolvedValue(songs)
+    const queueMock = h.mock(useQueueStore(), 'queueAfterCurrent')
     const toastMock = h.mock(MessageToasterStub.value, 'success')
     const { playlist } = await renderComponent(h.factory('playlist').make())
 

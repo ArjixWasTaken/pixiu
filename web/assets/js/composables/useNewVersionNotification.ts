@@ -1,5 +1,5 @@
 import { computed, toRef } from 'vue'
-import { commonStore } from '@/stores/commonStore'
+import { useCommonStore } from '@/stores/commonStore'
 import { usePolicies } from '@/composables/usePolicies'
 
 const parseVersion = (version: string) => {
@@ -33,8 +33,8 @@ const isNewerVersion = (candidate: string, current: string) => {
 export const useNewVersionNotification = () => {
   const { currentUserCan } = usePolicies()
 
-  const latestVersion = toRef(commonStore.state, 'latest_version')
-  const currentVersion = toRef(commonStore.state, 'current_version')
+  const latestVersion = toRef(useCommonStore().state, 'latest_version')
+  const currentVersion = toRef(useCommonStore().state, 'current_version')
 
   const hasNewVersion = computed(() => isNewerVersion(latestVersion.value, currentVersion.value))
   const shouldNotifyNewVersion = computed(() => currentUserCan.manageSettings() && hasNewVersion.value)
