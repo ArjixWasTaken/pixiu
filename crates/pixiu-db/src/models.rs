@@ -4,8 +4,30 @@
 
 use jiff::Timestamp;
 
-/// The admin account. píxiū is single-user, so exactly one row exists once
-/// the first-run setup has completed.
+/// What a user may do.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, toasty::Embed)]
+pub enum Role {
+    /// Manages users and the server's settings, besides their own library.
+    Admin,
+    /// Has a library of their own.
+    User,
+}
+
+/// Where an account stands.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, toasty::Embed)]
+pub enum UserStatus {
+    /// Registered; an admin has yet to approve it.
+    Pending,
+    /// Approved; the email address has yet to be confirmed.
+    Unverified,
+    /// Signs in and plays.
+    Active,
+    /// Turned off by an admin; the library stays.
+    Disabled,
+}
+
+/// An account: a person with a library of their own. The first one, made
+/// by the first-run setup, is an admin.
 #[derive(Debug, toasty::Model)]
 pub struct User {
     #[key]
@@ -15,12 +37,31 @@ pub struct User {
     #[unique]
     pub username: String,
 
+    /// What the player calls the user; the username when unset.
+    pub display_name: Option<String>,
+
+    /// Lowercase; for signing in, password resets and alerts. Unique among
+    /// those set.
+    #[unique]
+    pub email: Option<String>,
+
+    /// When the email address was confirmed.
+    pub email_verified_at: Option<Timestamp>,
+
+    pub role: Role,
+
+    pub status: UserStatus,
+
+    /// Set by an admin handing out a temporary password: the user picks
+    /// their own at their next sign-in.
+    pub password_change_required: bool,
+
     /// PHC-formatted argon2id hash of the password.
     pub password_hash: String,
 
     /// The password sealed with the instance key. Subsonic token
     /// authentication (`md5(password + salt)`) cannot work from a hash, so
-    /// the password is captured whenever the admin sets or types it.
+    /// the password is captured whenever the user sets or types it.
     pub subsonic_secret: Option<String>,
 
     pub created_at: Timestamp,
@@ -91,23 +132,28 @@ impl ApiKey {
     }
 }
 
+// Two lookups, two indexes: the attributes are not duplicates.
+#[allow(clippy::duplicated_attributes)]
 #[derive(Debug, toasty::Model)]
+#[index(user_id, name_key)]
+#[index(user_id, ytm_channel_id)]
 pub struct Artist {
     #[key]
     #[auto]
     pub id: u64,
 
+    /// The user whose library it belongs to.
+    pub user_id: u64,
+
     pub name: String,
 
     /// `name` normalized for matching (see `pixiu_treasury::name_key`).
-    #[index]
     pub name_key: String,
 
     pub mbid: Option<String>,
 
     /// The artist's YouTube Music channel (`UC…`), when a download or a
-    /// watch has named it. Lets the admin watch the artist.
-    #[index]
+    /// watch has named it. Lets the user watch the artist.
     pub ytm_channel_id: Option<String>,
 
     /// A short biography, from Wikipedia.
@@ -116,7 +162,8 @@ pub struct Artist {
     /// Where the biography comes from, for attribution.
     pub bio_url: Option<String>,
 
-    /// A picture of the artist, relative to the cache directory.
+    /// A picture of the artist, relative to the treasure directory
+    /// (`.store/images/…`).
     pub image: Option<String>,
 
     /// When the biography and picture were last looked for.
@@ -132,10 +179,14 @@ pub struct Artist {
 }
 
 #[derive(Debug, toasty::Model)]
+#[index(user_id, ytm_browse_id)]
 pub struct Album {
     #[key]
     #[auto]
     pub id: u64,
+
+    /// The user whose library it belongs to.
+    pub user_id: u64,
 
     pub title: String,
 
@@ -168,11 +219,12 @@ pub struct Album {
 
     pub enriched_at: Option<Timestamp>,
 
-    /// The album's YouTube Music browse id, when it was hunted there.
-    #[index]
+    /// The album's YouTube Music browse id, when it was downloaded from
+    /// there.
     pub ytm_browse_id: Option<String>,
 
-    /// The cover image, relative to the treasure directory.
+    /// The cover image, relative to the treasure directory
+    /// (`.store/images/…`). Albums with the same picture share the file.
     pub cover: Option<String>,
 
     pub created_at: Timestamp,
@@ -202,10 +254,14 @@ pub enum TrackOrigin {
 }
 
 #[derive(Debug, toasty::Model)]
+#[index(user_id, ytm_video_id)]
 pub struct Track {
     #[key]
     #[auto]
     pub id: u64,
+
+    /// The user whose library it belongs to.
+    pub user_id: u64,
 
     #[index]
     pub album_id: u64,
@@ -244,8 +300,13 @@ pub struct Track {
 
     pub bit_depth: Option<u8>,
 
-    /// The audio file, relative to the treasure directory.
-    #[unique]
+    /// The audio file the track plays: its [`AudioFile`], or 0 for a track
+    /// filed before files were shared, until it is adopted at startup.
+    #[index]
+    pub file_id: u64,
+
+    /// The audio file, relative to the treasure directory; a copy of the
+    /// [`AudioFile`]'s path. Several tracks may share it.
     pub path: String,
 
     pub size: u64,
@@ -261,7 +322,6 @@ pub struct Track {
     pub isrc: Option<String>,
 
     /// The YouTube Music video id the track was downloaded from.
-    #[index]
     pub ytm_video_id: Option<String>,
 
     pub origin: TrackOrigin,
@@ -279,6 +339,49 @@ pub struct Track {
 
     #[has_many]
     pub released_claims: toasty::Deferred<Vec<ReleasedClaim>>,
+}
+
+/// Audio bytes, stored once under their SHA-256 and shared by every track
+/// made from them. Files never change once stored: edits live in the
+/// database. A file goes when no track points at it any more.
+#[derive(Debug, toasty::Model)]
+pub struct AudioFile {
+    #[key]
+    #[auto]
+    pub id: u64,
+
+    /// Hex-encoded SHA-256 of the content.
+    #[unique]
+    pub sha256: String,
+
+    /// Relative to the treasure directory:
+    /// `.store/audio/<first two hex digits>/<sha256>.<suffix>`.
+    pub path: String,
+
+    pub size: u64,
+
+    /// File extension, e.g. `flac`.
+    pub suffix: String,
+
+    pub content_type: String,
+
+    pub duration_ms: u64,
+
+    /// Kilobits per second.
+    pub bitrate: Option<u32>,
+
+    pub sample_rate: Option<u32>,
+
+    pub channels: Option<u8>,
+
+    pub bit_depth: Option<u8>,
+
+    /// The YouTube Music video the file was downloaded from, so the video
+    /// is not downloaded again.
+    #[index]
+    pub ytm_video_id: Option<String>,
+
+    pub created_at: Timestamp,
 }
 
 /// Why a track is kept. A track without claims is an orphan: kept on disk,
@@ -364,13 +467,16 @@ pub enum OfferingStatus {
 /// An uploaded file waiting to be absorbed into the treasure. Accepted
 /// offerings become tracks and their rows are deleted.
 #[derive(Debug, toasty::Model)]
+#[index(user_id, batch)]
 pub struct Offering {
     #[key]
     #[auto]
     pub id: u64,
 
+    /// The user who uploaded it.
+    pub user_id: u64,
+
     /// Files uploaded together share a batch.
-    #[index]
     pub batch: String,
 
     pub file_name: String,
@@ -434,15 +540,18 @@ pub struct PlayQueue {
     pub changed_at: Timestamp,
 }
 
-/// Listening data about an item: plays now; stars and ratings later.
+/// Listening data about an item: plays, stars and ratings.
 #[derive(Debug, toasty::Model)]
+#[unique(user_id, item)]
 pub struct Annotation {
     #[key]
     #[auto]
     pub id: u64,
 
+    /// The user who listened; items are in their library.
+    pub user_id: u64,
+
     /// The Subsonic id of the annotated item, e.g. `tr-12` or `al-3`.
-    #[unique]
     pub item: String,
 
     pub play_count: u64,
@@ -462,20 +571,22 @@ pub enum SessionState {
     Valid,
     /// The last check failed for a transient reason (network, server).
     Degraded,
-    /// The platform no longer accepts the cookies; the admin must log in
+    /// The platform no longer accepts the cookies; the user must log in
     /// again.
     Expired,
 }
 
-/// The admin's logged-in session with a streaming platform.
+/// A user's logged-in session with a streaming platform.
 #[derive(Debug, toasty::Model)]
+#[unique(user_id, source)]
 pub struct SourceSession {
     #[key]
     #[auto]
     pub id: u64,
 
+    pub user_id: u64,
+
     /// The platform, e.g. `youtube_music`.
-    #[unique]
     pub source: String,
 
     /// The session cookies as a `Cookie` header, sealed with the instance
@@ -516,14 +627,16 @@ impl SessionEventKind {
     }
 }
 
-/// A notable change in a platform session, for the admin's history.
+/// A notable change in a platform session, for the user's history.
 #[derive(Debug, toasty::Model)]
+#[index(user_id, source)]
 pub struct SessionEvent {
     #[key]
     #[auto]
     pub id: u64,
 
-    #[index]
+    pub user_id: u64,
+
     pub source: String,
 
     pub kind: SessionEventKind,
@@ -544,7 +657,9 @@ pub enum JobKind {
     /// Look an album up on MusicBrainz, fetch its cover, lyrics and artist
     /// information.
     Enrich,
-    /// Move every file where the file layout wants it.
+    /// Retired: moved files to follow the file layout, before files were
+    /// shared and stopped moving. None are queued any more; the variant
+    /// stays because the schema cannot drop it.
     Refile,
 }
 
@@ -560,10 +675,14 @@ pub enum JobState {
 
 /// Background work that survives restarts.
 #[derive(Debug, toasty::Model)]
+#[index(user_id, state)]
 pub struct Job {
     #[key]
     #[auto]
     pub id: u64,
+
+    /// The user the work is for.
+    pub user_id: u64,
 
     pub kind: JobKind,
 
@@ -613,15 +732,17 @@ pub enum WatchKind {
 /// in are claimed by it; when they leave it, they are kept, and become
 /// orphans unless something else claims them.
 #[derive(Debug, toasty::Model)]
+#[unique(user_id, remote_id)]
 pub struct Watch {
     #[key]
     #[auto]
     pub id: u64,
 
+    pub user_id: u64,
+
     pub kind: WatchKind,
 
     /// The playlist or channel id; `LM` for liked music.
-    #[unique]
     pub remote_id: String,
 
     /// The name on the platform, filled in by the first sync.
@@ -649,15 +770,24 @@ pub struct Watch {
     pub next_sync_at: Timestamp,
 
     pub last_error: Option<String>,
+
+    /// Syncs failed in a row; the user hears about a long streak.
+    pub failures: u32,
+
+    /// When the current streak of failures began.
+    pub failing_since: Option<Timestamp>,
 }
 
-/// A playlist: made by the admin in a Subsonic client, or mirroring a
-/// watched playlist (read-only to clients).
+/// A playlist: made by its user in a Subsonic client or the player, or
+/// mirroring a watched playlist (read-only to clients).
 #[derive(Debug, toasty::Model)]
 pub struct Playlist {
     #[key]
     #[auto]
     pub id: u64,
+
+    #[index]
+    pub user_id: u64,
 
     pub name: String,
 
@@ -689,6 +819,9 @@ pub struct PlaylistFolder {
     #[key]
     #[auto]
     pub id: u64,
+
+    #[index]
+    pub user_id: u64,
 
     pub name: String,
 
@@ -783,6 +916,25 @@ pub struct Setting {
     pub value: String,
 }
 
+/// Another YouTube Music video of a track the library holds: YouTube
+/// Music lists some songs under several videos, and a download of one of
+/// them turned out to be a track the library had. The library holds that
+/// video too, so watches and searches do not fetch it again.
+#[derive(Debug, toasty::Model)]
+#[unique(user_id, ytm_video_id)]
+pub struct TrackAlias {
+    #[key]
+    #[auto]
+    pub id: u64,
+
+    pub user_id: u64,
+
+    #[index]
+    pub track_id: u64,
+
+    pub ytm_video_id: String,
+}
+
 /// A song the admin excluded from a watched playlist: the watch neither
 /// keeps, lists nor downloads it.
 #[derive(Debug, toasty::Model)]
@@ -803,4 +955,99 @@ pub struct WatchExclusion {
     pub artist: Option<String>,
 
     pub excluded_at: Timestamp,
+}
+
+/// What an [`AccountToken`] is for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, toasty::Embed)]
+pub enum TokenPurpose {
+    /// Confirms the email address it was sent to.
+    VerifyEmail,
+    /// Lets its holder choose a new password.
+    ResetPassword,
+}
+
+/// A single-use link sent by email. Only the SHA-256 of the token is
+/// stored; the link holds the token itself.
+#[derive(Debug, toasty::Model)]
+pub struct AccountToken {
+    #[key]
+    #[auto]
+    pub id: u64,
+
+    #[index]
+    pub user_id: u64,
+
+    pub purpose: TokenPurpose,
+
+    /// Hex-encoded SHA-256 of the token.
+    #[unique]
+    pub token_hash: String,
+
+    /// For email confirmations, the address confirmed.
+    pub email: Option<String>,
+
+    pub created_at: Timestamp,
+
+    pub expires_at: Timestamp,
+}
+
+/// A user's setting, by name, as JSON.
+#[derive(Debug, toasty::Model)]
+#[unique(user_id, key)]
+pub struct UserSetting {
+    #[key]
+    #[auto]
+    pub id: u64,
+
+    pub user_id: u64,
+
+    pub key: String,
+
+    pub value: String,
+}
+
+/// An alert emailed to a user, so each is sent once (e.g. once per expiry
+/// of their YouTube Music session), even across restarts.
+#[derive(Debug, toasty::Model)]
+#[unique(user_id, dedupe_key)]
+pub struct SentAlert {
+    #[key]
+    #[auto]
+    pub id: u64,
+
+    pub user_id: u64,
+
+    /// What the alert was about, e.g. `youtube-music/expired/<when>`.
+    pub dedupe_key: String,
+
+    pub sent_at: Timestamp,
+}
+
+/// An account at a single sign-on provider, linked to a píxiū account by
+/// its owner. Signing in there signs them in here.
+// Two rules, two indexes: the attributes are not duplicates.
+#[allow(clippy::duplicated_attributes)]
+#[derive(Debug, toasty::Model)]
+#[unique(issuer, subject)]
+#[unique(user_id, issuer)]
+pub struct UserIdentity {
+    #[key]
+    #[auto]
+    pub id: u64,
+
+    #[index]
+    pub user_id: u64,
+
+    /// The provider, by its issuer URL.
+    pub issuer: String,
+
+    /// Who they are there: the ID token's `sub`, stable for the account.
+    pub subject: String,
+
+    /// Their address there, when the provider says; shown, never trusted.
+    pub email: Option<String>,
+
+    pub linked_at: Timestamp,
+
+    pub last_login_at: Option<Timestamp>,
 }

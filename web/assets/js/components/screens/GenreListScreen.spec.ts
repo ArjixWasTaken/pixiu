@@ -41,4 +41,11 @@ describe('genreListScreen', () => {
       screen.getByTestId('screen-empty-state')
     })
   })
+
+  it('says so when the library has no genres yet', async () => {
+    commonStore.state.song_length = 10
+    await renderComponent([])
+
+    await screen.findByText('No genres yet.')
+  })
 })

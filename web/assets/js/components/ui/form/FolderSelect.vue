@@ -1,54 +1,40 @@
 <template>
-  <div>
-    <div
+  <div ref="root">
+    <M3TextField
       v-if="entering"
-      class="flex items-stretch rounded-sm border border-k-fg-10 overflow-hidden bg-k-bg-input focus-within:border-k-highlight transition-[border] duration-200"
+      v-model="inputName"
+      aria-label="New folder name"
+      label="New folder"
+      placeholder="Folder name"
+      @keydown.enter.prevent="confirm"
+      @keydown.esc.stop.prevent="cancel"
     >
-      <input
-        ref="newFolderInput"
-        v-model="inputName"
-        aria-label="New folder name"
-        class="flex-1 min-w-0 text-base px-3.5 py-2 bg-transparent text-k-fg-input border-0 focus-visible:outline-hidden"
-        placeholder="Folder name"
-        type="text"
-        @keydown.enter.prevent="confirm"
-        @keydown.esc.stop.prevent="cancel"
-      />
-      <button
-        class="px-2.5 bg-k-fg-5 text-k-success hover:text-white border-l border-k-fg-10"
-        title="Create"
-        type="button"
-        @click="confirm"
-      >
-        <Icon :icon="faCheck" fixed-width />
-      </button>
-      <button
-        class="px-2.5 bg-k-fg-5 text-k-fg-60 hover:text-white border-l border-k-fg-10"
-        title="Cancel"
-        type="button"
-        @click="cancel"
-      >
-        <Icon :icon="faTimes" fixed-width />
-      </button>
-    </div>
-    <SelectBox v-else v-model="selected" @update:model-value="onSelectChange">
-      <option :value="null" />
+      <template #trailing>
+        <span class="flex -mr-3">
+          <M3IconButton icon="check" label="Create" @click="confirm" />
+          <M3IconButton icon="close" label="Cancel" @click="cancel" />
+        </span>
+      </template>
+    </M3TextField>
+    <M3Select v-else v-model="selected" label="Folder" @update:model-value="onSelectChange">
+      <option :value="null">None</option>
       <option v-for="folder in folders" :key="folder.id" :value="folder.id">
         {{ playlistFolderStore.pathFor(folder) }}
       </option>
       <option v-if="folderName" :value="PENDING_FOLDER">{{ folderName }} (new)</option>
-      <option :value="NEW_FOLDER">+ New Folder</option>
-    </SelectBox>
+      <option :value="NEW_FOLDER">New folder…</option>
+    </M3Select>
   </div>
 </template>
 
 <script lang="ts" setup>
-import { computed, nextTick, ref, watch } from 'vue'
-import { faCheck, faTimes } from '@fortawesome/free-solid-svg-icons'
+import { computed, nextTick, ref, useTemplateRef, watch } from 'vue'
 import { orderBy } from 'lodash-es'
 import { playlistFolderStore } from '@/stores/playlistFolderStore'
 
-import SelectBox from '@/components/ui/form/SelectBox.vue'
+import M3IconButton from '@/components/m3/M3IconButton.vue'
+import M3Select from '@/components/m3/M3Select.vue'
+import M3TextField from '@/components/m3/M3TextField.vue'
 
 const NEW_FOLDER = '__new__'
 const PENDING_FOLDER = '__pending__'
@@ -61,7 +47,7 @@ const folders = computed(() =>
 )
 const entering = ref(false)
 const inputName = ref('')
-const newFolderInput = ref<HTMLInputElement>()
+const root = useTemplateRef('root')
 const selected = ref(folderName.value ? PENDING_FOLDER : folderId.value)
 
 watch([folderId, folderName], ([id, name]) => {
@@ -72,7 +58,7 @@ const onSelectChange = () => {
   if (selected.value === NEW_FOLDER || selected.value === PENDING_FOLDER) {
     entering.value = true
     inputName.value = folderName.value ?? ''
-    nextTick(() => newFolderInput.value?.focus())
+    nextTick(() => root.value?.querySelector('input')?.focus())
   } else {
     folderId.value = selected.value
     folderName.value = null

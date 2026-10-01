@@ -59,4 +59,22 @@ describe('artistCard.vue', () => {
 
     await assertOpenContextMenu(openContextMenu as Mock, ArtistContextMenu, { artist })
   })
+
+  it('counts the albums', () => {
+    h.render(Component, {
+      props: { artist: h.factory('artist').make({ name: 'Led Zeppelin', album_count: 3 }) },
+      global: { stubs: { AlbumArtistThumbnail: h.stub('thumbnail') } },
+    })
+
+    screen.getByText('3 albums')
+  })
+
+  it('says “Artist” when the count is unknown', () => {
+    h.render(Component, {
+      props: { artist: h.factory('artist').make({ name: 'Led Zeppelin', album_count: undefined }) },
+      global: { stubs: { AlbumArtistThumbnail: h.stub('thumbnail') } },
+    })
+
+    screen.getByText('Artist')
+  })
 })

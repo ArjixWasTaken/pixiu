@@ -1,5 +1,5 @@
 <template>
-  <ul>
+  <ul role="none">
     <MenuItem v-if="isForSingleFolder" @click="openFolder">Open</MenuItem>
     <MenuItem @click="play">Play</MenuItem>
     <MenuItem @click="shuffle">Shuffle</MenuItem>

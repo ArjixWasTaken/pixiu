@@ -2,6 +2,10 @@ import { reactive } from 'vue'
 import { preferenceStore as preferences } from '@/stores/preferenceStore'
 import themes from '@/config/themes'
 
+const DARK_QUERY = '(prefers-color-scheme: dark)'
+
+const systemPrefersDark = () => typeof window.matchMedia === 'function' && window.matchMedia(DARK_QUERY).matches
+
 export const themeStore = {
   state: reactive({
     themes,
@@ -14,6 +18,13 @@ export const themeStore = {
     }
 
     this.setTheme(theme)
+
+    // Following the system: follow it when it changes, too.
+    window.matchMedia?.(DARK_QUERY).addEventListener?.('change', () => {
+      if (preferences.dark_mode === null) {
+        this.applyMode()
+      }
+    })
   },
 
   get all() {
@@ -35,10 +46,15 @@ export const themeStore = {
   },
 
   get darkMode() {
-    return preferences.dark_mode ?? true
+    const chosen = preferences.dark_mode
+    if (chosen === null) {
+      return systemPrefersDark()
+    }
+    return chosen ?? true
   },
 
-  setDarkMode(dark: boolean) {
+  /** Dark, light, or `null` to follow the system. */
+  setDarkMode(dark: boolean | null) {
     preferences.dark_mode = dark
     this.applyMode()
   },

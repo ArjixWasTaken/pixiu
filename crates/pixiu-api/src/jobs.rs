@@ -1,5 +1,5 @@
-//! The job board: downloads, album grabs, watch syncs, lookups and file
-//! moves, as they queue, run, finish or fail. `GET /api/events` says when
+//! The signed-in user's job board: downloads, album grabs, watch syncs and
+//! lookups, as they queue, run, finish or fail. `GET /api/events` says when
 //! the board changed.
 
 use std::collections::{HashMap, HashSet};
@@ -28,7 +28,7 @@ pub(crate) fn kind_name(kind: JobKind) -> &'static str {
     }
 }
 
-fn state_name(state: JobState) -> &'static str {
+pub(crate) fn state_name(state: JobState) -> &'static str {
     match state {
         JobState::Queued => "queued",
         JobState::Running => "running",
@@ -47,10 +47,17 @@ fn standing(job: &Job, family: Option<&Family>) -> JobState {
     }
 }
 
-/// `GET /api/jobs`: the latest jobs. Tracks of an album on the board show
-/// through their album, unless they failed and need the admin.
-pub(crate) async fn board(State(state): State<ApiState>, _: Session) -> ApiResult<Json<JsonValue>> {
-    let recent = state.jobs.recent(BOARD_SIZE).await?;
+/// `GET /api/jobs`: every job still to do or failed, and the latest done,
+/// newest first. Tracks of an album on the board show through their album,
+/// unless they failed and need the user.
+pub(crate) async fn board(
+    State(state): State<ApiState>,
+    session: Session,
+) -> ApiResult<Json<JsonValue>> {
+    let mut recent = state.jobs.unfinished(session.owner()).await?;
+    recent.extend(state.jobs.recent(session.owner(), BOARD_SIZE).await?);
+    recent.sort_by_key(|job| std::cmp::Reverse(job.id));
+    recent.dedup_by_key(|job| job.id);
     let parents: Vec<u64> = recent
         .iter()
         .filter(|job| job.kind == JobKind::GrabAlbum)
@@ -107,35 +114,37 @@ pub(crate) async fn board(State(state): State<ApiState>, _: Session) -> ApiResul
 /// `POST /api/jobs/{id}/retry`.
 pub(crate) async fn retry(
     State(state): State<ApiState>,
-    _: Session,
+    session: Session,
     Path(id): Path<u64>,
 ) -> ApiResult<StatusCode> {
-    state.jobs.retry(id).await?;
+    state.jobs.retry(session.owner(), id).await?;
     Ok(StatusCode::ACCEPTED)
 }
 
 /// `DELETE /api/jobs/finished`: forgets the finished jobs.
 pub(crate) async fn clear_finished(
     State(state): State<ApiState>,
-    _: Session,
+    session: Session,
 ) -> ApiResult<StatusCode> {
-    state.jobs.clear_finished().await?;
+    state.jobs.clear_finished(session.owner()).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
 /// `GET /api/hunting`: what the sidebar shows about hunting.
 pub(crate) async fn summary(
     State(state): State<ApiState>,
-    _: Session,
+    session: Session,
 ) -> ApiResult<Json<JsonValue>> {
-    Ok(Json(summarize(&state).await?))
+    Ok(Json(summarize(&state, &session).await?))
 }
 
-/// The session's state, how many orphans and offering batches await the
-/// admin, and how the jobs are doing.
-pub(crate) async fn summarize(state: &ApiState) -> ApiResult<JsonValue> {
+/// The user's YouTube Music session's state, how many of their orphans
+/// and offering batches await them, how their jobs are doing, and, for
+/// admins, how many registrations wait.
+pub(crate) async fn summarize(state: &ApiState, session: &Session) -> ApiResult<JsonValue> {
+    let owner = session.owner();
     let (mut running, mut waiting, mut failed) = (0, 0, 0);
-    for job in state.jobs.unfinished().await? {
+    for job in state.jobs.unfinished(owner).await? {
         match job.state {
             JobState::Running => running += 1,
             JobState::Failed => failed += 1,
@@ -145,14 +154,21 @@ pub(crate) async fn summarize(state: &ApiState) -> ApiResult<JsonValue> {
     }
     let batches: HashSet<String> = state
         .offerings
-        .pending()
+        .pending(owner)
         .await?
         .into_iter()
         .map(|offering| offering.batch)
         .collect();
+    // Admins see the registrations waiting for them.
+    let registrations = if session.user.role == pixiu_db::Role::Admin {
+        pixiu_accounts::registration::waiting(&mut state.db.clone()).await?
+    } else {
+        0
+    };
     Ok(json!({
-        "session": crate::sources::state_name(state.warden.health().state),
-        "orphans": state.treasury.orphan_count().await?,
+        "registrations": registrations,
+        "session": crate::sources::state_name(crate::sources::health_of(state, owner).state),
+        "orphans": state.treasury.orphan_count(owner).await?,
         "offerings": batches.len(),
         "jobs": { "running": running, "waiting": waiting, "failed": failed },
     }))

@@ -14,7 +14,7 @@
       <div class="current-version">{{ appName }} {{ currentVersion }}</div>
 
       <p>
-        A single-user music server that downloads from YouTube Music.
+        A music server that downloads from YouTube Music, with a library for each of its users.
         <a href="https://github.com/ArjixWasTaken/pixiu" rel="noopener" target="_blank">Source code</a>
       </p>
     </main>

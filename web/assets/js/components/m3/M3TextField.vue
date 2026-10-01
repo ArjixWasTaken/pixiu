@@ -9,6 +9,7 @@
       <textarea
         v-if="multiline"
         v-model="value"
+        :aria-label="label"
         v-bind="inputAttrs"
         :disabled
         :placeholder="placeholder || ' '"
@@ -18,6 +19,7 @@
       <input
         v-else
         v-model="value"
+        :aria-label="label"
         v-bind="inputAttrs"
         :disabled
         :placeholder="placeholder || ' '"

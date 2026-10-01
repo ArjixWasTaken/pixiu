@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vite-plus/test'
-import { screen, waitFor } from '@testing-library/vue'
+import { screen } from '@testing-library/vue'
 import { createHarness } from '@/__tests__/TestHarness'
 import models from '@/config/smart-playlist/models'
 import Component from './SmartPlaylistRuleGroup.vue'
@@ -7,89 +7,50 @@ import Component from './SmartPlaylistRuleGroup.vue'
 describe('smartPlaylistRuleGroup', () => {
   const h = createHarness()
 
-  const createRule = (overrides: Partial<SmartPlaylistRule> = {}): SmartPlaylistRule => ({
-    id: crypto.randomUUID(),
-    model: models[0], // Title (text)
-    operator: 'is',
-    value: ['test'],
-    ...overrides,
+  const rule = (id: string): SmartPlaylistRule => ({ id, model: models[0], operator: 'is', value: [id] })
+
+  const renderComponent = (rules = [rule('a')], isFirstGroup = true) =>
+    h.render(Component, { props: { group: { id: 'group-1', rules }, isFirstGroup } })
+
+  const updated = (emitted: Record<string, unknown[][]>) => emitted['update:group'].at(-1)![0] as SmartPlaylistRuleGroup
+
+  it.each([
+    [true, 'Songs that match all of these'],
+    [false, 'Or songs that match all of these'],
+  ])('says what its rules mean (first: %s)', (first, heading) => {
+    renderComponent(undefined, first)
+
+    screen.getByRole('heading', { name: heading })
   })
 
-  const renderComponent = (group?: SmartPlaylistRuleGroup, isFirstGroup = true) => {
-    group = group ?? {
-      id: crypto.randomUUID(),
-      rules: [createRule()],
-    }
+  it('shows each rule', () => {
+    renderComponent([rule('a'), rule('b')])
 
-    return h.render(Component, {
-      props: {
-        group,
-        isFirstGroup,
-      },
-    })
-  }
-
-  it('shows first-group heading', () => {
-    renderComponent(undefined, true)
-    screen.getByText(/Include songs that match/)
-    screen.getByText('all')
+    expect(screen.getAllByTestId('smart-playlist-rule')).toHaveLength(2)
   })
 
-  it('shows subsequent-group heading', () => {
-    renderComponent(undefined, false)
-    screen.getByText(/or/)
-    screen.getByText('all')
+  it('adds a rule', async () => {
+    const { emitted } = renderComponent()
+
+    await h.user.click(screen.getByRole('button', { name: /Add a rule/ }))
+
+    expect(updated(emitted()).rules).toHaveLength(2)
   })
 
-  it('renders a Rule component for each rule', async () => {
-    const group = {
-      id: crypto.randomUUID(),
-      rules: [createRule(), createRule()],
-    }
+  it('drops a removed rule', async () => {
+    const { emitted } = renderComponent([rule('a'), rule('b')])
 
-    renderComponent(group)
+    await h.user.click(screen.getAllByRole('button', { name: 'Remove this rule' })[0])
 
-    // Rules are async components, wait for them to render.
-    // Note: the "add rule" button also has title="Remove this rule" (component bug),
-    // so 2 rules + 1 add button = 3 elements with that title.
-    await waitFor(() => {
-      expect(screen.getAllByTitle('Remove this rule')).toHaveLength(3)
-    })
+    expect(updated(emitted()).rules.map(({ id }) => id)).toEqual(['b'])
   })
 
-  it('adds a new rule when add button is clicked', async () => {
-    renderComponent()
+  it('goes with its last rule', async () => {
+    const { emitted } = renderComponent()
 
-    // Wait for async components to render (1 rule + 1 add button = 2 buttons with this title)
-    await waitFor(() => {
-      expect(screen.getAllByTitle('Remove this rule')).toHaveLength(2)
-    })
+    await h.user.click(screen.getByRole('button', { name: 'Remove this rule' }))
 
-    // Click the last button (the add rule button)
-    const buttons = screen.getAllByRole('button')
-    await h.user.click(buttons[buttons.length - 1])
-
-    // After adding, there should be 2 rules + 1 add button = 3 elements
-    await waitFor(() => {
-      expect(screen.getAllByTitle('Remove this rule')).toHaveLength(3)
-    })
-  })
-
-  it('emits input with rule removed when remove button is clicked', async () => {
-    const group = {
-      id: crypto.randomUUID(),
-      rules: [createRule(), createRule()],
-    }
-
-    const { emitted } = renderComponent(group)
-
-    await waitFor(() => screen.getAllByTitle('Remove this rule'))
-
-    await h.user.click(screen.getAllByTitle('Remove this rule')[0])
-
-    const inputEvents = emitted().input as SmartPlaylistRuleGroup[][]
-    expect(inputEvents).toBeTruthy()
-    const lastEmittedGroup = inputEvents[inputEvents.length - 1][0]
-    expect(lastEmittedGroup.rules).toHaveLength(1)
+    expect(emitted().remove).toBeTruthy()
+    expect(emitted()['update:group']).toBeUndefined()
   })
 })

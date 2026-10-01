@@ -75,8 +75,6 @@ interface KoelGlobals {
     readonly default: string
   }
   mailer_configured: boolean
-  sso_providers: SSOProvider[]
-  sso_oidc_label?: string
   accepted_audio_extensions: string[]
   demo_account?: {
     email: string
@@ -153,6 +151,8 @@ interface Artist {
   is_external: boolean
   favorite: boolean
   rating: number
+  /** How many albums of theirs the library has, when the list says. */
+  album_count?: number
   permissions: {
     edit: boolean
   }
@@ -222,6 +222,8 @@ interface Song extends BasePlayable {
   file_size?: number | null
   basename?: string
   deleted?: boolean
+  /** When the user last played it. */
+  played_at?: string | null
   collaboration?: {
     user: PlaylistCollaborator
     added_at: string | null
@@ -442,7 +444,8 @@ interface UserPreferences extends Record<string, any> {
   show_album_art_overlay: boolean
   lyrics_zoom_level: number | null
   theme?: Theme['id'] | null
-  dark_mode?: boolean
+  /** `null`: follow the system's light or dark mode. */
+  dark_mode?: boolean | null
   visualizer?: Visualizer['id'] | null
   active_extra_panel_tab: SideSheetTab | null
   make_uploads_public: boolean
@@ -452,6 +455,10 @@ interface UserPreferences extends Record<string, any> {
   lastfm_session_key?: string
   listenbrainz_token?: string
   home_blocks_order: string[]
+  /** Home blocks switched off. */
+  home_blocks_hidden: string[]
+  /** Off: audio plays past the equalizer, its settings kept for later. */
+  equalizer_enabled: boolean
 }
 
 type Ability = 'manage settings' | 'manage users' | 'manage songs' | 'manage podcasts' | 'manage radio stations'
@@ -499,6 +506,11 @@ type CurrentUser = User & {
   abilities: Ability[]
   subsonic_api_key: string
   two_factor: boolean
+  /** Signed in with a temporary password: must pick their own first. */
+  password_change_required?: boolean
+  email_verified?: boolean
+  /** What they sign in with; `name` is what píxiū calls them. */
+  username?: string
 }
 
 type AiProvider = 'openai' | 'anthropic' | 'gemini' | 'deepseek' | 'groq' | 'mistral' | 'openrouter' | 'xai'
@@ -590,12 +602,15 @@ interface ScreenNames {
   Queue: true
   'Radio.Stations': true
   RecentlyPlayed: true
+  ResetPassword: true
   'Search.Excerpt': true
   'Search.Playables': true
   Settings: true
   Songs: true
+  SsoComplete: true
   Upload: true
   Users: true
+  VerifyEmail: true
   Visualizer: true
   YouTube: true
 }

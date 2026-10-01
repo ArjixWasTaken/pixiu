@@ -47,4 +47,16 @@ describe('artistInfo.vue', () => {
 
     expect(screen.getByTestId('artist-info').classList.contains(mode)).toBe(true)
   })
+
+  it('says when Wikipedia has nothing, without a source', async () => {
+    commonStore.state.uses_last_fm = true
+    h.mock(encyclopediaService, 'fetchForArtist').mockResolvedValue(null)
+    h.render(Component, {
+      props: { artist: h.factory('artist').make({ name: 'Led Zeppelin' }), mode: 'full' },
+      global: { stubs: { ArtistThumbnail: h.stub('thumbnail') } },
+    })
+
+    await screen.findByText('píxiū found nothing about Led Zeppelin on Wikipedia.')
+    expect(screen.queryByRole('link', { name: 'Source' })).toBeNull()
+  })
 })

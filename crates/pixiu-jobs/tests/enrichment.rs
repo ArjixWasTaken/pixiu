@@ -21,6 +21,9 @@ use pixiu_jobs::{
 };
 use pixiu_treasury::{Claim, Provenance, Treasury, tags};
 
+/// The user every test library and job belongs to.
+const OWNER: u64 = 1;
+
 fn fixture(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../fixtures/audio")
@@ -116,6 +119,7 @@ async fn hoard() -> Hoard {
         let info = tags::read(&staged).unwrap();
         album_id = treasury
             .ingest(
+                OWNER,
                 &staged,
                 &info,
                 None,
@@ -153,6 +157,7 @@ fn release(id: &str, title: &str, tracks: &[(&str, u64)]) -> Release {
         date: Some("2024-05-01".to_owned()),
         country: None,
         release_group_id: Some(format!("rg-{id}")),
+        genre: Some("Electronic".to_owned()),
         has_front_cover: true,
         tracks: tracks
             .iter()
@@ -197,13 +202,15 @@ async fn tracks(db: &mut Db, album_id: u64) -> Vec<Track> {
 }
 
 #[tokio::test]
-async fn a_certain_match_retags_and_refiles_the_album() {
+async fn a_certain_match_rewrites_the_album() {
     let mut hoard = hoard().await;
-    let durations: Vec<u64> = tracks(&mut hoard.db, hoard.album_id)
+    let before = tracks(&mut hoard.db, hoard.album_id).await;
+    let durations: Vec<u64> = before.iter().map(|track| track.duration_ms).collect();
+    let old_cover = Album::get_by_id(&mut hoard.db, &hoard.album_id)
         .await
-        .iter()
-        .map(|track| track.duration_ms)
-        .collect();
+        .unwrap()
+        .cover
+        .unwrap();
     let sources = FakeSources {
         candidates: vec![candidate("rel-test")],
         releases: HashMap::from([(
@@ -228,6 +235,7 @@ async fn a_certain_match_retags_and_refiles_the_album() {
         album_id: hoard.album_id,
         release: None,
         fresh: false,
+        genres_only: false,
     };
     let summary = enrich::enrich(&hoard.treasury, &sources, &NoPlatformLyrics, &request)
         .await
@@ -241,40 +249,30 @@ async fn a_certain_match_retags_and_refiles_the_album() {
     assert_eq!(album.enrichment, Some(Enrichment::Matched));
     assert_eq!(album.mbid.as_deref(), Some("rel-test"));
     assert_eq!(album.rg_mbid.as_deref(), Some("rg-rel-test"));
-    // The Cover Art Archive's cover is larger, so it replaced the file's.
+    // The files' tags name a genre: MusicBrainz's does not replace it.
+    assert_eq!(album.genre.as_deref(), Some("Ambient"));
+    // The Cover Art Archive's cover is larger, so it replaced the file's,
+    // which nothing shows any more.
     let cover = album.cover.as_deref().unwrap();
-    assert_eq!(cover, "Test Artist/2024 - Test Album_ Remastered/cover.jpg");
+    assert!(cover.starts_with(".store/images/") && cover.ends_with(".jpg"));
     assert!(hoard.treasury.resolve(cover).is_file());
+    assert!(!hoard.treasury.resolve(&old_cover).exists());
 
     let tracks = tracks(&mut hoard.db, hoard.album_id).await;
-    assert_eq!(
+    assert!(
         tracks
             .iter()
-            .map(|track| track.path.as_str())
-            .collect::<Vec<_>>(),
-        [
-            "Test Artist/2024 - Test Album_ Remastered/01-01 First Light.flac",
-            "Test Artist/2024 - Test Album_ Remastered/01-02 Second Wind.mp3",
-        ]
+            .all(|track| track.genre.as_deref() == Some("Ambient"))
     );
     assert_eq!(tracks[1].mbid.as_deref(), Some("rec-Second Wind"));
     assert_eq!(tracks[1].artist_credit, "Test Artist feat. Guest");
-    // The old directory is gone, the files say what the database says.
-    assert!(
-        !hoard
-            .treasury
-            .resolve("Test Artist/2024 - Test Album")
-            .exists()
-    );
-    let written = tags::read(&hoard.treasury.resolve(&tracks[0].path)).unwrap();
-    assert_eq!(written.album.as_deref(), Some("Test Album: Remastered"));
-    assert_eq!(written.mbid.as_deref(), Some("rec-First Light"));
-    assert_eq!(written.album_mbid.as_deref(), Some("rel-test"));
-    assert!(
-        written
-            .cover
-            .is_some_and(|cover| cover.mime == "image/jpeg")
-    );
+    // Only the database changed: the stored files are as they arrived.
+    for (track, old) in tracks.iter().zip(&before) {
+        assert_eq!(track.path, old.path);
+    }
+    let kept = tags::read(&hoard.treasury.resolve(&tracks[0].path)).unwrap();
+    assert_eq!(kept.album.as_deref(), Some("Test Album"));
+    assert_eq!(kept.mbid, None);
 
     // The artist learned their id, a biography and a picture.
     let artist = Artist::get_by_id(&mut hoard.db, &album.artist_id)
@@ -305,11 +303,8 @@ async fn a_certain_match_retags_and_refiles_the_album() {
 #[tokio::test]
 async fn doubtful_matches_wait_for_the_admin() {
     let mut hoard = hoard().await;
-    let durations: Vec<u64> = tracks(&mut hoard.db, hoard.album_id)
-        .await
-        .iter()
-        .map(|track| track.duration_ms)
-        .collect();
+    let before = tracks(&mut hoard.db, hoard.album_id).await;
+    let durations: Vec<u64> = before.iter().map(|track| track.duration_ms).collect();
     // Only one of the two tracks is on this release.
     let sources = FakeSources {
         candidates: vec![candidate("rel-partial")],
@@ -327,6 +322,7 @@ async fn doubtful_matches_wait_for_the_admin() {
         album_id: hoard.album_id,
         release: None,
         fresh: false,
+        genres_only: false,
     };
     let summary = enrich::enrich(&hoard.treasury, &sources, &YouTubeLyrics, &automatic)
         .await
@@ -347,6 +343,7 @@ async fn doubtful_matches_wait_for_the_admin() {
         album_id: hoard.album_id,
         release: Some("rel-partial".to_owned()),
         fresh: false,
+        genres_only: false,
     };
     enrich::enrich(&hoard.treasury, &sources, &YouTubeLyrics, &picked)
         .await
@@ -369,6 +366,7 @@ async fn unknown_albums_stay_as_they_are() {
         album_id: hoard.album_id,
         release: None,
         fresh: false,
+        genres_only: false,
     };
     let summary = enrich::enrich(&hoard.treasury, &sources, &YouTubeLyrics, &request)
         .await
@@ -415,6 +413,7 @@ async fn instrumentals_are_known_as_such() {
         album_id: hoard.album_id,
         release: None,
         fresh: false,
+        genres_only: false,
     };
     let summary = enrich::enrich(&hoard.treasury, &sources, &YouTubeLyrics, &request)
         .await
@@ -461,6 +460,7 @@ async fn instrumentals_are_known_as_such() {
     );
     let asked = Request {
         fresh: true,
+        genres_only: false,
         ..request
     };
     enrich::enrich(&hoard.treasury, &sources, &YouTubeLyrics, &asked)
@@ -486,11 +486,8 @@ fn shared_release(durations: &[u64]) -> Release {
 #[tokio::test]
 async fn shared_credits_file_albums_under_the_first_artist() {
     let mut hoard = hoard().await;
-    let durations: Vec<u64> = tracks(&mut hoard.db, hoard.album_id)
-        .await
-        .iter()
-        .map(|track| track.duration_ms)
-        .collect();
+    let before = tracks(&mut hoard.db, hoard.album_id).await;
+    let durations: Vec<u64> = before.iter().map(|track| track.duration_ms).collect();
     let sources = FakeSources {
         releases: HashMap::from([("rel-duo".to_owned(), shared_release(&durations))]),
         ..FakeSources::default()
@@ -499,6 +496,7 @@ async fn shared_credits_file_albums_under_the_first_artist() {
         album_id: hoard.album_id,
         release: Some("rel-duo".to_owned()),
         fresh: false,
+        genres_only: false,
     };
     enrich::enrich(&hoard.treasury, &sources, &NoPlatformLyrics, &request)
         .await
@@ -536,15 +534,87 @@ impl Executor for Idle {
 }
 
 #[tokio::test]
+async fn matched_albums_take_their_genre_once() {
+    let mut hoard = hoard().await;
+    let before = tracks(&mut hoard.db, hoard.album_id).await;
+    let durations: Vec<(&str, u64)> = before
+        .iter()
+        .map(|track| (track.title.as_str(), track.duration_ms))
+        .collect();
+    // Matched before genres came from MusicBrainz, from files without a
+    // genre; the user gave one track a genre since.
+    let mut album = Album::get_by_id(&mut hoard.db, &hoard.album_id)
+        .await
+        .unwrap();
+    let title = album.title.clone();
+    toasty::update!(album {
+        mbid: Some("rel-test".to_owned()),
+        enrichment: Some(Enrichment::Matched),
+        genre: Option::<String>::None,
+    })
+    .exec(&mut hoard.db)
+    .await
+    .unwrap();
+    for (track, genre) in before.iter().zip([Some("Mine".to_owned()), None]) {
+        let mut track = Track::get_by_id(&mut hoard.db, &track.id).await.unwrap();
+        toasty::update!(track { genre })
+            .exec(&mut hoard.db)
+            .await
+            .unwrap();
+    }
+
+    let jobs = Jobs::new(hoard.db.clone(), Box::new(Idle));
+    assert_eq!(
+        enrich::backfill_genres(&mut hoard.db, &jobs).await.unwrap(),
+        1
+    );
+    assert_eq!(
+        enrich::backfill_genres(&mut hoard.db, &jobs).await.unwrap(),
+        0
+    );
+    let job = jobs.unfinished(OWNER).await.unwrap().remove(0);
+    let payload: EnrichJob = serde_json::from_str(&job.payload).unwrap();
+    assert!(payload.genres_only);
+    assert_eq!(payload.release.as_deref(), Some("rel-test"));
+
+    let mut renamed = release("rel-test", "Renamed on MusicBrainz", &durations);
+    renamed.genre = Some("Electronic".to_owned());
+    let sources = FakeSources {
+        releases: HashMap::from([("rel-test".to_owned(), renamed)]),
+        ..FakeSources::default()
+    };
+    let request = Request {
+        album_id: payload.album_id,
+        release: payload.release,
+        fresh: payload.fresh,
+        genres_only: payload.genres_only,
+    };
+    let summary = enrich::enrich(&hoard.treasury, &sources, &NoPlatformLyrics, &request)
+        .await
+        .unwrap();
+    assert_eq!(summary, "Genre: Electronic.");
+
+    // Only the genre changed, and not where the user set one.
+    let album = Album::get_by_id(&mut hoard.db, &hoard.album_id)
+        .await
+        .unwrap();
+    assert_eq!(album.genre.as_deref(), Some("Electronic"));
+    assert_eq!(album.title, title);
+    let after = tracks(&mut hoard.db, hoard.album_id).await;
+    assert_eq!(after[0].genre.as_deref(), Some("Mine"));
+    assert_eq!(after[1].genre.as_deref(), Some("Electronic"));
+    assert_eq!(after[1].title, before[1].title);
+    assert_eq!(*sources.searches.lock().unwrap(), 0);
+}
+
+#[tokio::test]
 async fn albums_under_a_shared_credit_are_repaired_once() {
     let mut hoard = hoard().await;
-    let durations: Vec<u64> = tracks(&mut hoard.db, hoard.album_id)
-        .await
-        .iter()
-        .map(|track| track.duration_ms)
-        .collect();
+    let before = tracks(&mut hoard.db, hoard.album_id).await;
+    let durations: Vec<u64> = before.iter().map(|track| track.duration_ms).collect();
     // What an earlier píxiū made of a match: the credit as an artist.
     let credit_artist = toasty::create!(Artist {
+        user_id: OWNER,
         name: "Test Artist & Guest",
         name_key: "test artist & guest",
         created_at: now(),
@@ -569,7 +639,7 @@ async fn albums_under_a_shared_credit_are_repaired_once() {
         .await
         .unwrap();
     assert_eq!(queued, 1);
-    let job = jobs.unfinished().await.unwrap().remove(0);
+    let job = jobs.unfinished(OWNER).await.unwrap().remove(0);
     assert_eq!(job.kind, JobKind::Enrich);
     let payload: EnrichJob = serde_json::from_str(&job.payload).unwrap();
     assert_eq!(payload.release.as_deref(), Some("rel-duo"));
@@ -581,7 +651,8 @@ async fn albums_under_a_shared_credit_are_repaired_once() {
         0
     );
 
-    // Running that lookup moves the album; the credit's artist goes.
+    // Running that lookup moves the album to its artist; the credit's
+    // artist goes.
     let sources = FakeSources {
         releases: HashMap::from([("rel-duo".to_owned(), shared_release(&durations))]),
         ..FakeSources::default()
@@ -590,6 +661,7 @@ async fn albums_under_a_shared_credit_are_repaired_once() {
         album_id: payload.album_id,
         release: payload.release,
         fresh: payload.fresh,
+        genres_only: false,
     };
     enrich::enrich(&hoard.treasury, &sources, &NoPlatformLyrics, &request)
         .await
@@ -609,6 +681,7 @@ async fn albums_under_a_shared_credit_are_repaired_once() {
             .unwrap()
             .is_none()
     );
+    // The file stays in the store, as it was.
     let path = &tracks(&mut hoard.db, hoard.album_id).await[0].path;
-    assert!(path.starts_with("Test Artist/"), "{path}");
+    assert!(path.starts_with(".store/audio/"), "{path}");
 }

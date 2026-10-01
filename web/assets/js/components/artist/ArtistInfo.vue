@@ -9,9 +9,12 @@
     <ParagraphSkeleton v-if="loading" role="status" aria-busy="true" aria-label="Loading" />
 
     <div v-if="!loading && info?.bio" v-html="info.bio.full" />
+    <p v-else-if="!loading" class="nothing" data-testid="artist-info-empty">
+      píxiū found nothing about {{ artist.name }} on Wikipedia.
+    </p>
 
-    <template v-if="info && !loading" #footer>
-      <a :href="info.url" rel="openener" target="_blank">Source</a>
+    <template v-if="!loading && info?.url" #footer>
+      <a :href="info.url" rel="noopener" target="_blank">Source</a>
     </template>
   </AlbumArtistInfo>
 </template>

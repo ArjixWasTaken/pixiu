@@ -1,11 +1,11 @@
 //! Lyrics: `getLyrics` (by artist and title, plain text) and OpenSubsonic's
 //! `getLyricsBySongId` (structured, time-synced when known).
 
-use pixiu_db::{Db, Lyrics, Track, toasty};
+use pixiu_db::{Db, Lyrics, toasty};
 use pixiu_enrich::{parse_lrc, plain_from_lrc};
 
 use crate::{
-    Failure, Params, SubsonicState,
+    Cx, Failure, Params,
     ids::Id,
     response::{ApiError, Element, ErrorCode, Payload},
 };
@@ -26,9 +26,10 @@ fn plain(lyrics: &Lyrics) -> Option<String> {
         .or_else(|| lyrics.synced.as_deref().map(plain_from_lrc))
 }
 
-/// `getLyrics`: the first track by that artist with that title.
-pub(crate) async fn by_name(state: &SubsonicState, params: &Params) -> Result<Payload, Failure> {
-    let mut db = state.db.clone();
+/// `getLyrics`: the first track of the caller's by that artist with that
+/// title.
+pub(crate) async fn by_name(cx: &Cx<'_>, params: &Params) -> Result<Payload, Failure> {
+    let mut db = cx.lib.db();
     let artist = params.get("artist").unwrap_or_default();
     let title = params.get("title").unwrap_or_default();
     let wanted_title = pixiu_treasury::name_key(title);
@@ -36,7 +37,7 @@ pub(crate) async fn by_name(state: &SubsonicState, params: &Params) -> Result<Pa
 
     let mut found = None;
     if !wanted_title.is_empty() {
-        let tracks = Track::all().exec(&mut db).await?;
+        let tracks = cx.lib.all_tracks().await?;
         for track in tracks.into_iter().filter(|track| {
             pixiu_treasury::name_key(&track.title) == wanted_title
                 && pixiu_treasury::name_key(&track.artist_credit).contains(&wanted_artist)
@@ -60,13 +61,13 @@ pub(crate) async fn by_name(state: &SubsonicState, params: &Params) -> Result<Pa
 }
 
 /// `getLyricsBySongId`: time-synced lines when known, else plain ones.
-pub(crate) async fn by_song(state: &SubsonicState, params: &Params) -> Result<Payload, Failure> {
-    let mut db = state.db.clone();
+pub(crate) async fn by_song(cx: &Cx<'_>, params: &Params) -> Result<Payload, Failure> {
+    let mut db = cx.lib.db();
     let id = params.require("id")?;
     let Some(Id::Track(track_id)) = Id::parse(id) else {
         return Err(ApiError::new(ErrorCode::NotFound, format!("`{id}` is not a song")).into());
     };
-    let Some(track) = Track::filter_by_id(track_id).first().exec(&mut db).await? else {
+    let Some(track) = cx.lib.track(track_id).await? else {
         return Err(ApiError::new(ErrorCode::NotFound, "song not found").into());
     };
 

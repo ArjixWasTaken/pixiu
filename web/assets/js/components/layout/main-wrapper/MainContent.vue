@@ -38,7 +38,6 @@
       <ProfileScreen v-if="screen === 'Profile'" />
       <PodcastScreen v-if="screen === 'Podcast'" />
       <EpisodeScreen v-if="screen === 'Episode'" />
-      <UserListScreen v-if="screen === 'Users'" />
       <YouTubeScreen v-if="useYouTube" v-show="screen === 'YouTube'" />
       <NotFoundScreen v-if="screen === '404'" />
       <AcceptPlaylistCollaborationInvite v-if="screen === 'Playlist.Collaborate'" />
@@ -99,7 +98,6 @@ const WatchesScreen = defineAsyncComponent(() => import('@/components/screens/hu
 const JobsScreen = defineAsyncComponent(() => import('@/components/screens/hunting/JobsScreen.vue'))
 const OrphansScreen = defineAsyncComponent(() => import('@/components/screens/hunting/OrphansScreen.vue'))
 const UploadScreen = defineAsyncComponent(() => import('@/components/screens/UploadScreen.vue'))
-const UserListScreen = defineAsyncComponent(() => import('@/components/screens/UserListScreen.vue'))
 const VisualizerScreen = defineAsyncComponent(() => import('@/components/screens/VisualizerScreen.vue'))
 const YouTubeScreen = defineAsyncComponent(() => import('@/components/screens/YouTubeScreen.vue'))
 

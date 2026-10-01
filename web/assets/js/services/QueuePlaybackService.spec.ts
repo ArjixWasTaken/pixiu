@@ -320,11 +320,13 @@ describe('playbackService', () => {
     expect(song.playback_state).toEqual('Paused')
     expect(broadcastMock).toHaveBeenCalledWith('SOCKET_STREAMABLE', song)
     expect(pauseMock).toHaveBeenCalled()
+    expect(document.title).toEqual('Koel')
   })
 
   it('resumes playback', async () => {
     const song = setCurrentSong(
       h.factory('song').make({
+        title: 'Some song',
         playback_state: 'Paused',
       }),
     )
@@ -337,6 +339,7 @@ describe('playbackService', () => {
     expect(queueStore.current?.playback_state).toEqual('Playing')
     expect(broadcastMock).toHaveBeenCalledWith('SOCKET_STREAMABLE', song)
     expect(playMock).toHaveBeenCalled()
+    expect(document.title).toEqual('Some song ♫ Koel')
   })
 
   it('plays first in queue if toggled when there is no current playable', async () => {

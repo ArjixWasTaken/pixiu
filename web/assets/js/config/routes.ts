@@ -10,6 +10,8 @@ const ALBUM_ID = 'al-[0-9]+'
 const ARTIST_ID = 'ar-[0-9]+'
 const PLAYLIST_ID = 'pl-[0-9]+'
 const SONG_ID = 'tr-[0-9]+'
+// The tokens of links píxiū emails, and of single sign-ons: base64url.
+const EMAIL_TOKEN = '[A-Za-z0-9_-]+'
 
 export const routes = [
   {
@@ -102,17 +104,6 @@ export const routes = [
     name: 'settings',
     path: '/settings',
     screen: 'Settings',
-    meta: {
-      guard: () => usePolicies().currentUserCan.manageSettings(),
-    },
-  },
-  {
-    name: 'users.index',
-    path: '/users',
-    screen: 'Users',
-    meta: {
-      guard: () => usePolicies().currentUserCan.manageUsers(),
-    },
   },
   {
     name: 'youtube',
@@ -214,30 +205,6 @@ export const routes = [
     },
   },
   {
-    name: 'invitation.accept',
-    path: '/invitation/accept/:token',
-    screen: 'Invitation.Accept',
-    meta: {
-      layout: 'invitation',
-      public: true,
-    },
-    constraints: {
-      token: UUID_REGEX,
-    },
-  },
-  {
-    name: 'password.reset',
-    path: '/reset-password/:payload',
-    screen: 'Password.Reset',
-    meta: {
-      public: true,
-      layout: 'reset-password',
-    },
-    constraints: {
-      payload: '[a-zA-Z0-9\\+/=]+',
-    },
-  },
-  {
     name: 'ai',
     path: '/ai',
     screen: 'AI',
@@ -248,6 +215,42 @@ export const routes = [
     screen: 'MediaBrowser',
     constraints: {
       folder: UUID_REGEX,
+    },
+  },
+  {
+    name: 'verify-email',
+    path: '/verify-email/:token',
+    screen: 'VerifyEmail',
+    meta: {
+      public: true,
+      layout: 'email-link',
+    },
+    constraints: {
+      token: EMAIL_TOKEN,
+    },
+  },
+  {
+    name: 'reset-password',
+    path: '/reset-password/:token',
+    screen: 'ResetPassword',
+    meta: {
+      public: true,
+      layout: 'email-link',
+    },
+    constraints: {
+      token: EMAIL_TOKEN,
+    },
+  },
+  {
+    name: 'sso',
+    path: '/sso/:code',
+    screen: 'SsoComplete',
+    meta: {
+      public: true,
+      layout: 'sso',
+    },
+    constraints: {
+      code: EMAIL_TOKEN,
     },
   },
   {

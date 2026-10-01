@@ -30,7 +30,7 @@ import { toRefs } from 'vue'
 import { useAuthorization } from '@/composables/useAuthorization'
 
 import Btn from '@/components/ui/form/Btn.vue'
-import UserAvatar from '@/components/user/UserAvatar.vue'
+import UserAvatar from '@/components/ui/UserAvatar.vue'
 
 const props = defineProps<{
   collaborator: PlaylistCollaborator

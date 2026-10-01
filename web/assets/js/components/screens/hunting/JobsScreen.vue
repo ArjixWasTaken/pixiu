@@ -4,7 +4,11 @@
       <ScreenHeader layout="collapsed">
         Jobs
         <template #meta>
-          <span>{{ running.length }} running · {{ waiting.length }} waiting</span>
+          <span
+            >{{ running.length }} running · {{ waiting.length }} waiting<template v-if="failed.length">
+              · {{ failed.length }} failed</template
+            ></span
+          >
         </template>
         <template #controls>
           <M3Button v-if="done.length" variant="text" @click.prevent="clearFinished">Clear finished</M3Button>

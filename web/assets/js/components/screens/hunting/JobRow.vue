@@ -57,7 +57,6 @@ const kindLabel = computed(
       album: 'Album',
       watch_sync: 'Watch sync',
       lookup: 'MusicBrainz lookup',
-      refile: 'Moving files',
     })[props.job.kind],
 )
 
@@ -68,7 +67,6 @@ const icon = computed(
       album: 'album',
       watch_sync: 'sync',
       lookup: 'manage_search',
-      refile: 'drive_file_move',
     })[props.job.kind],
 )
 </script>

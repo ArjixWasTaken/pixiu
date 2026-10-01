@@ -13,7 +13,14 @@
       </p>
     </template>
 
-    <M3TextField v-model="data.username" autocomplete="username" autofocus label="Username" name="username" required />
+    <M3TextField
+      v-model="data.username"
+      :label="claiming ? 'Username' : 'Username or email'"
+      autocomplete="username"
+      autofocus
+      name="username"
+      required
+    />
 
     <M3TextField
       v-model="data.password"
@@ -42,14 +49,22 @@
       type="password"
     />
 
-    <p v-if="problem" class="m3-body-medium text-center text-(--schemes-error)">{{ problem }}</p>
+    <p v-if="problem || notice" class="m3-body-medium text-center text-(--schemes-error)" role="alert">
+      {{ problem || notice }}
+    </p>
 
     <M3Button class="w-full" data-testid="submit" type="submit">{{ claiming ? 'Create account' : 'Log in' }}</M3Button>
+    <SsoButton v-if="sso && !claiming" :href="authService.ssoStartUrl()" :name="sso.name" />
+
+    <div v-if="!claiming && (passwordReset || registration)" class="flex flex-wrap justify-center gap-2">
+      <M3Button v-if="passwordReset" variant="text" @click.prevent="$emit('forgot')">Forgot password?</M3Button>
+      <M3Button v-if="registration" variant="text" @click.prevent="$emit('register')">Ask for an account</M3Button>
+    </div>
   </AuthFormCard>
 </template>
 
 <script lang="ts" setup>
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { onBeforeUnmount, ref } from 'vue'
 import { authService } from '@/services/authService'
 import { getHttpErrorBody, isHttpError } from '@/services/http'
 import { logger } from '@/utils/logger'
@@ -59,26 +74,26 @@ import M3Button from '@/components/m3/M3Button.vue'
 import M3IconButton from '@/components/m3/M3IconButton.vue'
 import M3TextField from '@/components/m3/M3TextField.vue'
 import AuthFormCard from '@/components/auth/AuthFormCard.vue'
+import SsoButton from '@/components/auth/SsoButton.vue'
 
-const emit = defineEmits<{
-  (e: 'loggedIn'): void
-  (e: 'twoFactorRequired', loginToken: string): void
-  (e: 'forgotPassword'): void
+const props = defineProps<{
+  /** A fresh píxiū has no admin yet: the form creates the account instead. */
+  claiming: boolean
+  /** Whether a forgotten password can be reset by email. */
+  passwordReset: boolean
+  /** Whether anyone may ask for an account. */
+  registration: boolean
+  /** The single sign-on provider, if people may sign in with it. */
+  sso?: { name: string } | null
+  /** Why a single sign-on did not work. */
+  notice?: string
 }>()
 
+const emit = defineEmits<{ (e: 'loggedIn'): void; (e: 'forgot'): void; (e: 'register'): void }>()
+
 const failed = ref(false)
-/** A fresh píxiū has no admin yet: the form creates the account instead. */
-const claiming = ref(false)
 const problem = ref('')
 const showPassword = ref(false)
-
-onMounted(async () => {
-  try {
-    claiming.value = !(await authService.claimed())
-  } catch (error: unknown) {
-    logger.error(error)
-  }
-})
 
 let errorResetTimer: number | null = null
 
@@ -94,7 +109,7 @@ const { data, handleSubmit } = useForm<{ username: string; password: string; con
   onSubmit: async ({ username, password, confirm }) => {
     problem.value = ''
 
-    if (!claiming.value) {
+    if (!props.claiming) {
       return await authService.login(username, password)
     }
 
@@ -103,27 +118,22 @@ const { data, handleSubmit } = useForm<{ username: string; password: string; con
     }
 
     await authService.claim(username, password)
-    return null
   },
-  onSuccess: challenge => {
+  onSuccess: () => {
     failed.value = false
     data.password = ''
     data.confirm = ''
-
-    if (challenge) {
-      emit('twoFactorRequired', challenge.login_token)
-      return
-    }
-
     emit('loggedIn')
   },
   onError: (error: unknown) => {
     failed.value = true
     logger.error(error)
 
-    // A claim explains what is wrong; a failed login just shakes.
-    if (claiming.value) {
-      const body = isHttpError(error) ? getHttpErrorBody(error) : undefined
+    // Say what is wrong: a claim's problem, or why an account whose
+    // password is right cannot sign in (awaiting approval, turned off).
+    // A wrong password just shakes.
+    const body = isHttpError(error) ? getHttpErrorBody(error) : undefined
+    if (props.claiming || body?.code) {
       problem.value = body?.message ?? (error instanceof Error ? error.message : 'That did not work.')
     }
 

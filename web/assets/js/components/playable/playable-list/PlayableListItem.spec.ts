@@ -18,6 +18,7 @@ vi.mock('@/composables/useOfflinePlayback', () => ({
 }))
 
 import { setViewport } from '@/composables/useViewport'
+import { PlayableListContextKey } from '@/config/symbols'
 import Component from './PlayableListItem.vue'
 
 describe('playableListItem.vue', () => {
@@ -34,7 +35,7 @@ describe('playableListItem.vue', () => {
     },
   })
 
-  const renderComponent = (playable?: Playable, showDisc = false) => {
+  const renderComponent = (playable?: Playable, showDisc = false, context: PlayableListContext = {}) => {
     playable = playable ?? h.factory('song').make({ favorite: false })
 
     const row = {
@@ -46,6 +47,11 @@ describe('playableListItem.vue', () => {
       props: {
         item: row,
         showDisc,
+      },
+      global: {
+        provide: {
+          [<symbol>PlayableListContextKey]: [context],
+        },
       },
     })
 
@@ -73,6 +79,32 @@ describe('playableListItem.vue', () => {
     screen.getByText('Test Song')
     screen.getByText('Test Artist · Test Album')
     screen.getByRole('button', { name: 'Undo Favorite' })
+  })
+
+  it('says when a song was played on Recently Played', () => {
+    const song = h.factory('song').make({
+      album_name: 'Test Album',
+      artist_name: 'Test Artist',
+      played_at: new Date(Date.now() - 3 * 3600 * 1000).toISOString(),
+    })
+
+    setViewport({ mobile: false })
+    renderComponent(song, false, { type: 'RecentlyPlayed' })
+
+    screen.getByText('Test Artist · Test Album · played 3 hours ago')
+  })
+
+  it('leaves the play time out elsewhere', () => {
+    const song = h.factory('song').make({
+      album_name: 'Test Album',
+      artist_name: 'Test Artist',
+      played_at: new Date().toISOString(),
+    })
+
+    setViewport({ mobile: false })
+    renderComponent(song, false, { type: 'Favorites' })
+
+    screen.getByText('Test Artist · Test Album')
   })
 
   it('emits play event on double click', async () => {

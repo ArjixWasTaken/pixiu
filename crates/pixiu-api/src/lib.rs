@@ -7,6 +7,7 @@
 //! but signing in needs an API key as a bearer token; signing in hands one
 //! out.
 
+mod admin;
 mod albums;
 mod auth;
 mod bootstrap;
@@ -14,13 +15,19 @@ mod events;
 mod hunt;
 mod jobs;
 mod library;
+mod me;
 mod offerings;
 mod orphans;
 mod playlists;
+mod server_settings;
 mod settings;
 mod songs;
 mod sources;
+mod sso;
+mod throttle;
 mod watches;
+
+pub use throttle::Throttle;
 
 use std::{fmt::Display, sync::Arc};
 
@@ -29,13 +36,14 @@ use axum::{
     extract::{DefaultBodyLimit, FromRequestParts},
     http::{StatusCode, header, request::Parts},
     response::{IntoResponse, Response},
-    routing::{delete, get, post, put},
+    routing::{delete, get, patch, post, put},
 };
-use pixiu_browser::LoginDesk;
+use pixiu_accounts::{Mailer, Settings, oidc::Sso};
+use pixiu_browser::LoginDesks;
 use pixiu_core::SecretBox;
-use pixiu_db::{ApiKey, Db, User, now, toasty};
+use pixiu_db::{ApiKey, Db, Library, Role, User, UserStatus, now, toasty};
 use pixiu_hunt::Hunter;
-use pixiu_jobs::{Jobs, Warden};
+use pixiu_jobs::{Jobs, Wardens};
 use pixiu_treasury::{Offerings, Treasury};
 use serde::Serialize;
 
@@ -48,9 +56,21 @@ pub struct ApiState {
     pub treasury: Treasury,
     pub offerings: Offerings,
     pub hunter: Arc<Hunter>,
-    pub warden: Arc<Warden>,
+    /// Every user's YouTube Music session warden.
+    pub wardens: Arc<Wardens>,
     pub jobs: Arc<Jobs>,
-    pub login_desk: Arc<LoginDesk>,
+    /// Every user's login browser.
+    pub desks: Arc<LoginDesks>,
+    /// What admins set in the player: the public address, registration,
+    /// the mail server.
+    pub settings: Arc<Settings>,
+    pub mailer: Arc<Mailer>,
+    /// The single sign-on provider.
+    pub sso: Arc<Sso>,
+    /// Limits guessing passwords and flooding inboxes.
+    pub throttle: Arc<Throttle>,
+    /// Whether `X-Forwarded-For` names the client (behind a reverse proxy).
+    pub trust_proxy_headers: bool,
 }
 
 /// Builds the API router. Paths are absolute (`/api/...`), so mount it
@@ -61,6 +81,13 @@ pub fn router(state: ApiState) -> Router {
         .route("/api/auth/login", post(auth::login))
         .route("/api/auth/setup", post(auth::setup))
         .route("/api/auth/session", delete(auth::logout))
+        .route("/api/auth/forgot", post(auth::forgot))
+        .route("/api/auth/reset", post(auth::reset))
+        .route("/api/auth/verify-email", post(auth::verify_email))
+        .route("/api/auth/register", post(auth::register))
+        .route("/api/auth/oidc/start", get(sso::start))
+        .route("/api/auth/oidc/callback", get(sso::callback))
+        .route("/api/auth/oidc/exchange", post(sso::exchange))
         .route("/api/bootstrap", get(bootstrap::bootstrap))
         .route("/api/albums", get(library::albums))
         .route("/api/artists", get(library::artists))
@@ -126,15 +153,61 @@ pub fn router(state: ApiState) -> Router {
         )
         .route("/api/offerings/{id}", delete(offerings::discard))
         .route("/api/settings", get(settings::show))
-        .route("/api/settings/layout", put(settings::save_layout))
-        .route(
-            "/api/settings/layout/preview",
-            get(settings::preview_layout),
-        )
-        .route("/api/settings/refile", post(settings::refile))
         .route("/api/settings/lookup-all", post(settings::lookup_all))
-        .route("/api/keys", post(settings::create_key))
-        .route("/api/keys/{id}", delete(settings::revoke_key))
+        .route("/api/me", get(me::show).put(me::update))
+        .route("/api/me/password", put(me::change_password))
+        .route("/api/me/keys", get(me::keys).post(me::create_key))
+        .route("/api/me/keys/{id}", delete(me::revoke_key))
+        .route("/api/me/email/resend", post(me::resend_verification))
+        .route("/api/me/alerts", get(me::alerts).put(me::set_alerts))
+        .route("/api/me/identities", get(sso::list))
+        .route("/api/me/identities/oidc", post(sso::link))
+        .route("/api/me/identities/{id}", delete(sso::unlink))
+        .route("/api/admin/users", get(admin::list).post(admin::create))
+        .route(
+            "/api/admin/users/{id}",
+            patch(admin::update).delete(admin::delete),
+        )
+        .route("/api/admin/users/{id}/password", post(admin::set_password))
+        .route(
+            "/api/admin/users/{id}/password-reset",
+            post(admin::send_reset),
+        )
+        .route(
+            "/api/admin/users/{id}/verification",
+            post(admin::resend_verification),
+        )
+        .route(
+            "/api/admin/registrations/{id}/approve",
+            post(admin::approve),
+        )
+        .route("/api/admin/registrations/{id}/deny", post(admin::deny))
+        .route("/api/admin/storage", get(admin::storage))
+        .route("/api/admin/settings", get(server_settings::show))
+        .route(
+            "/api/admin/settings/server",
+            put(server_settings::set_server),
+        )
+        .route(
+            "/api/admin/settings/smtp",
+            put(server_settings::set_smtp).delete(server_settings::remove_smtp),
+        )
+        .route(
+            "/api/admin/settings/smtp/test",
+            post(server_settings::test_smtp),
+        )
+        .route(
+            "/api/admin/settings/registration",
+            put(server_settings::set_registration),
+        )
+        .route(
+            "/api/admin/settings/oidc",
+            put(server_settings::set_oidc).delete(server_settings::remove_oidc),
+        )
+        .route(
+            "/api/admin/settings/oidc/test",
+            post(server_settings::test_oidc),
+        )
         .route("/api/sources", get(sources::status))
         .route("/api/sources/validate", post(sources::validate))
         .route("/api/sources/refresh", post(sources::refresh))
@@ -149,11 +222,13 @@ pub fn router(state: ApiState) -> Router {
         .with_state(state)
 }
 
-/// A failed request, answered as `{"message": ...}` as koel expects.
+/// A failed request, answered as `{"message": ...}` as koel expects, with
+/// a `code` the player can act on when there is one.
 #[derive(Debug)]
 pub struct ApiError {
     status: StatusCode,
     message: String,
+    code: Option<&'static str>,
 }
 
 impl ApiError {
@@ -161,7 +236,17 @@ impl ApiError {
         Self {
             status,
             message: message.into(),
+            code: None,
         }
+    }
+
+    fn with_code(mut self, code: &'static str) -> Self {
+        self.code = Some(code);
+        self
+    }
+
+    fn forbidden(message: impl Into<String>) -> Self {
+        Self::new(StatusCode::FORBIDDEN, message)
     }
 
     fn unauthorized() -> Self {
@@ -188,11 +273,14 @@ impl IntoResponse for ApiError {
         #[derive(Serialize)]
         struct Body {
             message: String,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            code: Option<&'static str>,
         }
         (
             self.status,
             Json(Body {
                 message: self.message,
+                code: self.code,
             }),
         )
             .into_response()
@@ -203,6 +291,31 @@ impl From<toasty::Error> for ApiError {
     fn from(error: toasty::Error) -> Self {
         tracing::error!(%error, "database error in the web API");
         Self::new(StatusCode::INTERNAL_SERVER_ERROR, "internal error")
+    }
+}
+
+impl From<pixiu_accounts::AccountError> for ApiError {
+    fn from(error: pixiu_accounts::AccountError) -> Self {
+        use pixiu_accounts::AccountError;
+        match error {
+            AccountError::Invalid(message) => Self::unprocessable(message),
+            AccountError::NotFound => Self::not_found("user"),
+            error @ AccountError::LinkExpired => {
+                Self::new(StatusCode::GONE, error.to_string()).with_code("expired")
+            }
+            error @ AccountError::RegistrationClosed => {
+                Self::new(StatusCode::NOT_FOUND, error.to_string())
+            }
+            error @ (AccountError::UsernameTaken
+            | AccountError::EmailTaken
+            | AccountError::LastAdmin
+            | AccountError::AlreadySetUp
+            | AccountError::NotPending
+            | AccountError::IdentityTaken) => Self::new(StatusCode::CONFLICT, error.to_string()),
+            error @ (AccountError::Db(_) | AccountError::Join(_)) => {
+                Self::internal(error, "changing an account")
+            }
+        }
     }
 }
 
@@ -243,6 +356,18 @@ pub(crate) struct Session {
     pub key: ApiKey,
 }
 
+impl Session {
+    /// The signed-in user's library: all they see and change.
+    pub(crate) fn library(&self, state: &ApiState) -> Library {
+        Library::new(state.db.clone(), self.user.id)
+    }
+
+    /// The signed-in user's id, whose library everything is in.
+    pub(crate) fn owner(&self) -> u64 {
+        self.user.id
+    }
+}
+
 impl FromRequestParts<ApiState> for Session {
     type Rejection = ApiError;
 
@@ -271,11 +396,32 @@ impl FromRequestParts<ApiState> for Session {
             return Err(ApiError::unauthorized());
         };
         let user = User::get_by_id(&mut db, &key.user_id).await?;
+        // Disabled accounts (and ones not yet approved or confirmed) are
+        // signed out wherever they were signed in.
+        if user.status != UserStatus::Active {
+            return Err(ApiError::unauthorized());
+        }
         toasty::update!(key {
             last_used_at: Some(now()),
         })
         .exec(&mut db)
         .await?;
         Ok(Self { user, key })
+    }
+}
+
+/// A signed-in admin.
+pub(crate) struct AdminSession(pub Session);
+
+impl FromRequestParts<ApiState> for AdminSession {
+    type Rejection = ApiError;
+
+    async fn from_request_parts(parts: &mut Parts, state: &ApiState) -> ApiResult<Self> {
+        let session = Session::from_request_parts(parts, state).await?;
+        if session.user.role == Role::Admin {
+            Ok(Self(session))
+        } else {
+            Err(ApiError::forbidden("Only admins can do that."))
+        }
     }
 }

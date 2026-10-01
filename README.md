@@ -26,7 +26,11 @@ that downloads music from YouTube Music into a library it owns.
 | **Tagging** | [MusicBrainz](https://musicbrainz.org/) lookups, Cover Art Archive covers, Wikipedia bios; pick a release when unsure; edit albums by hand. |
 | **Lyrics** | From the file, [LRCLIB](https://lrclib.net) or YouTube Music; instrumentals recognized. |
 | **YouTube Music login** | A real browser on the server, shown in the player (two-factor works; password managers via [HTML-in-Canvas](https://github.com/WICG/html-in-canvas) where available). Cookies checked and refreshed automatically. |
-| **File layout** | Template-based, e.g. `{album_artist}/[{year} - ]{album}/{track:02} {title}`; files move on request. |
+| **Accounts** | A library, YouTube Music login and settings per account; admins make accounts, turn them off, reset passwords, promote admins, and see what each library takes up on disk. |
+| **Registration** | Optional: anyone may ask for an account; an admin approves (the applicant confirms their email) or denies. |
+| **Email** | Over SMTP: password resets, email confirmations, and alerts (YouTube Music signed out, a watch failing), each switchable. |
+| **Single sign-on** | Any OpenID Connect provider (e.g. [Authelia](https://www.authelia.com/)); people link their account there, then sign in with it. |
+| **Storage** | One copy of each file in `treasure/.store`, shared by every library holding it; edits change the library, never the files. |
 | **Streaming** | Original files with seeking, or transcoded (MP3, Opus, AAC) with FFmpeg's libraries. |
 | **Subsonic API** | At `/rest`: browsing, lists, search, stars, ratings, scrobbles, play queues, playlists, lyrics, covers, similar songs. Password, token or API key auth; CORS. Tested with Feishin and Airsonic Refix. |
 
@@ -39,7 +43,13 @@ mkdir -p data treasure   # writable by uid 1000
 docker compose up -d --build
 ```
 
-Open <http://localhost:4533>, create the admin account, and use the same credentials in Subsonic apps.
+Open <http://localhost:4533>, create the admin account, and use the same credentials in Subsonic apps. Then, under **Settings**:
+
+| Tab | |
+|---|---|
+| **Email** | The mail server, with a test email |
+| **Sign-in** | The public address (links in emails start with it), registration, single sign-on (with the redirect URI to give the provider) |
+| **Users** | Accounts, and requests for one |
 
 **From source** needs:
 
@@ -61,15 +71,34 @@ Defaults, then `pixiu.toml` (or `PIXIU_CONFIG`), then `PIXIU_` environment varia
 |---|---|---|
 | `server.host` | `127.0.0.1` | `0.0.0.0` in Docker |
 | `server.port` | `4533` | |
+| `server.trust_proxy_headers` | `false` | Read the client address from `X-Forwarded-For`; only behind a reverse proxy |
 | `paths.data_dir` | `data` | Database, secret key, caches, staged uploads |
 | `paths.treasure_dir` | `treasure` | The music library |
 | `paths.web_dir` | `web/` beside the binary, else `web/dist` | The web player |
 | `browser.executable` | from `PATH` | Chromium |
 | `browser.no_sandbox` | `false` | Set in Docker |
+| `browser.max_open` | `2` | Browsers open at once, for everyone's YouTube Music logins |
 | `stream.format` | `mp3` | Fallback transcode format: `mp3`, `opus`, `aac` |
 | `stream.max_transcodes` | `4` | Concurrent transcodes |
 | `enrich.contact` | unset | Your email or URL, sent only in the `User-Agent` of lookups |
 | `hunt.botguard` | unset | [`rustypipe-botguard`](https://codeberg.org/ThetaDev/rustypipe-botguard) path (glibc only, not in Docker) |
+
+## Files
+
+| Path | |
+|---|---|
+| `treasure/.store/audio/<aa>/<sha256>.<ext>` | Audio, named by content |
+| `treasure/.store/images/<aa>/<sha256>.<ext>` | Covers and artist pictures |
+| `data/pixiu.db` | Libraries, accounts, settings (SQLite) |
+| `data/secret.key` | Seals stored passwords and secrets; keep it with the database |
+| `data/users/<id>/` | Each account's login browser and YouTube Music session |
+
+## Upgrading to multiple accounts
+
+- Back up `data` and `treasure` first.
+- The first start moves every file into `treasure/.store` (hard links, then the old paths go; resumable); files it does not know stay where they are.
+- The existing account becomes the admin and keeps the library, its login browser and its YouTube Music session.
+- The file layout template and "Move files" are gone; Subsonic apps see a path made up from the tags.
 
 ## Development
 
@@ -85,16 +114,17 @@ Defaults, then `pixiu.toml` (or `PIXIU_CONFIG`), then `PIXIU_` environment varia
 | Crate | |
 |---|---|
 | `pixiu` | Binary: config, wiring, serving |
+| `pixiu-accounts` | Accounts, server settings, email, alerts, registration, single sign-on |
 | `pixiu-api` | Web player API (`/api`) |
 | `pixiu-browser` | Login browser (Chromium over CDP) |
-| `pixiu-core` | Config, secrets, passwords |
+| `pixiu-core` | Config, secrets, passwords, alerts |
 | `pixiu-db` | [Toasty](https://github.com/tokio-rs/toasty) models and migrations (SQLite) |
 | `pixiu-enrich` | MusicBrainz, Cover Art Archive, LRCLIB, Wikipedia |
 | `pixiu-hunt` | YouTube Music ([rustypipe](https://codeberg.org/ThetaDev/rustypipe)), downloads |
-| `pixiu-jobs` | Job queue, session warden |
+| `pixiu-jobs` | Job queue, session wardens |
 | `pixiu-media` | Remuxing and transcoding (FFmpeg) |
 | `pixiu-subsonic` | OpenSubsonic API (`/rest`) |
-| `pixiu-treasury` | Library on disk: tags, layout, ingest, uploads |
+| `pixiu-treasury` | The shared store, ingest, edits, uploads |
 | `web/` | Web player (Vue, TypeScript, Vite+, Material 3) |
 
 ## Credits

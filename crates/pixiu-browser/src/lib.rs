@@ -38,7 +38,7 @@ use chromiumoxide::{
 use futures_util::StreamExt;
 use serde::Deserialize;
 use tokio::{
-    sync::{broadcast, watch},
+    sync::{OwnedSemaphorePermit, Semaphore, broadcast, watch},
     task::JoinHandle,
 };
 
@@ -57,6 +57,9 @@ pub enum BrowserError {
     Io(#[from] std::io::Error),
     #[error("page script: {0}")]
     Script(String),
+    /// Every browser píxiū allows at once is in use.
+    #[error("another sign-in is running on the server; try again in a few minutes")]
+    Busy,
 }
 
 pub use fields::{Field, FieldKind};
@@ -474,11 +477,19 @@ pub struct Viewer {
     pub fields: watch::Receiver<Vec<Field>>,
 }
 
-/// Holds at most one login browser, shared by every web player viewer, and
-/// closes it once nobody has used it for a while.
+/// A login browser and the permit it runs under.
+struct Open {
+    browser: LoginBrowser,
+    _permit: OwnedSemaphorePermit,
+}
+
+/// One user's login browser: at most one open, shared by that user's web
+/// player tabs, and closed once nobody has used it for a while. It runs
+/// under a permit from the server-wide cap on browsers.
 pub struct LoginDesk {
     options: BrowserOptions,
-    current: tokio::sync::Mutex<Option<LoginBrowser>>,
+    permits: Arc<Semaphore>,
+    current: tokio::sync::Mutex<Option<Open>>,
     last_used: Mutex<std::time::Instant>,
 }
 
@@ -486,10 +497,19 @@ pub struct LoginDesk {
 pub const IDLE_TIMEOUT: Duration = Duration::from_secs(600);
 
 impl LoginDesk {
+    /// A desk of its own, under its own cap of one browser.
     #[must_use]
     pub fn new(options: BrowserOptions) -> Arc<Self> {
+        Self::sharing(options, Arc::new(Semaphore::new(1)))
+    }
+
+    /// A desk whose browsers count against `permits`, shared with other
+    /// desks.
+    #[must_use]
+    pub fn sharing(options: BrowserOptions, permits: Arc<Semaphore>) -> Arc<Self> {
         let desk = Arc::new(Self {
             options,
+            permits,
             current: tokio::sync::Mutex::new(None),
             last_used: Mutex::new(std::time::Instant::now()),
         });
@@ -517,17 +537,24 @@ impl LoginDesk {
         *self.last_used.lock().unwrap() = std::time::Instant::now();
     }
 
-    /// Opens a browser at `url`, replacing any open one.
+    /// Opens a browser at `url`, replacing this desk's open one.
     ///
     /// # Errors
     ///
-    /// Fails when Chromium cannot be started.
+    /// Fails when every browser the server allows is in use
+    /// ([`BrowserError::Busy`]), or Chromium cannot be started.
     pub async fn open(&self, url: &str) -> Result<(), BrowserError> {
         let mut current = self.current.lock().await;
         if let Some(previous) = current.take() {
-            previous.close().await;
+            previous.browser.close().await;
         }
-        *current = Some(LoginBrowser::launch(&self.options, url).await?);
+        let permit = Arc::clone(&self.permits)
+            .try_acquire_owned()
+            .map_err(|_| BrowserError::Busy)?;
+        *current = Some(Open {
+            browser: LoginBrowser::launch(&self.options, url).await?,
+            _permit: permit,
+        });
         self.touch();
         Ok(())
     }
@@ -539,7 +566,7 @@ impl LoginDesk {
     /// What a viewer of the open browser needs.
     pub async fn watch(&self) -> Option<Viewer> {
         let current = self.current.lock().await;
-        current.as_ref().map(|browser| Viewer {
+        current.as_ref().map(|Open { browser, .. }| Viewer {
             latest: browser.latest_frame(),
             frames: browser.frames(),
             fields: browser.fields(),
@@ -554,7 +581,7 @@ impl LoginDesk {
     pub async fn input(&self, input: Input) -> Result<(), BrowserError> {
         self.touch();
         match self.current.lock().await.as_ref() {
-            Some(browser) => browser.input(input).await,
+            Some(open) => open.browser.input(input).await,
             None => Ok(()),
         }
     }
@@ -563,7 +590,7 @@ impl LoginDesk {
     /// `accounts.google.com`.
     pub async fn host(&self) -> Option<String> {
         let url = match self.current.lock().await.as_ref() {
-            Some(browser) => browser.url().await?,
+            Some(open) => open.browser.url().await?,
             None => return None,
         };
         host_of(&url)
@@ -576,20 +603,20 @@ impl LoginDesk {
     /// Fails when the browser connection is broken.
     pub async fn cookies(&self, domain_suffix: &str) -> Result<Vec<Cookie>, BrowserError> {
         match self.current.lock().await.as_ref() {
-            Some(browser) => browser.cookies(domain_suffix).await,
+            Some(open) => open.browser.cookies(domain_suffix).await,
             None => Ok(Vec::new()),
         }
     }
 
     /// Closes the open browser, keeping its profile.
     pub async fn close(&self) {
-        if let Some(browser) = self.current.lock().await.take() {
-            browser.close().await;
+        if let Some(open) = self.current.lock().await.take() {
+            open.browser.close().await;
         }
     }
 
-    /// See [`harvest`]. Waits for an open login browser to close first:
-    /// two browsers cannot share a profile.
+    /// See [`harvest`]. Waits for this desk's open login browser to close
+    /// first (two browsers cannot share a profile), and for a free permit.
     ///
     /// # Errors
     ///
@@ -600,7 +627,78 @@ impl LoginDesk {
         domain_suffix: &str,
     ) -> Result<Vec<Cookie>, BrowserError> {
         let _exclusive = self.current.lock().await;
+        let _permit = Arc::clone(&self.permits)
+            .acquire_owned()
+            .await
+            .map_err(|_| BrowserError::Busy)?;
         harvest(&self.options, url, domain_suffix).await
+    }
+}
+
+/// Every user's login desk, and the server-wide cap on browsers open at
+/// once (sign-ins and cookie refreshes alike).
+pub struct LoginDesks {
+    executable: Option<PathBuf>,
+    no_sandbox: bool,
+    /// Profiles live in `<users>/<id>/browser-profile`.
+    users_dir: PathBuf,
+    permits: Arc<Semaphore>,
+    desks: Mutex<std::collections::HashMap<u64, Arc<LoginDesk>>>,
+}
+
+impl LoginDesks {
+    /// At most `max_open` browsers run at once (at least one).
+    #[must_use]
+    pub fn new(
+        executable: Option<PathBuf>,
+        no_sandbox: bool,
+        users_dir: PathBuf,
+        max_open: usize,
+    ) -> Arc<Self> {
+        Arc::new(Self {
+            executable,
+            no_sandbox,
+            users_dir,
+            permits: Arc::new(Semaphore::new(max_open.max(1))),
+            desks: Mutex::default(),
+        })
+    }
+
+    /// What the server keeps of `owner`'s: their browser profile, and their
+    /// YouTube Music client's cache.
+    #[must_use]
+    pub fn user_dir(&self, owner: u64) -> PathBuf {
+        self.users_dir.join(owner.to_string())
+    }
+
+    /// Where `owner`'s browser keeps its profile.
+    #[must_use]
+    pub fn profile_dir(&self, owner: u64) -> PathBuf {
+        self.user_dir(owner).join("browser-profile")
+    }
+
+    /// `owner`'s desk, made on first use.
+    #[must_use]
+    pub fn desk(&self, owner: u64) -> Arc<LoginDesk> {
+        let mut desks = self.desks.lock().unwrap();
+        Arc::clone(desks.entry(owner).or_insert_with(|| {
+            LoginDesk::sharing(
+                BrowserOptions {
+                    executable: self.executable.clone(),
+                    profile_dir: self.profile_dir(owner),
+                    no_sandbox: self.no_sandbox,
+                },
+                Arc::clone(&self.permits),
+            )
+        }))
+    }
+
+    /// Closes `owner`'s browser and forgets their desk.
+    pub async fn remove(&self, owner: u64) {
+        let desk = self.desks.lock().unwrap().remove(&owner);
+        if let Some(desk) = desk {
+            desk.close().await;
+        }
     }
 }
 
@@ -814,6 +912,26 @@ fn host_of(url: &str) -> Option<String> {
 
 #[cfg(test)]
 mod host_tests {
+    #[tokio::test]
+    async fn desks_share_the_browser_cap() {
+        let dir = tempfile::tempdir().unwrap();
+        let desks = super::LoginDesks::new(None, true, dir.path().to_owned(), 1);
+        let (mine, theirs) = (desks.desk(1), desks.desk(2));
+        assert!(std::sync::Arc::ptr_eq(&mine, &desks.desk(1)));
+        assert_ne!(mine.options().profile_dir, theirs.options().profile_dir);
+        assert!(mine.options().profile_dir.ends_with("1/browser-profile"));
+
+        // With the one permit taken, nobody else starts a browser.
+        let _held = std::sync::Arc::clone(&desks.permits)
+            .try_acquire_owned()
+            .unwrap();
+        assert!(matches!(
+            theirs.open("about:blank").await,
+            Err(super::BrowserError::Busy)
+        ));
+        assert!(!theirs.is_open().await);
+    }
+
     use super::host_of;
 
     #[test]

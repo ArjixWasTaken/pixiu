@@ -1,8 +1,23 @@
 import { describe, expect, it, vi } from 'vite-plus/test'
+import * as floating from '@floating-ui/dom'
+import { waitFor } from '@testing-library/vue'
 import { createHarness } from '@/__tests__/TestHarness'
 import { shallowRef } from 'vue'
 import { ContextMenuKey } from '@/config/symbols'
+import { logger } from '@/utils/logger'
 import Component from './ContextMenu.vue'
+
+// On a desktop: phones show menus as bottom sheets, unplaced.
+vi.mock('@/composables/useViewport', async () => {
+  const { ref } = await import('vue')
+  return { useViewport: () => ({ isMobile: ref(false), isWide: ref(false) }) }
+})
+
+// Placement runs as usual; the spec looks at how it was asked for.
+vi.mock('@floating-ui/dom', async importOriginal => {
+  const original = await importOriginal<typeof import('@floating-ui/dom')>()
+  return { ...original, computePosition: vi.fn(original.computePosition) }
+})
 
 describe('contextMenu', () => {
   const h = createHarness()
@@ -74,6 +89,25 @@ describe('contextMenu', () => {
     hideSpy.mockRestore()
   })
 
+  it('closes cleanly while it is still being placed', async () => {
+    const errorSpy = vi.spyOn(logger, 'error')
+    let place: (position: floating.ComputePositionReturn) => void = () => {}
+    vi.mocked(floating.computePosition)
+      .mockClear()
+      .mockImplementationOnce(() => new Promise(resolve => (place = resolve)))
+    const options = shallowRef<any>({ component: null, position: { top: 0, left: 0 } })
+    const { unmount } = h.render(Component, provide(options))
+
+    options.value = { component: { template: '<div>Menu</div>' }, position: { top: 100, left: 200 } }
+    await waitFor(() => expect(floating.computePosition).toHaveBeenCalled())
+    unmount()
+    place({ x: 10, y: 20, placement: 'bottom-start', strategy: 'fixed', middlewareData: {} })
+    // Everything the placement had left to do.
+    await new Promise(resolve => setTimeout(resolve, 0))
+
+    expect(errorSpy).not.toHaveBeenCalled()
+  })
+
   it('applies extra class', () => {
     const { container } = h.render(Component, {
       props: { extraClass: 'my-custom-class' },
@@ -81,5 +115,19 @@ describe('contextMenu', () => {
     })
 
     expect(container.querySelector('.my-custom-class[popover]')).toBeTruthy()
+  })
+
+  it('slides a menu too tall for its spot up or down, to keep it whole', async () => {
+    const place = vi.mocked(floating.computePosition)
+    place.mockClear()
+    const options = shallowRef<any>({ component: null, position: { top: 0, left: 0 } })
+    h.render(Component, provide(options))
+
+    options.value = { component: { template: '<div>Menu</div>' }, position: { top: 880, left: 200 } }
+    await waitFor(() => expect(place).toHaveBeenCalled())
+
+    const middleware = place.mock.calls[0][2]!.middleware!.filter(Boolean) as floating.Middleware[]
+    const shift = middleware.find(({ name }) => name === 'shift')!
+    expect(shift.options).toMatchObject({ crossAxis: true })
   })
 })

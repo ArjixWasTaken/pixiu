@@ -12,7 +12,7 @@
 <script lang="ts" setup>
 import { computed, toRefs } from 'vue'
 
-import UserAvatar from '@/components/user/UserAvatar.vue'
+import UserAvatar from '@/components/ui/UserAvatar.vue'
 
 const props = defineProps<{ collaborators: PlaylistCollaborator[] }>()
 const { collaborators } = toRefs(props)

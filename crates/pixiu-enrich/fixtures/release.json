@@ -7,7 +7,17 @@
   "artist-credit": [
     { "name": "Kevin MacLeod", "joinphrase": "", "artist": { "id": "art-kevin", "name": "Kevin MacLeod", "sort-name": "MacLeod, Kevin" } }
   ],
-  "release-group": { "id": "rg-august", "title": "The August Album", "primary-type": "Album" },
+  "release-group": {
+    "id": "rg-august",
+    "title": "The August Album",
+    "primary-type": "Album",
+    "genres": [
+      { "id": "g1", "name": "ambient", "count": 2, "disambiguation": "" },
+      { "id": "g2", "name": "r&b", "count": 3, "disambiguation": "" },
+      { "id": "g3", "name": "electronic", "count": 3, "disambiguation": "" }
+    ]
+  },
+  "genres": [],
   "cover-art-archive": { "artwork": true, "count": 1, "front": true, "back": false },
   "media": [
     {

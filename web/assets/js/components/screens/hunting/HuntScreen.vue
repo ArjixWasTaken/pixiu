@@ -65,6 +65,7 @@ import { ref } from 'vue'
 import { huntingService } from '@/services/huntingService'
 import type { HuntAlbum, HuntTrack } from '@/services/huntingService'
 import { useForm } from '@/composables/useForm'
+import { useRouter } from '@/composables/useRouter'
 import { useMessageToaster } from '@/composables/useMessageToaster'
 import { useErrorHandler } from '@/composables/useErrorHandler'
 
@@ -101,6 +102,18 @@ const { data, handleSubmit } = useForm<{ q: string }>({
     }
   },
   onSuccess: found => (results.value = found),
+})
+
+const { getRouteParam, onScreenActivated } = useRouter()
+
+// Library search sends its query along: `/discover?q=…`.
+onScreenActivated('Hunt', () => {
+  const q = getRouteParam('q')?.trim()
+
+  if (q && q !== lastQuery.value) {
+    data.q = q
+    handleSubmit()
+  }
 })
 
 const grab = async (item: HuntAlbum | HuntTrack, request: () => Promise<unknown>) => {

@@ -35,7 +35,7 @@ use axum::{
 use std::sync::Arc;
 
 use pixiu_core::SecretBox;
-use pixiu_db::{Db, toasty};
+use pixiu_db::{Db, Library, User, toasty};
 use pixiu_treasury::Treasury;
 use tokio::sync::Semaphore;
 use tower_http::cors::{Any, CorsLayer};
@@ -97,6 +97,77 @@ pub fn router(state: SubsonicState) -> Router {
         .layer(cors)
         .with_state(state)
 }
+
+/// A request's context: who asks, and their library, which is all they
+/// see.
+pub(crate) struct Cx<'a> {
+    pub state: &'a SubsonicState,
+    pub user: &'a User,
+    pub lib: Library,
+}
+
+impl Cx<'_> {
+    /// The caller, for "now playing".
+    pub(crate) fn listener(&self) -> pixiu_core::playing::Listener<'_> {
+        pixiu_core::playing::Listener {
+            id: self.user.id,
+            name: &self.user.username,
+        }
+    }
+}
+
+/// The methods píxiū answers, besides those it answers with nothing
+/// (see `system::empty`).
+pub const METHODS: &[&str] = &[
+    "ping",
+    "getLicense",
+    "getOpenSubsonicExtensions",
+    "getUser",
+    "getUsers",
+    "tokenInfo",
+    "getScanStatus",
+    "startScan",
+    "getMusicFolders",
+    "getIndexes",
+    "getArtists",
+    "getArtist",
+    "getAlbum",
+    "getSong",
+    "getMusicDirectory",
+    "getGenres",
+    "getAlbumInfo",
+    "getAlbumInfo2",
+    "getArtistInfo",
+    "getArtistInfo2",
+    "getAlbumList",
+    "getAlbumList2",
+    "getRandomSongs",
+    "getSongsByGenre",
+    "search2",
+    "search3",
+    "stream",
+    "download",
+    "getCoverArt",
+    "getPlayQueue",
+    "savePlayQueue",
+    "getLyrics",
+    "getLyricsBySongId",
+    "getPlaylists",
+    "getPlaylist",
+    "createPlaylist",
+    "updatePlaylist",
+    "deletePlaylist",
+    "scrobble",
+    "getNowPlaying",
+    "star",
+    "unstar",
+    "setRating",
+    "getStarred",
+    "getStarred2",
+    "getTopSongs",
+    "getSimilarSongs",
+    "getSimilarSongs2",
+];
 
 pub(crate) enum Failure {
     Api(ApiError),
@@ -177,53 +248,59 @@ async fn dispatch(
         return Ok(system::extensions().into());
     }
     let user = auth::authenticate(state, params).await?;
+    let cx = Cx {
+        state,
+        user: &user,
+        lib: Library::new(state.db.clone(), user.id),
+    };
+    let cx = &cx;
 
     Ok(match name {
         "ping" => Payload::default().into(),
         "getLicense" => system::license().into(),
-        "getUser" => system::user(&user, params)?.into(),
-        "getUsers" => system::users(&user).into(),
+        "getUser" => system::user(cx, params).await?.into(),
+        "getUsers" => system::users(cx).await?.into(),
         "tokenInfo" => system::token_info(&user).into(),
-        "getScanStatus" | "startScan" => system::scan_status(state).await?.into(),
+        "getScanStatus" | "startScan" => system::scan_status(cx).await?.into(),
         "getMusicFolders" => browse::music_folders().into(),
-        "getIndexes" => browse::artists(state, false).await?.into(),
-        "getArtists" => browse::artists(state, true).await?.into(),
-        "getArtist" => browse::artist(state, params).await?.into(),
-        "getAlbum" => browse::album(state, params).await?.into(),
-        "getSong" => browse::song(state, params).await?.into(),
-        "getMusicDirectory" => browse::music_directory(state, params).await?.into(),
-        "getGenres" => browse::genres(state).await?.into(),
-        "getAlbumInfo" | "getAlbumInfo2" => browse::album_info(state, params).await?.into(),
-        "getArtistInfo" => browse::artist_info(state, params, false).await?.into(),
-        "getArtistInfo2" => browse::artist_info(state, params, true).await?.into(),
-        "getAlbumList" => lists::album_list(state, params, false).await?.into(),
-        "getAlbumList2" => lists::album_list(state, params, true).await?.into(),
-        "getRandomSongs" => lists::random_songs(state, params).await?.into(),
-        "getSongsByGenre" => lists::songs_by_genre(state, params).await?.into(),
-        "search2" => search::search(state, params, false).await?.into(),
-        "search3" => search::search(state, params, true).await?.into(),
-        "stream" => Reply::Raw(media::stream(state, &user, params, method, headers, false).await?),
-        "download" => Reply::Raw(media::stream(state, &user, params, method, headers, true).await?),
-        "getCoverArt" => Reply::Raw(media::cover_art(state, params, method, headers).await?),
-        "getPlayQueue" => queue::get(state, &user).await?.into(),
-        "getLyrics" => lyrics::by_name(state, params).await?.into(),
-        "getLyricsBySongId" => lyrics::by_song(state, params).await?.into(),
-        "getPlaylists" => playlists::list(state, &user).await?.into(),
-        "getPlaylist" => playlists::get(state, &user, params).await?.into(),
-        "createPlaylist" => playlists::create(state, &user, params).await?.into(),
-        "updatePlaylist" => playlists::update(state, params).await?.into(),
-        "deletePlaylist" => playlists::delete(state, params).await?.into(),
-        "scrobble" => annotations::scrobble(state, &user, params).await?.into(),
-        "getNowPlaying" => playing::now_playing(state).await?.into(),
-        "star" => stars::star(state, params).await?.into(),
-        "unstar" => stars::unstar(state, params).await?.into(),
-        "setRating" => stars::set_rating(state, params).await?.into(),
-        "getStarred" => stars::starred(state, false).await?.into(),
-        "getStarred2" => stars::starred(state, true).await?.into(),
-        "getTopSongs" => discovery::top_songs(state, params).await?.into(),
-        "getSimilarSongs" => discovery::similar_songs(state, params, false).await?.into(),
-        "getSimilarSongs2" => discovery::similar_songs(state, params, true).await?.into(),
-        "savePlayQueue" => queue::save(state, &user, params).await?.into(),
+        "getIndexes" => browse::artists(cx, false).await?.into(),
+        "getArtists" => browse::artists(cx, true).await?.into(),
+        "getArtist" => browse::artist(cx, params).await?.into(),
+        "getAlbum" => browse::album(cx, params).await?.into(),
+        "getSong" => browse::song(cx, params).await?.into(),
+        "getMusicDirectory" => browse::music_directory(cx, params).await?.into(),
+        "getGenres" => browse::genres(cx).await?.into(),
+        "getAlbumInfo" | "getAlbumInfo2" => browse::album_info(cx, params).await?.into(),
+        "getArtistInfo" => browse::artist_info(cx, params, false).await?.into(),
+        "getArtistInfo2" => browse::artist_info(cx, params, true).await?.into(),
+        "getAlbumList" => lists::album_list(cx, params, false).await?.into(),
+        "getAlbumList2" => lists::album_list(cx, params, true).await?.into(),
+        "getRandomSongs" => lists::random_songs(cx, params).await?.into(),
+        "getSongsByGenre" => lists::songs_by_genre(cx, params).await?.into(),
+        "search2" => search::search(cx, params, false).await?.into(),
+        "search3" => search::search(cx, params, true).await?.into(),
+        "stream" => Reply::Raw(media::stream(cx, params, method, headers, false).await?),
+        "download" => Reply::Raw(media::stream(cx, params, method, headers, true).await?),
+        "getCoverArt" => Reply::Raw(media::cover_art(cx, params, method, headers).await?),
+        "getPlayQueue" => queue::get(cx).await?.into(),
+        "getLyrics" => lyrics::by_name(cx, params).await?.into(),
+        "getLyricsBySongId" => lyrics::by_song(cx, params).await?.into(),
+        "getPlaylists" => playlists::list(cx).await?.into(),
+        "getPlaylist" => playlists::get(cx, params).await?.into(),
+        "createPlaylist" => playlists::create(cx, params).await?.into(),
+        "updatePlaylist" => playlists::update(cx, params).await?.into(),
+        "deletePlaylist" => playlists::delete(cx, params).await?.into(),
+        "scrobble" => annotations::scrobble(cx, params).await?.into(),
+        "getNowPlaying" => playing::now_playing(cx).await?.into(),
+        "star" => stars::star(cx, params).await?.into(),
+        "unstar" => stars::unstar(cx, params).await?.into(),
+        "setRating" => stars::set_rating(cx, params).await?.into(),
+        "getStarred" => stars::starred(cx, false).await?.into(),
+        "getStarred2" => stars::starred(cx, true).await?.into(),
+        "getTopSongs" => discovery::top_songs(cx, params).await?.into(),
+        "getSimilarSongs" => discovery::similar_songs(cx, params, false).await?.into(),
+        "getSimilarSongs2" => discovery::similar_songs(cx, params, true).await?.into(),
+        "savePlayQueue" => queue::save(cx, params).await?.into(),
         other => system::empty(other).ok_or(Failure::UnknownMethod)?.into(),
     })
 }

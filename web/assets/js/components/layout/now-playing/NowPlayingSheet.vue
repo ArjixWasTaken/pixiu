@@ -163,16 +163,15 @@ const onPointerUp = () => {
 
 <style scoped>
 .now-playing-sheet {
+  /* The whole screen: what plays deserves it, and the navigation below
+     would only compete with the controls. */
   position: fixed;
-  left: 0;
-  right: 0;
-  top: 64px;
-  bottom: 80px;
+  inset: 0;
   z-index: 800;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border-radius: 28px 28px 0 0;
+  padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
   background: var(--schemes-surface);
   box-shadow: 0 -2px 6px rgb(0 0 0 / 0.25);
   transition: transform 220ms var(--m3-ease);

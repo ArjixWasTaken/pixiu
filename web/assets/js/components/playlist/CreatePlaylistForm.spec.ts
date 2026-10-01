@@ -30,8 +30,8 @@ describe('createPlaylistForm.vue', () => {
     const storeMock = h.mock(playlistStore, 'store').mockResolvedValue(h.factory('playlist').make())
     expect(screen.queryByTestId('from-playables')).toBeNull()
 
-    await h.type(screen.getByRole('textbox', { name: 'name' }), 'My playlist')
-    await h.type(screen.getByRole('textbox', { name: 'description' }), 'Some description')
+    await h.type(screen.getByRole('textbox', { name: 'Name' }), 'My playlist')
+    await h.type(screen.getByRole('textbox', { name: 'Description' }), 'Some description')
     await h.user.click(screen.getByRole('button', { name: 'Save' }))
 
     expect(storeMock).toHaveBeenCalledWith(
@@ -52,8 +52,8 @@ describe('createPlaylistForm.vue', () => {
 
     screen.getByText(`from ${playables.length} songs`)
 
-    await h.type(screen.getByRole('textbox', { name: 'name' }), 'My playlist')
-    await h.type(screen.getByRole('textbox', { name: 'description' }), 'Some description')
+    await h.type(screen.getByRole('textbox', { name: 'Name' }), 'My playlist')
+    await h.type(screen.getByRole('textbox', { name: 'Description' }), 'Some description')
     await h.user.click(screen.getByRole('button', { name: 'Save' }))
 
     expect(storeMock).toHaveBeenCalledWith(

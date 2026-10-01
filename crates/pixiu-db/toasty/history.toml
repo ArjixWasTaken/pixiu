@@ -44,3 +44,33 @@ snapshot_name = "0007_snapshot.toml"
 id = 1846660344905623907
 name = "0008_smart_playlists.sql"
 snapshot_name = "0008_snapshot.toml"
+
+[[migrations]]
+id = 2771980929738850162
+name = "0009_store.sql"
+snapshot_name = "0009_snapshot.toml"
+
+[[migrations]]
+id = 1985221149916564680
+name = "0010_libraries.sql"
+snapshot_name = "0010_snapshot.toml"
+
+[[migrations]]
+id = 8556928277293453309
+name = "0011_accounts.sql"
+snapshot_name = "0011_snapshot.toml"
+
+[[migrations]]
+id = 4663392542206057131
+name = "0012_mail.sql"
+snapshot_name = "0012_snapshot.toml"
+
+[[migrations]]
+id = 5103505369406426928
+name = "0013_identities.sql"
+snapshot_name = "0013_snapshot.toml"
+
+[[migrations]]
+id = 1337890392298820325
+name = "0014_aliases.sql"
+snapshot_name = "0014_snapshot.toml"

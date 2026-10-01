@@ -5,7 +5,7 @@
     </template>
 
     <Tabs v-if="tabs.length" class="settings-tabs" data-vue="SettingsScreen">
-      <TabList>
+      <TabList sticky>
         <TabButton
           v-for="tab in tabs"
           :id="`settingsTab-${tab.id}`"
@@ -20,7 +20,7 @@
         </TabButton>
       </TabList>
 
-      <TabPanelContainer class="max-w-[808px]">
+      <TabPanelContainer :scroll="false" class="max-w-[808px]">
         <TabPanel
           v-for="tab in tabs"
           v-show="currentTabId === tab.id"
@@ -37,9 +37,11 @@
 
 <script lang="ts" setup>
 import type { Component } from 'vue'
-import { ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { Filter } from '@/config/hooks'
 import { applyFilters } from '@/hooks'
+import { usePolicies } from '@/composables/usePolicies'
+import { useRouter } from '@/composables/useRouter'
 
 import M3Icon from '@/components/m3/M3Icon.vue'
 import ScreenHeader from '@/components/ui/ScreenHeader.vue'
@@ -49,9 +51,12 @@ import TabList from '@/components/ui/tabs/TabList.vue'
 import TabButton from '@/components/ui/tabs/TabButton.vue'
 import TabPanelContainer from '@/components/ui/tabs/TabPanelContainer.vue'
 import TabPanel from '@/components/ui/tabs/TabPanel.vue'
+import AccountSettings from '@/components/account/AccountSettings.vue'
 import YouTubeMusicSettings from '@/components/screens/settings/YouTubeMusicSettings.vue'
 import LibrarySettings from '@/components/screens/settings/LibrarySettings.vue'
-import ApiKeySettings from '@/components/screens/settings/ApiKeySettings.vue'
+import UsersSettings from '@/components/screens/settings/admin/UsersSettings.vue'
+import SignInSettings from '@/components/screens/settings/admin/SignInSettings.vue'
+import EmailSettings from '@/components/screens/settings/admin/EmailSettings.vue'
 
 export interface SettingsTab {
   id: string
@@ -60,21 +65,75 @@ export interface SettingsTab {
   props?: Record<string, unknown>
   /** A Material Symbols name. */
   icon?: string
+  /** Whether the signed-in user sees the tab; everyone does by default. */
+  visible?: () => boolean
 }
 
-const tabs = applyFilters<SettingsTab[]>(Filter.SETTINGS_TABS, [
+const { currentUserCan } = usePolicies()
+const { getRouteParam, onScreenActivated } = useRouter()
+
+const allTabs = applyFilters<SettingsTab[]>(Filter.SETTINGS_TABS, [
+  { id: 'account', label: 'Account', icon: 'account_circle', component: AccountSettings },
   { id: 'youtube-music', label: 'YouTube Music', icon: 'smart_display', component: YouTubeMusicSettings },
   { id: 'library', label: 'Library', icon: 'library_music', component: LibrarySettings },
-  { id: 'api-keys', label: 'API keys', icon: 'key', component: ApiKeySettings },
+  {
+    id: 'users',
+    label: 'Users',
+    icon: 'group',
+    component: UsersSettings,
+    visible: () => currentUserCan.manageUsers(),
+  },
+  {
+    id: 'sign-in',
+    label: 'Sign-in',
+    icon: 'login',
+    component: SignInSettings,
+    visible: () => currentUserCan.manageUsers(),
+  },
+  {
+    id: 'email',
+    label: 'Email',
+    icon: 'mail',
+    component: EmailSettings,
+    visible: () => currentUserCan.manageUsers(),
+  },
 ])
 
-const currentTabId = ref(tabs[0]?.id)
+const tabs = computed(() => allTabs.filter(tab => tab.visible?.() ?? true))
+
+/** The tab `?tab=` names, if the user sees it. */
+const requestedTab = () => {
+  const wanted = getRouteParam('tab')
+  return tabs.value.some(tab => tab.id === wanted) ? wanted : undefined
+}
+
+const currentTabId = ref(requestedTab() ?? tabs.value[0]?.id)
+
+onScreenActivated('Settings', () => {
+  const wanted = requestedTab()
+  if (wanted) {
+    currentTabId.value = wanted
+  }
+})
+
+// Another tab starts at its top, not where the last one was scrolled to.
+watch(currentTabId, () =>
+  document.querySelector('[data-vue="SettingsScreen"]')?.closest('.screen-body')?.scrollTo?.({ top: 0 }),
+)
+
+watch(tabs, visible => {
+  if (!visible.some(tab => tab.id === currentTabId.value)) {
+    currentTabId.value = visible[0]?.id
+  }
+})
 </script>
 
 <style scoped>
 /* The tabs run to the screen's edges. */
 .settings-tabs {
   margin: 0 -24px;
+  /* As tall as the settings, so the tab bar stays stuck all the way down. */
+  flex-shrink: 0;
 
   @media (max-width: 768px) {
     margin: 0 -16px;

@@ -1,6 +1,6 @@
 //! The YouTube Music account: the session's health and history, and the
 //! login browser, a real browser on the server whose screen streams to the
-//! player over a WebSocket while the admin signs in.
+//! player over a WebSocket while the user signs in.
 
 use std::sync::Arc;
 
@@ -13,10 +13,10 @@ use axum::{
     http::{HeaderMap, StatusCode, header},
     response::Response,
 };
-use pixiu_browser::{Field, Frame, Input, LoginDesk, Viewer, cookie_header};
+use pixiu_browser::{BrowserError, Field, Frame, Input, LoginDesk, Viewer, cookie_header};
 use pixiu_db::SessionState;
 use pixiu_jobs::{
-    Health,
+    Health, Warden,
     adapters::{COOKIE_DOMAIN, LOGIN_URL, is_logged_in},
 };
 use serde_json::{Value as JsonValue, json};
@@ -34,6 +34,21 @@ pub(crate) fn state_name(state: Option<SessionState>) -> &'static str {
     }
 }
 
+/// `owner`'s session health; nothing when they never connected one.
+pub(crate) fn health_of(state: &ApiState, owner: u64) -> Health {
+    state.wardens.health(owner)
+}
+
+/// The signed-in user's warden.
+async fn warden(state: &ApiState, session: &Session) -> ApiResult<Arc<Warden>> {
+    Ok(state.wardens.get(session.owner()).await?)
+}
+
+/// The signed-in user's login browser.
+fn desk(state: &ApiState, session: &Session) -> Arc<LoginDesk> {
+    state.desks.desk(session.owner())
+}
+
 fn describe(health: &Health) -> JsonValue {
     json!({
         "state": state_name(health.state),
@@ -48,10 +63,10 @@ fn describe(health: &Health) -> JsonValue {
 /// `GET /api/sources`: the session's health and latest events.
 pub(crate) async fn status(
     State(state): State<ApiState>,
-    _: Session,
+    session: Session,
 ) -> ApiResult<Json<JsonValue>> {
-    let events: Vec<JsonValue> = state
-        .warden
+    let warden = warden(&state, &session).await?;
+    let events: Vec<JsonValue> = warden
         .events(8)
         .await?
         .iter()
@@ -64,68 +79,105 @@ pub(crate) async fn status(
         })
         .collect();
     Ok(Json(json!({
-        "health": describe(&state.warden.health()),
+        "health": describe(&warden.health()),
         "events": events,
-        "login_open": state.login_desk.is_open().await,
+        "login_open": desk(&state, &session).is_open().await,
     })))
 }
 
 /// `POST /api/sources/validate`: checks the session now.
-pub(crate) async fn validate(State(state): State<ApiState>, _: Session) -> Json<JsonValue> {
-    Json(describe(&state.warden.validate().await))
+pub(crate) async fn validate(
+    State(state): State<ApiState>,
+    session: Session,
+) -> ApiResult<Json<JsonValue>> {
+    Ok(Json(describe(
+        &warden(&state, &session).await?.validate().await,
+    )))
 }
 
 /// `POST /api/sources/refresh`: renews the session's cookies now.
-pub(crate) async fn refresh(State(state): State<ApiState>, _: Session) -> Json<JsonValue> {
-    Json(describe(&state.warden.refresh().await))
+pub(crate) async fn refresh(
+    State(state): State<ApiState>,
+    session: Session,
+) -> ApiResult<Json<JsonValue>> {
+    Ok(Json(describe(
+        &warden(&state, &session).await?.refresh().await,
+    )))
 }
 
 /// `POST /api/sources/disconnect`: forgets the session.
-pub(crate) async fn disconnect(State(state): State<ApiState>, _: Session) -> StatusCode {
-    state.warden.disconnect().await;
-    StatusCode::NO_CONTENT
+pub(crate) async fn disconnect(
+    State(state): State<ApiState>,
+    session: Session,
+) -> ApiResult<StatusCode> {
+    warden(&state, &session).await?.disconnect().await;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 /// `POST /api/sources/login`: starts the login browser on Google's sign-in.
-pub(crate) async fn open_login(State(state): State<ApiState>, _: Session) -> ApiResult<StatusCode> {
-    state.login_desk.open(LOGIN_URL).await.map_err(|error| {
-        tracing::error!(%error, "cannot open the login browser");
-        ApiError::new(
-            StatusCode::SERVICE_UNAVAILABLE,
-            format!("The login browser could not start: {error}"),
-        )
-    })?;
+pub(crate) async fn open_login(
+    State(state): State<ApiState>,
+    session: Session,
+) -> ApiResult<StatusCode> {
+    desk(&state, &session)
+        .open(LOGIN_URL)
+        .await
+        .map_err(|error| match error {
+            BrowserError::Busy => ApiError::new(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "Another sign-in is running on the server; try again in a few minutes.",
+            ),
+            error => {
+                tracing::error!(%error, "cannot open the login browser");
+                ApiError::new(
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    format!("The login browser could not start: {error}"),
+                )
+            }
+        })?;
     Ok(StatusCode::CREATED)
 }
 
 /// `DELETE /api/sources/login`: closes the login browser.
-pub(crate) async fn cancel_login(State(state): State<ApiState>, _: Session) -> StatusCode {
-    state.login_desk.close().await;
-    StatusCode::NO_CONTENT
+pub(crate) async fn cancel_login(
+    State(state): State<ApiState>,
+    session: Session,
+) -> ApiResult<StatusCode> {
+    desk(&state, &session).close().await;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 /// `GET /api/sources/login/status`: lets the player enable "Done" once the
 /// browser holds a login.
-pub(crate) async fn login_status(State(state): State<ApiState>, _: Session) -> Json<JsonValue> {
-    let desk = &state.login_desk;
+pub(crate) async fn login_status(
+    State(state): State<ApiState>,
+    session: Session,
+) -> ApiResult<Json<JsonValue>> {
+    let desk = desk(&state, &session);
     let open = desk.is_open().await;
     let logged_in = open && is_logged_in(&desk.cookies(COOKIE_DOMAIN).await.unwrap_or_default());
-    Json(json!({ "open": open, "logged_in": logged_in, "host": desk.host().await }))
+    Ok(Json(
+        json!({ "open": open, "logged_in": logged_in, "host": desk.host().await }),
+    ))
 }
 
 /// `POST /api/sources/login/finish`: hands the browser's login to píxiū.
 pub(crate) async fn finish_login(
     State(state): State<ApiState>,
-    _: Session,
+    session: Session,
 ) -> ApiResult<Json<JsonValue>> {
-    let desk = &state.login_desk;
+    let desk = desk(&state, &session);
     let cookies = desk.cookies(COOKIE_DOMAIN).await.unwrap_or_default();
     if !is_logged_in(&cookies) {
         return Err(ApiError::unprocessable(
             "The login browser is not signed in yet.",
         ));
     }
-    match state.warden.connect(cookie_header(&cookies)).await {
+    match warden(&state, &session)
+        .await?
+        .connect(cookie_header(&cookies))
+        .await
+    {
         Ok(health) => {
             desk.close().await;
             Ok(Json(describe(&health)))
@@ -162,14 +214,14 @@ fn same_origin(headers: &HeaderMap) -> bool {
 /// mirror.
 pub(crate) async fn screen(
     State(state): State<ApiState>,
-    _: Session,
+    session: Session,
     headers: HeaderMap,
     upgrade: WebSocketUpgrade,
 ) -> ApiResult<Response> {
     if !same_origin(&headers) {
         return Err(ApiError::new(StatusCode::FORBIDDEN, "wrong origin"));
     }
-    let desk = Arc::clone(&state.login_desk);
+    let desk = desk(&state, &session);
     Ok(upgrade.on_upgrade(move |socket| relay(desk, socket)))
 }
 

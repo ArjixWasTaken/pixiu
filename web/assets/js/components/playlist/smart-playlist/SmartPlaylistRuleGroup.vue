@@ -1,63 +1,44 @@
 <template>
-  <div class="relative p-4 rounded-md border border-white/15">
-    <h4 class="mb-3">
-      <span>
-        <template v-if="isFirstGroup"> Include songs that match <strong>all</strong> of these criteria </template>
-        <template v-else> or <strong>all</strong> of these criteria </template>
-      </span>
-    </h4>
+  <M3Card class="flex flex-col gap-4 p-4" data-testid="smart-playlist-rule-group" variant="outlined">
+    <h3 class="m3-title-small">
+      <template v-if="isFirstGroup">Songs that match <strong>all</strong> of these</template>
+      <template v-else>Or songs that match <strong>all</strong> of these</template>
+    </h3>
 
-    <div class="space-y-2 mb-2">
-      <Rule
-        v-for="rule in mutatedGroup.rules"
-        :key="rule.id"
-        :rule="rule"
-        @input="onRuleChanged"
-        @remove="removeRule(rule)"
-      />
-    </div>
+    <SmartPlaylistRule
+      v-for="(rule, index) in group.rules"
+      :key="rule.id"
+      :rule
+      @remove="removeRule(index)"
+      @update:rule="setRule(index, $event)"
+    />
 
-    <div class="text-center absolute w-full left-0 mt-[-2px]">
-      <Btn
-        size="small"
-        variant="success"
-        class="aspect-square scale-75 hover:scale-90 active:scale-[80%]"
-        rounded
-        title="Remove this rule"
-        @click.prevent="addRule"
-      >
-        <Icon :icon="faPlus" />
-      </Btn>
-    </div>
-  </div>
+    <M3Button class="self-start" icon="add" size="s" variant="text" @click.prevent="addRule">Add a rule</M3Button>
+  </M3Card>
 </template>
 
 <script lang="ts" setup>
-import { faPlus } from '@fortawesome/free-solid-svg-icons'
-import { defineAsyncComponent, reactive, toRefs } from 'vue'
 import { playlistStore } from '@/stores/playlistStore'
 
+import M3Button from '@/components/m3/M3Button.vue'
+import M3Card from '@/components/m3/M3Card.vue'
+import SmartPlaylistRule from '@/components/playlist/smart-playlist/SmartPlaylistRule.vue'
+
 const props = defineProps<{ group: SmartPlaylistRuleGroup; isFirstGroup: boolean }>()
-const emit = defineEmits<{ (e: 'input', group: SmartPlaylistRuleGroup): void }>()
 
-const { group, isFirstGroup } = toRefs(props)
+const emit = defineEmits<{
+  (e: 'update:group', group: SmartPlaylistRuleGroup): void
+  /** Its last rule went: the group goes too. */
+  (e: 'remove'): void
+}>()
 
-const Btn = defineAsyncComponent(() => import('@/components/ui/form/Btn.vue'))
-const Rule = defineAsyncComponent(() => import('@/components/playlist/smart-playlist/SmartPlaylistRule.vue'))
+const setRules = (rules: SmartPlaylistRule[]) =>
+  rules.length ? emit('update:group', { ...props.group, rules }) : emit('remove')
 
-const mutatedGroup = reactive<SmartPlaylistRuleGroup>(JSON.parse(JSON.stringify(group.value)))
+const setRule = (index: number, rule: SmartPlaylistRule) =>
+  setRules(props.group.rules.map((current, at) => (at === index ? rule : current)))
 
-const notifyParentForUpdate = () => emit('input', mutatedGroup)
+const removeRule = (index: number) => setRules(props.group.rules.filter((_, at) => at !== index))
 
-const addRule = () => mutatedGroup.rules.push(playlistStore.createEmptySmartPlaylistRule())
-
-const onRuleChanged = (data: SmartPlaylistRule) => {
-  Object.assign(mutatedGroup.rules.find(({ id }) => id === data.id)!, data)
-  notifyParentForUpdate()
-}
-
-const removeRule = (rule: SmartPlaylistRule) => {
-  mutatedGroup.rules = mutatedGroup.rules.filter(({ id }) => id !== rule.id)
-  notifyParentForUpdate()
-}
+const addRule = () => setRules([...props.group.rules, playlistStore.createEmptySmartPlaylistRule()])
 </script>

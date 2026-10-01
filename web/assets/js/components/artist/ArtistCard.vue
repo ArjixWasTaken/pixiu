@@ -16,7 +16,9 @@
       <a :href="url('artists.show', { id: artist.id })" class="m3-title-medium title" data-testid="name">
         {{ artist.name }}
       </a>
-      <p class="m3-body-medium subtitle">Artist</p>
+      <p class="m3-body-medium subtitle">
+        {{ artist.album_count === undefined ? 'Artist' : pluralize(artist.album_count, 'album') }}
+      </p>
     </template>
   </BaseCard>
 </template>
@@ -24,6 +26,7 @@
 <script lang="ts" setup>
 import { computed, toRefs } from 'vue'
 import { defineAsyncComponent } from '@/utils/helpers'
+import { pluralize } from '@/utils/formatters'
 import { artistStore } from '@/stores/artistStore'
 import { playableStore } from '@/stores/playableStore'
 import { useDraggable } from '@/composables/useDragAndDrop'

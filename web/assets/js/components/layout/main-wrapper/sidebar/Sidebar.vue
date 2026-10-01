@@ -170,7 +170,8 @@ const onPointerUp = () => {
   position: fixed;
   inset: 0;
   z-index: 900;
-  background: color-mix(in srgb, var(--schemes-scrim) 32%, transparent);
+  /* Dark schemes hide a lighter scrim against their dark pages. */
+  background: color-mix(in srgb, var(--schemes-scrim) 50%, transparent);
   transition: opacity 200ms linear;
 }
 

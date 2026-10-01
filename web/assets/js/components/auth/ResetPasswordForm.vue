@@ -1,57 +1,77 @@
 <template>
-  <div class="flex items-center justify-center min-h-screen">
-    <AuthFormCard v-if="validPayload" @submit="handleSubmit">
-      <p class="text-[.95rem] text-k-fg-70 mb-4">Choose a new password for your account.</p>
+  <AuthFormCard :failed="Boolean(problem)" data-testid="reset-password-form" @submit="handleSubmit">
+    <template #title>
+      <h1 class="m3-headline-small text-(--schemes-on-surface)">Choose a new password</h1>
+      <p class="m3-body-medium text-(--schemes-on-surface-variant)">
+        Your browsers and apps signed in with the old one sign out.
+      </p>
+    </template>
 
-      <FormRow>
-        <PasswordField v-model="data.password" minlength="10" placeholder="New password" required />
-        <template #help>Min. 10 characters. Should be a mix of characters, numbers, and symbols.</template>
-      </FormRow>
+    <template v-if="!expired">
+      <M3TextField
+        v-model="data.password"
+        :supporting-text="`At least ${MIN_LENGTH} characters.`"
+        autocomplete="new-password"
+        autofocus
+        label="New password"
+        name="password"
+        required
+        type="password"
+      />
+      <M3TextField
+        v-model="data.confirmation"
+        :error="mismatch"
+        :supporting-text="mismatch ? 'The passwords differ.' : undefined"
+        autocomplete="new-password"
+        label="New password again"
+        name="password_confirmation"
+        required
+        type="password"
+      />
+    </template>
 
-      <Btn class="w-full" :disabled="loading" type="submit">Save</Btn>
-    </AuthFormCard>
-  </div>
+    <p v-if="problem" class="m3-body-medium text-center text-(--schemes-error)">{{ problem }}</p>
+
+    <M3Button v-if="expired" class="w-full" @click.prevent="$emit('done')">Back to sign in</M3Button>
+    <M3Button v-else :disabled="loading" class="w-full" type="submit">Set password</M3Button>
+  </AuthFormCard>
 </template>
 
 <script lang="ts" setup>
 import { computed, ref } from 'vue'
 import { authService } from '@/services/authService'
-import { base64Decode } from '@/utils/crypto'
-import { logger } from '@/utils/logger'
-import { useMessageToaster } from '@/composables/useMessageToaster'
-import { useRouter } from '@/composables/useRouter'
+import { getHttpErrorBody, isHttpError } from '@/services/http'
 import { useForm } from '@/composables/useForm'
 
-import PasswordField from '@/components/ui/form/PasswordField.vue'
-import Btn from '@/components/ui/form/Btn.vue'
-import FormRow from '@/components/ui/form/FormRow.vue'
 import AuthFormCard from '@/components/auth/AuthFormCard.vue'
+import M3Button from '@/components/m3/M3Button.vue'
+import M3TextField from '@/components/m3/M3TextField.vue'
 
-const { getRouteParam, go } = useRouter()
-const { toastSuccess, toastError } = useMessageToaster()
+const props = defineProps<{ token: string }>()
+const emit = defineEmits<{ (e: 'done'): void }>()
 
-const email = ref('')
-const token = ref('')
+const MIN_LENGTH = 8
 
-const validPayload = computed(() => email.value && token.value)
+const problem = ref('')
+const expired = ref(false)
 
-try {
-  ;[email.value, token.value] = base64Decode(decodeURIComponent(getRouteParam('payload')!)).split('|')
-} catch (error: unknown) {
-  logger.error(error)
-  toastError('Invalid reset password link.')
-}
-
-const { data, loading, handleSubmit } = useForm<{ password: string }>({
-  initialValues: {
-    password: '',
-  },
+const { data, loading, handleSubmit } = useForm<{ password: string; confirmation: string }>({
+  initialValues: { password: '', confirmation: '' },
   useOverlay: false,
+  validator: ({ password, confirmation }) => password.length >= MIN_LENGTH && password === confirmation,
   onSubmit: async ({ password }) => {
-    await authService.resetPassword(email.value, password, token.value)
-    toastSuccess('Password set.')
-    await authService.login(email.value, password)
+    problem.value = ''
+    await authService.resetPassword(props.token, password)
   },
-  onSuccess: () => setTimeout(() => go('/', true)),
+  onSuccess: () => emit('done'),
+  onError: (error: unknown) => {
+    const body = isHttpError(error) ? getHttpErrorBody(error) : undefined
+    expired.value = body?.code === 'expired'
+    problem.value = expired.value
+      ? 'This link expired, or was used already. Ask for a new one from the sign-in screen.'
+      : (body?.message ?? 'That did not work; try again.')
+  },
 })
+
+const mismatch = computed(() => data.confirmation !== '' && data.password !== data.confirmation)
 </script>

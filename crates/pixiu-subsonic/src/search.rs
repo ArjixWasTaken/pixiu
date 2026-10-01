@@ -4,10 +4,10 @@
 //! of the searched fields. An empty query matches everything, which clients
 //! use to sync the whole library page by page.
 
+use pixiu_db::owned::{Bind, Sql};
+
 use crate::{
-    Failure, Params, SubsonicState, annotations,
-    catalog::{self, Bind},
-    lists::Sql,
+    Cx, Failure, Params, annotations, catalog,
     response::{Element, Payload},
 };
 
@@ -58,17 +58,17 @@ fn page(params: &Params, kind: &str) -> Result<Page, Failure> {
     })
 }
 
-pub(crate) async fn search(
-    state: &SubsonicState,
-    params: &Params,
-    id3: bool,
-) -> Result<Payload, Failure> {
+/// `search2` and `search3`, over the caller's library.
+pub(crate) async fn search(cx: &Cx<'_>, params: &Params, id3: bool) -> Result<Payload, Failure> {
     let words = words(params.get("query").unwrap_or_default());
-    let mut db = state.db.clone();
+    let (lib, mut db) = (&cx.lib, cx.lib.db());
 
     // Artists: album artists whose name matches.
     let artists_page = page(params, "artist")?;
-    let mut sql = Sql::new("SELECT id FROM artists WHERE id IN (SELECT artist_id FROM albums)");
+    let mut sql = lib.sql(
+        "SELECT id FROM artists WHERE artists.user_id = ?1 \
+         AND id IN (SELECT artist_id FROM albums WHERE albums.user_id = ?1)",
+    );
     match_all(&mut sql, &words, &["name"]);
     sql.push(" ORDER BY name_key, id");
     sql.page(artists_page.count, artists_page.offset);
@@ -76,8 +76,9 @@ pub(crate) async fn search(
 
     // Albums: by title or album artist.
     let albums_page = page(params, "album")?;
-    let mut sql = Sql::new(
-        "SELECT albums.id FROM albums JOIN artists ON artists.id = albums.artist_id WHERE 1",
+    let mut sql = lib.sql(
+        "SELECT albums.id FROM albums JOIN artists ON artists.id = albums.artist_id \
+         WHERE albums.user_id = ?1",
     );
     match_all(&mut sql, &words, &["albums.title", "artists.name"]);
     sql.push(" ORDER BY albums.title_key, albums.id");
@@ -86,8 +87,10 @@ pub(crate) async fn search(
 
     // Songs: by title, artist credit or album title.
     let songs_page = page(params, "song")?;
-    let mut sql =
-        Sql::new("SELECT tracks.id FROM tracks JOIN albums ON albums.id = tracks.album_id WHERE 1");
+    let mut sql = lib.sql(
+        "SELECT tracks.id FROM tracks JOIN albums ON albums.id = tracks.album_id \
+         WHERE tracks.user_id = ?1",
+    );
     match_all(
         &mut sql,
         &words,
@@ -101,17 +104,17 @@ pub(crate) async fn search(
     sql.page(songs_page.count, songs_page.offset);
     let track_ids = sql.ids(&mut db).await?;
 
-    let artists = catalog::artists_in_order(&mut db, &artist_ids).await?;
-    let albums = catalog::albums_in_order(&mut db, &album_ids).await?;
-    let tracks = catalog::tracks_in_order(&mut db, &track_ids).await?;
+    let artists = catalog::artists_in_order(lib, &artist_ids).await?;
+    let albums = catalog::albums_in_order(lib, &album_ids).await?;
+    let tracks = catalog::tracks_in_order(lib, &track_ids).await?;
 
-    let all_albums = pixiu_db::Album::all().exec(&mut db).await?;
+    let all_albums = lib.all_albums().await?;
     let summaries = catalog::summarize_artists(&all_albums);
-    let stats = catalog::album_stats(&mut db).await?;
+    let stats = catalog::album_stats(lib).await?;
     let album_artists =
-        catalog::artists_by_id(&mut db, albums.iter().map(|album| album.artist_id)).await?;
-    let songs = catalog::songs(&mut db, "song", &tracks).await?;
-    let artist_annotations = annotations::for_artists(&mut db, artist_ids.iter().copied()).await?;
+        catalog::artists_by_id(lib, albums.iter().map(|album| album.artist_id)).await?;
+    let songs = catalog::songs(lib, "song", &tracks).await?;
+    let artist_annotations = annotations::for_artists(lib, artist_ids.iter().copied()).await?;
 
     let artist_elements = artists.iter().map(|artist| {
         let annotation = artist_annotations.get(&artist.id);
@@ -128,7 +131,7 @@ pub(crate) async fn search(
             catalog::artist_folder("artist", artist, annotation)
         }
     });
-    let plays = annotations::for_albums(&mut db, album_ids.iter().copied()).await?;
+    let plays = annotations::for_albums(lib, album_ids.iter().copied()).await?;
     let album_elements = albums.iter().map(|album| {
         let artist = album_artists.get(&album.artist_id);
         let stats = stats.get(&album.id).copied().unwrap_or_default();

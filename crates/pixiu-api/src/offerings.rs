@@ -6,7 +6,7 @@ use axum::{
     extract::{Multipart, Path, State},
     http::StatusCode,
 };
-use pixiu_db::{Album, Offering, OfferingStatus};
+use pixiu_db::{Offering, OfferingStatus};
 use pixiu_jobs::NewJob;
 use serde_json::{Value as JsonValue, json};
 use tokio::io::AsyncWriteExt;
@@ -34,9 +34,12 @@ fn describe(offering: &Offering) -> JsonValue {
 }
 
 /// `GET /api/offerings`: what awaits review, by batch.
-pub(crate) async fn list(State(state): State<ApiState>, _: Session) -> ApiResult<Json<JsonValue>> {
+pub(crate) async fn list(
+    State(state): State<ApiState>,
+    session: Session,
+) -> ApiResult<Json<JsonValue>> {
     let mut batches: Vec<(String, Vec<JsonValue>)> = Vec::new();
-    for offering in state.offerings.pending().await? {
+    for offering in state.offerings.pending(session.owner()).await? {
         match batches.last_mut() {
             Some((batch, files)) if *batch == offering.batch => files.push(describe(&offering)),
             _ => batches.push((offering.batch.clone(), vec![describe(&offering)])),
@@ -56,7 +59,7 @@ pub(crate) async fn list(State(state): State<ApiState>, _: Session) -> ApiResult
 /// one per audio file inside.
 pub(crate) async fn upload(
     State(state): State<ApiState>,
-    _: Session,
+    session: Session,
     mut multipart: Multipart,
 ) -> ApiResult<Json<JsonValue>> {
     let bad = |error: axum::extract::multipart::MultipartError| {
@@ -76,7 +79,10 @@ pub(crate) async fn upload(
                     .filter(|name| !name.is_empty())
                     .unwrap_or("upload")
                     .to_owned();
-                let (path, mut file) = state.offerings.create_upload(batch, &name).await?;
+                let (path, mut file) = state
+                    .offerings
+                    .create_upload(session.owner(), batch, &name)
+                    .await?;
                 let written = async {
                     while let Some(chunk) = field.chunk().await.map_err(bad)? {
                         file.write_all(&chunk)
@@ -93,7 +99,10 @@ pub(crate) async fn upload(
                     let _ = tokio::fs::remove_file(&path).await;
                     return Err(error);
                 }
-                let offerings = state.offerings.process_upload(batch, &path).await?;
+                let offerings = state
+                    .offerings
+                    .process_upload(session.owner(), batch, &path)
+                    .await?;
                 tracing::info!(
                     batch,
                     file = name,
@@ -112,20 +121,17 @@ pub(crate) async fn upload(
 /// offering of the batch, then looks the albums up on MusicBrainz.
 pub(crate) async fn accept_batch(
     State(state): State<ApiState>,
-    _: Session,
+    session: Session,
     Path(batch): Path<String>,
 ) -> ApiResult<Json<JsonValue>> {
-    let outcome = state.offerings.accept_batch(&batch).await?;
+    let (owner, lib) = (session.owner(), session.library(&state));
+    let outcome = state.offerings.accept_batch(owner, &batch).await?;
     for album_id in &outcome.albums {
-        if let Some(album) = Album::filter_by_id(*album_id)
-            .first()
-            .exec(&mut state.db.clone())
-            .await?
-        {
+        if let Some(album) = lib.album(*album_id).await? {
             let title = format!("Look up {}", album.title);
             state
                 .jobs
-                .enqueue(NewJob::enrich(*album_id, &title, None, false))
+                .enqueue(owner, NewJob::enrich(*album_id, &title, None, false))
                 .await?;
         }
     }
@@ -142,19 +148,22 @@ pub(crate) async fn accept_batch(
 /// `DELETE /api/offerings/batches/{batch}`.
 pub(crate) async fn discard_batch(
     State(state): State<ApiState>,
-    _: Session,
+    session: Session,
     Path(batch): Path<String>,
 ) -> ApiResult<StatusCode> {
-    state.offerings.discard_batch(&batch).await?;
+    state
+        .offerings
+        .discard_batch(session.owner(), &batch)
+        .await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
 /// `DELETE /api/offerings/{id}`.
 pub(crate) async fn discard(
     State(state): State<ApiState>,
-    _: Session,
+    session: Session,
     Path(id): Path<u64>,
 ) -> ApiResult<StatusCode> {
-    state.offerings.discard(id).await?;
+    state.offerings.discard(session.owner(), id).await?;
     Ok(StatusCode::NO_CONTENT)
 }

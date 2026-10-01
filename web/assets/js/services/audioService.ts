@@ -1,4 +1,5 @@
 import { equalizerStore } from '@/stores/equalizerStore'
+import { preferenceStore } from '@/stores/preferenceStore'
 import { frequencies } from '@/config/audio'
 
 export const dbToGain = (db: number) => 10 ** (db / 20) || 0
@@ -20,6 +21,31 @@ export const audioService = {
 
   bands: [] as Band[],
   preamp: 0,
+  /** Whether audio plays past the equalizer. */
+  bypassed: false,
+
+  /** Where the source plays into: the equalizer, or straight past it. */
+  entry(): AudioNode {
+    return this.bypassed ? this.analyzer : this.preampGainNode
+  },
+
+  /** Switches the equalizer off (`true`) or back on, keeping its settings. */
+  setBypassed(bypassed: boolean) {
+    if (bypassed === this.bypassed) {
+      return
+    }
+    this.bypassed = bypassed
+
+    if (!this.source) {
+      return
+    }
+    try {
+      this.source.disconnect()
+    } catch {
+      // may already be disconnected
+    }
+    this.source.connect(this.entry())
+  },
 
   init(mediaElement: HTMLMediaElement) {
     this.element = mediaElement
@@ -28,8 +54,9 @@ export const audioService = {
     this.preampGainNode = this.context.createGain()
     this.source = this.context.createMediaElementSource(this.element)
     this.analyzer = this.context.createAnalyser()
+    this.bypassed = !preferenceStore.equalizer_enabled
 
-    this.source.connect(this.preampGainNode)
+    this.source.connect(this.entry())
 
     const config = equalizerStore.getConfig()
 
@@ -80,7 +107,7 @@ export const audioService = {
 
     this.element = newElement
     this.source = this.context.createMediaElementSource(newElement)
-    this.source.connect(this.preampGainNode)
+    this.source.connect(this.entry())
   },
 
   changePreampGain(db: number) {

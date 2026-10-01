@@ -53,6 +53,12 @@
     opacity: 0.1;
   }
 
+  /* Keyboard focus shows as a ring, not only a faint tint. */
+  &:focus-visible {
+    outline: 2px solid var(--schemes-secondary);
+    outline-offset: 2px;
+  }
+
   &:disabled::before,
   &[aria-disabled='true']::before {
     opacity: 0;

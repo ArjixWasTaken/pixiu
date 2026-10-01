@@ -4,12 +4,16 @@ use std::{
 };
 
 use pixiu_db::{
-    Album, Artist, ClaimKind, Db, OfferingStatus, ReleaseReason, ReleasedClaim, Track, TrackClaim,
+    Album, Artist, AudioFile, ClaimKind, Db, OfferingStatus, ReleaseReason, ReleasedClaim, Track,
+    TrackAlias, TrackClaim, videos,
 };
 use pixiu_treasury::{
     Claim, IngestError, OfferingError, Offerings, Provenance, Release, Treasury, tags,
 };
 use tokio::io::AsyncWriteExt;
+
+/// Every test library belongs to one user.
+const OWNER: u64 = 1;
 
 fn fixture(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -91,7 +95,7 @@ fn reads_tags_and_properties() {
 }
 
 #[tokio::test]
-async fn ingest_files_tracks_under_the_layout() {
+async fn ingest_keeps_files_in_the_store() {
     let hoard = Hoard::new().await;
     let mut db = hoard.db.clone();
 
@@ -101,6 +105,7 @@ async fn ingest_files_tracks_under_the_layout() {
         hoard
             .treasury
             .ingest(
+                OWNER,
                 &staged,
                 &info,
                 None,
@@ -111,6 +116,8 @@ async fn ingest_files_tracks_under_the_layout() {
             .unwrap();
         assert!(!staged.exists(), "the file was moved, not copied");
     }
+    let stored =
+        |path: &str, suffix: &str| path.starts_with(".store/audio/") && path.ends_with(suffix);
 
     // One artist: the featured guest is not the primary artist.
     let artists = Artist::all().exec(&mut db).await.unwrap();
@@ -125,24 +132,29 @@ async fn ingest_files_tracks_under_the_layout() {
         ("Test Album", Some(2024))
     );
     let cover = album.cover.as_deref().expect("cover taken from the FLAC");
-    assert_eq!(cover, "Test Artist/2024 - Test Album/cover.png");
+    assert!(cover.starts_with(".store/images/") && cover.ends_with(".png"));
     assert!(hoard.treasury.resolve(cover).is_file());
 
     let mut tracks = Track::all().exec(&mut db).await.unwrap();
     tracks.sort_by_key(|track| track.track_number);
-    let paths: Vec<_> = tracks.iter().map(|track| track.path.as_str()).collect();
-    assert_eq!(
-        paths,
-        [
-            "Test Artist/2024 - Test Album/01-01 First Light.flac",
-            "Test Artist/2024 - Test Album/01-02 Second Wind.mp3",
-        ]
-    );
-    assert!(
-        tracks
-            .iter()
-            .all(|track| hoard.treasury.resolve(&track.path).is_file())
-    );
+    assert!(stored(&tracks[0].path, ".flac"), "{}", tracks[0].path);
+    assert!(stored(&tracks[1].path, ".mp3"), "{}", tracks[1].path);
+    let files = AudioFile::all().exec(&mut db).await.unwrap();
+    assert_eq!(files.len(), 2);
+    for track in &tracks {
+        let file = files.iter().find(|file| file.id == track.file_id).unwrap();
+        assert_eq!((&file.path, file.size), (&track.path, track.size));
+        assert!(hoard.treasury.resolve(&track.path).is_file());
+        assert_eq!(
+            file.path,
+            format!(
+                ".store/audio/{}/{}.{}",
+                &file.sha256[..2],
+                file.sha256,
+                file.suffix
+            )
+        );
+    }
     assert_eq!(tracks[1].artist_credit, "Test Artist feat. Guest");
     assert_eq!(tracks[1].artist_id, artists[0].id);
 
@@ -156,6 +168,7 @@ async fn ingest_files_tracks_under_the_layout() {
     let error = hoard
         .treasury
         .ingest(
+            OWNER,
             &staged,
             &info,
             None,
@@ -166,90 +179,6 @@ async fn ingest_files_tracks_under_the_layout() {
         .unwrap_err();
     assert!(matches!(error, IngestError::Duplicate { track_id } if track_id == tracks[0].id));
     assert!(staged.exists());
-}
-
-#[tokio::test]
-async fn a_new_layout_moves_the_hoard() {
-    let hoard = Hoard::new().await;
-    let mut db = hoard.db.clone();
-    let offer = |name: &'static str| {
-        let staged = hoard.stage(name);
-        let treasury = hoard.treasury.clone();
-        async move {
-            let info = tags::read(&staged).unwrap();
-            treasury
-                .ingest(
-                    &staged,
-                    &info,
-                    None,
-                    Provenance::offering("upload.flac", None),
-                    Claim::offering(),
-                )
-                .await
-                .unwrap()
-        }
-    };
-    offer("01-first-light.flac").await;
-
-    let template =
-        pixiu_treasury::Template::parse("{genre}/{album} ({year})/{track:03}. {title}").unwrap();
-    assert_eq!(hoard.treasury.misplaced().await.unwrap(), 0);
-    hoard.treasury.set_layout(template.clone()).await.unwrap();
-    assert_eq!(hoard.treasury.misplaced().await.unwrap(), 1);
-    // New tracks follow the new layout; the old one stays until refiled.
-    offer("02-second-wind.mp3").await;
-    let paths = |tracks: Vec<Track>| {
-        let mut paths: Vec<String> = tracks.into_iter().map(|track| track.path).collect();
-        paths.sort();
-        paths
-    };
-    assert_eq!(
-        paths(Track::all().exec(&mut db).await.unwrap()),
-        [
-            "Ambient/Test Album (2024)/002. Second Wind.mp3",
-            "Test Artist/2024 - Test Album/01-01 First Light.flac",
-        ]
-    );
-
-    let seen = std::sync::Mutex::new(Vec::new());
-    let albums = hoard
-        .treasury
-        .refile_all(|done, of| seen.lock().unwrap().push((done, of)))
-        .await
-        .unwrap();
-    assert_eq!(albums, 1);
-    assert_eq!(*seen.lock().unwrap(), [(1, 1)]);
-    assert_eq!(hoard.treasury.misplaced().await.unwrap(), 0);
-    let tracks = Track::all().exec(&mut db).await.unwrap();
-    assert!(
-        tracks
-            .iter()
-            .all(|track| hoard.treasury.resolve(&track.path).is_file())
-    );
-    assert_eq!(
-        paths(tracks),
-        [
-            "Ambient/Test Album (2024)/001. First Light.flac",
-            "Ambient/Test Album (2024)/002. Second Wind.mp3",
-        ]
-    );
-    let album = Album::all().exec(&mut db).await.unwrap().remove(0);
-    assert_eq!(
-        album.cover.as_deref(),
-        Some("Ambient/Test Album (2024)/cover.png")
-    );
-    // The old directories went away with their files.
-    assert!(!hoard.treasury.resolve("Test Artist").exists());
-
-    // The setting outlives the process.
-    let reopened = Treasury::new(
-        hoard.db.clone(),
-        hoard.treasury.root(),
-        hoard.treasury.cache_dir(),
-    );
-    assert_ne!(reopened.layout(), template);
-    reopened.load_layout().await.unwrap();
-    assert_eq!(reopened.layout(), template);
 }
 
 fn zip_of(files: &[(&str, &[u8])]) -> Vec<u8> {
@@ -265,7 +194,7 @@ fn zip_of(files: &[(&str, &[u8])]) -> Vec<u8> {
 }
 
 async fn upload(offerings: &Offerings, batch: &str, name: &str, data: &[u8]) {
-    let (_, mut file) = offerings.create_upload(batch, name).await.unwrap();
+    let (_, mut file) = offerings.create_upload(OWNER, batch, name).await.unwrap();
     file.write_all(data).await.unwrap();
     file.flush().await.unwrap();
 }
@@ -304,7 +233,7 @@ async fn offerings_are_reviewed_then_absorbed() {
     .await;
     upload(&offerings, &batch, "not-audio.mp3", b"plain text").await;
 
-    let registered = offerings.process_batch(&batch).await.unwrap();
+    let registered = offerings.process_batch(OWNER, &batch).await.unwrap();
     assert_eq!(registered.len(), 4, "{registered:#?}");
     let unreadable: Vec<_> = registered
         .iter()
@@ -326,35 +255,41 @@ async fn offerings_are_reviewed_then_absorbed() {
 
     // Accepting an unreadable offering fails; discarding it works.
     assert!(matches!(
-        offerings.accept(unreadable[0].id).await,
+        offerings.accept(OWNER, unreadable[0].id).await,
         Err(OfferingError::Unreadable(_))
     ));
-    offerings.discard(unreadable[0].id).await.unwrap();
+    offerings.discard(OWNER, unreadable[0].id).await.unwrap();
 
-    let failures = offerings.accept_batch(&batch).await.unwrap().failures;
+    let failures = offerings
+        .accept_batch(OWNER, &batch)
+        .await
+        .unwrap()
+        .failures;
     assert!(failures.is_empty(), "{failures:?}");
-    assert!(offerings.pending().await.unwrap().is_empty());
+    assert!(offerings.pending(OWNER).await.unwrap().is_empty());
     assert!(
-        !hoard.dir.path().join("offerings").join(&batch).exists(),
+        !hoard
+            .dir
+            .path()
+            .join("offerings")
+            .join(OWNER.to_string())
+            .join(&batch)
+            .exists(),
         "the batch directory is cleaned up"
     );
 
-    let mut paths: Vec<_> = Track::all()
+    let mut titles: Vec<_> = Track::all()
         .exec(&mut db)
         .await
         .unwrap()
         .into_iter()
-        .map(|track| track.path)
+        .map(|track| {
+            assert!(hoard.treasury.resolve(&track.path).is_file());
+            track.title
+        })
         .collect();
-    paths.sort();
-    assert_eq!(
-        paths,
-        [
-            "Test Artist/2024 - Test Album/01-01 First Light.flac",
-            "Test Artist/2024 - Test Album/01-02 Second Wind.mp3",
-            "Unknown Artist/Unknown Album/untagged.opus",
-        ]
-    );
+    titles.sort();
+    assert_eq!(titles, ["First Light", "Second Wind", "untagged"]);
     // The embedded FLAC cover wins; the untagged track's album gets the
     // batch's folder image.
     let mut covers: Vec<_> = Album::all()
@@ -362,14 +297,18 @@ async fn offerings_are_reviewed_then_absorbed() {
         .await
         .unwrap()
         .into_iter()
-        .filter_map(|album| album.cover)
+        .map(|album| {
+            let cover = album.cover.expect("every album has a cover");
+            assert!(hoard.treasury.resolve(&cover).is_file());
+            (album.title, cover.rsplit('.').next().unwrap().to_owned())
+        })
         .collect();
     covers.sort();
     assert_eq!(
         covers,
         [
-            "Test Artist/2024 - Test Album/cover.png",
-            "Unknown Artist/Unknown Album/cover.jpg",
+            ("Test Album".to_owned(), "png".to_owned()),
+            ("Unknown Album".to_owned(), "jpg".to_owned()),
         ]
     );
 }
@@ -384,16 +323,19 @@ async fn uploads_are_processed_one_at_a_time_into_one_batch() {
         "Test Album/01-first-light.flac",
         &std::fs::read(fixture("01-first-light.flac")).unwrap(),
     )]);
-    let (zip, mut file) = offerings.create_upload(&batch, "album.zip").await.unwrap();
+    let (zip, mut file) = offerings
+        .create_upload(OWNER, &batch, "album.zip")
+        .await
+        .unwrap();
     file.write_all(&archive).await.unwrap();
     file.flush().await.unwrap();
-    let from_zip = offerings.process_upload(&batch, &zip).await.unwrap();
+    let from_zip = offerings.process_upload(OWNER, &batch, &zip).await.unwrap();
     assert_eq!(from_zip.len(), 1);
     assert_eq!(from_zip[0].archive.as_deref(), Some("album.zip"));
     assert!(!zip.exists(), "the archive is gone once unpacked");
 
     let (mp3, mut file) = offerings
-        .create_upload(&batch, "02-second-wind.mp3")
+        .create_upload(OWNER, &batch, "02-second-wind.mp3")
         .await
         .unwrap();
     file.write_all(&std::fs::read(fixture("02-second-wind.mp3")).unwrap())
@@ -401,16 +343,23 @@ async fn uploads_are_processed_one_at_a_time_into_one_batch() {
         .unwrap();
     file.flush().await.unwrap();
     assert_eq!(
-        offerings.process_upload(&batch, &mp3).await.unwrap().len(),
+        offerings
+            .process_upload(OWNER, &batch, &mp3)
+            .await
+            .unwrap()
+            .len(),
         1
     );
 
-    let (log, mut file) = offerings.create_upload(&batch, "rip.log").await.unwrap();
+    let (log, mut file) = offerings
+        .create_upload(OWNER, &batch, "rip.log")
+        .await
+        .unwrap();
     file.write_all(b"EAC log").await.unwrap();
     file.flush().await.unwrap();
     assert!(
         offerings
-            .process_upload(&batch, &log)
+            .process_upload(OWNER, &batch, &log)
             .await
             .unwrap()
             .is_empty()
@@ -418,13 +367,13 @@ async fn uploads_are_processed_one_at_a_time_into_one_batch() {
     assert!(!log.exists(), "other files are dropped");
 
     // Nothing is registered twice.
-    let pending = offerings.pending().await.unwrap();
+    let pending = offerings.pending(OWNER).await.unwrap();
     assert_eq!(pending.len(), 2);
     assert!(pending.iter().all(|offering| offering.batch == batch));
 
     // A file outside the batch is refused.
     let other = Offerings::new_batch();
-    assert!(offerings.process_upload(&other, &mp3).await.is_err());
+    assert!(offerings.process_upload(OWNER, &other, &mp3).await.is_err());
 }
 
 #[tokio::test]
@@ -440,12 +389,23 @@ async fn discarding_a_batch_removes_everything() {
         &std::fs::read(fixture("01-first-light.flac")).unwrap(),
     )
     .await;
-    assert_eq!(offerings.process_batch(&batch).await.unwrap().len(), 1);
+    assert_eq!(
+        offerings.process_batch(OWNER, &batch).await.unwrap().len(),
+        1
+    );
 
-    offerings.discard_batch(&batch).await.unwrap();
-    assert!(offerings.pending().await.unwrap().is_empty());
-    assert!(!hoard.dir.path().join("offerings").join(&batch).exists());
-    assert!(offerings.discard_batch("../etc").await.is_err());
+    offerings.discard_batch(OWNER, &batch).await.unwrap();
+    assert!(offerings.pending(OWNER).await.unwrap().is_empty());
+    assert!(
+        !hoard
+            .dir
+            .path()
+            .join("offerings")
+            .join(OWNER.to_string())
+            .join(&batch)
+            .exists()
+    );
+    assert!(offerings.discard_batch(OWNER, "../etc").await.is_err());
 }
 
 #[tokio::test]
@@ -464,7 +424,14 @@ async fn downloads_dedupe_by_platform_ids() {
     info.artists = vec!["Test Artist".to_owned(), "Guest".to_owned()];
     let first = hoard
         .treasury
-        .ingest(&staged, &info, None, youtube("video-1"), Claim::offering())
+        .ingest(
+            OWNER,
+            &staged,
+            &info,
+            None,
+            youtube("video-1"),
+            Claim::offering(),
+        )
         .await
         .unwrap();
     assert_eq!(first.ytm_video_id.as_deref(), Some("video-1"));
@@ -475,7 +442,14 @@ async fn downloads_dedupe_by_platform_ids() {
     info.title = Some("Renamed".to_owned());
     let error = hoard
         .treasury
-        .ingest(&staged, &info, None, youtube("video-1"), Claim::offering())
+        .ingest(
+            OWNER,
+            &staged,
+            &info,
+            None,
+            youtube("video-1"),
+            Claim::offering(),
+        )
         .await
         .unwrap_err();
     assert!(matches!(error, IngestError::Duplicate { track_id } if track_id == first.id));
@@ -487,7 +461,14 @@ async fn downloads_dedupe_by_platform_ids() {
     info.album = Some("Test Album (Deluxe)".to_owned());
     let second = hoard
         .treasury
-        .ingest(&staged, &info, None, youtube("video-2"), Claim::offering())
+        .ingest(
+            OWNER,
+            &staged,
+            &info,
+            None,
+            youtube("video-2"),
+            Claim::offering(),
+        )
         .await
         .unwrap();
     assert_eq!(second.album_id, first.album_id);
@@ -501,13 +482,14 @@ async fn downloads_dedupe_by_platform_ids() {
 
     // A later download by the same channel finds the artist even under
     // another name.
-    let staged = hoard.stage("01-first-light.flac");
+    let staged = hoard.stage("untagged.opus");
     let mut info = tags::read(&staged).unwrap();
     info.album_artist = Some("Test Artist (Official)".to_owned());
     info.album = Some("Another Album".to_owned());
     let third = hoard
         .treasury
         .ingest(
+            OWNER,
             &staged,
             &info,
             None,
@@ -521,6 +503,95 @@ async fn downloads_dedupe_by_platform_ids() {
 }
 
 #[tokio::test]
+async fn another_video_of_a_track_is_noted_as_it() {
+    let hoard = Hoard::new().await;
+    let mut db = hoard.db.clone();
+    let youtube = |video: &str| Provenance::youtube_music(video, None, None);
+
+    let staged = hoard.stage("02-second-wind.mp3");
+    let info = tags::read(&staged).unwrap();
+    let first = hoard
+        .treasury
+        .ingest(
+            OWNER,
+            &staged,
+            &info,
+            None,
+            youtube("video-1"),
+            Claim::offering(),
+        )
+        .await
+        .unwrap();
+    assert!(
+        videos::track_of_video(&mut db, OWNER, "video-2")
+            .await
+            .unwrap()
+            .is_none()
+    );
+
+    // YouTube Music lists the song under another video too: its download
+    // is the same file.
+    let staged = hoard.stage("02-second-wind.mp3");
+    let error = hoard
+        .treasury
+        .ingest(
+            OWNER,
+            &staged,
+            &info,
+            None,
+            youtube("video-2"),
+            Claim::offering(),
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(error, IngestError::Duplicate { track_id } if track_id == first.id));
+
+    // The library holds that video now.
+    let noted = videos::track_of_video(&mut db, OWNER, "video-2")
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(noted.id, first.id);
+    let held = videos::tracks_of_videos(
+        &mut db,
+        OWNER,
+        &[
+            "video-1".to_owned(),
+            "video-2".to_owned(),
+            "video-3".to_owned(),
+        ],
+    )
+    .await
+    .unwrap();
+    assert_eq!(held.track("video-1").unwrap().id, first.id);
+    assert_eq!(held.track("video-2").unwrap().id, first.id);
+    assert!(!held.contains("video-3"));
+    // Only for its owner.
+    assert!(
+        videos::track_of_video(&mut db, OWNER + 1, "video-2")
+            .await
+            .unwrap()
+            .is_none()
+    );
+
+    // Noting it again changes nothing.
+    let staged = hoard.stage("02-second-wind.mp3");
+    hoard
+        .treasury
+        .ingest(
+            OWNER,
+            &staged,
+            &info,
+            None,
+            youtube("video-2"),
+            Claim::offering(),
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(TrackAlias::all().exec(&mut db).await.unwrap().len(), 1);
+}
+
+#[tokio::test]
 async fn offerings_remember_their_upload_names() {
     let hoard = Hoard::new().await;
     let staged = hoard.stage("01-first-light.flac");
@@ -528,6 +599,7 @@ async fn offerings_remember_their_upload_names() {
     let track = hoard
         .treasury
         .ingest(
+            OWNER,
             &staged,
             &info,
             None,
@@ -551,6 +623,7 @@ async fn orphans_are_kept_until_the_admin_deletes_them() {
         let track = hoard
             .treasury
             .ingest(
+                OWNER,
                 &staged,
                 &info,
                 None,
@@ -595,6 +668,7 @@ async fn orphans_are_kept_until_the_admin_deletes_them() {
     let released = hoard
         .treasury
         .release(
+            OWNER,
             ClaimKind::WatchPlaylist,
             "7",
             Release {
@@ -624,6 +698,7 @@ async fn orphans_are_kept_until_the_admin_deletes_them() {
     hoard
         .treasury
         .release(
+            OWNER,
             ClaimKind::WatchPlaylist,
             "7",
             Release {
@@ -636,7 +711,7 @@ async fn orphans_are_kept_until_the_admin_deletes_them() {
         .unwrap();
     let orphans: Vec<u64> = hoard
         .treasury
-        .orphans()
+        .orphans(OWNER)
         .await
         .unwrap()
         .iter()
@@ -648,7 +723,7 @@ async fn orphans_are_kept_until_the_admin_deletes_them() {
     assert_eq!(
         hoard
             .treasury
-            .delete_orphans(&[first, second])
+            .delete_orphans(OWNER, &[first, second])
             .await
             .unwrap(),
         1
@@ -675,7 +750,7 @@ async fn orphans_are_kept_until_the_admin_deletes_them() {
     let cover = hoard.treasury.resolve(album.cover.as_deref().unwrap());
     assert!(cover.is_file());
 
-    // The last track takes its album, cover, artist and directories along.
+    // The last track takes its album, cover, artist and file along.
     for claim in TrackClaim::filter_by_track_id(second)
         .exec(&mut db)
         .await
@@ -683,14 +758,17 @@ async fn orphans_are_kept_until_the_admin_deletes_them() {
     {
         claim.delete().exec(&mut db).await.unwrap();
     }
-    assert_eq!(hoard.treasury.delete_orphans(&[second]).await.unwrap(), 1);
+    assert_eq!(
+        hoard
+            .treasury
+            .delete_orphans(OWNER, &[second])
+            .await
+            .unwrap(),
+        1
+    );
     assert!(Album::all().exec(&mut db).await.unwrap().is_empty());
     assert!(Artist::all().exec(&mut db).await.unwrap().is_empty());
     assert!(!cover.exists());
-    let treasure = hoard.dir.path().join("treasure");
-    assert!(
-        !treasure.join("Test Artist").exists(),
-        "empty directories remain"
-    );
-    assert!(hoard.treasury.orphans().await.unwrap().is_empty());
+    assert!(AudioFile::all().exec(&mut db).await.unwrap().is_empty());
+    assert!(hoard.treasury.orphans(OWNER).await.unwrap().is_empty());
 }

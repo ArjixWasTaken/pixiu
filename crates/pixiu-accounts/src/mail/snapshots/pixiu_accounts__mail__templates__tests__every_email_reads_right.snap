@@ -1,0 +1,88 @@
+---
+source: crates/pixiu-accounts/src/mail/templates.rs
+expression: "[test(\"a@example.com\"), verify_email(\"a@example.com\", \"alice\", link),\npassword_reset(\"a@example.com\", \"alice\", link),\nnew_registration(\"admin@example.com\", \"bob\", \"bob@example.com\", link),\nregistration_approved(\"b@example.com\", \"bob\", link),\nregistration_declined(\"b@example.com\", \"bob\"),\nemail_in_use(\"a@example.com\", link),\nyoutube_music_expired(\"a@example.com\", \"alice\", \"signed out\", link),\nwatch_failing(\"a@example.com\", \"alice\", \"Liked music\", \"timeout\",\nlink),].iter().map(|email|\nformat!(\"To: {}\\nSubject: {}\\n\\n{}\", email.to, email.subject,\nemail.text)).collect::<Vec<_>>().join(\"\\n---\\n\")"
+---
+To: a@example.com
+Subject: píxiū can send email
+
+This is a test from píxiū: the mail server works.
+
+---
+To: a@example.com
+Subject: Confirm your email address for píxiū
+
+Hi alice,
+
+Confirm this is your email address, so píxiū can send you password resets and alerts. The link works for 7 days.
+
+Confirm my email: https://music.example.com/somewhere
+
+---
+To: a@example.com
+Subject: Reset your píxiū password
+
+Hi alice,
+
+Someone asked to reset the password of your píxiū account. If it was you, choose a new one; the link works for an hour. If not, ignore this email: nothing changes.
+
+Choose a new password: https://music.example.com/somewhere
+
+---
+To: admin@example.com
+Subject: bob asks for a píxiū account
+
+bob (bob@example.com) registered on píxiū.
+
+Approve them, and they get an email to confirm their address; deny them, and they get a short note.
+
+Review the request: https://music.example.com/somewhere
+
+---
+To: b@example.com
+Subject: Your píxiū account is approved
+
+Hi bob,
+
+An admin approved your píxiū account. Confirm your email address, and you can sign in. The link works for 7 days.
+
+Confirm my email: https://music.example.com/somewhere
+
+---
+To: b@example.com
+Subject: Your píxiū registration
+
+Hi bob,
+
+An admin declined your request for a píxiū account, so none was made.
+
+---
+To: a@example.com
+Subject: Someone registered on píxiū with your email
+
+Someone asked for a píxiū account with this email address, which already has one. If it was you, sign in, or reset your password if you forgot it. If not, ignore this email.
+
+Sign in: https://music.example.com/somewhere
+
+---
+To: a@example.com
+Subject: Sign in to YouTube Music again on píxiū
+
+Hi alice,
+
+YouTube Music no longer accepts píxiū's sign-in to your account, so your liked music and private playlists stop syncing. Sign in again to carry on.
+
+YouTube Music said: signed out
+
+Sign in again: https://music.example.com/somewhere
+
+---
+To: a@example.com
+Subject: píxiū cannot sync “Liked music”
+
+Hi alice,
+
+Syncing your watch “Liked music” failed several times in a row.
+
+The last error: timeout
+
+See your watches: https://music.example.com/somewhere

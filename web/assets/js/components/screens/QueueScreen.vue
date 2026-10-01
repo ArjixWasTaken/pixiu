@@ -9,7 +9,7 @@
         </template>
 
         <template v-if="playables.length" #meta>
-          <span>{{ pluralize(playables, 'item') }}</span>
+          <span>{{ pluralize(playables, 'song') }}</span>
           <span>{{ duration }}</span>
         </template>
 
@@ -53,7 +53,8 @@
 
 <script lang="ts" setup>
 import { faCoffee } from '@fortawesome/free-solid-svg-icons'
-import { computed, nextTick, ref, toRef } from 'vue'
+import { computed, nextTick, onMounted, ref, toRef } from 'vue'
+import { until } from '@vueuse/core'
 import { pluralize } from '@/utils/formatters'
 import { commonStore } from '@/stores/commonStore'
 import { queueStore } from '@/stores/queueStore'
@@ -64,6 +65,9 @@ import { useErrorHandler } from '@/composables/useErrorHandler'
 import { usePlayableList } from '@/composables/usePlayableList'
 import { usePlayableListControls } from '@/composables/usePlayableListControls'
 import { playback } from '@/services/playbackManager'
+import { requireInjection } from '@/utils/helpers'
+import { isRadioStation } from '@/utils/typeGuards'
+import { CurrentStreamableKey } from '@/config/symbols'
 
 import ScreenHeader from '@/components/ui/ScreenHeader.vue'
 import ScreenEmptyState from '@/components/ui/ScreenEmptyState.vue'
@@ -157,19 +161,26 @@ onScreenActivated('Queue', async () => {
   queueStore.queue(playable!)
 })
 
-onScreenActivated('Queue', async () => {
-  if (!cache.hit('scroll-to-current-in-queue')) {
+// What the player shows, playing or not: after a reload, the song the queue
+// was saved at, before anything has played.
+const currentStreamable = requireInjection(CurrentStreamableKey, ref())
+
+/** The queue opens where it is playing, not at its top. */
+const revealCurrent = async () => {
+  const current = queueStore.current ?? currentStreamable.value
+
+  if (!current || isRadioStation(current)) {
     return
   }
 
-  cache.remove('scroll-to-current-in-queue')
-  const current = queueStore.current
-
-  if (!current) {
-    return
-  }
-
+  // The list loads on its own, a moment after the screen.
+  await until(() => Boolean(playableList.value)).toBe(true, { timeout: 5_000 })
   await nextTick()
   playableList.value?.scrollToPlayable(current)
-})
+}
+
+// Shown again, and shown the first time (the route change that mounts the
+// screen happens before it listens for one).
+onScreenActivated('Queue', revealCurrent)
+onMounted(revealCurrent)
 </script>

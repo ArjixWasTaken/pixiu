@@ -7,10 +7,13 @@
     @keydown.esc="close"
   >
     <header>
-      <h1>Reorder Home Blocks</h1>
+      <h1>Home blocks</h1>
     </header>
 
     <main class="space-y-1">
+      <p class="hint m3-body-medium">
+        Drag to reorder; untick to hide. Blocks with nothing to show stay hidden until they have something.
+      </p>
       <div
         v-for="block in orderedBlocks"
         :key="block.id"
@@ -23,7 +26,12 @@
         @drop.prevent
       >
         <GripVerticalIcon class="w-4 h-4 text-k-fg-50" />
-        {{ block.label }}
+        <span class="flex-1">{{ block.label }}</span>
+        <M3Checkbox
+          :aria-label="`Show ${block.label}`"
+          :model-value="!hidden.includes(block.id)"
+          @update:model-value="setShown(block.id, $event)"
+        />
       </div>
     </main>
 
@@ -40,6 +48,7 @@ import { computed, ref } from 'vue'
 import { preferenceStore } from '@/stores/preferenceStore'
 
 import Btn from '@/components/ui/form/Btn.vue'
+import M3Checkbox from '@/components/m3/M3Checkbox.vue'
 
 interface BlockSummary {
   id: string
@@ -100,5 +109,19 @@ const onDragEnd = () => {
   draggedId.value = null
 }
 
+const hidden = computed(() => preferenceStore.home_blocks_hidden ?? [])
+
+const setShown = (id: string, shown: boolean) => {
+  const others = hidden.value.filter(other => other !== id)
+  preferenceStore.home_blocks_hidden = shown ? others : [...others, id]
+}
+
 const close = () => emit('close')
 </script>
+
+<style scoped>
+.hint {
+  margin-bottom: 12px;
+  color: var(--schemes-on-surface-variant);
+}
+</style>

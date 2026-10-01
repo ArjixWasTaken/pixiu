@@ -19,7 +19,7 @@
 
         <template v-if="filteredPlayables.length || playlist.is_collaborative" #meta>
           <CollaboratorsBadge v-if="collaborators.length" :collaborators />
-          <span>{{ pluralize(filteredPlayables, 'item') }}</span>
+          <span>{{ pluralize(filteredPlayables, 'song') }}</span>
           <span>{{ duration }}</span>
         </template>
 

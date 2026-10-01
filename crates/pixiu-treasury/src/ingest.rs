@@ -1,17 +1,20 @@
-//! Filing tracks into the treasure.
+//! Adding tracks to the library.
 
 use std::{
     io,
     path::{Path, PathBuf},
-    sync::{Arc, RwLock},
+    sync::Arc,
 };
 
-use pixiu_db::{Album, Artist, ClaimKind, Db, Track, TrackClaim, TrackOrigin, now, toasty};
+use pixiu_db::{
+    Album, Artist, AudioFile, ClaimKind, Db, Track, TrackClaim, TrackOrigin, now, toasty, videos,
+};
 use tokio::sync::Mutex;
 
 use crate::{
-    layout::{self, Template, TrackLocation},
+    claims::remove_file,
     name_key,
+    store::{self, Entry},
     tags::{AudioInfo, Cover},
 };
 
@@ -104,11 +107,9 @@ pub struct Treasury {
     pub(crate) root: PathBuf,
     pub(crate) cache_dir: PathBuf,
     /// Changes to the library are serialized, so concurrent ones cannot
-    /// create the same artist or album twice, race for a file name, or
-    /// delete an album another is filing into.
+    /// create the same artist or album twice, or delete a stored file
+    /// another is about to use.
     pub(crate) lock: Arc<Mutex<()>>,
-    /// Where tracks are filed.
-    pub(crate) layout: Arc<RwLock<Template>>,
 }
 
 impl Treasury {
@@ -119,7 +120,6 @@ impl Treasury {
             root: root.into(),
             cache_dir: cache_dir.into(),
             lock: Arc::default(),
-            layout: Arc::default(),
         }
     }
 
@@ -144,17 +144,21 @@ impl Treasury {
         self.root.join(relative)
     }
 
-    /// Moves the audio file at `source` into the treasure and records it.
+    /// Puts the audio file at `source` into the store and records a track
+    /// playing it in `owner`'s library. When the store holds the same
+    /// content already (in anyone's library), the track shares that file
+    /// and `source` is removed.
     ///
     /// `fallback_cover` is used for the album when the file has no embedded
     /// cover. On failure the file is left at `source`.
     ///
     /// # Errors
     ///
-    /// Fails when the album already holds the same track, or on I/O and
-    /// database errors.
+    /// Fails when the owner's library already holds the same track, or on
+    /// I/O and database errors.
     pub async fn ingest(
         &self,
+        owner: u64,
         source: &Path,
         info: &AudioInfo,
         fallback_cover: Option<&Cover>,
@@ -164,17 +168,171 @@ impl Treasury {
         let _guard = self.lock.lock().await;
         let mut db = self.db.clone();
 
-        if let Some(video_id) = &provenance.ytm_video_id
-            && let Some(existing) = Track::filter_by_ytm_video_id(video_id)
-                .first()
-                .exec(&mut db)
-                .await?
+        let sha256 = store::hash_file(source).await?;
+        let stored = AudioFile::filter_by_sha256(&sha256)
+            .first()
+            .exec(&mut db)
+            .await?;
+        if let Some(existing) = self
+            .duplicate(
+                &mut db,
+                owner,
+                &provenance,
+                stored.as_ref().map(|file| file.id),
+            )
+            .await?
         {
-            return Err(IngestError::Duplicate {
-                track_id: existing.id,
-            });
+            return Err(note_video(&mut db, existing, &provenance).await?);
         }
 
+        let (album, artist_id) = self.place(&mut db, owner, info, &provenance).await?;
+
+        let file = match stored {
+            Some(file) => StoredFile::Shared(file),
+            None => {
+                let relative = store::audio_path(&sha256, &info.suffix);
+                self.put(source, &relative, Entry::Move).await?;
+                StoredFile::New { sha256, relative }
+            }
+        };
+        let placed = match &file {
+            StoredFile::New { relative, .. } => Some(self.resolve(relative)),
+            StoredFile::Shared(_) => None,
+        };
+        let recorded = self
+            .record(
+                &mut db,
+                album,
+                artist_id,
+                file,
+                info,
+                fallback_cover,
+                provenance,
+                claim,
+            )
+            .await;
+        match (&recorded, placed) {
+            // The store had the content: the new copy is not needed.
+            (Ok(_), None) => {
+                if let Err(error) = remove_file(source).await {
+                    tracing::warn!(%error, path = %source.display(), "cannot remove a stored copy");
+                }
+            }
+            (Err(_), Some(placed)) => {
+                if let Err(error) = move_file(&placed, source).await {
+                    tracing::error!(
+                        %error,
+                        path = %placed.display(),
+                        "failed to restore a file after a failed ingest"
+                    );
+                }
+            }
+            _ => {}
+        }
+        recorded
+    }
+
+    /// Records a track in `owner`'s library playing `file`, which the store
+    /// holds already (e.g. another user downloaded the same video): nothing
+    /// is downloaded or copied.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the owner's library already holds the same track, or on
+    /// database errors.
+    pub async fn ingest_stored(
+        &self,
+        owner: u64,
+        file: AudioFile,
+        info: &AudioInfo,
+        provenance: Provenance,
+        claim: Claim,
+    ) -> Result<Track, IngestError> {
+        let _guard = self.lock.lock().await;
+        let mut db = self.db.clone();
+        if let Some(existing) = self
+            .duplicate(&mut db, owner, &provenance, Some(file.id))
+            .await?
+        {
+            return Err(note_video(&mut db, existing, &provenance).await?);
+        }
+        let (album, artist_id) = self.place(&mut db, owner, info, &provenance).await?;
+        self.record(
+            &mut db,
+            album,
+            artist_id,
+            StoredFile::Shared(file),
+            info,
+            None,
+            provenance,
+            claim,
+        )
+        .await
+    }
+
+    /// A track of `owner`'s that is the same download (or another video
+    /// found to be it), or plays the same file.
+    async fn duplicate(
+        &self,
+        db: &mut Db,
+        owner: u64,
+        provenance: &Provenance,
+        file_id: Option<u64>,
+    ) -> Result<Option<Track>, toasty::Error> {
+        if let Some(video_id) = &provenance.ytm_video_id
+            && let Some(existing) = videos::track_of_video(db, owner, video_id).await?
+        {
+            return Ok(Some(existing));
+        }
+        match file_id {
+            Some(file_id) => {
+                Track::filter(
+                    Track::fields()
+                        .file_id()
+                        .eq(file_id)
+                        .and(Track::fields().user_id().eq(owner)),
+                )
+                .first()
+                .exec(db)
+                .await
+            }
+            None => Ok(None),
+        }
+    }
+
+    /// [`Self::find_place`], noting the download's video when the album
+    /// holds the same track already.
+    async fn place(
+        &self,
+        db: &mut Db,
+        owner: u64,
+        info: &AudioInfo,
+        provenance: &Provenance,
+    ) -> Result<(Album, u64), IngestError> {
+        match self.find_place(db, owner, info, provenance).await {
+            Err(IngestError::Duplicate { track_id }) => {
+                match Track::filter_by_id(track_id).first().exec(&mut *db).await? {
+                    Some(existing) => Err(note_video(db, existing, provenance).await?),
+                    None => Err(IngestError::Duplicate { track_id }),
+                }
+            }
+            placed => placed,
+        }
+    }
+
+    /// The album (and track artist) a track described by `info` belongs to
+    /// in `owner`'s library, created when missing.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the album holds the same track already.
+    async fn find_place(
+        &self,
+        db: &mut Db,
+        owner: u64,
+        info: &AudioInfo,
+        provenance: &Provenance,
+    ) -> Result<(Album, u64), IngestError> {
         let credit = info.artist.as_deref().unwrap_or(UNKNOWN_ARTIST);
         let primary = info
             .artists
@@ -184,7 +342,8 @@ impl Treasury {
         let title = info.title.as_deref().unwrap_or(UNTITLED);
 
         let album_artist = find_or_create_artist(
-            &mut db,
+            db,
+            owner,
             album_artist_name,
             provenance.ytm_artist_id.as_deref(),
         )
@@ -192,19 +351,15 @@ impl Treasury {
         let artist_id = if name_key(primary) == album_artist.name_key {
             album_artist.id
         } else {
-            find_or_create_artist(&mut db, primary, None).await?.id
+            find_or_create_artist(db, owner, primary, None).await?.id
         };
-        let album = find_or_create_album(
-            &mut db,
-            &album_artist,
-            info,
-            provenance.ytm_browse_id.as_deref(),
-        )
-        .await?;
+        let album =
+            find_or_create_album(db, &album_artist, info, provenance.ytm_browse_id.as_deref())
+                .await?;
 
         let title_key = name_key(title);
         if let Some(duplicate) = Track::filter_by_album_id(album.id)
-            .exec(&mut db)
+            .exec(db)
             .await?
             .into_iter()
             .find(|track| {
@@ -218,46 +373,7 @@ impl Treasury {
             });
         }
 
-        let relative = self
-            .free_path(self.layout().track_path(TrackLocation {
-                album_artist: &album_artist.name,
-                artist: credit,
-                album: &album.title,
-                year: album.year,
-                genre: info.genre.as_deref(),
-                disc: info.disc_number,
-                track: info.track_number,
-                title,
-                suffix: &info.suffix,
-            }))
-            .await;
-        let destination = self.root.join(&relative);
-        tokio::fs::create_dir_all(destination.parent().expect("track paths have a parent")).await?;
-        move_file(source, &destination).await?;
-
-        let recorded = self
-            .record(
-                &mut db,
-                album,
-                artist_id,
-                &relative,
-                &destination,
-                info,
-                fallback_cover,
-                provenance,
-                claim,
-            )
-            .await;
-        if recorded.is_err()
-            && let Err(error) = move_file(&destination, source).await
-        {
-            tracing::error!(
-                %error,
-                path = %destination.display(),
-                "failed to restore a file after a failed ingest"
-            );
-        }
-        recorded
+        Ok((album, artist_id))
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -266,17 +382,14 @@ impl Treasury {
         db: &mut Db,
         mut album: Album,
         artist_id: u64,
-        relative: &Path,
-        destination: &Path,
+        file: StoredFile,
         info: &AudioInfo,
         fallback_cover: Option<&Cover>,
         provenance: Provenance,
         claim: Claim,
     ) -> Result<Track, IngestError> {
-        let size = tokio::fs::metadata(destination).await?.len();
-        let album_dir = relative.parent().expect("track paths have a parent");
         let cover = match (&album.cover, info.cover.as_ref().or(fallback_cover)) {
-            (None, Some(cover)) => Some(self.write_cover(album_dir, cover).await?),
+            (None, Some(cover)) => Some(self.place_image(cover).await?),
             _ => None,
         };
 
@@ -286,7 +399,30 @@ impl Treasury {
                 .exec(&mut tx)
                 .await?;
         }
+        let file = match file {
+            StoredFile::Shared(file) => file,
+            StoredFile::New { sha256, relative } => {
+                let size = tokio::fs::metadata(self.resolve(&relative)).await?.len();
+                toasty::create!(AudioFile {
+                    sha256,
+                    path: relative,
+                    size,
+                    suffix: info.suffix.to_ascii_lowercase(),
+                    content_type: &info.content_type,
+                    duration_ms: info.duration_ms,
+                    bitrate: info.bitrate,
+                    sample_rate: info.sample_rate,
+                    channels: info.channels,
+                    bit_depth: info.bit_depth,
+                    ytm_video_id: provenance.ytm_video_id.clone(),
+                    created_at: now(),
+                })
+                .exec(&mut tx)
+                .await?
+            }
+        };
         let track = toasty::create!(Track {
+            user_id: album.user_id,
             album_id: album.id,
             artist_id,
             title: info.title.as_deref().unwrap_or(UNTITLED),
@@ -300,10 +436,11 @@ impl Treasury {
             sample_rate: info.sample_rate,
             channels: info.channels,
             bit_depth: info.bit_depth,
-            path: path_string(relative),
-            size,
-            suffix: &info.suffix,
-            content_type: &info.content_type,
+            file_id: file.id,
+            path: file.path.clone(),
+            size: file.size,
+            suffix: file.suffix.clone(),
+            content_type: file.content_type.clone(),
             mbid: info.mbid.clone(),
             isrc: info.isrc.clone(),
             ytm_video_id: provenance.ytm_video_id,
@@ -324,33 +461,21 @@ impl Treasury {
         .await?;
         tx.commit().await?;
 
-        tracing::info!(track = track.id, path = %track.path, "track added to the hoard");
+        tracing::info!(
+            track = track.id,
+            file = file.id,
+            "track added to the library"
+        );
         Ok(track)
     }
+}
 
-    /// Writes `cover` into the album directory, returning its relative path.
-    async fn write_cover(&self, album_dir: &Path, cover: &Cover) -> io::Result<String> {
-        let relative = self
-            .free_path(album_dir.join(format!("cover.{}", cover.extension())))
-            .await;
-        tokio::fs::write(self.root.join(&relative), &cover.data).await?;
-        Ok(path_string(&relative))
-    }
-
-    /// `relative`, or a numbered variant of it that is not taken on disk.
-    pub(crate) async fn free_path(&self, relative: PathBuf) -> PathBuf {
-        let mut candidate = relative.clone();
-        for n in 2.. {
-            if !tokio::fs::try_exists(self.root.join(&candidate))
-                .await
-                .unwrap_or(true)
-            {
-                break;
-            }
-            candidate = layout::numbered(&relative, n);
-        }
-        candidate
-    }
+/// The file a new track plays.
+enum StoredFile {
+    /// Content the store holds already.
+    Shared(AudioFile),
+    /// Just put into the store; its row is written with the track's.
+    New { sha256: String, relative: String },
 }
 
 /// The artist with YouTube Music channel `channel`, else the one named
@@ -358,19 +483,25 @@ impl Treasury {
 /// artist.
 pub(crate) async fn find_or_create_artist(
     db: &mut Db,
+    owner: u64,
     name: &str,
     channel: Option<&str>,
 ) -> Result<Artist, toasty::Error> {
     if let Some(channel) = channel
-        && let Some(artist) = Artist::filter_by_ytm_channel_id(Some(channel.to_owned()))
-            .first()
-            .exec(db)
-            .await?
+        && let Some(artist) =
+            Artist::filter_by_user_id_and_ytm_channel_id(owner, Some(channel.to_owned()))
+                .first()
+                .exec(db)
+                .await?
     {
         return Ok(artist);
     }
     let key = name_key(name);
-    if let Some(mut artist) = Artist::filter_by_name_key(&key).first().exec(db).await? {
+    if let Some(mut artist) = Artist::filter_by_user_id_and_name_key(owner, &key)
+        .first()
+        .exec(db)
+        .await?
+    {
         if artist.ytm_channel_id.is_none()
             && let Some(channel) = channel
         {
@@ -383,6 +514,7 @@ pub(crate) async fn find_or_create_artist(
         return Ok(artist);
     }
     toasty::create!(Artist {
+        user_id: owner,
         name,
         name_key: key,
         ytm_channel_id: channel.map(str::to_owned),
@@ -393,19 +525,20 @@ pub(crate) async fn find_or_create_artist(
 }
 
 impl Treasury {
-    /// Tells the artist named `name` its YouTube Music channel, if it has
-    /// none yet and no other artist has that channel.
+    /// Tells `owner`'s artist named `name` its YouTube Music channel, if it
+    /// has none yet and no other artist of theirs has that channel.
     ///
     /// # Errors
     ///
     /// Fails on database errors.
     pub async fn learn_artist_channel(
         &self,
+        owner: u64,
         name: &str,
         channel: &str,
     ) -> Result<(), toasty::Error> {
         let mut db = self.db.clone();
-        if Artist::filter_by_ytm_channel_id(Some(channel.to_owned()))
+        if Artist::filter_by_user_id_and_ytm_channel_id(owner, Some(channel.to_owned()))
             .first()
             .exec(&mut db)
             .await?
@@ -413,7 +546,7 @@ impl Treasury {
         {
             return Ok(());
         }
-        if let Some(mut artist) = Artist::filter_by_name_key(name_key(name))
+        if let Some(mut artist) = Artist::filter_by_user_id_and_name_key(owner, name_key(name))
             .first()
             .exec(&mut db)
             .await?
@@ -429,6 +562,21 @@ impl Treasury {
     }
 }
 
+/// A download that turned out to be `existing`: its video is the track's
+/// too, so it is not fetched again.
+async fn note_video(
+    db: &mut Db,
+    existing: Track,
+    provenance: &Provenance,
+) -> Result<IngestError, toasty::Error> {
+    if let Some(video_id) = &provenance.ytm_video_id {
+        videos::alias(db, &existing, video_id).await?;
+    }
+    Ok(IngestError::Duplicate {
+        track_id: existing.id,
+    })
+}
+
 /// The album a track belongs to: by platform id when known (names can
 /// differ between releases), then by artist and title.
 async fn find_or_create_album(
@@ -438,10 +586,11 @@ async fn find_or_create_album(
     ytm_browse_id: Option<&str>,
 ) -> Result<Album, toasty::Error> {
     if let Some(browse_id) = ytm_browse_id
-        && let Some(album) = Album::filter_by_ytm_browse_id(browse_id)
-            .first()
-            .exec(db)
-            .await?
+        && let Some(album) =
+            Album::filter_by_user_id_and_ytm_browse_id(album_artist.user_id, browse_id)
+                .first()
+                .exec(db)
+                .await?
     {
         return Ok(album);
     }
@@ -466,6 +615,7 @@ async fn find_or_create_album(
         return Ok(album);
     }
     toasty::create!(Album {
+        user_id: album_artist.user_id,
         title,
         title_key: key,
         artist_id: album_artist.id,

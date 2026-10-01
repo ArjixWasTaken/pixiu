@@ -16,6 +16,8 @@ export interface HuntTrack {
   cover: string | null
   is_video: boolean
   standing: Standing
+  /** The album holding the library's copy. */
+  library_album?: string | null
 }
 
 export interface HuntAlbum {
@@ -26,6 +28,8 @@ export interface HuntAlbum {
   kind: string
   cover: string | null
   standing: Standing
+  /** The library's copy. */
+  library_album?: string | null
 }
 
 export type WatchKind = 'playlist' | 'liked_music' | 'artist'
@@ -60,7 +64,13 @@ export interface ExcludedSong {
 
 export interface PlaylistWatch {
   watch: { id: number; kind: WatchKind; name: string; link: string; last_synced_at: string | null }
-  coming: Array<{ video_id: string; title: string | null; artist: string | null }>
+  coming: Array<{
+    video_id: string
+    title: string | null
+    artist: string | null
+    /** Its download, when there is one. */
+    job: { state: 'queued' | 'running' | 'paused' | 'failed' | 'done'; error: string | null } | null
+  }>
   excluded: ExcludedSong[]
 }
 
@@ -68,7 +78,7 @@ export type JobState = 'queued' | 'running' | 'done' | 'failed' | 'paused'
 
 export interface HuntJob {
   id: number
-  kind: 'download' | 'album' | 'watch_sync' | 'lookup' | 'refile'
+  kind: 'download' | 'album' | 'watch_sync' | 'lookup'
   state: JobState
   title: string
   error: string | null
@@ -125,30 +135,13 @@ export interface Sources {
   login_open: boolean
 }
 
-export interface ApiKeyInfo {
-  id: number
-  name: string
-  created_at: string
-  last_used_at: string | null
-  current: boolean
-}
-
 export interface Settings {
-  layout: {
-    template: string
-    default: string
-    misplaced: number
-    refiling: boolean
-    example: { title: string; album: string; track: number | null }
-  }
   albums_not_looked_up: number
-  keys: ApiKeyInfo[]
 }
 
 export interface SongInfo {
   format: string
   size: number
-  path: string
   origin: 'offering' | 'download'
   source_name: string | null
   source_archive: string | null
@@ -189,6 +182,8 @@ export interface HuntingSummary {
   orphans: number
   offerings: number
   jobs: { running: number; waiting: number; failed: number }
+  /** For admins: how many registrations wait for them. */
+  registrations: number
 }
 
 export const huntingService = {
@@ -251,13 +246,7 @@ export const huntingService = {
   finishLogin: () => http.post<SessionHealth>('sources/login/finish'),
 
   settings: () => http.get<Settings>('settings'),
-  previewLayout: (template: string) =>
-    http.silently.get<{ path: string }>(`settings/layout/preview?template=${encodeURIComponent(template)}`),
-  saveLayout: (template: string) => http.put<{ misplaced: number }>('settings/layout', { template }),
-  refile: () => http.post('settings/refile'),
   lookUpAll: () => http.post<{ queued: number }>('settings/lookup-all'),
-  createKey: (name: string) => http.post<{ id: number; name: string; key: string }>('keys', { name }),
-  revokeKey: (id: number) => http.delete(`keys/${id}`),
 
   songInfo: (song: Song) => http.get<SongInfo>(`songs/${song.id}/info`),
   albumDetails: (album: Album) => http.get<AlbumDetails>(`albums/${album.id}/details`),

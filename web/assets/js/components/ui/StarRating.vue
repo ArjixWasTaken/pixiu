@@ -10,8 +10,8 @@
       :key="star"
       v-koel-tooltip
       :title="titleFor(star)"
-      class="cursor-pointer transition-[color] duration-150"
-      :class="(hover || currentRating) >= star ? 'text-k-fg-70' : 'text-k-fg-40'"
+      :class="{ lit: (hover || currentRating) >= star }"
+      class="star cursor-pointer transition-[color] duration-150"
       @click="onClick($event, star)"
       @mouseenter="hover = star"
     >
@@ -94,3 +94,14 @@ const onClick = (event: MouseEvent, star: number) => {
   }
 }
 </script>
+
+<style scoped>
+/* The outline color reads in light and dark schemes alike. */
+.star {
+  color: var(--schemes-outline);
+
+  &.lit {
+    color: var(--schemes-primary);
+  }
+}
+</style>

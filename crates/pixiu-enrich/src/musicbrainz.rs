@@ -121,7 +121,9 @@ struct ReleaseJson {
     #[serde(rename = "artist-credit", default)]
     artist_credit: Vec<ArtistCreditJson>,
     #[serde(rename = "release-group")]
-    release_group: Option<IdJson>,
+    release_group: Option<ReleaseGroupJson>,
+    #[serde(default)]
+    genres: Vec<GenreJson>,
     #[serde(rename = "cover-art-archive")]
     cover_art_archive: Option<CoverArtJson>,
     #[serde(default)]
@@ -129,8 +131,43 @@ struct ReleaseJson {
 }
 
 #[derive(Deserialize)]
-struct IdJson {
+struct ReleaseGroupJson {
     id: String,
+    #[serde(default)]
+    genres: Vec<GenreJson>,
+}
+
+#[derive(Deserialize)]
+struct GenreJson {
+    name: String,
+    #[serde(default)]
+    count: u32,
+}
+
+/// The genre with the most votes, named as a tag would name it: "pop
+/// rock" is "Pop Rock". Ties go to the first by name.
+fn top_genre(genres: &[GenreJson]) -> Option<String> {
+    genres
+        .iter()
+        .filter(|genre| genre.count > 0 && !genre.name.trim().is_empty())
+        .min_by(|a, b| b.count.cmp(&a.count).then_with(|| a.name.cmp(&b.name)))
+        .map(|genre| genre_name(&genre.name))
+}
+
+fn genre_name(name: &str) -> String {
+    name.split(' ')
+        .map(|word| {
+            // "r&b" and the like are initials.
+            if word.contains('&') {
+                return word.to_uppercase();
+            }
+            let mut chars = word.chars();
+            chars.next().map_or_else(String::new, |first| {
+                first.to_uppercase().chain(chars).collect()
+            })
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 #[derive(Deserialize)]
@@ -210,6 +247,11 @@ impl From<ReleaseJson> for Release {
                 })
             })
             .collect();
+        let genre = top_genre(&json.genres).or_else(|| {
+            json.release_group
+                .as_ref()
+                .and_then(|group| top_genre(&group.genres))
+        });
         Self {
             id: json.id,
             title: json.title,
@@ -217,6 +259,7 @@ impl From<ReleaseJson> for Release {
             date: json.date.filter(|date| !date.is_empty()),
             country: json.country,
             release_group_id: json.release_group.map(|group| group.id),
+            genre,
             has_front_cover: json.cover_art_archive.is_some_and(|art| art.front),
             tracks,
         }
@@ -315,7 +358,10 @@ impl MusicBrainz {
         let json: ReleaseJson = self
             .get(Self::url(
                 &format!("release/{id}"),
-                &[("inc", "recordings+artist-credits+isrcs+release-groups")],
+                &[(
+                    "inc",
+                    "recordings+artist-credits+isrcs+release-groups+genres",
+                )],
             ))
             .await?;
         Ok(json.into())
@@ -371,5 +417,37 @@ mod tests {
         assert_eq!(second.isrcs, ["QZTB82300002"]);
         assert_eq!(second.artist.name, "Kevin MacLeod feat. Somebody");
         assert_eq!(second.artist.artists.len(), 2);
+        // The release has none: its release group's, most voted first.
+        assert_eq!(release.genre.as_deref(), Some("Electronic"));
+    }
+
+    #[test]
+    fn a_release_s_own_genres_come_first() {
+        let genres = |names: &[(&str, u32)]| -> Vec<GenreJson> {
+            names
+                .iter()
+                .map(|&(name, count)| GenreJson {
+                    name: name.to_owned(),
+                    count,
+                })
+                .collect()
+        };
+        let json = ReleaseJson {
+            genres: genres(&[("pop rock", 1)]),
+            release_group: Some(ReleaseGroupJson {
+                id: "rg".to_owned(),
+                genres: genres(&[("rock", 9)]),
+            }),
+            ..serde_json::from_str(include_str!("../fixtures/release.json")).unwrap()
+        };
+        assert_eq!(Release::from(json).genre.as_deref(), Some("Pop Rock"));
+    }
+
+    #[test]
+    fn genres_are_named_like_tags() {
+        assert_eq!(genre_name("drum and bass"), "Drum And Bass");
+        assert_eq!(genre_name("r&b"), "R&B");
+        assert_eq!(genre_name("j-pop"), "J-pop");
+        assert_eq!(top_genre(&[]), None);
     }
 }

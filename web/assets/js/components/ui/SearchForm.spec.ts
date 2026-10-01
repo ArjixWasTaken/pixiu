@@ -46,4 +46,17 @@ describe('searchForm.vue', () => {
 
     expect(goMock).toHaveBeenCalledWith('/#/search')
   })
+
+  it('leaves the search behind when leaving the results', async () => {
+    h.render(Component)
+    h.visit('/search')
+    await h.type(screen.getByRole('searchbox'), 'coldplay')
+
+    h.visit('/search')
+    expect(screen.getByRole<HTMLInputElement>('searchbox').value).toBe('coldplay')
+
+    h.visit('/home')
+    await h.tick()
+    expect(screen.getByRole<HTMLInputElement>('searchbox').value).toBe('')
+  })
 })

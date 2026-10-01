@@ -1,6 +1,10 @@
 //! YouTube Music, through rustypipe.
 
-use std::path::{Path, PathBuf};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+    sync::{Arc, Mutex},
+};
 
 use pixiu_core::SecretBox;
 use rustypipe::{
@@ -267,6 +271,90 @@ impl YtMusic {
                 _ => "m4a",
             },
         })
+    }
+}
+
+/// YouTube Music clients. rustypipe keeps one login per client, and a
+/// client with a login uses it for every request, so each user with a
+/// session has a client of their own (their liked music, private playlists,
+/// and streams that need a login), and one client that never holds a login
+/// serves what everyone shares: searches, albums, artists, lyrics.
+pub struct YtMusicPool {
+    public: Arc<YtMusic>,
+    /// Users' clients keep their caches in `<users>/<id>/youtube-music`.
+    users_dir: PathBuf,
+    secrets: SecretBox,
+    botguard: Option<PathBuf>,
+    users: Mutex<HashMap<u64, Arc<YtMusic>>>,
+}
+
+impl YtMusicPool {
+    /// The public client keeps its cache in `public_dir`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the public client cannot be built.
+    pub fn new(
+        public_dir: &Path,
+        users_dir: PathBuf,
+        secrets: SecretBox,
+        botguard: Option<PathBuf>,
+    ) -> Result<Self, HuntError> {
+        Ok(Self {
+            public: Arc::new(YtMusic::new(public_dir, secrets.clone(), botguard.clone())?),
+            users_dir,
+            secrets,
+            botguard,
+            users: Mutex::default(),
+        })
+    }
+
+    /// Drops any login the public client's cache still holds (from before
+    /// each user had a client).
+    pub async fn logout_public(&self) {
+        self.public.forget_cookies().await;
+    }
+
+    /// The client without a login.
+    #[must_use]
+    pub fn public(&self) -> Arc<YtMusic> {
+        Arc::clone(&self.public)
+    }
+
+    /// `owner`'s client, made on first use.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the client cannot be built.
+    pub fn for_user(&self, owner: u64) -> Result<Arc<YtMusic>, HuntError> {
+        let mut users = self.users.lock().unwrap();
+        if let Some(client) = users.get(&owner) {
+            return Ok(Arc::clone(client));
+        }
+        let dir = self.users_dir.join(owner.to_string()).join("youtube-music");
+        let client = Arc::new(YtMusic::new(
+            &dir,
+            self.secrets.clone(),
+            self.botguard.clone(),
+        )?);
+        users.insert(owner, Arc::clone(&client));
+        Ok(client)
+    }
+
+    /// `owner`'s client if they have one (a session was connected), else
+    /// the public one.
+    #[must_use]
+    pub fn client(&self, owner: u64) -> Arc<YtMusic> {
+        self.users
+            .lock()
+            .unwrap()
+            .get(&owner)
+            .map_or_else(|| self.public(), Arc::clone)
+    }
+
+    /// Forgets `owner`'s client.
+    pub fn remove(&self, owner: u64) {
+        self.users.lock().unwrap().remove(&owner);
     }
 }
 

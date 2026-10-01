@@ -39,40 +39,36 @@ describe('playableListControls.vue', () => {
     })
   }
 
-  it.each([[0], [1]])('shuffles all if %s songs are selected', async (selectedCount: number) => {
+  it.each([[0], [1]])('plays all in order if %s songs are selected', async (selectedCount: number) => {
     const { emitted } = renderComponent(selectedCount)
 
-    await h.user.click(screen.getByTitle('Shuffle all. Press Alt/⌥ to change mode.'))
-
-    expect(emitted()['play-all'][0]).toEqual([true])
-  })
-
-  it.each([[0], [1]])('plays all if %s songs are selected with Alt pressed', async (selectedCount: number) => {
-    const { emitted } = renderComponent(selectedCount)
-
-    await h.user.keyboard('{Alt>}')
-    await h.user.click(screen.getByTitle('Play all. Press Alt/⌥ to change mode.'))
-    await h.user.keyboard('{/Alt}')
+    await h.user.click(screen.getByRole('button', { name: 'Play' }))
 
     expect(emitted()['play-all'][0]).toEqual([false])
   })
 
-  it('shuffles selected if more than one song are selected', async () => {
-    const { emitted } = renderComponent(2)
+  it.each([[0], [1]])('shuffles all if %s songs are selected', async (selectedCount: number) => {
+    const { emitted } = renderComponent(selectedCount)
 
-    await h.user.click(screen.getByTitle('Shuffle selected. Press Alt/⌥ to change mode.'))
+    await h.user.click(screen.getByRole('button', { name: 'Shuffle' }))
 
-    expect(emitted()['play-selected'][0]).toEqual([true])
+    expect(emitted()['play-all'][0]).toEqual([true])
   })
 
-  it('plays selected if more than one song are selected with Alt pressed', async () => {
+  it('plays the selection in order if more than one song is selected', async () => {
     const { emitted } = renderComponent(2)
 
-    await h.user.keyboard('{Alt>}')
-    await h.user.click(screen.getByTitle('Play selected. Press Alt/⌥ to change mode.'))
-    await h.user.keyboard('{/Alt}')
+    await h.user.click(screen.getByRole('button', { name: 'Play selected' }))
 
     expect(emitted()['play-selected'][0]).toEqual([false])
+  })
+
+  it('shuffles the selection if more than one song is selected', async () => {
+    const { emitted } = renderComponent(2)
+
+    await h.user.click(screen.getByRole('button', { name: 'Shuffle' }))
+
+    expect(emitted()['play-selected'][0]).toEqual([true])
   })
 
   it('clears queue', async () => {

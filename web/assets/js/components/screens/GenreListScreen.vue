@@ -26,6 +26,14 @@
       <EmptyLibraryHint />
     </ScreenEmptyState>
 
+    <ScreenEmptyState v-else-if="!loading && !genres.length" data-testid="no-genres">
+      <template #icon>
+        <GuitarIcon :size="96" />
+      </template>
+      No genres yet.
+      <span class="block secondary"> Genres come from the songs' tags and MusicBrainz, as albums are looked up. </span>
+    </ScreenEmptyState>
+
     <template v-else>
       <ul v-if="!loading" class="genre-list grid gap-3 pt-2">
         <GenreCard v-for="(genre, index) in displayedGenres" :key="genre.id" :genre :tone="index" />

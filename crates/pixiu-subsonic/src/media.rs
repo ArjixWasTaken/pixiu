@@ -15,13 +15,13 @@ use axum::{
     http::{HeaderMap, HeaderName, HeaderValue, Method, Request, header},
     response::Response,
 };
-use pixiu_db::{Album, Artist, Track, User};
+use pixiu_db::{Album, Track};
 use pixiu_media::{Codec, Target};
 use tokio_util::io::ReaderStream;
 use tower::ServiceExt;
 use tower_http::services::ServeFile;
 
-use crate::{Failure, Params, SubsonicState, browse::not_found, ids::Id, playing};
+use crate::{Cx, Failure, Params, SubsonicState, browse::not_found, ids::Id, playing};
 
 /// Request headers that matter for serving a file.
 const FORWARDED: [HeaderName; 6] = [
@@ -47,15 +47,11 @@ async fn serve_file(path: &Path, method: &Method, headers: &HeaderMap) -> Respon
     }
 }
 
-async fn load_track(state: &SubsonicState, params: &Params) -> Result<Track, Failure> {
+async fn load_track(cx: &Cx<'_>, params: &Params) -> Result<Track, Failure> {
     let Some(Id::Track(id)) = Id::parse(params.require("id")?) else {
         return Err(not_found("song"));
     };
-    Track::filter_by_id(id)
-        .first()
-        .exec(&mut state.db.clone())
-        .await?
-        .ok_or_else(|| not_found("song"))
+    cx.lib.track(id).await?.ok_or_else(|| not_found("song"))
 }
 
 /// How to serve a stream.
@@ -142,14 +138,14 @@ async fn transcoded(
 /// `stream` and `download`: the original file, or for `stream` a transcode
 /// when the client asks for one (see [`plan`]).
 pub(crate) async fn stream(
-    state: &SubsonicState,
-    user: &User,
+    cx: &Cx<'_>,
     params: &Params,
     method: &Method,
     headers: &HeaderMap,
     download: bool,
 ) -> Result<Response, Failure> {
-    let track = load_track(state, params).await?;
+    let state = cx.state;
+    let track = load_track(cx, params).await?;
     let path = state.treasury.resolve(&track.path);
     if !tokio::fs::try_exists(&path).await.unwrap_or(false) {
         tracing::warn!(path = %path.display(), "audio file missing from the treasure");
@@ -164,7 +160,7 @@ pub(crate) async fn stream(
     {
         state
             .now_playing
-            .streamed(&user.username, player, playing::song(&track));
+            .streamed(cx.listener(), player, playing::song(&track));
     }
     match plan(&track.suffix, track.bitrate, params, state.transcode_format) {
         Plan::Original => Ok(original(&track, &path, method, headers, false).await),
@@ -189,10 +185,12 @@ async fn original(
                 .insert(header::CONTENT_TYPE, content_type);
         }
         if download {
-            let name = path
-                .file_name()
-                .map(|name| name.to_string_lossy().into_owned())
-                .unwrap_or_default();
+            // Stored files are named by their content; name the download
+            // after the song.
+            let name = pixiu_treasury::layout::sanitize(
+                &format!("{} - {}.{}", track.artist_credit, track.title, track.suffix),
+                "download",
+            );
             if let Ok(disposition) = HeaderValue::from_str(&attachment(&name)) {
                 response
                     .headers_mut()
@@ -232,24 +230,20 @@ fn attachment(name: &str) -> String {
 /// `getCoverArt`: an album's cover (also for its songs and its artist),
 /// resized when `size` is given.
 pub(crate) async fn cover_art(
-    state: &SubsonicState,
+    cx: &Cx<'_>,
     params: &Params,
     method: &Method,
     headers: &HeaderMap,
 ) -> Result<Response, Failure> {
-    let mut db = state.db.clone();
+    let (state, lib) = (cx.state, &cx.lib);
     let size = params.get("size").and_then(|size| size.parse().ok());
     let id = Id::parse(params.require("id")?);
     // An artist's own picture, when píxiū has one.
     if let Some(Id::Artist(artist_id)) = id
-        && let Some(image) = Artist::filter_by_id(artist_id)
-            .first()
-            .exec(&mut db)
-            .await?
-            .and_then(|artist| artist.image)
+        && let Some(image) = lib.artist(artist_id).await?.and_then(|artist| artist.image)
     {
         let path = pixiu_treasury::covers::sized(
-            &state.treasury.cache_dir().join(image),
+            &state.treasury.resolve(&image),
             state.treasury.cache_dir(),
             size,
         )
@@ -257,22 +251,22 @@ pub(crate) async fn cover_art(
         return Ok(serve_file(&path, method, headers).await);
     }
     let album = match id {
-        Some(Id::Album(id)) => Album::filter_by_id(id).first().exec(&mut db).await?,
-        Some(Id::Track(id)) => match Track::filter_by_id(id).first().exec(&mut db).await? {
-            Some(track) => {
-                Album::filter_by_id(track.album_id)
-                    .first()
-                    .exec(&mut db)
-                    .await?
-            }
+        Some(Id::Album(id)) => lib.album(id).await?,
+        Some(Id::Track(id)) => match lib.track(id).await? {
+            Some(track) => lib.album(track.album_id).await?,
             None => None,
         },
         Some(Id::Artist(id)) => {
-            let mut albums = Album::filter_by_artist_id(id).exec(&mut db).await?;
+            let mut albums: Vec<Album> = lib
+                .all_albums()
+                .await?
+                .into_iter()
+                .filter(|album| album.artist_id == id)
+                .collect();
             albums.sort_by_key(|album| std::cmp::Reverse(album.year));
             albums.into_iter().find(|album| album.cover.is_some())
         }
-        Some(Id::Playlist(id)) => crate::playlists::cover_album(&mut db, id).await?,
+        Some(Id::Playlist(id)) => crate::playlists::cover_album(lib, id).await?,
         None => None,
     };
     let Some(cover) = album.and_then(|album| album.cover) else {

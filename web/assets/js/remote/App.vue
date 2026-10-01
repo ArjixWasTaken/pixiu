@@ -27,6 +27,7 @@
 <script lang="ts" setup>
 import { computed, defineAsyncComponent, onMounted, provide, reactive, ref } from 'vue'
 import { authService } from '@/services/authService'
+import { http } from '@/services/http'
 import { socketService } from '@/services/socketService'
 import { preferenceStore } from '@/stores/preferenceStore'
 import { userStore } from '@/stores/userStore'
@@ -62,7 +63,7 @@ const inStandaloneMode = ref(
 
 const init = async () => {
   try {
-    userStore.init((await authService.getProfile()) as CurrentUser)
+    userStore.init((await http.get<{ current_user: CurrentUser }>('bootstrap')).current_user)
     await socketService.init()
 
     socketService

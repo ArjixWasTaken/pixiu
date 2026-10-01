@@ -10,7 +10,12 @@
       </p>
     </div>
 
-    <StandingAction :standing="album.standing" class="mx-1 mb-1" @grab="emit('grab')" />
+    <StandingAction
+      :library-album="album.library_album"
+      :standing="album.standing"
+      class="mx-1 mb-1"
+      @grab="emit('grab')"
+    />
   </M3Card>
 </template>
 

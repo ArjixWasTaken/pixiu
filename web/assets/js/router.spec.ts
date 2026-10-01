@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import Router from './router'
+import factory from '@/__tests__/factory'
+import { userStore } from '@/stores/userStore'
 
 describe('Router', () => {
   let router: Router
@@ -97,6 +99,19 @@ describe('Router', () => {
 
       expect(route).toBeNull()
       expect(router.$currentRoute.value.screen).toBe('404')
+    })
+
+    it('refuses routes their guard denies once guarding, on every navigation', () => {
+      // Someone who may not upload.
+      userStore.state.current = factory('user').state('current').make() as CurrentUser
+
+      // Before start-up, the app checks the first route itself.
+      expect(router.resolve('#/upload')?.screen).toBe('Upload')
+
+      router.startGuarding()
+      expect(router.resolve('#/upload')).toBeNull()
+      expect(router.$currentRoute.value.screen).toBe('404')
+      expect(router.resolve('#/songs')?.screen).toBe('Songs')
     })
   })
 

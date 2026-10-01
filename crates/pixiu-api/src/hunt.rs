@@ -1,15 +1,16 @@
-//! Hunting: search YouTube Music and grab what the hoard lacks.
+//! Search YouTube Music and grab what the signed-in user's library lacks.
 
-use std::collections::HashSet;
+use std::collections::HashMap;
 
 use axum::{
     Json,
     extract::{Query, State},
     http::StatusCode,
 };
-use pixiu_db::{Album, Track};
+use pixiu_db::Library;
 use pixiu_hunt::{AlbumKind, RemoteAlbum, RemoteTrack, SearchResults, image_url_at};
 use pixiu_jobs::NewJob;
+use pixiu_subsonic::ids;
 use serde::{Deserialize, Serialize};
 
 use crate::{ApiError, ApiResult, ApiState, Session};
@@ -41,6 +42,8 @@ pub(crate) struct TrackResult {
     cover: Option<String>,
     is_video: bool,
     standing: Standing,
+    /// The album of the library's copy, when the library holds it.
+    library_album: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -53,6 +56,8 @@ pub(crate) struct AlbumResult {
     kind: &'static str,
     cover: Option<String>,
     standing: Standing,
+    /// The library's copy, when the library holds it.
+    library_album: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -70,12 +75,12 @@ fn kind_label(kind: AlbumKind) -> &'static str {
     }
 }
 
-/// The video and browse ids of the results that the hoard holds.
+/// The results the library holds: video ids and browse ids, with the album
+/// holding each (as a Subsonic id).
 async fn hoarded(
-    state: &ApiState,
+    lib: &Library,
     results: &SearchResults,
-) -> ApiResult<(HashSet<String>, HashSet<String>)> {
-    let mut db = state.db.clone();
+) -> ApiResult<(HashMap<String, String>, HashMap<String, String>)> {
     let videos: Vec<String> = results
         .tracks
         .iter()
@@ -86,26 +91,17 @@ async fn hoarded(
         .iter()
         .map(|album| album.id.clone())
         .collect();
-    let tracks = if videos.is_empty() {
-        HashSet::new()
-    } else {
-        Track::filter(Track::fields().ytm_video_id().in_list(videos))
-            .exec(&mut db)
-            .await?
-            .into_iter()
-            .filter_map(|track| track.ytm_video_id)
-            .collect()
-    };
-    let albums = if browses.is_empty() {
-        HashSet::new()
-    } else {
-        Album::filter(Album::fields().ytm_browse_id().in_list(browses))
-            .exec(&mut db)
-            .await?
-            .into_iter()
-            .filter_map(|album| album.ytm_browse_id)
-            .collect()
-    };
+    let held = lib.tracks_of_videos(&videos).await?;
+    let tracks = held
+        .videos()
+        .filter_map(|video| Some((video.to_owned(), ids::album(held.track(video)?.album_id))))
+        .collect();
+    let albums = lib
+        .albums_of_browse_ids(&browses)
+        .await?
+        .into_iter()
+        .filter_map(|album| Some((album.ytm_browse_id?, ids::album(album.id))))
+        .collect();
     Ok((tracks, albums))
 }
 
@@ -116,7 +112,7 @@ fn cover(url: Option<&str>) -> Option<String> {
 /// `GET /api/hunt?q=`.
 pub(crate) async fn search(
     State(state): State<ApiState>,
-    _: Session,
+    session: Session,
     Query(query): Query<SearchQuery>,
 ) -> ApiResult<Json<Results>> {
     let q = query.q.trim();
@@ -133,11 +129,11 @@ pub(crate) async fn search(
             format!("YouTube Music did not answer: {error}"),
         )
     })?;
-    let (hoarded_tracks, hoarded_albums) = hoarded(&state, &results).await?;
-    let pending = pixiu_jobs::pending(&mut state.db.clone()).await?;
+    let (hoarded_tracks, hoarded_albums) = hoarded(&session.library(&state), &results).await?;
+    let pending = pixiu_jobs::pending(&mut state.db.clone(), session.owner()).await?;
 
     let track = |track: &RemoteTrack| TrackResult {
-        standing: if hoarded_tracks.contains(&track.id) {
+        standing: if hoarded_tracks.contains_key(&track.id) {
             Standing::Hoarded
         } else if pending.tracks.contains(&track.id) {
             Standing::Pending
@@ -151,9 +147,10 @@ pub(crate) async fn search(
         length: track.duration_secs,
         cover: cover(track.cover_url.as_deref()),
         is_video: track.is_video,
+        library_album: hoarded_tracks.get(&track.id).cloned(),
     };
     let album = |album: &RemoteAlbum| AlbumResult {
-        standing: if hoarded_albums.contains(&album.id) {
+        standing: if hoarded_albums.contains_key(&album.id) {
             Standing::Hoarded
         } else if pending.has_album(&album.id) {
             Standing::Pending
@@ -166,6 +163,7 @@ pub(crate) async fn search(
         year: album.year,
         kind: kind_label(album.kind),
         cover: cover(album.cover_url.as_deref()),
+        library_album: hoarded_albums.get(&album.id).cloned(),
     };
     Ok(Json(Results {
         tracks: results.tracks.iter().map(track).collect(),
@@ -192,7 +190,7 @@ pub(crate) struct Grab {
 /// `POST /api/hunt/tracks`: queues a download.
 pub(crate) async fn grab_track(
     State(state): State<ApiState>,
-    _: Session,
+    session: Session,
     Json(grab): Json<Grab>,
 ) -> ApiResult<StatusCode> {
     if !valid_id(&grab.id) {
@@ -200,7 +198,7 @@ pub(crate) async fn grab_track(
     }
     state
         .jobs
-        .enqueue(NewJob::track(&grab.id, &grab.title, None))
+        .enqueue(session.owner(), NewJob::track(&grab.id, &grab.title, None))
         .await?;
     Ok(StatusCode::ACCEPTED)
 }
@@ -208,7 +206,7 @@ pub(crate) async fn grab_track(
 /// `POST /api/hunt/albums`: queues grabbing a whole album.
 pub(crate) async fn grab_album(
     State(state): State<ApiState>,
-    _: Session,
+    session: Session,
     Json(grab): Json<Grab>,
 ) -> ApiResult<StatusCode> {
     if !valid_id(&grab.id) {
@@ -218,7 +216,7 @@ pub(crate) async fn grab_album(
     }
     state
         .jobs
-        .enqueue(NewJob::album(&grab.id, &grab.title))
+        .enqueue(session.owner(), NewJob::album(&grab.id, &grab.title))
         .await?;
     Ok(StatusCode::ACCEPTED)
 }

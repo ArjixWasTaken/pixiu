@@ -11,6 +11,7 @@ import { artistStore } from '@/stores/artistStore'
 import { overviewStore } from '@/stores/overviewStore'
 import { preferenceStore } from '@/stores/preferenceStore'
 import { playlistStore } from '@/stores/playlistStore'
+import { subsonic } from '@/services/subsonic'
 
 describe('playableStore', () => {
   const h = createHarness({
@@ -19,6 +20,17 @@ describe('playableStore', () => {
       preferenceStore.temporary.transcode_on_mobile = false
       playlistStore.state.playlists = []
     },
+  })
+
+  it('counts a play, and notes when it was', async () => {
+    const scrobble = h.mock(subsonic, 'scrobble').mockResolvedValue({})
+    const song = h.factory('song').make({ play_count: 2, played_at: null })
+
+    await playableStore.registerPlay(song)
+
+    expect(scrobble).toHaveBeenCalledWith(song.id, true, undefined)
+    expect(song.play_count).toBe(3)
+    expect(Date.now() - new Date(song.played_at!).getTime()).toBeLessThan(5_000)
   })
 
   it('gets a song by ID', () => {

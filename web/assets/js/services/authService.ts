@@ -1,18 +1,6 @@
-import { merge } from 'lodash-es'
 import { http } from '@/services/http'
-import { userStore } from '@/stores/userStore'
 import { useLocalStorage } from '@/composables/useLocalStorage'
 import { use } from '@/utils/helpers'
-
-/**
- * An `avatar` of `undefined` leaves the current avatar untouched, whereas `null` removes it
- * (falling back to the Gravatar). Any other value is the new avatar as base64-encoded image data.
- */
-export interface UpdateCurrentProfileData {
-  name: string
-  email: string
-  avatar?: string | null
-}
 
 const API_TOKEN_STORAGE_KEY = 'api-token'
 const AUDIO_TOKEN_STORAGE_KEY = 'audio-token'
@@ -20,61 +8,56 @@ const REDIRECT_KEY = 'redirect'
 
 const { get: lsGet, set: lsSet, remove: lsRemove } = useLocalStorage(false) // authentication local storage data aren't namespaced
 
-const isTwoFactorChallengeRequired = (response: LoginResponse): response is TwoFactorChallengeRequired => {
-  return 'two_factor' in response && response.two_factor
+export interface AuthStatus {
+  /** Whether píxiū has its admin yet; until then, the login screen creates it. */
+  claimed: boolean
+  /** Whether a forgotten password can be reset by email. */
+  password_reset: boolean
+  /** Whether anyone may ask for an account. */
+  registration: boolean
+  /** The single sign-on provider people may sign in with. */
+  sso: { name: string } | null
 }
 
 export const authService = {
-  /** Whether píxiū has its admin yet; until then, the login screen creates it. */
-  claimed: async () => (await http.get<{ claimed: boolean }>('auth/status')).claimed,
+  status: () => http.get<AuthStatus>('auth/status'),
+
+  /** Asks for an account, which an admin approves or denies. */
+  register: (account: { username: string; email: string; password: string }) => http.post('auth/register', account),
+
+  /** Emails a reset link to the account, if there is one. Says nothing either way. */
+  forgot: (login: string) => http.post('auth/forgot', { login }),
+
+  /** Follows a reset link: sets the new password and signs in with it. */
+  async resetPassword(token: string, password: string) {
+    this.setTokensUsingCompositeToken(await http.post<CompositeToken>('auth/reset', { token, password }))
+  },
+
+  /** Where single sign-on starts: the browser goes there, and on to the provider. */
+  ssoStartUrl: () => `${window.KOEL.base_url}api/auth/oidc/start`,
+
+  /** Trades a single sign-on's one-time code for a token. */
+  async exchangeSsoCode(code: string) {
+    this.setTokensUsingCompositeToken(await http.post<CompositeToken>('auth/oidc/exchange', { code }))
+  },
+
+  /** Follows a link confirming an email address; says whether that opened the account. */
+  verifyEmail: async (token: string) => (await http.post<{ opened: boolean }>('auth/verify-email', { token })).opened,
 
   /** Creates the admin account of a fresh píxiū, and signs in as it. */
   async claim(username: string, password: string) {
     this.setTokensUsingCompositeToken(await http.post<CompositeToken>('auth/setup', { username, password }))
   },
 
-  async login(username: string, password: string): Promise<TwoFactorChallengeRequired | null> {
-    const response = await http.post<LoginResponse>('auth/login', { username, password })
-
-    if (isTwoFactorChallengeRequired(response)) {
-      return response
-    }
-
-    this.setTokensUsingCompositeToken(response)
-    this.maybeRedirect()
-    return null
-  },
-
-  async submitTwoFactorChallenge(loginToken: string, code: string) {
-    this.setTokensUsingCompositeToken(
-      await http.post<CompositeToken>('me/two-factor-challenge', { login_token: loginToken, code }),
-    )
+  /** Signs in with a username or an email. */
+  async login(login: string, password: string) {
+    this.setTokensUsingCompositeToken(await http.post<CompositeToken>('auth/login', { username: login, password }))
     this.maybeRedirect()
   },
-
-  enrollTwoFactor: async () => await http.post<{ provisioning_uri: string }>('me/two-factor'),
-
-  confirmTwoFactor: async (code: string) =>
-    await http.post<{ recovery_codes: string[] }>('me/two-factor/confirm', { code }),
-
-  disableTwoFactor: async (code: string) => await http.delete('me/two-factor', { code }),
-
-  regenerateRecoveryCodes: async (code: string) =>
-    await http.post<{ recovery_codes: string[] }>('me/two-factor/recovery-codes', { code }),
 
   async logout() {
     await http.delete('auth/session')
     this.destroy()
-  },
-
-  getProfile: async () => await http.get<User>('me'),
-
-  updateProfile: async (data: UpdateCurrentProfileData) => {
-    merge(userStore.current, await http.put<User>('me', data))
-  },
-
-  changePassword: async (currentPassword: string, newPassword: string) => {
-    await http.put('me/password', { current_password: currentPassword, new_password: newPassword })
   },
 
   getApiToken: () => lsGet<string>(API_TOKEN_STORAGE_KEY),
@@ -101,14 +84,6 @@ export const authService = {
     // for backward compatibility, we first try to get the audio token, and fall back to the (full-privileged) API token
     return lsGet(AUDIO_TOKEN_STORAGE_KEY) || lsGet(API_TOKEN_STORAGE_KEY)
   },
-
-  requestResetPasswordLink: async (email: string) => await http.post('forgot-password', { email }),
-
-  resetPassword: async (email: string, password: string, token: string) => {
-    return await http.post('reset-password', { email, password, token })
-  },
-
-  getOneTimeToken: async () => (await http.get<{ token: string }>('one-time-token')).token,
 
   setRedirect: (url?: string) => lsSet(REDIRECT_KEY, url || location.toString()),
 

@@ -9,7 +9,7 @@
         </template>
 
         <template v-if="playables.length" #meta>
-          <span>{{ pluralize(playables, 'item') }}</span>
+          <span>{{ pluralize(playables, 'song') }}</span>
           <span>{{ duration }}</span>
         </template>
 

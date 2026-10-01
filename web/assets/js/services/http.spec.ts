@@ -83,12 +83,12 @@ describe('http service', () => {
       expect(emitMock).toHaveBeenCalledWith('LOG_OUT')
     })
 
-    it('does not emit LOG_OUT on 401 for login request', async () => {
+    it.each(['auth/login', 'auth/setup'])('does not emit LOG_OUT on 401 for %s', async url => {
       mockFetch(401, {})
       h.restoreAllMocks()
       const emitMock = h.mock(eventBus, 'emit')
 
-      await expect(http.post('me', {})).rejects.toThrow()
+      await expect(http.post(url, {})).rejects.toThrow()
       expect(emitMock).not.toHaveBeenCalledWith('LOG_OUT')
     })
 

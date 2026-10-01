@@ -1,5 +1,5 @@
 <template>
-  <ul>
+  <ul role="none">
     <MenuItem @click="play">Play</MenuItem>
     <MenuItem @click="shuffle">Shuffle</MenuItem>
     <MenuItem @click="addToQueue">Add to Queue</MenuItem>

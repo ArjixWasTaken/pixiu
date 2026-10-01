@@ -8,6 +8,7 @@ license.workspace = true
 publish = false
 
 [dependencies]
+pixiu-accounts.workspace = true
 pixiu-browser.workspace = true
 pixiu-core.workspace = true
 pixiu-db.workspace = true

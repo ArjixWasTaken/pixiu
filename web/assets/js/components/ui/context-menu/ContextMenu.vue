@@ -33,10 +33,17 @@ const { isMobile } = useViewport()
 const el = ref<HTMLElement>()
 const isOpen = ref(false)
 let deferredListenerTimer: ReturnType<typeof setTimeout> | undefined
+/** Where the menu was asked for, to place it again when its size changes. */
+let anchor = { clientX: 0, clientY: 0 }
+let resizeObserver: ResizeObserver | undefined
 
 const positionAt = async (clientX: number, clientY: number) => {
+  anchor = { clientX, clientY }
+
+  const menu = el.value
+
   // On phones, the menu is a bottom sheet placed by CSS.
-  if (!el.value || isMobile.value) {
+  if (!menu || isMobile.value) {
     return
   }
   const virtualAnchor = {
@@ -51,13 +58,21 @@ const positionAt = async (clientX: number, clientY: number) => {
       right: clientX,
     }),
   }
-  const { x, y } = await computePosition(virtualAnchor, el.value, {
+  const { x, y } = await computePosition(virtualAnchor, menu, {
     placement: 'bottom-start',
-    middleware: [flip(), shift({ padding: 8 })],
+    // A menu taller than the room above and below its anchor slides up or
+    // down to stay whole, rather than running off the screen. (It can't
+    // scroll instead: its submenus open outside it.)
+    middleware: [flip(), shift({ padding: 8, crossAxis: true })],
     strategy: 'fixed',
   })
-  el.value.style.left = `${x}px`
-  el.value.style.top = `${y}px`
+
+  // Closed while it was measured.
+  if (el.value !== menu) {
+    return
+  }
+  menu.style.left = `${x}px`
+  menu.style.top = `${y}px`
 }
 
 const positionSubmenu = async (parent: HTMLElement, submenu: HTMLElement) => {
@@ -67,7 +82,7 @@ const positionSubmenu = async (parent: HTMLElement, submenu: HTMLElement) => {
 
   const { x, y } = await computePosition(parent, submenu, {
     placement: 'right-start',
-    middleware: [flip(), shift({ padding: 8 })],
+    middleware: [flip(), shift({ padding: 8, crossAxis: true })],
     strategy: 'absolute',
   })
   // Resolve coords relative to the offset parent (the parent <li>).
@@ -384,10 +399,23 @@ const open = async (top = 0, left = 0) => {
   }, 0)
 
   startObservingSubmenus()
+
+  // Menus whose items load later change size once shown: place them again.
+  if (typeof ResizeObserver !== 'undefined') {
+    resizeObserver?.disconnect()
+    resizeObserver = new ResizeObserver(() => {
+      if (isOpen.value) {
+        positionAt(anchor.clientX, anchor.clientY).catch(logger.error)
+      }
+    })
+    resizeObserver.observe(el.value)
+  }
 }
 
 const close = () => {
   stopObservingSubmenus()
+  resizeObserver?.disconnect()
+  resizeObserver = undefined
   clearTimeout(deferredListenerTimer)
   deferredListenerTimer = undefined
   document.removeEventListener('pointerdown', onPointerDownOutside)
@@ -410,6 +438,7 @@ onBeforeUnmount(() => {
   deferredListenerTimer = undefined
 
   stopObservingSubmenus()
+  resizeObserver?.disconnect()
   document.removeEventListener('pointerdown', onPointerDownOutside)
   el.value?.querySelectorAll<HTMLElement>('.has-sub').forEach((item: MenuItem) => {
     clearTimeout(item.hideTimeout)

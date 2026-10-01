@@ -1,20 +1,22 @@
 <template>
-  <div v-if="config.sortable" ref="container" class="sort-bar">
-    <M3Chip
-      :icon="sortOrder === 'asc' ? 'arrow_upward' : 'arrow_downward'"
-      :title="`Sorted by ${currentLabel}, ${sortOrder === 'asc' ? 'ascending' : 'descending'}`"
-      data-testid="sort-chip"
-      @click="open = !open"
-    >
-      {{ currentLabel }}
-    </M3Chip>
-
-    <M3Menu v-if="open" class="menu" data-testid="sort-menu">
+  <div v-if="config.sortable" class="sort-bar">
+    <M3MenuPopover v-model:open="open" menu-class="sort-menu">
+      <template #anchor>
+        <M3Chip
+          :icon="sortOrder === 'asc' ? 'arrow_upward' : 'arrow_downward'"
+          :title="`Sorted by ${currentLabel}, ${sortOrder === 'asc' ? 'ascending' : 'descending'}`"
+          data-testid="sort-chip"
+          @click="open = !open"
+        >
+          {{ currentLabel }}
+        </M3Chip>
+      </template>
       <M3MenuItem
         v-for="option in options"
         :key="option.label"
-        :selected="isCurrent(option.field)"
         :label="option.label"
+        :selected="isCurrent(option.field)"
+        data-testid="sort-menu-item"
         tag="div"
         @click="sort(option.field)"
       >
@@ -26,22 +28,21 @@
           />
         </template>
       </M3MenuItem>
-    </M3Menu>
+    </M3MenuPopover>
   </div>
 </template>
 
 <script setup lang="ts">
 import type { Ref } from 'vue'
-import { computed, ref, useTemplateRef } from 'vue'
-import { onClickOutside } from '@vueuse/core'
+import { computed, ref } from 'vue'
 import { arrayify, requireInjection } from '@/utils/helpers'
 import { PlayableListConfigKey, PlayableListSortFieldKey, PlayableListSortOrderKey } from '@/config/symbols'
 import type { getPlayableCollectionContentType } from '@/utils/typeGuards'
 
 import M3Chip from '@/components/m3/M3Chip.vue'
 import M3Icon from '@/components/m3/M3Icon.vue'
-import M3Menu from '@/components/m3/M3Menu.vue'
 import M3MenuItem from '@/components/m3/M3MenuItem.vue'
+import M3MenuPopover from '@/components/m3/M3MenuPopover.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -62,8 +63,6 @@ const [sortOrder, setSortOrder] = requireInjection<[Ref<SortOrder>, Closure]>(Pl
 const [config] = requireInjection<[Partial<PlayableListConfig>]>(PlayableListConfigKey, [{}])
 
 const open = ref(false)
-const container = useTemplateRef('container')
-onClickOutside(container, () => (open.value = false))
 
 const options = computed<Array<{ label: string; field: MaybeArray<PlayableListSortField> }>>(() => {
   if (props.contentType === 'episodes') {
@@ -90,7 +89,8 @@ const options = computed<Array<{ label: string; field: MaybeArray<PlayableListSo
 const isCurrent = (field: MaybeArray<PlayableListSortField>) =>
   arrayify(field).join() === arrayify(sortField.value).join()
 
-const currentLabel = computed(() => options.value.find(({ field }) => isCurrent(field))?.label ?? 'Sort')
+// Unsorted, or by position: the list's own order (a playlist's, the queue's).
+const currentLabel = computed(() => options.value.find(({ field }) => isCurrent(field))?.label ?? 'Default order')
 
 const sort = (field: MaybeArray<PlayableListSortField>) => {
   setSortOrder(isCurrent(field) && sortOrder.value === 'asc' ? 'desc' : 'asc')
@@ -103,17 +103,12 @@ const sort = (field: MaybeArray<PlayableListSortField>) => {
 
 <style scoped>
 .sort-bar {
-  position: relative;
   display: flex;
   justify-content: flex-end;
   padding: 0 24px 4px;
-  z-index: 5;
 }
 
-.menu {
-  position: absolute;
-  top: calc(100% + 4px);
-  right: 24px;
+:deep(.sort-menu) {
   min-width: 200px;
 }
 </style>

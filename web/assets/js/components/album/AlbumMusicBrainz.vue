@@ -4,9 +4,8 @@
 
     <p v-if="details.enrichment === 'matched'">
       Matched to
-      <a :href="`https://musicbrainz.org/release/${details.mbid}`" rel="noopener" target="_blank">a release</a>
-      <template v-if="details.enriched_at"> {{ timeAgo(details.enriched_at) }}</template
-      >; its tags follow it.
+      <a :href="`https://musicbrainz.org/release/${details.mbid}`" rel="noopener" target="_blank">a release</a
+      >{{ details.enriched_at ? ` ${timeAgo(details.enriched_at)}` : '' }}; its tags follow it.
     </p>
     <p v-else-if="details.enrichment === 'review'" class="text-k-warning">
       píxiū isn’t sure which release this is. Pick one below, or paste a MusicBrainz release link.

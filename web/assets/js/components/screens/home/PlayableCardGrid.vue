@@ -16,7 +16,7 @@ const { playables } = toRefs(props)
 <style scoped>
 .playable-card-grid {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: minmax(0, 1fr);
   gap: 0 16px;
   margin: 0 -12px;
 

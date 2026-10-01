@@ -1,61 +1,57 @@
-import { describe, expect, it, vi } from 'vite-plus/test'
+import { describe, expect, it } from 'vite-plus/test'
+import { nextTick } from 'vue'
 import { createHarness } from '@/__tests__/TestHarness'
-import { useSmartPlaylistForm } from './useSmartPlaylistForm'
 import { playlistStore } from '@/stores/playlistStore'
+import { useSmartPlaylistForm } from './useSmartPlaylistForm'
 
 describe('useSmartPlaylistForm', () => {
   createHarness()
 
-  it('starts on the details tab', () => {
-    const { currentTab, isTabActive } = useSmartPlaylistForm()
+  const form = (html: string) => {
+    const element = document.createElement('form')
+    element.innerHTML = html
+    document.body.append(element)
+    return element
+  }
+
+  it('starts on the details tab, with a copy of the groups it was given', () => {
+    const group = playlistStore.createEmptySmartPlaylistRuleGroup()
+    const { tabs, currentTab, ruleGroups, rulesChanged } = useSmartPlaylistForm([group])
+
+    expect(tabs.map(tab => tab.id)).toEqual(['details', 'rules'])
     expect(currentTab.value).toBe('details')
-    expect(isTabActive('details')).toBe(true)
-    expect(isTabActive('rules')).toBe(false)
+    expect(ruleGroups.value).toEqual([group])
+    expect(rulesChanged()).toBe(false)
+
+    ruleGroups.value[0].rules[0].value = ['changed']
+    expect(group.rules[0].value).toEqual([''])
+    expect(rulesChanged()).toBe(true)
   })
 
-  it('switches tabs', () => {
-    const { activateTab, isTabActive } = useSmartPlaylistForm()
-    activateTab('rules')
-    expect(isTabActive('rules')).toBe(true)
-    expect(isTabActive('details')).toBe(false)
+  it('shows the hidden tab holding a blank field', async () => {
+    const { currentTab, onInvalid } = useSmartPlaylistForm([])
+    const element = form(
+      '<div data-tab="details"><input name="name" value="Mine"></div><div data-tab="rules"><input required name="value"></div>',
+    )
+    element.addEventListener('invalid', onInvalid, true)
+
+    element.querySelector<HTMLInputElement>('[name="value"]')!.dispatchEvent(new Event('invalid'))
+    await nextTick()
+
+    expect(currentTab.value).toBe('rules')
+    element.remove()
   })
 
-  it('initializes with provided rule groups', () => {
-    const groups = [{ id: 1, rules: [] }] as unknown as SmartPlaylistRuleGroup[]
-    const { collectedRuleGroups } = useSmartPlaylistForm(groups)
-    expect(collectedRuleGroups.value).toHaveLength(1)
-  })
+  it('leaves a blank field on the tab shown to the browser', () => {
+    const { currentTab, onInvalid } = useSmartPlaylistForm([])
+    const element = form(
+      '<div data-tab="details"><input required name="name"></div><div data-tab="rules"><input required name="value"></div>',
+    )
+    element.addEventListener('invalid', onInvalid, true)
 
-  it('adds a new rule group', () => {
-    const mockGroup = { id: 99, rules: [{}] } as unknown as SmartPlaylistRuleGroup
-    vi.spyOn(playlistStore, 'createEmptySmartPlaylistRuleGroup').mockReturnValue(mockGroup)
+    element.querySelector<HTMLInputElement>('[name="value"]')!.dispatchEvent(new Event('invalid'))
 
-    const { collectedRuleGroups, addGroup } = useSmartPlaylistForm()
-    addGroup()
-    expect(collectedRuleGroups.value).toHaveLength(1)
-    expect(collectedRuleGroups.value[0].id).toBe(99)
-  })
-
-  it('removes a group when its rules become empty', () => {
-    const groups = [
-      { id: 1, rules: [{ id: 'r1' }] },
-      { id: 2, rules: [{ id: 'r2' }] },
-    ] as unknown as SmartPlaylistRuleGroup[]
-
-    const { collectedRuleGroups, onGroupChanged } = useSmartPlaylistForm(groups)
-    expect(collectedRuleGroups.value).toHaveLength(2)
-
-    onGroupChanged({ id: 1, rules: [] } as unknown as SmartPlaylistRuleGroup)
-    expect(collectedRuleGroups.value).toHaveLength(1)
-    expect(collectedRuleGroups.value[0].id).toBe(2)
-  })
-
-  it('updates a group when rules are changed', () => {
-    const groups = [{ id: 1, rules: [{ id: 'r1', value: 'old' }] }] as unknown as SmartPlaylistRuleGroup[]
-
-    const { collectedRuleGroups, onGroupChanged } = useSmartPlaylistForm(groups)
-
-    onGroupChanged({ id: 1, rules: [{ id: 'r1', value: 'new' }] } as unknown as SmartPlaylistRuleGroup)
-    expect((collectedRuleGroups.value[0].rules[0] as any).value).toBe('new')
+    expect(currentTab.value).toBe('details')
+    element.remove()
   })
 })

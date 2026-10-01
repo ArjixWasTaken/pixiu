@@ -114,4 +114,18 @@ describe('homeScreen.vue', () => {
     expect(ids[1]).toBe('recently-added-albums')
     expect(ids).toContain('most-played-songs')
   })
+
+  it('leaves out the blocks hidden in preferenceStore.home_blocks_hidden', () => {
+    commonStore.state.song_length = 100
+    h.mock(overviewStore, 'fetch')
+    preferenceStore.temporary.home_blocks_order = []
+    preferenceStore.temporary.home_blocks_hidden = ['random-songs']
+
+    const { container } = h.render(Component)
+    const ids = blockIdsInDom(container)
+
+    expect(ids).not.toContain('random-songs')
+    expect(ids).toContain('recently-added-albums')
+    preferenceStore.temporary.home_blocks_hidden = []
+  })
 })

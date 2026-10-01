@@ -7,7 +7,7 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
 };
-use pixiu_db::{Album, Artist, Db, Enrichment, Track};
+use pixiu_db::{Album, Enrichment, Library, Track};
 use pixiu_jobs::NewJob;
 use pixiu_subsonic::ids;
 use pixiu_treasury::{AlbumEdit, ArtistRef, TrackEdit};
@@ -23,10 +23,9 @@ fn album_id(id: &str) -> ApiResult<u64> {
     }
 }
 
-async fn load(db: &mut Db, id: u64) -> ApiResult<Album> {
-    Album::filter_by_id(id)
-        .first()
-        .exec(db)
+/// One of the signed-in user's albums.
+async fn load(lib: &Library, id: u64) -> ApiResult<Album> {
+    lib.album(id)
         .await?
         .ok_or_else(|| ApiError::not_found("album"))
 }
@@ -34,12 +33,16 @@ async fn load(db: &mut Db, id: u64) -> ApiResult<Album> {
 /// `GET /api/albums/{id}/details`.
 pub(crate) async fn details(
     State(state): State<ApiState>,
-    _: Session,
+    session: Session,
     Path(id): Path<String>,
 ) -> ApiResult<Json<JsonValue>> {
-    let mut db = state.db.clone();
-    let album = load(&mut db, album_id(&id)?).await?;
-    let artist = Artist::get_by_id(&mut db, &album.artist_id).await?;
+    let lib = session.library(&state);
+    let mut db = lib.db();
+    let album = load(&lib, album_id(&id)?).await?;
+    let artist = lib
+        .artist(album.artist_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("artist"))?;
     let candidates: JsonValue = album
         .candidates
         .as_deref()
@@ -93,16 +96,20 @@ fn nonempty(text: &str) -> Option<String> {
     Some(text.trim().to_owned()).filter(|text| !text.is_empty())
 }
 
-/// `PUT /api/albums/{id}`: changes the album's tags; files move to match.
+/// `PUT /api/albums/{id}`: changes what the library says about the album.
 pub(crate) async fn edit(
     State(state): State<ApiState>,
-    _: Session,
+    session: Session,
     Path(id): Path<String>,
     Json(form): Json<AlbumForm>,
 ) -> ApiResult<StatusCode> {
-    let mut db = state.db.clone();
-    let album = load(&mut db, album_id(&id)?).await?;
-    let album_artist = Artist::get_by_id(&mut db, &album.artist_id).await?;
+    let lib = session.library(&state);
+    let mut db = lib.db();
+    let album = load(&lib, album_id(&id)?).await?;
+    let album_artist = lib
+        .artist(album.artist_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("artist"))?;
     let artist_name = nonempty(&form.artist).unwrap_or_else(|| album_artist.name.clone());
     let mut tracks = Vec::new();
     for track in Track::filter_by_album_id(album.id).exec(&mut db).await? {
@@ -110,7 +117,10 @@ pub(crate) async fn edit(
             .tracks
             .iter()
             .find(|edit| ids::Id::parse(&edit.id) == Some(ids::Id::Track(track.id)));
-        let artist = Artist::get_by_id(&mut db, &track.artist_id).await?;
+        let artist = lib
+            .artist(track.artist_id)
+            .await?
+            .ok_or_else(|| ApiError::not_found("artist"))?;
         tracks.push(TrackEdit {
             track_id: track.id,
             title: changed
@@ -169,11 +179,11 @@ pub(crate) struct Lookup {
 /// again, or follows the given release.
 pub(crate) async fn lookup(
     State(state): State<ApiState>,
-    _: Session,
+    session: Session,
     Path(id): Path<String>,
     body: Option<Json<Lookup>>,
 ) -> ApiResult<StatusCode> {
-    let album = load(&mut state.db.clone(), album_id(&id)?).await?;
+    let album = load(&session.library(&state), album_id(&id)?).await?;
     let release =
         match body.and_then(|Json(lookup)| lookup.release) {
             Some(given) => Some(release_id(&given).ok_or_else(|| {
@@ -185,7 +195,10 @@ pub(crate) async fn lookup(
     let title = format!("Look up {}", album.title);
     state
         .jobs
-        .enqueue(NewJob::enrich(album.id, &title, release, fresh))
+        .enqueue(
+            session.owner(),
+            NewJob::enrich(album.id, &title, release, fresh),
+        )
         .await?;
     Ok(StatusCode::ACCEPTED)
 }

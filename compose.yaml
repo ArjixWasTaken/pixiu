@@ -9,6 +9,13 @@ services:
       # user), or set `user:` to the owner of your directories.
       - ./data:/data
       - ./treasure:/treasure
+    # environment:
+    #   # Behind a reverse proxy (Caddy, nginx): throttles count requests by
+    #   # the client address it passes in X-Forwarded-For.
+    #   PIXIU_SERVER__TRUST_PROXY_HEADERS: "true"
+    # To reach a mail server in another compose project, join its network
+    # (and list `default` too, to keep this one's):
+    # networks: [default, mail]
     restart: unless-stopped
     # Hardening: only the volumes and some scratch space are writable, and
     # nothing in the container can gain privileges.
@@ -21,3 +28,7 @@ services:
     cap_drop: [ALL]
     security_opt:
       - no-new-privileges:true
+
+# networks:
+#   mail:
+#     external: true

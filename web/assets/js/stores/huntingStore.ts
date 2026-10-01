@@ -20,6 +20,7 @@ export const huntingStore = {
     orphans: 0,
     offerings: 0,
     jobs: { running: 0, waiting: 0, failed: 0 },
+    registrations: 0,
   }),
 
   /** What each playlist mirrors, by playlist id; `null` for playlists of the admin's own. */

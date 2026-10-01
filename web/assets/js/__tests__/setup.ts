@@ -59,7 +59,6 @@ window.KOEL = {
   branding: { name: 'Koel', logo: '', cover: '' },
   gravatar: { url: 'https://www.gravatar.com/avatar', default: 'robohash' },
   mailer_configured: true,
-  sso_providers: [],
   accepted_audio_extensions: [],
 }
 window.RUNNING_UNIT_TESTS = true

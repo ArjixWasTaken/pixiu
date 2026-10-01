@@ -9,10 +9,13 @@ use axum::{
     http::{Method, Request, StatusCode, header},
 };
 use pixiu_core::{Config, SecretBox};
-use pixiu_db::{Annotation, ApiKey, Db, Track, User, now, toasty};
+use pixiu_db::{Annotation, ApiKey, Db, Job, JobKind, JobState, Track, User, now, toasty};
 use pixiu_treasury::{Claim, Provenance, tags};
 use serde_json::{Value, json};
 use tower::ServiceExt;
+
+/// The account `claim` makes, whose library the tests stock.
+const OWNER: u64 = 1;
 
 const PASSWORD: &str = "gold-and-jade";
 
@@ -99,6 +102,7 @@ impl Api {
             let info = tags::read(&staged).unwrap();
             treasury
                 .ingest(
+                    OWNER,
                     &staged,
                     &info,
                     None,
@@ -302,6 +306,7 @@ async fn favorites_plays_and_genres_shape_the_lists() {
     api.stock().await;
     let second_wind = api.track_id("Second Wind").await;
     toasty::create!(Annotation {
+        user_id: OWNER,
         item: format!("tr-{second_wind}"),
         play_count: 3,
         last_played: Some(now()),
@@ -423,7 +428,7 @@ async fn watches_are_added_listed_and_removed() {
             StatusCode::CONFLICT,
         )
         .await;
-    assert_eq!(duplicate["message"], "píxiū already watches that.");
+    assert_eq!(duplicate["message"], "You already watch that.");
     api.send(
         &token,
         Method::POST,
@@ -484,6 +489,47 @@ async fn grabs_show_on_the_job_board() {
         .request(Method::DELETE, "/api/jobs/finished", Some(&token), None)
         .await;
     assert_eq!(status, StatusCode::NO_CONTENT);
+}
+
+#[tokio::test]
+async fn failed_jobs_stay_on_the_board_however_old() {
+    let api = Api::new().await;
+    let token = api.claim().await;
+    let mut db = api.db.clone();
+    let job = |title: String, state: JobState| {
+        toasty::create!(Job {
+            user_id: 1_u64,
+            kind: JobKind::DownloadTrack,
+            payload: json!({ "video_id": "abcdefghijk" }).to_string(),
+            title,
+            state,
+            progress: 0_u8,
+            attempts: 0_u32,
+            created_at: now(),
+        })
+    };
+    job("Somebody — Unavailable".to_owned(), JobState::Failed)
+        .exec(&mut db)
+        .await
+        .unwrap();
+    // More finished since than the board shows.
+    for n in 0..160 {
+        job(format!("Somebody — Song {n}"), JobState::Done)
+            .exec(&mut db)
+            .await
+            .unwrap();
+    }
+
+    let board = api.get(&token, "/api/jobs").await;
+    let board = board.as_array().unwrap();
+    assert_eq!(board.len(), 151);
+    assert_eq!(board[0]["title"], "Somebody — Song 159");
+    let failed: Vec<&Value> = board
+        .iter()
+        .filter(|job| job["state"] == "failed")
+        .collect();
+    assert_eq!(failed.len(), 1);
+    assert_eq!(failed[0]["title"], "Somebody — Unavailable");
 }
 
 #[tokio::test]
@@ -648,36 +694,18 @@ async fn songs_and_albums_tell_more_than_subsonic() {
 }
 
 #[tokio::test]
-async fn settings_manage_the_layout_and_keys() {
+async fn accounts_manage_their_keys() {
     let api = Api::new().await;
     let token = api.claim().await;
 
-    let settings = api.get(&token, "/api/settings").await;
-    assert_eq!(
-        settings["layout"]["template"],
-        settings["layout"]["default"]
-    );
-    assert_eq!(settings["keys"][0]["current"], true);
-
-    let preview = api
-        .get(&token, "/api/settings/layout/preview?template=%7Btitle%7D")
-        .await;
-    assert_eq!(preview["path"], "Vibing Over Venus.opus");
-    let (status, _) = api
-        .request(
-            Method::GET,
-            "/api/settings/layout/preview?template=%7Bnope%7D",
-            Some(&token),
-            None,
-        )
-        .await;
-    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    let keys = api.get(&token, "/api/me/keys").await;
+    assert_eq!(keys[0]["current"], true);
 
     let created = api
         .send(
             &token,
             Method::POST,
-            "/api/keys",
+            "/api/me/keys",
             json!({ "name": "Phone" }),
             StatusCode::OK,
         )
@@ -689,7 +717,7 @@ async fn settings_manage_the_layout_and_keys() {
     let (status, _) = api
         .request(
             Method::DELETE,
-            &format!("/api/keys/{}", created["id"]),
+            &format!("/api/me/keys/{}", created["id"]),
             Some(&token),
             None,
         )

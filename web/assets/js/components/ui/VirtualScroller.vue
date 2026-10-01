@@ -67,7 +67,9 @@ const scrollToIndex = (index: number) => {
     return
   }
 
-  const top = index * itemHeight.value - scrollerHeight.value / 2 + itemHeight.value / 2
+  // Measured now: a screen just shown again has not reported its height yet.
+  const height = scroller.value.clientHeight
+  const top = index * itemHeight.value - height / 2 + itemHeight.value / 2
   scroller.value.scrollTo({ top: Math.max(0, top), behavior: 'smooth' })
 }
 

@@ -1,47 +1,49 @@
 <template>
   <AuthFormCard data-testid="forgot-password-form" @submit="handleSubmit">
-    <p class="text-[.95rem] text-k-fg-70 mb-4">Enter your email address and we'll send you a password reset link.</p>
+    <template #title>
+      <h1 class="m3-headline-small text-(--schemes-on-surface)">Forgot your password?</h1>
+      <p class="m3-body-medium text-(--schemes-on-surface-variant)">
+        {{
+          sent
+            ? 'If an account has that name or address, píxiū emailed it a link to choose a new password. The link works for an hour.'
+            : 'Say who you are, and píxiū emails you a link to choose a new password.'
+        }}
+      </p>
+    </template>
 
-    <FormRow>
-      <TextInput v-model="data.email" placeholder="Your email address" required type="email" />
-    </FormRow>
+    <template v-if="!sent">
+      <M3TextField
+        v-model="data.login"
+        autocomplete="username"
+        autofocus
+        label="Username or email"
+        name="login"
+        required
+      />
+      <M3Button :disabled="loading" class="w-full" type="submit">Email me a link</M3Button>
+    </template>
 
-    <Btn class="w-full" :disabled="loading" type="submit">Reset Password</Btn>
-    <Btn class="w-full" bordered :disabled="loading" type="button" @click="cancel">Cancel</Btn>
+    <M3Button class="self-center" variant="text" @click.prevent="$emit('back')">Back to sign in</M3Button>
   </AuthFormCard>
 </template>
 
 <script lang="ts" setup>
+import { ref } from 'vue'
 import { authService } from '@/services/authService'
-import { useErrorHandler } from '@/composables/useErrorHandler'
-import { useMessageToaster } from '@/composables/useMessageToaster'
 import { useForm } from '@/composables/useForm'
 
-import Btn from '@/components/ui/form/Btn.vue'
-import TextInput from '@/components/ui/form/TextInput.vue'
-import FormRow from '@/components/ui/form/FormRow.vue'
 import AuthFormCard from '@/components/auth/AuthFormCard.vue'
+import M3Button from '@/components/m3/M3Button.vue'
+import M3TextField from '@/components/m3/M3TextField.vue'
 
-const emit = defineEmits<{ (e: 'cancel'): void }>()
+defineEmits<{ (e: 'back'): void }>()
 
-const { handleHttpError } = useErrorHandler()
-const { toastSuccess } = useMessageToaster()
+const sent = ref(false)
 
-const { data, loading, handleSubmit } = useForm<{ email: string }>({
-  initialValues: {
-    email: '',
-  },
-  useOverlay: false,
-  onSubmit: async ({ email }) => await authService.requestResetPasswordLink(email),
-  onSuccess: () => {
-    data.email = ''
-    toastSuccess('Check your mailbox for a reset link.')
-  },
-  onError: error => handleHttpError(error),
+const { data, loading, handleSubmit } = useForm<{ login: string }>({
+  initialValues: { login: '' },
+  validator: ({ login }) => login.trim() !== '',
+  onSubmit: async ({ login }) => await authService.forgot(login.trim()),
+  onSuccess: () => (sent.value = true),
 })
-
-const cancel = () => {
-  data.email = ''
-  emit('cancel')
-}
 </script>

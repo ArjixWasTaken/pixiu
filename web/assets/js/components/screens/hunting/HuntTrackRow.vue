@@ -13,7 +13,7 @@
       <span v-if="track.is_video" class="m3-label-small video">Video</span>
     </template>
     <template #trailing>
-      <StandingAction :standing="track.standing" @grab="emit('grab')" />
+      <StandingAction :library-album="track.library_album" :standing="track.standing" @grab="emit('grab')" />
     </template>
   </M3ListItem>
 </template>

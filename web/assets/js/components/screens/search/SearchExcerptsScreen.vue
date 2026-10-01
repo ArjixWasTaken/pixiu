@@ -28,6 +28,10 @@
         :searching
         data-testid="radio-station-excerpts"
       />
+
+      <M3Button :href="discoverUrl" icon="travel_explore" variant="tonal">
+        Search YouTube Music for “{{ q }}”
+      </M3Button>
     </div>
 
     <ScreenEmptyState v-else>
@@ -42,13 +46,15 @@
 
 <script lang="ts" setup>
 import { intersectionBy } from 'lodash-es'
-import { ref, toRef } from 'vue'
+import { computed, ref, toRef } from 'vue'
 import { eventBus } from '@/utils/eventBus'
 import { commonStore } from '@/stores/commonStore'
 import { searchStore } from '@/stores/searchStore'
+import { useRouter } from '@/composables/useRouter'
 
 import ScreenHeader from '@/components/ui/ScreenHeader.vue'
 import ScreenEmptyState from '@/components/ui/ScreenEmptyState.vue'
+import M3Button from '@/components/m3/M3Button.vue'
 import M3Icon from '@/components/m3/M3Icon.vue'
 import ScreenBase from '@/components/screens/ScreenBase.vue'
 import PlayableExcerptResultsBlock from '@/components/screens/search/PlayableExcerptResultsBlock.vue'
@@ -57,9 +63,13 @@ import AlbumResultsBlock from '@/components/screens/search/AlbumExcerptResultsBl
 import PodcastExcerptResultsBlock from '@/components/screens/search/PodcastExcerptResultsBlock.vue'
 import RadioStationExcerptResultsBlock from '@/components/screens/search/RadioStationExcerptResultsBlock.vue'
 
+const { url } = useRouter()
+
 const excerpt = toRef(searchStore.state, 'excerpt')
 const q = ref('')
 const searching = ref(false)
+
+const discoverUrl = computed(() => `${url('hunt')}?q=${encodeURIComponent(q.value)}`)
 
 const doSearch = async () => {
   searching.value = true

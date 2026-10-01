@@ -8,12 +8,12 @@
         :style="{ backgroundImage: `url(${image}), url(${defaultCover})` }"
         class="art"
       />
-      <p class="m3-headline-small">{{ entity.name }}</p>
+      <a :href="entityUrl" class="m3-headline-small entity-link">{{ entity.name }}</a>
     </div>
 
     <ParagraphSkeleton v-if="loading" />
     <div v-else-if="text" class="m3-body-large text" v-html="text" />
-    <p v-else class="m3-body-large text">Nothing known about it yet.</p>
+    <p v-else class="m3-body-large text">píxiū knows nothing about {{ entity?.name ?? 'this' }} yet.</p>
 
     <M3Button v-if="source" :href="source" class="self-start" rel="noopener" target="_blank" variant="text"
       >Source</M3Button
@@ -28,6 +28,7 @@ import { artistStore } from '@/stores/artistStore'
 import { encyclopediaService } from '@/services/encyclopediaService'
 import { useBranding } from '@/composables/useBranding'
 import { useNowPlaying } from '@/composables/useNowPlaying'
+import { useRouter } from '@/composables/useRouter'
 
 import M3Button from '@/components/m3/M3Button.vue'
 import M3SegmentedButton from '@/components/m3/M3SegmentedButton.vue'
@@ -51,6 +52,18 @@ const albumInfo = ref<AlbumInfo | null>(null)
 const loading = ref(false)
 
 const entity = computed(() => (nowPlaying.about.value === 'Artist' ? artist.value : album.value))
+
+const { url } = useRouter()
+
+/** The artist's or album's own page. */
+const entityUrl = computed(() => {
+  if (!entity.value) {
+    return undefined
+  }
+  return nowPlaying.about.value === 'Artist'
+    ? url('artists.show', { id: entity.value.id })
+    : url('albums.show', { id: entity.value.id })
+})
 
 const image = computed(() =>
   nowPlaying.about.value === 'Artist'
@@ -84,6 +97,14 @@ watch([song, nowPlaying.about], load, { immediate: true })
 </script>
 
 <style scoped>
+.entity-link {
+  color: var(--schemes-on-surface);
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
 .now-playing-about {
   display: flex;
   flex-direction: column;

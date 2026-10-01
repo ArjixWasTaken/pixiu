@@ -41,6 +41,8 @@ const preferences: UserPreferences = {
   include_public_media: true,
   lastfm_session_key: 'fake-session-key',
   home_blocks_order: [],
+  home_blocks_hidden: [],
+  equalizer_enabled: true,
 }
 
 export default (): User => ({

@@ -1,152 +1,95 @@
 //! Loading the library and rendering it as Subsonic elements.
 //!
 //! Lists and searches select ids with raw SQL (ordering by random, joins,
-//! multi-word matching), then load the models in bulk.
+//! multi-word matching), then load the models in bulk. Everything goes
+//! through the caller's [`Library`], so it only ever sees their own.
 
 use std::collections::{HashMap, HashSet};
 
-use pixiu_db::{
-    Album, Annotation, Artist, Db, Track,
-    toasty::{self, stmt::Value},
-};
+use pixiu_db::{Album, Annotation, Artist, Library, Track, owned::as_u64, toasty};
 
 use crate::{annotations::annotate, ids, response::Element};
 
-/// A bound value for raw SQL.
-pub(crate) enum Bind {
-    Int(i64),
-    Text(String),
-}
-
-/// Runs `sql`, whose first column is an id, returning the ids in order.
-pub(crate) async fn select_ids(
-    db: &mut Db,
-    sql: &str,
-    binds: Vec<Bind>,
-) -> Result<Vec<u64>, toasty::Error> {
-    let mut query = toasty::sql::query(sql);
-    for bind in binds {
-        query = match bind {
-            Bind::Int(value) => query.bind(value),
-            Bind::Text(value) => query.bind(value),
-        };
-    }
-    let rows = query.exec(db).await?;
+/// Song count and total duration (ms) of every album in the library.
+pub(crate) async fn album_stats(lib: &Library) -> Result<HashMap<u64, (u64, u64)>, toasty::Error> {
+    let rows = lib
+        .sql(
+            "SELECT album_id, COUNT(*), COALESCE(SUM(duration_ms), 0) FROM tracks \
+             WHERE tracks.user_id = ?1 GROUP BY album_id",
+        )
+        .rows(&mut lib.db())
+        .await?;
     Ok(rows
         .iter()
-        .filter_map(|row| match row {
-            Value::Record(record) => as_u64(&record[0]),
-            _ => None,
-        })
-        .collect())
-}
-
-/// Runs `sql` returning `(u64, u64)` pairs, e.g. grouped counts.
-pub(crate) async fn select_pairs(
-    db: &mut Db,
-    sql: &str,
-) -> Result<HashMap<u64, (u64, u64)>, toasty::Error> {
-    let rows = toasty::sql::query(sql).exec(db).await?;
-    Ok(rows
-        .iter()
-        .filter_map(|row| match row {
-            Value::Record(record) => Some((
-                as_u64(&record[0])?,
+        .filter_map(|row| {
+            Some((
+                as_u64(row.first()?)?,
                 (
-                    as_u64(&record[1]).unwrap_or(0),
-                    as_u64(&record[2]).unwrap_or(0),
+                    row.get(1).and_then(as_u64).unwrap_or(0),
+                    row.get(2).and_then(as_u64).unwrap_or(0),
                 ),
-            )),
-            _ => None,
+            ))
         })
         .collect())
 }
 
-pub(crate) fn as_u64(value: &Value) -> Option<u64> {
-    match value {
-        Value::I64(n) => u64::try_from(*n).ok(),
-        Value::I32(n) => u64::try_from(*n).ok(),
-        Value::U64(n) => Some(*n),
-        Value::U32(n) => Some(u64::from(*n)),
-        _ => None,
-    }
-}
-
-/// Song count and total duration (ms) of every album.
-pub(crate) async fn album_stats(db: &mut Db) -> Result<HashMap<u64, (u64, u64)>, toasty::Error> {
-    select_pairs(
-        db,
-        "SELECT album_id, COUNT(*), COALESCE(SUM(duration_ms), 0) FROM tracks GROUP BY album_id",
-    )
-    .await
-}
-
-pub(crate) async fn artists_by_id(
-    db: &mut Db,
-    ids: impl IntoIterator<Item = u64>,
-) -> Result<HashMap<u64, Artist>, toasty::Error> {
-    let ids: Vec<u64> = ids
-        .into_iter()
+fn unique(ids: impl IntoIterator<Item = u64>) -> Vec<u64> {
+    ids.into_iter()
         .collect::<HashSet<_>>()
         .into_iter()
-        .collect();
-    if ids.is_empty() {
-        return Ok(HashMap::new());
-    }
-    Ok(Artist::filter(Artist::fields().id().in_list(ids))
-        .exec(db)
+        .collect()
+}
+
+/// The library's artists among `ids`, by id.
+pub(crate) async fn artists_by_id(
+    lib: &Library,
+    ids: impl IntoIterator<Item = u64>,
+) -> Result<HashMap<u64, Artist>, toasty::Error> {
+    Ok(lib
+        .artists(&unique(ids))
         .await?
         .into_iter()
         .map(|artist| (artist.id, artist))
         .collect())
 }
 
+/// The library's albums among `ids`, by id.
 pub(crate) async fn albums_by_id(
-    db: &mut Db,
+    lib: &Library,
     ids: impl IntoIterator<Item = u64>,
 ) -> Result<HashMap<u64, Album>, toasty::Error> {
-    let ids: Vec<u64> = ids
-        .into_iter()
-        .collect::<HashSet<_>>()
-        .into_iter()
-        .collect();
-    if ids.is_empty() {
-        return Ok(HashMap::new());
-    }
-    Ok(Album::filter(Album::fields().id().in_list(ids))
-        .exec(db)
+    Ok(lib
+        .albums(&unique(ids))
         .await?
         .into_iter()
         .map(|album| (album.id, album))
         .collect())
 }
 
-/// Loads albums by id, keeping the order of `ids`.
-pub(crate) async fn albums_in_order(db: &mut Db, ids: &[u64]) -> Result<Vec<Album>, toasty::Error> {
-    let mut by_id = albums_by_id(db, ids.iter().copied()).await?;
+/// Loads the library's albums by id, keeping the order of `ids`.
+pub(crate) async fn albums_in_order(
+    lib: &Library,
+    ids: &[u64],
+) -> Result<Vec<Album>, toasty::Error> {
+    let mut by_id = albums_by_id(lib, ids.iter().copied()).await?;
     Ok(ids.iter().filter_map(|id| by_id.remove(id)).collect())
 }
 
-/// Loads tracks by id, keeping the order of `ids`.
-pub(crate) async fn tracks_in_order(db: &mut Db, ids: &[u64]) -> Result<Vec<Track>, toasty::Error> {
-    if ids.is_empty() {
-        return Ok(Vec::new());
-    }
-    let mut by_id: HashMap<u64, Track> = Track::filter(Track::fields().id().in_list(ids.to_vec()))
-        .exec(db)
-        .await?
-        .into_iter()
-        .map(|track| (track.id, track))
-        .collect();
+/// Loads the library's tracks by id, keeping the order of `ids`.
+pub(crate) async fn tracks_in_order(
+    lib: &Library,
+    ids: &[u64],
+) -> Result<Vec<Track>, toasty::Error> {
+    let mut by_id = lib.tracks_by_id(ids).await?;
     Ok(ids.iter().filter_map(|id| by_id.remove(id)).collect())
 }
 
-/// Loads artists by id, keeping the order of `ids`.
+/// Loads the library's artists by id, keeping the order of `ids`.
 pub(crate) async fn artists_in_order(
-    db: &mut Db,
+    lib: &Library,
     ids: &[u64],
 ) -> Result<Vec<Artist>, toasty::Error> {
-    let mut by_id = artists_by_id(db, ids.iter().copied()).await?;
+    let mut by_id = artists_by_id(lib, ids.iter().copied()).await?;
     Ok(ids.iter().filter_map(|id| by_id.remove(id)).collect())
 }
 
@@ -176,22 +119,23 @@ fn artist_ref(name: &'static str, artist: &Artist) -> Element {
         .attr("name", artist.name.as_str())
 }
 
-/// Renders songs, loading the albums and artists they refer to.
+/// Renders songs of the library, loading the albums and artists they
+/// refer to.
 pub(crate) async fn songs(
-    db: &mut Db,
+    lib: &Library,
     name: &'static str,
     tracks: &[Track],
 ) -> Result<Vec<Element>, toasty::Error> {
-    let albums = albums_by_id(db, tracks.iter().map(|track| track.album_id)).await?;
+    let albums = albums_by_id(lib, tracks.iter().map(|track| track.album_id)).await?;
     let artists = artists_by_id(
-        db,
+        lib,
         tracks
             .iter()
             .map(|track| track.artist_id)
             .chain(albums.values().map(|album| album.artist_id)),
     )
     .await?;
-    let plays = crate::annotations::for_tracks(db, tracks.iter().map(|track| track.id)).await?;
+    let plays = crate::annotations::for_tracks(lib, tracks.iter().map(|track| track.id)).await?;
     Ok(tracks
         .iter()
         .map(|track| {
@@ -209,6 +153,25 @@ pub(crate) async fn songs(
             )
         })
         .collect())
+}
+
+/// Where the song would sit in a folder tree, for apps that show paths:
+/// files live in the content-addressed store, named by their content.
+fn display_path(track: &Track, album: Option<&Album>, album_artist: Option<&Artist>) -> String {
+    pixiu_treasury::layout::track_path(pixiu_treasury::layout::TrackLocation {
+        album_artist: album_artist
+            .map_or(track.artist_credit.as_str(), |artist| artist.name.as_str()),
+        artist: &track.artist_credit,
+        album: album.map_or("Unknown Album", |album| album.title.as_str()),
+        year: track.year.or(album.and_then(|album| album.year)),
+        genre: track.genre.as_deref(),
+        disc: track.disc_number,
+        track: track.track_number,
+        title: &track.title,
+        suffix: &track.suffix,
+    })
+    .to_string_lossy()
+    .into_owned()
 }
 
 /// A song (the Subsonic `Child` type).
@@ -243,7 +206,7 @@ pub(crate) fn song(
         .attr_opt("bitDepth", track.bit_depth)
         .attr_opt("samplingRate", track.sample_rate)
         .attr_opt("channelCount", track.channels)
-        .attr("path", track.path.as_str())
+        .attr("path", display_path(track, album, album_artist))
         .attr_opt("discNumber", track.disc_number)
         .attr("created", track.added_at.to_string())
         .attr("albumId", ids::album(track.album_id))

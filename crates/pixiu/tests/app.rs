@@ -8,8 +8,8 @@ use futures_util::StreamExt;
 use md5::Digest;
 use pixiu_core::{Config, SecretBox};
 use pixiu_db::{
-    Album, Artist, ClaimKind, Db, Playlist, PlaylistEntry, Track, TrackClaim, TrackOrigin, Watch,
-    WatchKind, now, toasty,
+    Album, Artist, ClaimKind, Db, Job, JobKind, JobState, Playlist, PlaylistEntry, Track,
+    TrackClaim, TrackOrigin, Watch, WatchKind, now, toasty,
 };
 use reqwest::{StatusCode, header};
 use serde_json::{Value, json};
@@ -323,6 +323,7 @@ async fn songs_are_excluded_from_watched_playlists() {
     let seeded = std::sync::Arc::clone(&ids);
     let server = TestServer::start_with(async move |db| {
         let artist = toasty::create!(Artist {
+            user_id: 1_u64,
             name: "Somebody",
             name_key: "somebody",
             created_at: now(),
@@ -331,6 +332,7 @@ async fn songs_are_excluded_from_watched_playlists() {
         .await
         .unwrap();
         let album = toasty::create!(Album {
+            user_id: 1_u64,
             title: "Road Songs",
             title_key: "road songs",
             artist_id: artist.id,
@@ -340,11 +342,13 @@ async fn songs_are_excluded_from_watched_playlists() {
         .await
         .unwrap();
         let track = toasty::create!(Track {
+            user_id: 1_u64,
             album_id: album.id,
             artist_id: artist.id,
             title: "Unwanted Song",
             artist_credit: "Somebody",
             duration_ms: 1_000_u64,
+            file_id: 0_u64,
             path: "Somebody/Road Songs/Unwanted Song.opus",
             size: 1_u64,
             suffix: "opus",
@@ -357,6 +361,8 @@ async fn songs_are_excluded_from_watched_playlists() {
         .await
         .unwrap();
         let watch = toasty::create!(Watch {
+            failures: 0_u32,
+            user_id: 1_u64,
             kind: WatchKind::Playlist,
             remote_id: "PLroad",
             name: "Road trip",
@@ -380,6 +386,7 @@ async fn songs_are_excluded_from_watched_playlists() {
         .await
         .unwrap();
         let playlist = toasty::create!(Playlist {
+            user_id: 1_u64,
             name: "Road trip",
             public: false,
             watch_id: Some(watch.id),
@@ -404,6 +411,21 @@ async fn songs_are_excluded_from_watched_playlists() {
             .await
             .unwrap();
         }
+        // The coming song's download failed.
+        toasty::create!(Job {
+            user_id: 1_u64,
+            kind: JobKind::DownloadTrack,
+            payload: json!({ "video_id": "vidB" }).to_string(),
+            title: "Somebody — Coming Song",
+            state: JobState::Failed,
+            progress: 0_u8,
+            attempts: 3_u32,
+            error: Some("This video is unavailable".to_owned()),
+            created_at: now(),
+        })
+        .exec(db)
+        .await
+        .unwrap();
         *seeded.lock().unwrap() = (watch.id, playlist.id, track.id);
     })
     .await;
@@ -414,6 +436,10 @@ async fn songs_are_excluded_from_watched_playlists() {
         .await;
     assert_eq!(mirror["watch"]["name"], "Road trip");
     assert_eq!(mirror["coming"][0]["title"], "Coming Song");
+    assert_eq!(
+        mirror["coming"][0]["job"],
+        json!({ "state": "failed", "error": "This video is unavailable" })
+    );
     assert_eq!(mirror["excluded"], json!([]));
 
     // The song sheet offers to exclude it from the watch that keeps it.

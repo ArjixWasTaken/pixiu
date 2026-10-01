@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vite-plus/test'
+import { describe, expect, it, vi } from 'vite-plus/test'
 import { createHarness } from '@/__tests__/TestHarness'
 import { preferenceStore } from '@/stores/preferenceStore'
 import { themeStore } from '@/stores/themeStore'
@@ -42,6 +42,28 @@ describe('themeStore', () => {
 
     expect(document.documentElement.getAttribute('data-mode')).toBe('pink-lt')
     expect(preferenceStore.state.dark_mode).toBe(false)
+  })
+
+  it('follows the system when set to System', () => {
+    const system = vi.spyOn(window, 'matchMedia').mockReturnValue({ matches: false } as MediaQueryList)
+    themeStore.setTheme('pink')
+    themeStore.setDarkMode(null)
+
+    expect(preferenceStore.state.dark_mode).toBeNull()
+    expect(system).toHaveBeenCalledWith('(prefers-color-scheme: dark)')
+    expect(document.documentElement.getAttribute('data-mode')).toBe('pink-lt')
+
+    system.mockReturnValue({ matches: true } as MediaQueryList)
+    themeStore.applyMode()
+    expect(document.documentElement.getAttribute('data-mode')).toBe('pink-dt')
+  })
+
+  it('keeps a chosen mode whatever the system prefers', () => {
+    vi.spyOn(window, 'matchMedia').mockReturnValue({ matches: false } as MediaQueryList)
+    themeStore.setTheme('pink')
+    themeStore.setDarkMode(true)
+
+    expect(document.documentElement.getAttribute('data-mode')).toBe('pink-dt')
   })
 
   it('falls back to the default scheme for unknown ids', () => {

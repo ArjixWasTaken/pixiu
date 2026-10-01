@@ -90,6 +90,7 @@ const toSong = (child: Record<string, any>): Song => ({
   title: child.title,
   length: child.duration ?? 0,
   play_count: child.playCount ?? 0,
+  played_at: child.played ?? null,
   rating: child.userRating ?? 0,
   favorite: Boolean(child.starred),
   created_at: child.created ?? '',
@@ -143,6 +144,7 @@ const toArtist = (artist: Record<string, any>): Artist => ({
   is_external: false,
   favorite: Boolean(artist.starred),
   rating: artist.userRating ?? 0,
+  album_count: artist.albumCount,
   permissions: { edit: true },
 })
 

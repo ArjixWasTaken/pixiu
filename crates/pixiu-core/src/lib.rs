@@ -1,5 +1,6 @@
 //! Configuration and shared types for píxiū.
 
+pub mod alerts;
 pub mod config;
 pub mod password;
 pub mod playing;

@@ -16,4 +16,16 @@ describe('focus directive', () => {
     expect(focusSpy).toHaveBeenCalled()
     focusSpy.mockRestore()
   })
+
+  it('focuses the input inside a field component', () => {
+    const focusSpy = vi.spyOn(HTMLElement.prototype, 'focus')
+
+    h.render({
+      directives: { focus },
+      template: '<label v-focus><span>Name</span><input data-testid="input" /></label>',
+    })
+
+    expect(focusSpy.mock.contexts).toEqual([document.querySelector('[data-testid="input"]')])
+    focusSpy.mockRestore()
+  })
 })

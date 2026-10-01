@@ -105,11 +105,12 @@ onRouteChanged(() => nowPlaying.close())
   align-items: center;
   justify-content: center;
   gap: 24px;
+  /* The art is sized from the room here, both ways, so it stays square. */
+  container-type: size;
 }
 
 .art {
-  width: min(100%, 640px);
-  max-height: calc(100% - 96px);
+  width: min(100%, 640px, 100cqh - 96px);
   aspect-ratio: 1 / 1;
   border-radius: 28px;
   background-size: cover;
@@ -118,7 +119,7 @@ onRouteChanged(() => nowPlaying.close())
 }
 
 .caption {
-  width: min(100%, 640px);
+  width: min(100%, 640px, 100cqh - 96px);
   display: flex;
   align-items: center;
   gap: 8px;

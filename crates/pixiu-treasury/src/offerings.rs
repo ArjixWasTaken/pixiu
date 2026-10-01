@@ -85,14 +85,54 @@ impl Offerings {
         format!("{}-{:04x}", now().as_millisecond(), rand::random::<u16>())
     }
 
-    fn batch_dir(&self, batch: &str) -> Result<PathBuf, OfferingError> {
+    /// Where `owner`'s batch is staged: `<offerings>/<owner>/<batch>`.
+    fn batch_dir(&self, owner: u64, batch: &str) -> Result<PathBuf, OfferingError> {
         let valid =
             !batch.is_empty() && batch.chars().all(|c| c.is_ascii_alphanumeric() || c == '-');
         if valid {
-            Ok(self.dir.join(batch))
+            Ok(self.dir.join(owner.to_string()).join(batch))
         } else {
             Err(OfferingError::InvalidBatch)
         }
+    }
+
+    /// Removes everything `owner` uploaded and left unreviewed, on disk
+    /// (their rows go with their account).
+    pub async fn remove_owner(&self, owner: u64) {
+        let dir = self.dir.join(owner.to_string());
+        if let Err(error) = tokio::fs::remove_dir_all(&dir).await
+            && error.kind() != io::ErrorKind::NotFound
+        {
+            tracing::warn!(%error, path = %dir.display(), "cannot remove a user's uploads");
+        }
+    }
+
+    /// Moves batches staged before uploads had owners (`<offerings>/<batch>`)
+    /// into their owner's directory.
+    ///
+    /// # Errors
+    ///
+    /// Fails on I/O or database errors.
+    pub async fn relocate_legacy(&self) -> Result<(), OfferingError> {
+        let mut db = self.db();
+        for mut offering in Offering::all().exec(&mut db).await? {
+            let prefix = format!("{}/", offering.user_id);
+            if offering.staged_path.starts_with(&prefix) {
+                continue;
+            }
+            let old = self.dir.join(&offering.batch);
+            let new = self.batch_dir(offering.user_id, &offering.batch)?;
+            if tokio::fs::try_exists(&old).await? && !tokio::fs::try_exists(&new).await? {
+                tokio::fs::create_dir_all(new.parent().expect("batch dirs have a parent")).await?;
+                tokio::fs::rename(&old, &new).await?;
+            }
+            toasty::update!(offering {
+                staged_path: format!("{prefix}{}", offering.staged_path),
+            })
+            .exec(&mut db)
+            .await?;
+        }
+        Ok(())
     }
 
     /// Creates the staging file for an uploaded file named `file_name`.
@@ -102,10 +142,11 @@ impl Offerings {
     /// Fails for invalid batch ids, or when the file cannot be created.
     pub async fn create_upload(
         &self,
+        owner: u64,
         batch: &str,
         file_name: &str,
     ) -> Result<(PathBuf, tokio::fs::File), OfferingError> {
-        let dir = self.batch_dir(batch)?;
+        let dir = self.batch_dir(owner, batch)?;
         tokio::fs::create_dir_all(&dir).await?;
         // Browsers may send paths for folder uploads; keep the last part.
         let name = file_name.rsplit(['/', '\\']).next().unwrap_or(file_name);
@@ -120,8 +161,12 @@ impl Offerings {
     /// # Errors
     ///
     /// Fails on invalid archives and I/O or database errors.
-    pub async fn process_batch(&self, batch: &str) -> Result<Vec<Offering>, OfferingError> {
-        let dir = self.batch_dir(batch)?;
+    pub async fn process_batch(
+        &self,
+        owner: u64,
+        batch: &str,
+    ) -> Result<Vec<Offering>, OfferingError> {
+        let dir = self.batch_dir(owner, batch)?;
 
         // Which archive each unpacked file came from, by its staged path.
         let mut unpacked: HashMap<PathBuf, String> = HashMap::new();
@@ -144,7 +189,7 @@ impl Offerings {
         for path in list_files(&dir).await? {
             if has_extension(&path, AUDIO_EXTENSIONS) {
                 let archive = unpacked.get(&path).map(String::as_str);
-                offerings.push(self.register(batch, &path, archive).await?);
+                offerings.push(self.register(owner, batch, &path, archive).await?);
             } else if !is_cover_image(&path) {
                 tokio::fs::remove_file(&path).await?;
             }
@@ -166,10 +211,11 @@ impl Offerings {
     /// archives, and I/O or database errors.
     pub async fn process_upload(
         &self,
+        owner: u64,
         batch: &str,
         path: &Path,
     ) -> Result<Vec<Offering>, OfferingError> {
-        let dir = self.batch_dir(batch)?;
+        let dir = self.batch_dir(owner, batch)?;
         if path.parent() != Some(dir.as_path()) {
             return Err(OfferingError::InvalidBatch);
         }
@@ -185,11 +231,11 @@ impl Offerings {
             tokio::fs::remove_file(path).await?;
             for file in files {
                 if has_extension(&file, AUDIO_EXTENSIONS) {
-                    offerings.push(self.register(batch, &file, Some(&name)).await?);
+                    offerings.push(self.register(owner, batch, &file, Some(&name)).await?);
                 }
             }
         } else if has_extension(path, AUDIO_EXTENSIONS) {
-            offerings.push(self.register(batch, path, None).await?);
+            offerings.push(self.register(owner, batch, path, None).await?);
         } else if !is_cover_image(path) {
             tokio::fs::remove_file(path).await?;
         }
@@ -198,6 +244,7 @@ impl Offerings {
 
     async fn register(
         &self,
+        owner: u64,
         batch: &str,
         path: &Path,
         archive: Option<&str>,
@@ -207,7 +254,7 @@ impl Offerings {
             .map(|name| name.to_string_lossy().into_owned())
             .unwrap_or_default();
         let size = tokio::fs::metadata(path).await?.len();
-        let staged_path = format!("{batch}/{file_name}");
+        let staged_path = format!("{owner}/{batch}/{file_name}");
         let stem = path
             .file_stem()
             .map(|stem| stem.to_string_lossy().into_owned())
@@ -216,6 +263,7 @@ impl Offerings {
         let owned = path.to_owned();
         let offering = match tokio::task::spawn_blocking(move || tags::read(&owned)).await? {
             Ok(info) => toasty::create!(Offering {
+                user_id: owner,
                 batch,
                 file_name: &file_name,
                 archive: archive.map(str::to_owned),
@@ -240,6 +288,7 @@ impl Offerings {
                 created_at: now(),
             }),
             Err(error) => toasty::create!(Offering {
+                user_id: owner,
                 batch,
                 file_name: &file_name,
                 archive: archive.map(str::to_owned),
@@ -259,13 +308,15 @@ impl Offerings {
         Ok(offering)
     }
 
-    /// Every offering awaiting review, in album order.
+    /// Every offering of `owner`'s awaiting review, in album order.
     ///
     /// # Errors
     ///
     /// Fails on database errors.
-    pub async fn pending(&self) -> Result<Vec<Offering>, OfferingError> {
-        let mut offerings = Offering::all().exec(&mut self.db()).await?;
+    pub async fn pending(&self, owner: u64) -> Result<Vec<Offering>, OfferingError> {
+        let mut offerings = Offering::filter_by_user_id(owner)
+            .exec(&mut self.db())
+            .await?;
         offerings.sort_by(|a, b| {
             (
                 &a.batch,
@@ -285,20 +336,16 @@ impl Offerings {
         Ok(offerings)
     }
 
-    /// Absorbs an offering into the treasure. The offering's (possibly
-    /// corrected) metadata wins over the file's tags.
+    /// Absorbs one of `owner`'s offerings into their library. The
+    /// offering's (possibly corrected) metadata wins over the file's tags.
     ///
     /// # Errors
     ///
     /// Fails for unknown or unreadable offerings, duplicates, and I/O or
     /// database errors.
-    pub async fn accept(&self, id: u64) -> Result<Track, OfferingError> {
+    pub async fn accept(&self, owner: u64, id: u64) -> Result<Track, OfferingError> {
         let mut db = self.db();
-        let offering = Offering::filter_by_id(id)
-            .first()
-            .exec(&mut db)
-            .await?
-            .ok_or(OfferingError::NotFound)?;
+        let offering = self.owned(owner, id).await?;
         if offering.status == OfferingStatus::Unreadable {
             return Err(OfferingError::Unreadable(
                 offering.error.clone().unwrap_or_default(),
@@ -319,11 +366,12 @@ impl Offerings {
             genre: offering.genre.clone(),
             ..tagged
         };
-        let cover = self.batch_cover(&offering.batch).await;
+        let cover = self.batch_cover(owner, &offering.batch).await;
 
         let track = self
             .treasury
             .ingest(
+                owner,
                 &path,
                 &info,
                 cover.as_ref(),
@@ -334,7 +382,7 @@ impl Offerings {
 
         let batch = offering.batch.clone();
         offering.delete().exec(&mut db).await?;
-        self.clean_up_batch(&batch).await?;
+        self.clean_up_batch(owner, &batch).await?;
         Ok(track)
     }
 
@@ -343,8 +391,12 @@ impl Offerings {
     /// # Errors
     ///
     /// Fails only on database errors; per-offering failures are returned.
-    pub async fn accept_batch(&self, batch: &str) -> Result<BatchOutcome, OfferingError> {
-        let offerings = Offering::filter_by_batch(batch)
+    pub async fn accept_batch(
+        &self,
+        owner: u64,
+        batch: &str,
+    ) -> Result<BatchOutcome, OfferingError> {
+        let offerings = Offering::filter_by_user_id_and_batch(owner, batch)
             .exec(&mut self.db())
             .await?;
         let mut outcome = BatchOutcome::default();
@@ -352,7 +404,7 @@ impl Offerings {
             if offering.status != OfferingStatus::Pending {
                 continue;
             }
-            match self.accept(offering.id).await {
+            match self.accept(owner, offering.id).await {
                 Ok(track) => {
                     if !outcome.albums.contains(&track.album_id) {
                         outcome.albums.push(track.album_id);
@@ -372,32 +424,38 @@ impl Offerings {
         Ok(outcome)
     }
 
-    /// Deletes an offering and its staged file.
+    /// One of `owner`'s offerings.
+    async fn owned(&self, owner: u64, id: u64) -> Result<Offering, OfferingError> {
+        Offering::filter_by_id(id)
+            .first()
+            .exec(&mut self.db())
+            .await?
+            .filter(|offering| offering.user_id == owner)
+            .ok_or(OfferingError::NotFound)
+    }
+
+    /// Deletes one of `owner`'s offerings and its staged file.
     ///
     /// # Errors
     ///
     /// Fails for unknown offerings and on I/O or database errors.
-    pub async fn discard(&self, id: u64) -> Result<(), OfferingError> {
+    pub async fn discard(&self, owner: u64, id: u64) -> Result<(), OfferingError> {
         let mut db = self.db();
-        let offering = Offering::filter_by_id(id)
-            .first()
-            .exec(&mut db)
-            .await?
-            .ok_or(OfferingError::NotFound)?;
+        let offering = self.owned(owner, id).await?;
         remove_if_exists(&self.dir.join(&offering.staged_path)).await?;
         let batch = offering.batch.clone();
         offering.delete().exec(&mut db).await?;
-        self.clean_up_batch(&batch).await
+        self.clean_up_batch(owner, &batch).await
     }
 
-    /// Deletes every offering of a batch.
+    /// Deletes every offering of `owner`'s batch.
     ///
     /// # Errors
     ///
     /// Fails on I/O or database errors.
-    pub async fn discard_batch(&self, batch: &str) -> Result<(), OfferingError> {
-        let dir = self.batch_dir(batch)?;
-        Offering::filter_by_batch(batch)
+    pub async fn discard_batch(&self, owner: u64, batch: &str) -> Result<(), OfferingError> {
+        let dir = self.batch_dir(owner, batch)?;
+        Offering::filter_by_user_id_and_batch(owner, batch)
             .delete()
             .exec(&mut self.db())
             .await?;
@@ -408,8 +466,8 @@ impl Offerings {
     }
 
     /// An image in the batch named like a cover (`folder.jpg`, ...).
-    async fn batch_cover(&self, batch: &str) -> Option<Cover> {
-        let dir = self.batch_dir(batch).ok()?;
+    async fn batch_cover(&self, owner: u64, batch: &str) -> Option<Cover> {
+        let dir = self.batch_dir(owner, batch).ok()?;
         for path in list_files(&dir).await.ok()? {
             if is_cover_image(&path)
                 && let Some(mime) = Cover::mime_for_path(&path)
@@ -426,13 +484,13 @@ impl Offerings {
     }
 
     /// Removes the batch directory once no offerings refer to it.
-    async fn clean_up_batch(&self, batch: &str) -> Result<(), OfferingError> {
-        let remaining = Offering::filter_by_batch(batch)
+    async fn clean_up_batch(&self, owner: u64, batch: &str) -> Result<(), OfferingError> {
+        let remaining = Offering::filter_by_user_id_and_batch(owner, batch)
             .first()
             .exec(&mut self.db())
             .await?;
         if remaining.is_none() {
-            match tokio::fs::remove_dir_all(self.batch_dir(batch)?).await {
+            match tokio::fs::remove_dir_all(self.batch_dir(owner, batch)?).await {
                 Err(error) if error.kind() != io::ErrorKind::NotFound => return Err(error.into()),
                 _ => {}
             }

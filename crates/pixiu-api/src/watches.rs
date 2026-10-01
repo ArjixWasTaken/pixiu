@@ -1,5 +1,6 @@
 //! Watches: YouTube Music playlists, liked music and artists that píxiū
-//! keeps in the hoard, and the songs excluded from watched playlists.
+//! keeps in the signed-in user's library, and the songs excluded from
+//! watched playlists.
 
 use std::collections::{HashMap, HashSet};
 
@@ -9,10 +10,12 @@ use axum::{
     http::StatusCode,
 };
 use jiff::Timestamp;
-use pixiu_db::{JobState, Playlist, PlaylistEntry, SessionState, Track, Watch, WatchKind};
+use pixiu_db::{
+    Job, JobKind, JobState, Library, Playlist, PlaylistEntry, SessionState, Watch, WatchKind,
+};
 use pixiu_hunt::link::{self, Link};
 use pixiu_jobs::{
-    queue::wanted,
+    queue::{TrackJob, wanted},
     watch::{self, NewWatch, WAITING_FOR_LOGIN, WatchError},
 };
 use pixiu_subsonic::ids;
@@ -39,24 +42,26 @@ fn remote_url(watch: &Watch) -> String {
     }
 }
 
-/// The songs of a watched playlist's mirror that the hoard holds, of all.
-async fn progress(state: &ApiState, mirror: &Playlist) -> ApiResult<(usize, usize)> {
-    let mut db = state.db.clone();
+/// The library's tracks among `videos`, by video id.
+async fn videos_held(lib: &Library, videos: &[String]) -> ApiResult<HashSet<String>> {
+    Ok(lib
+        .tracks_of_videos(videos)
+        .await?
+        .videos()
+        .map(str::to_owned)
+        .collect())
+}
+
+/// The songs of a watched playlist's mirror that the library holds, of all.
+async fn progress(lib: &Library, mirror: &Playlist) -> ApiResult<(usize, usize)> {
+    let mut db = lib.db();
     let videos: Vec<String> = PlaylistEntry::filter_by_playlist_id(mirror.id)
         .exec(&mut db)
         .await?
         .into_iter()
         .filter_map(|entry| entry.ytm_video_id)
         .collect();
-    let mut downloaded = HashSet::new();
-    for chunk in videos.chunks(500) {
-        for track in Track::filter(Track::fields().ytm_video_id().in_list(chunk.to_vec()))
-            .exec(&mut db)
-            .await?
-        {
-            downloaded.extend(track.ytm_video_id);
-        }
-    }
+    let downloaded = videos_held(lib, &videos).await?;
     let have = videos
         .iter()
         .filter(|video| downloaded.contains(*video))
@@ -72,22 +77,23 @@ struct Status {
     error: Option<String>,
 }
 
-/// `GET /api/watches`: every watch with how it is doing.
+/// `GET /api/watches`: every watch of the user's with how it is doing.
 pub(crate) async fn list(
     State(state): State<ApiState>,
-    _: Session,
+    session: Session,
 ) -> ApiResult<Json<Vec<JsonValue>>> {
-    let mut db = state.db.clone();
-    let mut watches = Watch::all().exec(&mut db).await?;
+    let (owner, lib) = (session.owner(), session.library(&state));
+    let mut db = lib.db();
+    let mut watches = lib.all_watches().await?;
     watches.sort_by_key(|watch| watch.created_at);
     let logged_in = matches!(
-        state.warden.health().state,
+        crate::sources::health_of(&state, owner).state,
         Some(SessionState::Valid | SessionState::Degraded)
     );
-    let unfinished = state.jobs.unfinished().await?;
-    let syncing = watch::syncing(&mut db).await?;
-    let mirrors: HashMap<u64, Playlist> = Playlist::all()
-        .exec(&mut db)
+    let unfinished = state.jobs.unfinished(owner).await?;
+    let syncing = watch::syncing(&mut db, owner).await?;
+    let mirrors: HashMap<u64, Playlist> = lib
+        .all_playlists()
         .await?
         .into_iter()
         .filter_map(|playlist| playlist.watch_id.map(|id| (id, playlist)))
@@ -140,7 +146,7 @@ pub(crate) async fn list(
         let mirror = mirrors.get(&watch.id);
         let songs = match mirror {
             Some(mirror) => {
-                let (have, total) = progress(&state, mirror).await?;
+                let (have, total) = progress(&lib, mirror).await?;
                 Some(json!({ "have": have, "total": total }))
             }
             None => None,
@@ -179,7 +185,7 @@ pub(crate) struct AddWatch {
 /// `POST /api/watches`.
 pub(crate) async fn add(
     State(state): State<ApiState>,
-    _: Session,
+    session: Session,
     Json(form): Json<AddWatch>,
 ) -> ApiResult<StatusCode> {
     let target = form.target.trim();
@@ -209,11 +215,11 @@ pub(crate) async fn add(
         include_singles: form.singles,
         only_new: form.only_new,
     };
-    match watch::add(&state.treasury, &state.jobs, new).await {
+    match watch::add(&state.treasury, &state.jobs, session.owner(), new).await {
         Ok(_) => Ok(StatusCode::CREATED),
         Err(WatchError::Duplicate) => Err(ApiError::new(
             StatusCode::CONFLICT,
-            "píxiū already watches that.",
+            "You already watch that.",
         )),
         Err(WatchError::Db(error)) => Err(error.into()),
     }
@@ -223,26 +229,21 @@ pub(crate) async fn add(
 /// orphans unless something else keeps it.
 pub(crate) async fn remove(
     State(state): State<ApiState>,
-    _: Session,
+    session: Session,
     Path(id): Path<u64>,
 ) -> ApiResult<StatusCode> {
-    watch::remove(&state.treasury, &state.jobs, id).await?;
+    let watch = load(&session.library(&state), id).await?;
+    watch::remove(&state.treasury, &state.jobs, watch.id).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
 /// `POST /api/watches/{id}/sync`: syncs now.
 pub(crate) async fn sync(
     State(state): State<ApiState>,
-    _: Session,
+    session: Session,
     Path(id): Path<u64>,
 ) -> ApiResult<StatusCode> {
-    let Some(watch) = Watch::filter_by_id(id)
-        .first()
-        .exec(&mut state.db.clone())
-        .await?
-    else {
-        return Err(ApiError::not_found("watch"));
-    };
+    let watch = load(&session.library(&state), id).await?;
     watch::queue_sync(&state.jobs, &watch).await?;
     Ok(StatusCode::ACCEPTED)
 }
@@ -255,8 +256,16 @@ struct Excluded {
     excluded_at: Timestamp,
 }
 
-async fn excluded(state: &ApiState, watch_id: u64) -> ApiResult<Vec<Excluded>> {
-    Ok(watch::exclusions(&mut state.db.clone(), watch_id)
+/// One of the library's watches.
+async fn load(lib: &Library, id: u64) -> ApiResult<Watch> {
+    lib.watch(id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("watch"))
+}
+
+/// The songs excluded from one of the library's watches.
+async fn excluded(lib: &Library, watch_id: u64) -> ApiResult<Vec<Excluded>> {
+    Ok(watch::exclusions(&mut lib.db(), watch_id)
         .await?
         .into_iter()
         .map(|exclusion| Excluded {
@@ -271,10 +280,12 @@ async fn excluded(state: &ApiState, watch_id: u64) -> ApiResult<Vec<Excluded>> {
 /// `GET /api/watches/{id}/exclusions`.
 pub(crate) async fn exclusions(
     State(state): State<ApiState>,
-    _: Session,
+    session: Session,
     Path(id): Path<u64>,
 ) -> ApiResult<Json<JsonValue>> {
-    Ok(Json(json!(excluded(&state, id).await?)))
+    let lib = session.library(&state);
+    let watch = load(&lib, id).await?;
+    Ok(Json(json!(excluded(&lib, watch.id).await?)))
 }
 
 #[derive(Deserialize)]
@@ -287,14 +298,15 @@ pub(crate) struct Exclude {
 /// playlist; it becomes an orphan unless something else keeps it.
 pub(crate) async fn exclude(
     State(state): State<ApiState>,
-    _: Session,
+    session: Session,
     Path(id): Path<u64>,
     Json(form): Json<Exclude>,
 ) -> ApiResult<StatusCode> {
+    let lib = session.library(&state);
+    let id = load(&lib, id).await?.id;
     let video = match ids::Id::parse(&form.song) {
-        Some(ids::Id::Track(track_id)) => Track::filter_by_id(track_id)
-            .first()
-            .exec(&mut state.db.clone())
+        Some(ids::Id::Track(track_id)) => lib
+            .track(track_id)
             .await?
             .and_then(|track| track.ytm_video_id)
             .ok_or_else(|| ApiError::unprocessable("That song did not come from YouTube Music."))?,
@@ -311,11 +323,30 @@ pub(crate) async fn exclude(
 /// song again.
 pub(crate) async fn include(
     State(state): State<ApiState>,
-    _: Session,
+    session: Session,
     Path((id, video)): Path<(u64, String)>,
 ) -> ApiResult<StatusCode> {
-    watch::include(&state.treasury, &state.jobs, id, &video).await?;
+    let watch = load(&session.library(&state), id).await?;
+    watch::include(&state.treasury, &state.jobs, watch.id, &video).await?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// The latest download job of each video the user asked for, among the
+/// unfinished and the recent.
+async fn latest_downloads(state: &ApiState, owner: u64) -> ApiResult<HashMap<String, Job>> {
+    let mut jobs = state.jobs.unfinished(owner).await?;
+    jobs.extend(state.jobs.recent(owner, 500).await?);
+    jobs.sort_by_key(|job| job.id);
+    let mut latest = HashMap::new();
+    for job in jobs {
+        if job.kind != JobKind::DownloadTrack {
+            continue;
+        }
+        if let Ok(payload) = serde_json::from_str::<TrackJob>(&job.payload) {
+            latest.insert(payload.video_id, job);
+        }
+    }
+    Ok(latest)
 }
 
 /// `GET /api/playlists/{id}/watch`: for a playlist mirroring a watch, the
@@ -323,24 +354,21 @@ pub(crate) async fn include(
 /// playlists.
 pub(crate) async fn of_playlist(
     State(state): State<ApiState>,
-    _: Session,
+    session: Session,
     Path(id): Path<String>,
 ) -> ApiResult<Json<JsonValue>> {
     let Some(ids::Id::Playlist(playlist_id)) = ids::Id::parse(&id) else {
         return Err(ApiError::not_found("playlist"));
     };
-    let mut db = state.db.clone();
-    let Some(playlist) = Playlist::filter_by_id(playlist_id)
-        .first()
-        .exec(&mut db)
-        .await?
-    else {
+    let lib = session.library(&state);
+    let mut db = lib.db();
+    let Some(playlist) = lib.playlist(playlist_id).await? else {
         return Err(ApiError::not_found("playlist"));
     };
     let Some(watch_id) = playlist.watch_id else {
         return Ok(Json(JsonValue::Null));
     };
-    let Some(watch) = Watch::filter_by_id(watch_id).first().exec(&mut db).await? else {
+    let Some(watch) = lib.watch(watch_id).await? else {
         return Ok(Json(JsonValue::Null));
     };
     let mut entries = PlaylistEntry::filter_by_playlist_id(playlist.id)
@@ -351,22 +379,23 @@ pub(crate) async fn of_playlist(
         .iter()
         .filter_map(|entry| entry.ytm_video_id.clone())
         .collect();
-    let mut hoarded = HashSet::new();
-    for chunk in videos.chunks(500) {
-        for track in Track::filter(Track::fields().ytm_video_id().in_list(chunk.to_vec()))
-            .exec(&mut db)
-            .await?
-        {
-            hoarded.extend(track.ytm_video_id);
-        }
-    }
+    let hoarded = videos_held(&lib, &videos).await?;
+    let downloads = latest_downloads(&state, session.owner()).await?;
     let coming: Vec<JsonValue> = entries
         .into_iter()
         .filter(|entry| entry.track_id.is_none())
         .filter_map(|entry| {
             let video = entry.ytm_video_id?;
-            (!hoarded.contains(&video))
-                .then(|| json!({ "video_id": video, "title": entry.title, "artist": entry.artist }))
+            (!hoarded.contains(&video)).then(|| {
+                // How its download is doing, when there is one.
+                let job = downloads.get(&video).map(|job| {
+                    json!({
+                        "state": crate::jobs::state_name(job.state),
+                        "error": job.error,
+                    })
+                });
+                json!({ "video_id": video, "title": entry.title, "artist": entry.artist, "job": job })
+            })
         })
         .collect();
     Ok(Json(json!({
@@ -378,6 +407,6 @@ pub(crate) async fn of_playlist(
             "last_synced_at": watch.last_synced_at,
         },
         "coming": coming,
-        "excluded": excluded(&state, watch.id).await?,
+        "excluded": excluded(&lib, watch.id).await?,
     })))
 }

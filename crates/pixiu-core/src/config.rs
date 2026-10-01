@@ -37,7 +37,7 @@ pub struct Config {
 }
 
 /// The Chromium that platform logins run in.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct BrowserConfig {
     /// The Chromium binary; found in `PATH` when unset.
@@ -45,6 +45,19 @@ pub struct BrowserConfig {
     /// Disables Chromium's sandbox, which containers usually cannot
     /// provide. The Docker image sets this.
     pub no_sandbox: bool,
+    /// How many browsers may run at once, for every user's sign-ins and
+    /// cookie refreshes together. Each takes a few hundred megabytes.
+    pub max_open: usize,
+}
+
+impl Default for BrowserConfig {
+    fn default() -> Self {
+        Self {
+            executable: None,
+            no_sandbox: false,
+            max_open: 2,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -101,6 +114,10 @@ pub struct ServerConfig {
     /// Address to bind. Defaults to loopback; the Docker image binds `0.0.0.0`.
     pub host: IpAddr,
     pub port: u16,
+    /// Whether a reverse proxy in front of píxiū says who connected, in
+    /// `X-Forwarded-For`. Only turn it on behind one: anyone could claim
+    /// any address otherwise. Throttles count requests per address.
+    pub trust_proxy_headers: bool,
 }
 
 impl Default for ServerConfig {
@@ -108,6 +125,7 @@ impl Default for ServerConfig {
         Self {
             host: IpAddr::V4(Ipv4Addr::LOCALHOST),
             port: 4533,
+            trust_proxy_headers: false,
         }
     }
 }
@@ -159,13 +177,23 @@ impl PathsConfig {
         self.data_dir.join("cache")
     }
 
-    /// The login browser's profile, which keeps platform logins.
+    /// The login browser's profile from before every user had their own
+    /// (see [`users_dir`](Self::users_dir)); moved to the first account's.
     #[must_use]
-    pub fn browser_profile_dir(&self) -> PathBuf {
+    pub fn legacy_browser_profile_dir(&self) -> PathBuf {
         self.data_dir.join("browser-profile")
     }
 
-    /// The YouTube Music client's sealed cache and error reports.
+    /// What each user keeps on the server: `<users>/<id>/browser-profile`
+    /// (their login browser) and `<users>/<id>/youtube-music` (their
+    /// client's sealed cache).
+    #[must_use]
+    pub fn users_dir(&self) -> PathBuf {
+        self.data_dir.join("users")
+    }
+
+    /// The cache of the YouTube Music client without a login, which serves
+    /// what every user shares (searches, albums, artists).
     #[must_use]
     pub fn youtube_music_dir(&self) -> PathBuf {
         self.data_dir.join("youtube-music")

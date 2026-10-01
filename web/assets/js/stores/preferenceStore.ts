@@ -48,6 +48,8 @@ export const defaultPreferences: UserPreferences = {
   continuous_playback: false,
   crossfade_duration: 0,
   home_blocks_order: [],
+  home_blocks_hidden: [],
+  equalizer_enabled: true,
 }
 
 const STORAGE_KEY = 'preferences'

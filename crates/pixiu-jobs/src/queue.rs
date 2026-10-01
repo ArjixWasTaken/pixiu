@@ -94,6 +94,9 @@ pub struct EnrichJob {
     /// Search again, even if the album is matched already.
     #[serde(default)]
     pub fresh: bool,
+    /// Only the genre, from the release the album is matched to.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub genres_only: bool,
 }
 
 /// What a job wants, from its payload: `None` for jobs that want nothing
@@ -174,14 +177,14 @@ impl Pending {
     }
 }
 
-/// What unfinished jobs, failed ones included, already fetch.
+/// What `owner`'s unfinished jobs, failed ones included, already fetch.
 ///
 /// # Errors
 ///
 /// Fails on database errors.
-pub async fn pending(db: &mut Db) -> Result<Pending, toasty::Error> {
+pub async fn pending(db: &mut Db, owner: u64) -> Result<Pending, toasty::Error> {
     let mut pending = Pending::default();
-    for job in unfinished(db).await? {
+    for job in unfinished(db, owner).await? {
         match job.kind {
             JobKind::DownloadTrack => {
                 if let Ok(payload) = serde_json::from_str::<TrackJob>(&job.payload) {
@@ -204,12 +207,13 @@ pub async fn pending(db: &mut Db) -> Result<Pending, toasty::Error> {
     Ok(pending)
 }
 
-/// Jobs that have not finished: queued, running, paused or failed.
+/// `owner`'s jobs that have not finished: queued, running, paused or
+/// failed.
 ///
 /// # Errors
 ///
 /// Fails on database errors.
-pub async fn unfinished(db: &mut Db) -> Result<Vec<Job>, toasty::Error> {
+pub async fn unfinished(db: &mut Db, owner: u64) -> Result<Vec<Job>, toasty::Error> {
     let mut jobs = Vec::new();
     for state in [
         JobState::Queued,
@@ -217,7 +221,11 @@ pub async fn unfinished(db: &mut Db) -> Result<Vec<Job>, toasty::Error> {
         JobState::Paused,
         JobState::Failed,
     ] {
-        jobs.extend(Job::filter_by_state(state).exec(db).await?);
+        jobs.extend(
+            Job::filter_by_user_id_and_state(owner, state)
+                .exec(db)
+                .await?,
+        );
     }
     jobs.sort_by_key(|job| job.id);
     Ok(jobs)
@@ -243,7 +251,7 @@ impl NewJob {
         }
     }
 
-    /// The admin grabs a track.
+    /// The user grabs a track.
     #[must_use]
     pub fn track(video_id: &str, title: &str, reference: Option<String>) -> Self {
         Self::wanted_track(video_id, title, reference, Wanted::Grab)
@@ -264,7 +272,7 @@ impl NewJob {
         Self::new(JobKind::DownloadTrack, &payload, title)
     }
 
-    /// The admin grabs an album.
+    /// The user grabs an album.
     #[must_use]
     pub fn album(browse_id: &str, title: &str) -> Self {
         Self::wanted_album(browse_id, title, Wanted::Grab)
@@ -290,18 +298,21 @@ impl NewJob {
             album_id,
             release,
             fresh,
+            genres_only: false,
         };
         Self::new(JobKind::Enrich, &payload, title)
     }
 
-    /// Moving every file to the current layout.
+    /// Takes the genre of the release an album is matched to.
     #[must_use]
-    pub fn refile() -> Self {
-        Self::new(
-            JobKind::Refile,
-            &serde_json::Map::new(),
-            "Move files to the new layout",
-        )
+    pub fn enrich_genre(album_id: u64, title: &str, release: String) -> Self {
+        let payload = EnrichJob {
+            album_id,
+            release: Some(release),
+            fresh: false,
+            genres_only: true,
+        };
+        Self::new(JobKind::Enrich, &payload, title)
     }
 }
 
@@ -345,16 +356,27 @@ pub trait Executor: Send + Sync {
     ) -> BoxFuture<'a, Outcome>;
 }
 
-/// A change to show in the web player.
+/// A change to show in the web player of the job's owner.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum JobUpdate {
     Changed {
+        owner: u64,
         id: u64,
         state: JobState,
         progress: u8,
     },
-    /// Finished jobs were forgotten.
-    Cleared,
+    /// The owner's finished jobs were forgotten.
+    Cleared { owner: u64 },
+}
+
+impl JobUpdate {
+    /// The user whose job it is.
+    #[must_use]
+    pub fn owner(&self) -> u64 {
+        match self {
+            Self::Changed { owner, .. } | Self::Cleared { owner } => *owner,
+        }
+    }
 }
 
 pub struct Jobs {
@@ -366,6 +388,9 @@ pub struct Jobs {
     progress: Mutex<HashMap<u64, u8>>,
     wake: Notify,
     slots: Arc<Semaphore>,
+    /// Whose job ran last: users take turns, so one user's long queue does
+    /// not hold everyone else's up.
+    last_owner: Mutex<u64>,
 }
 
 impl Jobs {
@@ -378,6 +403,7 @@ impl Jobs {
             progress: Mutex::default(),
             wake: Notify::new(),
             slots: Arc::new(Semaphore::new(CONCURRENCY)),
+            last_owner: Mutex::default(),
         })
     }
 
@@ -392,13 +418,14 @@ impl Jobs {
         self.progress.lock().unwrap().get(&id).copied()
     }
 
-    /// Queues a job.
+    /// Queues a job for `owner`.
     ///
     /// # Errors
     ///
     /// Fails on database errors.
-    pub async fn enqueue(&self, job: NewJob) -> Result<Job, toasty::Error> {
+    pub async fn enqueue(&self, owner: u64, job: NewJob) -> Result<Job, toasty::Error> {
         let created = toasty::create!(Job {
+            user_id: owner,
             kind: job.kind,
             payload: job.payload,
             title: job.title,
@@ -410,18 +437,18 @@ impl Jobs {
         })
         .exec(&mut self.db.clone())
         .await?;
-        self.notify(created.id, JobState::Queued, 0);
+        self.notify(owner, created.id, JobState::Queued, 0);
         self.wake.notify_one();
         Ok(created)
     }
 
-    /// The most recent jobs, newest first.
+    /// `owner`'s most recent jobs, newest first.
     ///
     /// # Errors
     ///
     /// Fails on database errors.
-    pub async fn recent(&self, limit: usize) -> Result<Vec<Job>, toasty::Error> {
-        let mut jobs = Job::all()
+    pub async fn recent(&self, owner: u64, limit: usize) -> Result<Vec<Job>, toasty::Error> {
+        let mut jobs = Job::filter_by_user_id(owner)
             .order_by(Job::fields().id().desc())
             .limit(limit)
             .exec(&mut self.db.clone())
@@ -466,14 +493,15 @@ impl Jobs {
         Ok(families)
     }
 
-    /// Queues a failed job again.
+    /// Queues one of `owner`'s failed jobs again.
     ///
     /// # Errors
     ///
     /// Fails on database errors.
-    pub async fn retry(&self, id: u64) -> Result<(), toasty::Error> {
+    pub async fn retry(&self, owner: u64, id: u64) -> Result<(), toasty::Error> {
         let mut db = self.db.clone();
         if let Some(mut job) = Job::filter_by_id(id).first().exec(&mut db).await?
+            && job.user_id == owner
             && job.state == JobState::Failed
         {
             toasty::update!(job {
@@ -483,20 +511,23 @@ impl Jobs {
             })
             .exec(&mut db)
             .await?;
-            self.notify(id, JobState::Queued, 0);
+            self.notify(owner, id, JobState::Queued, 0);
             self.wake.notify_one();
         }
         Ok(())
     }
 
-    /// Queues paused jobs again, e.g. once a platform login works again.
+    /// Queues `owner`'s paused jobs again, e.g. once their platform login
+    /// works again.
     ///
     /// # Errors
     ///
     /// Fails on database errors.
-    pub async fn resume_paused(&self) -> Result<usize, toasty::Error> {
+    pub async fn resume_paused(&self, owner: u64) -> Result<usize, toasty::Error> {
         let mut db = self.db.clone();
-        let paused = Job::filter_by_state(JobState::Paused).exec(&mut db).await?;
+        let paused = Job::filter_by_user_id_and_state(owner, JobState::Paused)
+            .exec(&mut db)
+            .await?;
         let count = paused.len();
         for mut job in paused {
             let id = job.id;
@@ -506,7 +537,7 @@ impl Jobs {
             })
             .exec(&mut db)
             .await?;
-            self.notify(id, JobState::Queued, 0);
+            self.notify(owner, id, JobState::Queued, 0);
         }
         if count > 0 {
             self.wake.notify_one();
@@ -519,28 +550,32 @@ impl Jobs {
     /// # Errors
     ///
     /// Fails on database errors.
-    pub async fn unfinished(&self) -> Result<Vec<Job>, toasty::Error> {
-        unfinished(&mut self.db.clone()).await
+    pub async fn unfinished(&self, owner: u64) -> Result<Vec<Job>, toasty::Error> {
+        unfinished(&mut self.db.clone(), owner).await
     }
 
-    /// Forgets the jobs `unwanted` picks among those not running, e.g. the
-    /// work of a watch being removed.
+    /// Forgets the jobs `unwanted` picks among `owner`'s not running, e.g.
+    /// the work of a watch being removed.
     ///
     /// # Errors
     ///
     /// Fails on database errors.
-    pub async fn forget(&self, unwanted: impl Fn(&Job) -> bool) -> Result<(), toasty::Error> {
+    pub async fn forget(
+        &self,
+        owner: u64,
+        unwanted: impl Fn(&Job) -> bool,
+    ) -> Result<(), toasty::Error> {
         let mut db = self.db.clone();
-        for job in self.unfinished().await? {
+        for job in self.unfinished(owner).await? {
             if job.state != JobState::Running && unwanted(&job) {
                 job.delete().exec(&mut db).await?;
             }
         }
-        let _ = self.updates.send(JobUpdate::Cleared);
+        let _ = self.updates.send(JobUpdate::Cleared { owner });
         Ok(())
     }
 
-    /// Forgets finished jobs.
+    /// Forgets `owner`'s finished jobs.
     ///
     /// # Errors
     ///
@@ -548,14 +583,17 @@ impl Jobs {
     ///
     /// A family (an album grab and its downloads) is cleared only once all of
     /// it has finished, so its progress stays whole while it runs.
-    pub async fn clear_finished(&self) -> Result<(), toasty::Error> {
+    pub async fn clear_finished(&self, owner: u64) -> Result<(), toasty::Error> {
         let mut db = self.db.clone();
-        let in_flight: HashSet<u64> = unfinished(&mut db)
+        let in_flight: HashSet<u64> = unfinished(&mut db, owner)
             .await?
             .into_iter()
             .filter_map(|job| job.parent_id)
             .collect();
-        for job in Job::filter_by_state(JobState::Done).exec(&mut db).await? {
+        for job in Job::filter_by_user_id_and_state(owner, JobState::Done)
+            .exec(&mut db)
+            .await?
+        {
             let busy = in_flight.contains(&job.id)
                 || job
                     .parent_id
@@ -564,26 +602,27 @@ impl Jobs {
                 job.delete().exec(&mut db).await?;
             }
         }
-        let _ = self.updates.send(JobUpdate::Cleared);
+        let _ = self.updates.send(JobUpdate::Cleared { owner });
         Ok(())
     }
 
-    fn notify(&self, id: u64, state: JobState, progress: u8) {
+    fn notify(&self, owner: u64, id: u64, state: JobState, progress: u8) {
         let _ = self.updates.send(JobUpdate::Changed {
+            owner,
             id,
             state,
             progress,
         });
     }
 
-    fn set_progress(&self, id: u64, percent: u8) {
+    fn set_progress(&self, owner: u64, id: u64, percent: u8) {
         let changed = {
             let mut all = self.progress.lock().unwrap();
             let previous = all.insert(id, percent);
             previous != Some(percent)
         };
         if changed {
-            self.notify(id, JobState::Running, percent);
+            self.notify(owner, id, JobState::Running, percent);
         }
     }
 
@@ -639,15 +678,38 @@ impl Jobs {
         Ok(())
     }
 
-    /// Takes the oldest queued job and marks it running.
+    /// Takes the next queued job and marks it running: the oldest of the
+    /// next user in turn who has queued work.
     async fn claim_next(&self) -> Result<Option<Job>, toasty::Error> {
         let mut db = self.db.clone();
-        let Some(mut job) = Job::filter_by_state(JobState::Queued)
-            .order_by(Job::fields().id().asc())
-            .first()
-            .exec(&mut db)
-            .await?
+        // Jobs of accounts turned off (or being deleted) wait.
+        let heads: Vec<(u64, u64)> = toasty::sql::query(
+            "SELECT jobs.user_id, MIN(jobs.id) FROM jobs \
+             JOIN users ON users.id = jobs.user_id \
+             WHERE jobs.state = 'queued' AND users.status = 'active' \
+             GROUP BY jobs.user_id ORDER BY jobs.user_id",
+        )
+        .exec(&mut db)
+        .await?
+        .into_iter()
+        .filter_map(|row| match row {
+            toasty::stmt::Value::Record(record) => Some((
+                pixiu_db::owned::as_u64(&record[0])?,
+                pixiu_db::owned::as_u64(&record[1])?,
+            )),
+            _ => None,
+        })
+        .collect();
+        let last = *self.last_owner.lock().unwrap();
+        let Some(&(owner, id)) = heads
+            .iter()
+            .find(|(owner, _)| *owner > last)
+            .or_else(|| heads.first())
         else {
+            return Ok(None);
+        };
+        *self.last_owner.lock().unwrap() = owner;
+        let Some(mut job) = Job::filter_by_id(id).first().exec(&mut db).await? else {
             return Ok(None);
         };
         toasty::update!(job {
@@ -658,15 +720,15 @@ impl Jobs {
         .exec(&mut db)
         .await?;
         self.progress.lock().unwrap().insert(job.id, 0);
-        self.notify(job.id, JobState::Running, 0);
+        self.notify(job.user_id, job.id, JobState::Running, 0);
         Ok(Some(job))
     }
 
     async fn run(&self, mut job: Job) {
-        let id = job.id;
+        let (owner, id) = (job.user_id, job.id);
         let outcome = self
             .executor
-            .run(&job, &|percent| self.set_progress(id, percent))
+            .run(&job, &|percent| self.set_progress(owner, id, percent))
             .await;
         let (state, track_id, error) = match &outcome {
             Outcome::Done { track_id } => (JobState::Done, *track_id, None),
@@ -698,7 +760,7 @@ impl Jobs {
             tracing::error!(%error, id, "cannot record a job's outcome");
         }
         self.progress.lock().unwrap().remove(&id);
-        self.notify(id, state, progress);
+        self.notify(owner, id, state, progress);
 
         // An expansion's jobs are its children; see `Jobs::families`.
         let parent = matches!(outcome, Outcome::Expand(_)).then_some(id);
@@ -709,7 +771,7 @@ impl Jobs {
         {
             for mut follow_up in follow_ups {
                 follow_up.parent = follow_up.parent.or(parent);
-                if let Err(error) = self.enqueue(follow_up).await {
+                if let Err(error) = self.enqueue(owner, follow_up).await {
                     tracing::error!(%error, "cannot queue a follow-up job");
                 }
             }

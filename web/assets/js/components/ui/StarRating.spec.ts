@@ -19,6 +19,13 @@ describe('starRating.vue', () => {
     expect(stars[0].checked).toBe(false)
   })
 
+  it('lights the stars up to the rating', () => {
+    h.render(Component, { props: { rating: 3 } })
+
+    const lit = screen.getAllByRole('radio').map(star => star.closest('label')!.classList.contains('lit'))
+    expect(lit).toEqual([true, true, true, false, false])
+  })
+
   it('reads currentRating from a rateable when provided', () => {
     const album = h.factory('album').make({ rating: 4 })
     h.render(Component, { props: { rateable: album } })

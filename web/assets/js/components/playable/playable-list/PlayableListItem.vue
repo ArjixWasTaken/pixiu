@@ -55,10 +55,10 @@
 import { computed, toRefs } from 'vue'
 import { getPlayableProp, requireInjection } from '@/utils/helpers'
 import { isSong } from '@/utils/typeGuards'
-import { secondsToHis } from '@/utils/formatters'
+import { secondsToHis, timeAgo } from '@/utils/formatters'
 import { useTableColumnVisibility } from '@/composables/useTableColumnVisibility'
 import { useOfflinePlayback } from '@/composables/useOfflinePlayback'
-import { PlayableListConfigKey } from '@/config/symbols'
+import { PlayableListConfigKey, PlayableListContextKey } from '@/config/symbols'
 import { playableListColumnConfig } from '@/config/tables'
 import { playableStore } from '@/stores/playableStore'
 import { useViewport } from '@/composables/useViewport'
@@ -80,6 +80,7 @@ const emit = defineEmits<{
 }>()
 
 const [config] = requireInjection<[Partial<PlayableListConfig>]>(PlayableListConfigKey, [{}])
+const [context] = requireInjection<[PlayableListContext]>(PlayableListContextKey, [{}])
 
 const { shouldShowColumn } = useTableColumnVisibility(playableListColumnConfig)
 
@@ -99,9 +100,16 @@ const album = computed(() => getPlayableProp(playable.value, 'album_name', 'podc
 
 const { isMobile } = useViewport()
 
+/** When it was played, on Recently Played. */
+const played = computed(() =>
+  context.type === 'RecentlyPlayed' && isSong(playable.value) && playable.value.played_at
+    ? `played ${timeAgo(playable.value.played_at)}`
+    : null,
+)
+
 /** "Artist · album" on wide screens; phones show the length instead of the album. */
 const supporting = computed(() =>
-  [artist.value, isMobile.value ? fmtLength : shouldShowColumn('album') ? album.value : null]
+  [artist.value, isMobile.value ? fmtLength : shouldShowColumn('album') ? album.value : null, played.value]
     .filter(Boolean)
     .join(' · '),
 )

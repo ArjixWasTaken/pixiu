@@ -1,5 +1,8 @@
 //! The Subsonic API against a small real library.
 
+// Tests inspect whole tables; only handlers must go through a `Library`.
+#![allow(clippy::disallowed_methods)]
+
 use std::path::{Path, PathBuf};
 
 use axum::{
@@ -77,6 +80,9 @@ impl Api {
         );
 
         let user = toasty::create!(User {
+            role: pixiu_db::Role::Admin,
+            status: pixiu_db::UserStatus::Active,
+            password_change_required: false,
             username: "keeper",
             password_hash: pixiu_core::password::hash(PASSWORD),
             subsonic_secret: Some(secrets.seal_str(PASSWORD)),
@@ -103,6 +109,7 @@ impl Api {
             let info = tags::read(&staged).unwrap();
             treasury
                 .ingest(
+                    user.id,
                     &staged,
                     &info,
                     None,
@@ -620,10 +627,13 @@ async fn system_endpoints() {
     let json = api.call("getUser", "username=keeper").await.ok();
     assert_eq!(json["user"]["adminRole"], true);
     assert_eq!(json["user"]["folder"], serde_json::json!([1]));
+    // An admin asking after nobody: not found.
     assert_eq!(
         api.call("getUser", "username=someone").await.error_code(),
-        50
+        70
     );
+    let json = api.call("getUsers", "").await.ok();
+    assert_eq!(json["users"]["user"][0]["username"], "keeper");
 
     let unknown = api.call("getEverything", "").await;
     assert_eq!(unknown.status, StatusCode::NOT_FOUND);
@@ -1028,6 +1038,7 @@ async fn playlists_are_made_changed_and_mirrored() {
     .await
     .unwrap();
     let mirror = toasty::create!(Playlist {
+        user_id: 1,
         name: "Liked music",
         public: false,
         watch_id: Some(1_u64),
@@ -1172,6 +1183,7 @@ async fn smart_playlists_list_what_their_rules_match() {
     let rules =
         r#"[{"id":"g","rules":[{"id":"r","model":"genre","operator":"is","value":["Ambient"]}]}]"#;
     let playlist = toasty::create!(Playlist {
+        user_id: 1,
         name: "Ambient",
         public: false,
         rules: Some(rules.to_owned()),

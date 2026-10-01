@@ -3,10 +3,14 @@
 
 use std::sync::Arc;
 
-use pixiu_browser::{Cookie, LoginDesk, cookie_header};
-use pixiu_db::{Album, Job, JobKind, JobState, ReleaseReason, SessionState, Track, Watch};
+use pixiu_browser::{Cookie, LoginDesks, cookie_header};
+use pixiu_core::alerts::AlertSink;
+use pixiu_db::{Album, Job, JobKind, JobState, ReleaseReason, SessionState, Watch};
 use pixiu_enrich::Sources;
-use pixiu_hunt::{Discography, DownloadRequest, HuntError, Hunter, RemotePlaylist, SessionCheck};
+use pixiu_hunt::{
+    Discography, DownloadRequest, HuntError, Hunter, RemotePlaylist, SessionCheck, YtMusic,
+    YtMusicPool,
+};
 use pixiu_treasury::Release;
 
 use crate::{
@@ -14,7 +18,8 @@ use crate::{
     queue::{
         self, AlbumJob, EnrichJob, Executor, NewJob, Outcome, SyncJob, TrackJob, enriched_album,
     },
-    warden::{BoxFuture, Platform, Refresher, Warden},
+    warden::{BoxFuture, Platform, Refresher},
+    wardens::{SessionFactory, Wardens},
     watch::{self, Catalog, CatalogError, Synced},
 };
 
@@ -33,31 +38,60 @@ pub fn is_logged_in(cookies: &[Cookie]) -> bool {
         .any(|cookie| matches!(cookie.name.as_str(), "SAPISID" | "__Secure-3PAPISID"))
 }
 
-/// YouTube Music, as the warden's platform.
-pub struct YtMusicPlatform(pub Arc<Hunter>);
+/// A user's YouTube Music client, as their warden's platform.
+pub struct YtMusicPlatform {
+    pub pool: Arc<YtMusicPool>,
+    pub owner: u64,
+}
 
-impl Platform for YtMusicPlatform {
-    fn apply<'a>(&'a self, cookies: &'a str) -> BoxFuture<'a, SessionCheck> {
-        Box::pin(self.0.ytmusic().apply_cookies(cookies))
-    }
-
-    fn check(&self) -> BoxFuture<'_, SessionCheck> {
-        Box::pin(self.0.ytmusic().check_session())
-    }
-
-    fn forget(&self) -> BoxFuture<'_, ()> {
-        Box::pin(self.0.ytmusic().forget_cookies())
+impl YtMusicPlatform {
+    fn client(&self) -> Result<Arc<YtMusic>, SessionCheck> {
+        self.pool
+            .for_user(self.owner)
+            .map_err(|error| SessionCheck::Unreachable(error.to_string()))
     }
 }
 
-/// Fresh cookies from the login browser's persistent profile.
-pub struct BrowserRefresher(pub Arc<LoginDesk>);
+impl Platform for YtMusicPlatform {
+    fn apply<'a>(&'a self, cookies: &'a str) -> BoxFuture<'a, SessionCheck> {
+        Box::pin(async move {
+            match self.client() {
+                Ok(client) => client.apply_cookies(cookies).await,
+                Err(unreachable) => unreachable,
+            }
+        })
+    }
+
+    fn check(&self) -> BoxFuture<'_, SessionCheck> {
+        Box::pin(async move {
+            match self.client() {
+                Ok(client) => client.check_session().await,
+                Err(unreachable) => unreachable,
+            }
+        })
+    }
+
+    fn forget(&self) -> BoxFuture<'_, ()> {
+        Box::pin(async move {
+            if let Ok(client) = self.client() {
+                client.forget_cookies().await;
+            }
+        })
+    }
+}
+
+/// Fresh cookies from a user's login browser profile.
+pub struct BrowserRefresher {
+    pub desks: Arc<LoginDesks>,
+    pub owner: u64,
+}
 
 impl Refresher for BrowserRefresher {
     fn refresh(&self) -> BoxFuture<'_, Result<String, String>> {
         Box::pin(async move {
             let cookies = self
-                .0
+                .desks
+                .desk(self.owner)
                 .harvest(YOUTUBE_MUSIC_URL, COOKIE_DOMAIN)
                 .await
                 .map_err(|error| error.to_string())?;
@@ -69,12 +103,44 @@ impl Refresher for BrowserRefresher {
     }
 }
 
+/// Users' wardens work with their own YouTube Music client and login
+/// browser.
+pub struct Sessions {
+    pub pool: Arc<YtMusicPool>,
+    pub desks: Arc<LoginDesks>,
+}
+
+impl SessionFactory for Sessions {
+    fn platform(&self, owner: u64) -> Box<dyn Platform> {
+        Box::new(YtMusicPlatform {
+            pool: Arc::clone(&self.pool),
+            owner,
+        })
+    }
+
+    fn refresher(&self, owner: u64) -> Box<dyn Refresher> {
+        Box::new(BrowserRefresher {
+            desks: Arc::clone(&self.desks),
+            owner,
+        })
+    }
+
+    fn forget(&self, owner: u64) -> BoxFuture<'_, ()> {
+        Box::pin(async move {
+            self.desks.remove(owner).await;
+            self.pool.remove(owner);
+        })
+    }
+}
+
 /// Runs jobs with the hunter.
 pub struct HuntExecutor {
     pub hunter: Arc<Hunter>,
-    pub warden: Arc<Warden>,
+    pub wardens: Arc<Wardens>,
     /// MusicBrainz and friends, for enriching albums.
     pub sources: Arc<dyn Sources>,
+    /// Tells owners about watches that keep failing.
+    pub alerts: Arc<dyn AlertSink>,
 }
 
 /// YouTube Music lyrics, through the hunter.
@@ -106,7 +172,8 @@ impl Executor for HuntExecutor {
                 JobKind::GrabAlbum => self.expand_album(job).await,
                 JobKind::SyncWatch => self.sync_watch(job).await,
                 JobKind::Enrich => self.enrich(job).await,
-                JobKind::Refile => self.refile(progress).await,
+                // Retired: files no longer move.
+                JobKind::Refile => Outcome::Done { track_id: None },
             }
         })
     }
@@ -119,10 +186,13 @@ impl HuntExecutor {
             Err(error) => return Outcome::Failed(format!("invalid job: {error}")),
         };
         let claim = payload.wanted.claim(payload.reference);
+        let owner = job.user_id;
         let request = DownloadRequest {
+            owner,
+            job_id: job.id,
             video_id: payload.video_id.clone(),
             claim: claim.clone(),
-            cookies: self.warden.cookies().await,
+            cookies: self.wardens.cookies(owner).await,
         };
         let treasury = self.hunter.treasury();
         // Excluded from its playlist while this was queued or running.
@@ -139,6 +209,7 @@ impl HuntExecutor {
                 {
                     let released = treasury
                         .release(
+                            owner,
                             claim.kind,
                             reference,
                             Release {
@@ -159,6 +230,7 @@ impl HuntExecutor {
                 {
                     let released = treasury
                         .release(
+                            owner,
                             claim.kind,
                             reference,
                             Release {
@@ -174,7 +246,7 @@ impl HuntExecutor {
                 }
                 Outcome::DoneWith {
                     track_id: Some(track.id),
-                    then: self.enrich_later(track.album_id).await,
+                    then: self.enrich_later(owner, track.album_id).await,
                 }
             }
             // Already here: whoever wants it now keeps it too.
@@ -205,14 +277,11 @@ impl HuntExecutor {
         let mut db = treasury.db();
         let claim = payload.wanted.claim(Some(album.id.clone()));
         for track in &album.tracks {
-            let hoarded = match Track::filter_by_ytm_video_id(&track.id)
-                .first()
-                .exec(&mut db)
-                .await
-            {
-                Ok(hoarded) => hoarded,
-                Err(error) => return Outcome::Failed(error.to_string()),
-            };
+            let hoarded =
+                match pixiu_db::videos::track_of_video(&mut db, job.user_id, &track.id).await {
+                    Ok(hoarded) => hoarded,
+                    Err(error) => return Outcome::Failed(error.to_string()),
+                };
             match hoarded {
                 // Already here: whoever wants the album keeps it too.
                 Some(hoarded) => {
@@ -231,10 +300,10 @@ impl HuntExecutor {
         Outcome::Expand(jobs)
     }
 
-    /// An enrich job for the album, unless one is already waiting.
-    async fn enrich_later(&self, album_id: u64) -> Vec<NewJob> {
+    /// An enrich job for `owner`'s album, unless one is already waiting.
+    async fn enrich_later(&self, owner: u64, album_id: u64) -> Vec<NewJob> {
         let mut db = self.hunter.treasury().db();
-        let waiting = queue::unfinished(&mut db).await.is_ok_and(|jobs| {
+        let waiting = queue::unfinished(&mut db, owner).await.is_ok_and(|jobs| {
             jobs.iter()
                 .any(|job| job.state == JobState::Queued && enriched_album(job) == Some(album_id))
         });
@@ -261,13 +330,18 @@ impl HuntExecutor {
         // Downloads of the album still to come would each ask again; the
         // last one's request does the work.
         let automatic = payload.release.is_none() && !payload.fresh;
-        if automatic && self.album_downloads_pending(payload.album_id).await {
+        if automatic
+            && self
+                .album_downloads_pending(job.user_id, payload.album_id)
+                .await
+        {
             return Outcome::Done { track_id: None };
         }
         let request = enrich::Request {
             album_id: payload.album_id,
             release: payload.release,
             fresh: payload.fresh,
+            genres_only: payload.genres_only,
         };
         let lyrics = HunterLyrics(Arc::clone(&self.hunter));
         match enrich::enrich(treasury, self.sources.as_ref(), &lyrics, &request).await {
@@ -279,23 +353,9 @@ impl HuntExecutor {
         }
     }
 
-    async fn refile(&self, progress: &(dyn Fn(u8) + Send + Sync)) -> Outcome {
-        let moved = self
-            .hunter
-            .treasury()
-            .refile_all(|done, of| {
-                let percent = (done * 100).checked_div(of).unwrap_or(100);
-                progress(u8::try_from(percent).unwrap_or(100));
-            })
-            .await;
-        match moved {
-            Ok(_) => Outcome::Done { track_id: None },
-            Err(error) => Outcome::Failed(error.to_string()),
-        }
-    }
-
-    /// Whether downloads for the album (grabbed as an album) are queued.
-    async fn album_downloads_pending(&self, album_id: u64) -> bool {
+    /// Whether downloads for `owner`'s album (grabbed as an album) are
+    /// queued.
+    async fn album_downloads_pending(&self, owner: u64, album_id: u64) -> bool {
         let mut db = self.hunter.treasury().db();
         let Ok(Some(album)) = Album::filter_by_id(album_id).first().exec(&mut db).await else {
             return false;
@@ -303,7 +363,7 @@ impl HuntExecutor {
         let Some(browse_id) = album.ytm_browse_id else {
             return false;
         };
-        queue::unfinished(&mut db).await.is_ok_and(|jobs| {
+        queue::unfinished(&mut db, owner).await.is_ok_and(|jobs| {
             jobs.iter().any(|job| {
                 matches!(job.state, JobState::Queued | JobState::Running)
                     && job.kind == JobKind::DownloadTrack
@@ -321,9 +381,17 @@ impl HuntExecutor {
         };
         let catalog = YtMusicCatalog {
             hunter: Arc::clone(&self.hunter),
-            warden: Arc::clone(&self.warden),
+            wardens: Arc::clone(&self.wardens),
+            owner: job.user_id,
         };
-        match watch::sync(self.hunter.treasury(), &catalog, payload.watch_id).await {
+        match watch::sync(
+            self.hunter.treasury(),
+            &catalog,
+            self.alerts.as_ref(),
+            payload.watch_id,
+        )
+        .await
+        {
             Ok(Synced::Done(jobs)) => Outcome::Expand(jobs),
             Ok(Synced::NeedsLogin(reason)) => Outcome::Paused(reason),
             Err(reason) => Outcome::Failed(reason),
@@ -341,10 +409,13 @@ async fn watch_exists(hunter: &Hunter, watch_id: u64) -> bool {
     )
 }
 
-/// YouTube Music, as the catalog of watches.
+/// YouTube Music, as the catalog of a user's watches.
 pub struct YtMusicCatalog {
     pub hunter: Arc<Hunter>,
-    pub warden: Arc<Warden>,
+    pub wardens: Arc<Wardens>,
+    /// Whose watches: their login sees their liked music and private
+    /// playlists.
+    pub owner: u64,
 }
 
 fn catalog_error(error: &HuntError) -> CatalogError {
@@ -359,7 +430,8 @@ impl Catalog for YtMusicCatalog {
     fn playlist<'a>(&'a self, id: &'a str) -> BoxFuture<'a, Result<RemotePlaylist, CatalogError>> {
         Box::pin(async move {
             self.hunter
-                .ytmusic()
+                .clients()
+                .client(self.owner)
                 .playlist(id)
                 .await
                 .map_err(|error| catalog_error(&error))
@@ -381,7 +453,7 @@ impl Catalog for YtMusicCatalog {
 
     fn logged_in(&self) -> bool {
         matches!(
-            self.warden.health().state,
+            self.wardens.health(self.owner).state,
             Some(SessionState::Valid | SessionState::Degraded)
         )
     }

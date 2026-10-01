@@ -120,7 +120,7 @@ describe('playableContextMenu.vue', () => {
     const song = h.factory('song').make()
     await renderComponent(song)
 
-    await h.user.click(screen.getByText(song.album_name))
+    await h.user.click(screen.getByText(`Album: ${song.album_name}`))
 
     expect(goMock).toHaveBeenCalledWith(`/#/albums/${song.album_id}`)
   })
@@ -130,7 +130,7 @@ describe('playableContextMenu.vue', () => {
     const song = h.factory('song').make()
     await renderComponent(song)
 
-    await h.user.click(screen.getByText(song.artist_name))
+    await h.user.click(screen.getByText(`Artist: ${song.artist_name}`))
 
     expect(goMock).toHaveBeenCalledWith(`/#/artists/${song.artist_id}`)
   })

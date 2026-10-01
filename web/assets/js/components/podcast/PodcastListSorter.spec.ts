@@ -16,9 +16,11 @@ describe('podcastListSorter.vue', () => {
 
     screen.getByTitle('Sorting by Title, descending')
 
+    await h.user.click(screen.getByTitle(/^Sorting by/))
     await h.user.click(screen.getByTitle('Sort by Title'))
     expect(emitted().sort[0]).toEqual(['title', 'asc'])
 
+    await h.user.click(screen.getByTitle(/^Sorting by/))
     await h.user.click(screen.getByTitle('Sort by Author'))
     expect(emitted().sort[1]).toEqual(['author', 'asc'])
   })
