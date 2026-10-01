@@ -2,7 +2,7 @@
   <ScreenBase>
     <template #header>
       <ScreenHeader :disabled="loading" :layout="playables.length ? headerLayout : 'collapsed'">
-        Results for <span class="font-thin">{{ q }}</span>
+        Results for “{{ q }}”
 
         <template #thumbnail>
           <ThumbnailStack :thumbnails="thumbnails" />
@@ -25,7 +25,7 @@
 </template>
 
 <script lang="ts" setup>
-import { onMounted, ref, toRef } from 'vue'
+import { ref, toRef } from 'vue'
 import { useSearchStore } from '@/stores/searchStore'
 import { usePlayableList } from '@/composables/usePlayableList'
 import { usePlayableListControls } from '@/composables/usePlayableListControls'
@@ -38,7 +38,7 @@ import ScreenBase from '@/components/screens/ScreenBase.vue'
 
 const searchStore = useSearchStore()
 
-const { getRouteParam } = useRouter()
+const { getRouteParam, onScreenActivated } = useRouter()
 const q = ref('')
 
 const {
@@ -58,16 +58,23 @@ const {
 const { PlayableListControls, config } = usePlayableListControls('Search.Playables')
 const loading = ref(false)
 
-searchStore.resetPlayableResultState()
+// Kept alive between visits: each visit looks for its own words.
+onScreenActivated('Search.Playables', async () => {
+  const words = getRouteParam('q') || ''
 
-onMounted(async () => {
-  q.value = getRouteParam('q') || ''
-  if (!q.value) {
+  if (words === q.value && playables.value.length) {
+    return
+  }
+
+  q.value = words
+  searchStore.resetPlayableResultState()
+
+  if (!words) {
     return
   }
 
   loading.value = true
-  await searchStore.playableSearch(q.value)
+  await searchStore.playableSearch(words)
   loading.value = false
 })
 </script>

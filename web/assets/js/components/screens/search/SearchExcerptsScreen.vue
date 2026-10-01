@@ -2,7 +2,7 @@
   <ScreenBase>
     <template #header>
       <ScreenHeader layout="collapsed">
-        <span v-if="q">Searching for {{ q }}</span>
+        <span v-if="q">Results for “{{ q }}”</span>
         <span v-else>Search</span>
       </ScreenHeader>
     </template>
@@ -52,9 +52,12 @@ import AlbumResultsBlock from '@/components/screens/search/AlbumExcerptResultsBl
 
 const searchStore = useSearchStore()
 
-const { url } = useRouter()
+const { url, getRouteParam, onRouteChanged } = useRouter()
 
-const q = ref('')
+/** The words looked for: the URL's `q` (`/search?q=…`), which the search field keeps up to date. */
+const q = ref(getRouteParam('q') || '')
+
+onRouteChanged(route => route.screen === 'Search.Excerpt' && (q.value = getRouteParam('q') || ''))
 
 // Each search kept by its words: typing back to earlier ones shows them at once, and
 // what was found shows while the next is looked for.
@@ -69,7 +72,6 @@ const excerpt = computed(() => data.value ?? { playables: [], albums: [], artist
 
 const discoverUrl = computed(() => `${url('hunt')}?q=${encodeURIComponent(q.value)}`)
 
-eventBus.on('SEARCH_KEYWORDS_CHANGED', keywords => (q.value = keywords))
 eventBus.on('SONGS_DELETED', songs => {
   if (intersectionBy(songs, excerpt.value.playables, 'id').length !== 0) {
     queryClient.invalidateQueries({ queryKey: ['search'] })

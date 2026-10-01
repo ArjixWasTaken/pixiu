@@ -18,9 +18,10 @@ describe('eventBus', () => {
 
   it('passes payload to listeners', () => {
     const callback = vi.fn()
-    eventBus.on('SEARCH_KEYWORDS_CHANGED', callback)
-    eventBus.emit('SEARCH_KEYWORDS_CHANGED', 'test query')
-    expect(callback).toHaveBeenCalledWith('test query')
+    const playlist = { id: 'pl-1' } as Playlist
+    eventBus.on('PLAYLIST_UPDATED', callback)
+    eventBus.emit('PLAYLIST_UPDATED', playlist)
+    expect(callback).toHaveBeenCalledWith(playlist)
   })
 
   it('supports multiple listeners', () => {

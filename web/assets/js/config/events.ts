@@ -6,7 +6,6 @@ export type Events = {
   NEW_VERSION_DEPLOYED: undefined
   TOGGLE_SIDEBAR: undefined
   FOCUS_SEARCH_FIELD: undefined
-  SEARCH_KEYWORDS_CHANGED: string
 
   FULLSCREEN_TOGGLE: undefined
   PLAYBACK_STARTED: Playable
