@@ -51,6 +51,7 @@ describe('editSongForm.vue', () => {
         album_name: 'IV',
         album_cover: 'http://test/album.jpg',
         genre: 'Rock',
+        year: 1971,
       }),
     )
 

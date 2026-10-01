@@ -145,7 +145,7 @@ export class QueuePlaybackService extends BasePlaybackService {
   }
 
   public showNotification(playable: Playable) {
-    if (preferences.show_now_playing_notification) {
+    if (preferences.show_now_playing_notification && window.Notification?.permission === 'granted') {
       try {
         const notification = new window.Notification(`♫ ${playable.title}`, {
           icon: playable.album_cover,

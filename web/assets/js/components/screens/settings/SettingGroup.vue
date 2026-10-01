@@ -28,7 +28,7 @@ import M3Card from '@/components/m3/M3Card.vue'
   display: flex;
   flex-direction: column;
   gap: 16px;
-  padding: 24px;
+  padding: var(--m3-group-padding);
 
   @media (max-width: 768px) {
     padding: 16px;

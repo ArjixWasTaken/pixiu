@@ -47,7 +47,7 @@ defineExpose({ focus: () => input.value?.focus() })
   display: flex;
   align-items: center;
   gap: 16px;
-  height: 56px;
+  height: var(--m3-field-height);
   padding: 0 16px;
   border-radius: 28px;
   background: var(--schemes-surface-container-high);

@@ -4,9 +4,9 @@
       <span>Playing a song plays the rest of its playlist, album, artist or genre</span>
       <M3Switch v-model="preferences.continuous_playback" name="continuous_playback" />
     </label>
-    <label v-if="onMobile" class="pref-row">
+    <label v-if="supportsNotifications" class="pref-row">
       <span>Show a notification when a song starts</span>
-      <M3Switch v-model="preferences.show_now_playing_notification" name="notify" />
+      <M3Switch :model-value="notifying" name="notify" @update:model-value="toggleNotifications" />
     </label>
     <label v-if="!onMobile" class="pref-row">
       <span>Confirm before closing {{ appName }}</span>
@@ -63,7 +63,7 @@
 
 <script lang="ts" setup>
 import isMobile from 'ismobilejs'
-import { computed, toRef } from 'vue'
+import { computed, ref, toRef } from 'vue'
 import { commonStore } from '@/stores/commonStore'
 import { preferenceStore as preferences } from '@/stores/preferenceStore'
 import { useBranding } from '@/composables/useBranding'
@@ -74,6 +74,19 @@ const onMobile = isMobile.any
 const { name: appName } = useBranding()
 
 const showTranscodingOption = toRef(commonStore.state, 'supports_transcoding')
+
+const supportsNotifications = 'Notification' in window
+const permission = ref(supportsNotifications ? Notification.permission : 'denied')
+const notifying = computed(() => preferences.show_now_playing_notification && permission.value === 'granted')
+
+/** Asks for the browser's permission when turned on, and stays off without it. */
+const toggleNotifications = async (enabled: boolean | undefined) => {
+  if (enabled && permission.value !== 'granted') {
+    permission.value = await Notification.requestPermission()
+  }
+
+  preferences.show_now_playing_notification = Boolean(enabled) && permission.value === 'granted'
+}
 
 const crossfadeEnabled = computed(() => preferences.crossfade_duration > 0)
 

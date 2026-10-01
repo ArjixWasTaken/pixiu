@@ -161,7 +161,7 @@ const onPointerUp = () => {
   position: relative;
   display: flex;
   flex-direction: column;
-  width: 360px;
+  width: var(--m3-nav-width);
   flex-shrink: 0;
   min-height: 0;
 }

@@ -57,11 +57,11 @@ const title = computed(() => {
 .song-thumbnail {
   position: relative;
   display: block;
-  width: 56px;
-  height: 56px;
+  width: var(--m3-row-cover);
+  height: var(--m3-row-cover);
   flex-shrink: 0;
   overflow: hidden;
-  border-radius: 8px;
+  border-radius: 6px;
   background-size: cover;
   background-position: center;
 

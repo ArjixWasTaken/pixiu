@@ -63,6 +63,12 @@ const toggleFavorite = () => use(playable.value, p => playableStore.toggleFavori
   height: 56px;
   flex-shrink: 0;
   border-radius: 12px;
+
+  @media (pointer: fine) and (min-width: 769px) {
+    width: 48px;
+    height: 48px;
+    border-radius: 6px;
+  }
   background-size: cover;
   background-position: center;
   cursor: pointer;

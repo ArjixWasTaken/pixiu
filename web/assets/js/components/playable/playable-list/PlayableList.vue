@@ -175,7 +175,7 @@ const onDragOver = useThrottleFn((event: DragEvent) => {
   }
 
   if (acceptsDrop(event)) {
-    const target = (event.target as HTMLElement).closest('.playable-list-item') as HTMLElement | null
+    const target = (event.target as HTMLElement).closest<HTMLElement>('.song-item')
 
     if (!target) {
       return

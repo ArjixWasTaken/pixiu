@@ -44,7 +44,7 @@ withDefaults(
   display: flex;
   align-items: center;
   gap: 12px;
-  min-height: 48px;
+  min-height: var(--m3-menu-item-height);
   padding: 0 12px;
   color: var(--schemes-on-surface);
   cursor: pointer;

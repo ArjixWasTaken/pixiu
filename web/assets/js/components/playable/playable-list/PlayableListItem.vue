@@ -125,10 +125,10 @@ const toggleFavorite = () => playableStore.toggleFavorite(playable.value)
 .song-item {
   display: flex;
   align-items: center;
-  gap: 16px;
-  height: 72px;
-  padding: 8px 8px 8px 16px;
-  border-radius: 16px;
+  gap: var(--m3-gutter);
+  height: var(--m3-row-height);
+  padding: 0 8px 0 var(--m3-gutter);
+  border-radius: 12px;
   color: var(--schemes-on-surface);
   outline: none;
 

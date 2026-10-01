@@ -42,8 +42,8 @@ withDefaults(
   align-items: center;
   justify-content: center;
   gap: 8px;
-  height: 40px;
-  padding: 0 24px;
+  height: var(--m3-button-height);
+  padding: 0 var(--m3-button-pad);
   border-radius: 9999px;
   border: 0;
   cursor: pointer;
@@ -55,11 +55,11 @@ withDefaults(
     background-color 150ms linear;
 
   &.with-icon {
-    padding: 0 24px 0 16px;
+    padding: 0 var(--m3-button-pad) 0 calc(var(--m3-button-pad) - 8px);
   }
 
   &.m {
-    height: 56px;
+    height: var(--m3-button-height-m);
     padding: 0 24px;
   }
 

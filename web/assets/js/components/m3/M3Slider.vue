@@ -50,31 +50,31 @@ const fraction = computed(() => {
   display: flex;
   align-items: center;
   gap: 6px;
-  height: 44px;
+  height: var(--m3-slider-height);
   min-width: 48px;
   flex: 1;
 }
 
 .track {
-  height: 16px;
+  height: var(--m3-slider-track);
   min-width: 0;
 }
 
 .active {
   flex: 0 0 calc((100% - 16px) * var(--fraction));
-  border-radius: 8px 2px 2px 8px;
+  border-radius: calc(var(--m3-slider-track) / 2) 2px 2px calc(var(--m3-slider-track) / 2);
   background: var(--schemes-primary);
 }
 
 .inactive {
   flex: 1;
-  border-radius: 2px 8px 8px 2px;
+  border-radius: 2px calc(var(--m3-slider-track) / 2) calc(var(--m3-slider-track) / 2) 2px;
   background: var(--schemes-secondary-container);
 }
 
 .handle {
   width: 4px;
-  height: 44px;
+  height: var(--m3-slider-height);
   flex-shrink: 0;
   border-radius: 2px;
   background: var(--schemes-primary);

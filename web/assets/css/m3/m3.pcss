@@ -7,6 +7,101 @@
   --m3-elevation-4: 0 2px 3px rgb(0 0 0 / 0.3), 0 6px 10px 4px rgb(0 0 0 / 0.15);
   --m3-elevation-5: 0 4px 4px rgb(0 0 0 / 0.3), 0 8px 12px 6px rgb(0 0 0 / 0.15);
   --m3-ease: cubic-bezier(0.2, 0, 0, 1);
+
+  /*
+   * Sizes. The defaults are M3's touch sizes; a mouse on a wide screen gets
+   * the compact set below. No target drops under 24px (WCAG 2.2 AA).
+   */
+  --m3-icon-size: 24px;
+  --m3-button-height: 40px;
+  --m3-button-height-m: 56px;
+  --m3-button-pad: 24px;
+  --m3-icon-button: 40px;
+  --m3-icon-button-m: 56px;
+  --m3-icon-button-icon: 24px;
+  --m3-field-height: 56px;
+  --m3-field-pad-y: 16px;
+  --m3-tab-height: 48px;
+  --m3-tab-height-icon: 64px;
+  --m3-tab-icon: inline-flex;
+  --m3-list-item-height: 56px;
+  --m3-list-item-height-2: 72px;
+  --m3-list-item-pad-y: 8px;
+  --m3-menu-item-height: 48px;
+  --m3-chip-height: 32px;
+  --m3-segment-height: 40px;
+  --m3-row-height: 72px;
+  --m3-row-cover: 56px;
+  --m3-nav-width: 360px;
+  --m3-nav-item-height: 56px;
+  --m3-player-height: 88px;
+  --m3-slider-height: 44px;
+  --m3-slider-track: 16px;
+  --m3-header-cover: 180px;
+  --m3-group-padding: 24px;
+  --m3-gutter: 24px;
+}
+
+@media (pointer: fine) and (min-width: 769px) {
+  :root {
+    --m3-button-height: 32px;
+    --m3-button-height-m: 40px;
+    --m3-button-pad: 16px;
+    --m3-icon-button: 32px;
+    --m3-icon-button-m: 40px;
+    --m3-icon-button-icon: 20px;
+    --m3-field-height: 40px;
+    --m3-field-pad-y: 10px;
+    --m3-tab-height: 40px;
+    --m3-tab-height-icon: 40px;
+    --m3-tab-icon: none;
+    --m3-list-item-height: 40px;
+    --m3-list-item-height-2: 48px;
+    --m3-list-item-pad-y: 4px;
+    --m3-menu-item-height: 32px;
+    --m3-chip-height: 28px;
+    --m3-segment-height: 32px;
+    --m3-row-height: 48px;
+    --m3-row-cover: 40px;
+    --m3-nav-width: 240px;
+    --m3-nav-item-height: 36px;
+    --m3-player-height: 64px;
+    --m3-slider-height: 24px;
+    --m3-slider-track: 6px;
+    --m3-header-cover: 128px;
+    --m3-group-padding: 16px;
+    --m3-gutter: 16px;
+
+    /* The type scale drops a step. */
+    --static-display-large-size: 45;
+    --static-display-large-line-height: 52;
+    --static-display-medium-size: 36;
+    --static-display-medium-line-height: 44;
+    --static-display-small-size: 32;
+    --static-display-small-line-height: 40;
+    --static-headline-large-size: 28;
+    --static-headline-large-line-height: 36;
+    --static-headline-medium-size: 24;
+    --static-headline-medium-line-height: 32;
+    --static-headline-small-size: 20;
+    --static-headline-small-line-height: 28;
+    --static-title-large-size: 18;
+    --static-title-large-line-height: 24;
+    --static-title-medium-size: 14;
+    --static-title-medium-line-height: 20;
+    --static-title-small-size: 13;
+    --static-title-small-line-height: 18;
+    --static-body-large-size: 14;
+    --static-body-large-line-height: 20;
+    --static-body-medium-size: 13;
+    --static-body-medium-line-height: 18;
+  }
+}
+
+/* Durations and counts line up. */
+time,
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
 }
 
 .material-symbols-outlined {

@@ -118,7 +118,7 @@ watch(value, revealSelected)
   flex: 1 0 auto;
   display: flex;
   justify-content: center;
-  height: 48px;
+  height: var(--m3-tab-height);
   padding: 0 16px;
   border: 0;
   background: transparent;
@@ -126,7 +126,7 @@ watch(value, revealSelected)
   cursor: pointer;
 
   &.with-icon {
-    height: 64px;
+    height: var(--m3-tab-height-icon);
   }
 
   &.active {
@@ -140,6 +140,10 @@ watch(value, revealSelected)
   align-items: center;
   gap: 8px;
   height: 100%;
+}
+
+.inner .m3-icon {
+  display: var(--m3-tab-icon);
 }
 
 .with-icon .inner {

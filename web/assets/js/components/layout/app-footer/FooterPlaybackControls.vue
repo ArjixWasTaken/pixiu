@@ -42,4 +42,17 @@ const playNext = () => playback().playNext()
   align-items: center;
   gap: 8px;
 }
+
+/* On a desktop the seek bar sits beside the buttons, keeping the bar one row tall. */
+@media (pointer: fine) and (min-width: 769px) {
+  .playback-controls {
+    flex-direction: row;
+    justify-content: center;
+    gap: 16px;
+  }
+
+  .buttons {
+    gap: 4px;
+  }
+}
 </style>

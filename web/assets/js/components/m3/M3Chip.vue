@@ -28,7 +28,7 @@ withDefaults(defineProps<{ variant?: 'assist' | 'filter'; icon?: string; selecte
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  height: 32px;
+  height: var(--m3-chip-height);
   padding: 0 16px;
   border-radius: 8px;
   border: 1px solid var(--schemes-outline-variant);

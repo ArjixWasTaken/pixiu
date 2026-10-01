@@ -2,7 +2,7 @@ import { reactive, ref } from 'vue'
 
 export const defaultPreferences: UserPreferences = {
   volume: 7,
-  show_now_playing_notification: true,
+  show_now_playing_notification: false,
   repeat_mode: 'NO_REPEAT',
   confirm_before_closing: false,
   equalizer: {

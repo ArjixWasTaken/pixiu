@@ -197,7 +197,7 @@ footer {
 
   &:not(.mobile) {
     margin: 12px;
-    min-height: 88px;
+    min-height: var(--m3-player-height);
     border-radius: 28px;
     background: var(--schemes-surface-container-high);
   }
@@ -210,8 +210,12 @@ footer {
     display: flex;
     align-items: center;
     gap: 16px;
-    min-height: 88px;
+    min-height: var(--m3-player-height);
     padding: 12px 16px;
+
+    @media (pointer: fine) and (min-width: 769px) {
+      padding: 8px 12px;
+    }
   }
 
   .fullscreen-backdrop {
