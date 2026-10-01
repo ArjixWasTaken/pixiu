@@ -10,12 +10,12 @@ FROM node:26-slim AS web
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
-    && npm install --global pnpm@11.26.0
+    && npm install --global @nubjs/nub@0.9.5
 WORKDIR /web
 COPY web/package.json web/pnpm-lock.yaml web/pnpm-workspace.yaml ./
-RUN pnpm install --frozen-lockfile
+RUN nub ci
 COPY web/ ./
-RUN pnpm build
+RUN nub run build
 
 # ---- tools -------------------------------------------------------------------
 FROM rust:1.98.1-alpine3.24 AS chef
