@@ -1,18 +1,23 @@
 import { describe, expect, it } from 'vite-plus/test'
 import { createHarness } from '@/__tests__/TestHarness'
-import { recentlyPlayedStore } from '@/stores/recentlyPlayedStore'
-
+import { library } from '@/services/library'
+import { useRecentlyPlayedStore } from '@/stores/recentlyPlayedStore'
 describe('recentlyPlayedStore', () => {
   const h = createHarness()
 
   it('fetches when attempting to add a new song and the state is empty', async () => {
-    recentlyPlayedStore.state.playables = []
+    useRecentlyPlayedStore().state.playables = []
     const songs = h.factory('song').make(3)
-    const fetchMock = h.mock(recentlyPlayedStore, 'fetch').mockResolvedValue(songs)
+    const fetchMock = h.mock(library, 'recentlyPlayed').mockResolvedValue(songs)
+    const added = h.factory('song').make()
 
-    await recentlyPlayedStore.add(h.factory('song').make())
+    await useRecentlyPlayedStore().add(added)
 
     expect(fetchMock).toHaveBeenCalled()
+    expect(useRecentlyPlayedStore().state.playables.map(({ id }) => id)).toEqual([
+      added.id,
+      ...songs.map(({ id }) => id),
+    ])
   })
 
   it('adds a song to the state', async () => {
@@ -21,13 +26,13 @@ describe('recentlyPlayedStore', () => {
     const exceptSongs = songs.slice(0, 6)
 
     // We don't want to keep the reference to the original songs
-    recentlyPlayedStore.state.playables = JSON.parse(JSON.stringify(songs))
-    recentlyPlayedStore.excerptState.playables = JSON.parse(JSON.stringify(exceptSongs))
+    useRecentlyPlayedStore().state.playables = JSON.parse(JSON.stringify(songs))
+    useRecentlyPlayedStore().excerptState.playables = JSON.parse(JSON.stringify(exceptSongs))
 
-    await recentlyPlayedStore.add(newSong)
+    await useRecentlyPlayedStore().add(newSong)
 
-    expect(recentlyPlayedStore.state.playables).toEqual([newSong, ...songs])
-    expect(recentlyPlayedStore.excerptState.playables).toEqual([newSong, ...songs.slice(0, 5)])
+    expect(useRecentlyPlayedStore().state.playables).toEqual([newSong, ...songs])
+    expect(useRecentlyPlayedStore().excerptState.playables).toEqual([newSong, ...songs.slice(0, 5)])
   })
 
   it('deduplicates when adding a song to the state', async () => {
@@ -36,12 +41,12 @@ describe('recentlyPlayedStore', () => {
     const exceptSongs = songs.slice(0, 6)
 
     // We don't want to keep the reference to the original songs
-    recentlyPlayedStore.state.playables = JSON.parse(JSON.stringify(songs))
-    recentlyPlayedStore.excerptState.playables = JSON.parse(JSON.stringify(exceptSongs))
+    useRecentlyPlayedStore().state.playables = JSON.parse(JSON.stringify(songs))
+    useRecentlyPlayedStore().excerptState.playables = JSON.parse(JSON.stringify(exceptSongs))
 
-    await recentlyPlayedStore.add(newSong)
+    await useRecentlyPlayedStore().add(newSong)
 
-    expect(recentlyPlayedStore.state.playables).toEqual([newSong, songs[0], ...songs.slice(2)])
-    expect(recentlyPlayedStore.excerptState.playables).toEqual([newSong, songs[0], ...songs.slice(2, 6)])
+    expect(useRecentlyPlayedStore().state.playables).toEqual([newSong, songs[0], ...songs.slice(2)])
+    expect(useRecentlyPlayedStore().excerptState.playables).toEqual([newSong, songs[0], ...songs.slice(2, 6)])
   })
 })

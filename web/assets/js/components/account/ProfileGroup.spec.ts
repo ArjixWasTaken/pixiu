@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vite-plus/test'
 import { screen } from '@testing-library/vue'
 import { createHarness } from '@/__tests__/TestHarness'
-import { userStore } from '@/stores/userStore'
+import { useUserStore } from '@/stores/userStore'
 import { accountService } from '@/services/accountService'
 import type { Account } from '@/services/accountService'
 import Component from './ProfileGroup.vue'
@@ -52,7 +52,7 @@ describe('profileGroup.vue', () => {
     await h.user.click(screen.getByRole('button', { name: 'Save' }))
 
     expect(update).toHaveBeenCalledWith({ username: 'alice', email: 'alice@example.com', display_name: 'Alice A.' })
-    await vi.waitFor(() => expect(userStore.current?.name).toBe('Alice A.'))
-    expect(userStore.current?.username).toBe('alice')
+    await vi.waitFor(() => expect(useUserStore().current?.name).toBe('Alice A.'))
+    expect(useUserStore().current?.username).toBe('alice')
   })
 })

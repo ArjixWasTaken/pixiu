@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vite-plus/test'
 import { screen } from '@testing-library/vue'
 import { createHarness } from '@/__tests__/TestHarness'
-import { playlistStore } from '@/stores/playlistStore'
+import { usePlaylistStore } from '@/stores/playlistStore'
 import Component from './CreatePlaylistForm.vue'
 
 describe('createPlaylistForm.vue', () => {
@@ -27,7 +27,7 @@ describe('createPlaylistForm.vue', () => {
 
   it('creates playlist with no playables', async () => {
     const { folder } = renderComponent(undefined, [])
-    const storeMock = h.mock(playlistStore, 'store').mockResolvedValue(h.factory('playlist').make())
+    const storeMock = h.mock(usePlaylistStore(), 'store').mockResolvedValue(h.factory('playlist').make())
     expect(screen.queryByTestId('from-playables')).toBeNull()
 
     await h.type(screen.getByRole('textbox', { name: 'Name' }), 'My playlist')
@@ -47,7 +47,7 @@ describe('createPlaylistForm.vue', () => {
   })
 
   it('creates playlist with playables', async () => {
-    const storeMock = h.mock(playlistStore, 'store').mockResolvedValue(h.factory('playlist').make())
+    const storeMock = h.mock(usePlaylistStore(), 'store').mockResolvedValue(h.factory('playlist').make())
     const { folder, playables } = renderComponent()
 
     screen.getByText(`from ${playables.length} songs`)

@@ -1,15 +1,15 @@
 import { describe, expect, it } from 'vite-plus/test'
 import { screen, waitFor } from '@testing-library/vue'
 import { createHarness } from '@/__tests__/TestHarness'
-import { playlistFolderStore } from '@/stores/playlistFolderStore'
-import { playlistStore } from '@/stores/playlistStore'
+import { usePlaylistFolderStore } from '@/stores/playlistFolderStore'
+import { usePlaylistStore } from '@/stores/playlistStore'
 import Component from './CreateSmartPlaylistForm.vue'
 
 describe('createSmartPlaylistForm', () => {
   const h = createHarness()
 
   const renderComponent = (folder?: PlaylistFolder | null) => {
-    playlistFolderStore.state.folders = h.factory('playlist-folder').make(2)
+    usePlaylistFolderStore().state.folders = h.factory('playlist-folder').make(2)
 
     return h.render(Component, {
       props: {
@@ -38,7 +38,7 @@ describe('createSmartPlaylistForm', () => {
 
   it('saves the details and rules', async () => {
     const playlist = h.factory('playlist').make()
-    const storeMock = h.mock(playlistStore, 'store').mockResolvedValue(playlist)
+    const storeMock = h.mock(usePlaylistStore(), 'store').mockResolvedValue(playlist)
     renderComponent()
 
     await h.type(screen.getByRole('textbox', { name: 'Name' }), 'Rock Playlist')
@@ -57,7 +57,7 @@ describe('createSmartPlaylistForm', () => {
   })
 
   it('shows a rule left blank instead of saving', async () => {
-    const storeMock = h.mock(playlistStore, 'store')
+    const storeMock = h.mock(usePlaylistStore(), 'store')
     renderComponent()
 
     await h.type(screen.getByRole('textbox', { name: 'Name' }), 'Rock Playlist')
@@ -69,7 +69,7 @@ describe('createSmartPlaylistForm', () => {
 
   it('saves without rules once they are removed', async () => {
     const playlist = h.factory('playlist').make()
-    const storeMock = h.mock(playlistStore, 'store').mockResolvedValue(playlist)
+    const storeMock = h.mock(usePlaylistStore(), 'store').mockResolvedValue(playlist)
     renderComponent()
 
     await h.type(screen.getByRole('textbox', { name: 'Name' }), 'Empty for now')
@@ -82,7 +82,7 @@ describe('createSmartPlaylistForm', () => {
 
   it('pre-selects folder when folder prop is provided', () => {
     const folder = h.factory('playlist-folder').make()
-    playlistFolderStore.state.folders = [folder]
+    usePlaylistFolderStore().state.folders = [folder]
 
     h.render(Component, {
       props: { folder },

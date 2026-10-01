@@ -1,32 +1,38 @@
 <template>
-  <dialog
-    ref="dialog"
-    class="modal-wrapper m-auto min-w-full md:min-w-[480px] border-0 p-0 overflow-visible"
-    @cancel.prevent="onEscape"
-    @close.prevent
-    @keydown.esc.prevent="onEscape"
-  >
-    <component :is="options.component" v-if="options.component" v-bind="props" @close="close" />
-  </dialog>
+  <DialogRoot :open @update:open="value => value || close()">
+    <DialogPortal>
+      <DialogOverlay class="modal-scrim" />
+      <DialogContent
+        :aria-describedby="undefined"
+        class="modal-wrapper"
+        @escape-key-down="dismiss"
+        @open-auto-focus="shown"
+        @pointer-down-outside="dismiss"
+      >
+        <DialogTitle as="span" class="sr-only">{{ title }}</DialogTitle>
+        <component :is="options.component" v-if="options.component" v-bind="options.props" @close="close" />
+      </DialogContent>
+    </DialogPortal>
+  </DialogRoot>
 </template>
 
 <script lang="ts" setup>
-import { computed, ref, watch } from 'vue'
+import { DialogContent, DialogOverlay, DialogPortal, DialogRoot, DialogTitle } from 'reka-ui'
+import { useMutationObserver } from '@vueuse/core'
+import { computed, ref, shallowRef, watch } from 'vue'
 import { requireInjection } from '@/utils/helpers'
 import { ModalKey } from '@/config/symbols'
 
-const dialog = ref<HTMLDialogElement>()
+/**
+ * The one modal dialog, showing what `useModal` opened. Reka UI runs it: focus
+ * stays inside while it's open and goes back where it was after.
+ */
 const options = requireInjection(ModalKey)
 
-const toggleCssClass = (...classes: string[]) => classes.forEach(c => dialog.value?.classList.toggle(c))
-
-const props = computed(() => ({
-  ...(options.value.props || {}),
-  toggleCssClass:
-    options.value.props && 'toggleCssClass' in options.value.props
-      ? options.value.props.toggleCssClass
-      : toggleCssClass,
-}))
+const open = computed(() => Boolean(options.value.component))
+/** The dialog's element, once shown (Reka UI tells it so: as the target of its focus on opening). */
+const content = shallowRef<HTMLElement | null>(null)
+const shown = (event: Event) => (content.value = event.target instanceof HTMLElement ? event.target : null)
 
 const close = () => {
   options.value = {
@@ -35,26 +41,42 @@ const close = () => {
 }
 
 /**
- * Escape closes what only shows something (song info, the equalizer). Forms
- * answer it themselves, asking before unsaved changes are lost.
+ * Escape, or a press outside, closes what only shows something (song info,
+ * the equalizer). Forms answer Escape themselves, asking before unsaved
+ * changes are lost.
  */
-const onEscape = (event: Event) => {
-  const target = event.target instanceof Element ? event.target : null
-  if (target?.closest('form') || dialog.value?.querySelector('form')) {
-    return
+const dismiss = (event: Event) => {
+  if (content.value?.querySelector('form')) {
+    event.preventDefault()
   }
-  close()
 }
 
-watch(
-  () => options.value.component,
-  component => (component ? dialog.value?.showModal() : dialog.value?.close()),
-)
+/** The dialog is named after its heading, once the component in it (often loaded on demand) shows one. */
+const title = ref('')
+
+const nameByHeading = () => (title.value = content.value?.querySelector('h1')?.textContent?.trim() ?? '')
+
+watch(content, nameByHeading)
+watch(open, isOpen => isOpen || (content.value = null))
+useMutationObserver(content, nameByHeading, { childList: true, subtree: true, characterData: true })
 </script>
 
 <style lang="postcss" scoped>
+.modal-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: color-mix(in srgb, var(--schemes-scrim) 32%, transparent);
+}
+
 /* koel's forms (header, main, footer) inside an M3 dialog. */
 .modal-wrapper {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 1000;
+  transform: translate(-50%, -50%);
+  min-width: 480px;
   max-width: min(640px, calc(100vw - 48px));
   max-height: calc(100dvh - 48px);
   border-radius: 28px;
@@ -62,11 +84,8 @@ watch(
   color: var(--schemes-on-surface-variant);
   box-shadow: var(--m3-elevation-3);
 
-  &::backdrop {
-    background: color-mix(in srgb, var(--schemes-scrim) 32%, transparent);
-  }
-
   @media (max-width: 768px) {
+    min-width: 100vw;
     max-width: 100vw;
     max-height: 100dvh;
     border-radius: 0;
@@ -78,7 +97,8 @@ watch(
     outline: none !important;
   }
 
-  :deep(> *) {
+  /* The component shown; not its hidden title. */
+  :deep(> :not(.sr-only)) {
     position: relative;
 
     > header,

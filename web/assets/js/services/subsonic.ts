@@ -20,6 +20,10 @@ export class SubsonicError extends Error {
   }
 }
 
+/** Whether what was asked for doesn't exist: Subsonic's error 70, or an HTTP 404 from the JSON API. */
+export const isNotFound = (error: unknown) =>
+  (error instanceof SubsonicError && error.code === 70) || (error as { status?: number } | null)?.status === 404
+
 /** The URL of a Subsonic method, credentials included (for `<audio>`, `<img>`). */
 const url = (method: string, params: Params = {}) => {
   const target = new URL(`${window.KOEL.base_url}rest/${method}`, window.location.origin)

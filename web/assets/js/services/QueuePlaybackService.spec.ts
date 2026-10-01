@@ -7,10 +7,10 @@ vi.mock('lodash-es', async importOriginal => {
   const mod = await importOriginal<typeof lodash>()
   return { ...mod, shuffle: vi.fn(mod.shuffle) }
 })
-import { preferenceStore as preferences } from '@/stores/preferenceStore'
-import { queueStore } from '@/stores/queueStore'
-import { playableStore } from '@/stores/playableStore'
-import { recentlyPlayedStore } from '@/stores/recentlyPlayedStore'
+import { usePreferenceStore } from '@/stores/preferenceStore'
+import { useQueueStore } from '@/stores/queueStore'
+import { usePlayableStore } from '@/stores/playableStore'
+import { useRecentlyPlayedStore } from '@/stores/recentlyPlayedStore'
 import { logger } from '@/utils/logger'
 import { playbackService } from '@/services/QueuePlaybackService'
 import { useBranding } from '@/composables/useBranding'
@@ -18,7 +18,7 @@ import { useBranding } from '@/composables/useBranding'
 describe('playbackService', () => {
   const h = createHarness({
     beforeEach: () => {
-      playableStore.vault.clear()
+      usePlayableStore().vault.clear()
       h.createAudioPlayer()
       playbackService.activate(document.querySelector<HTMLMediaElement>('#audio-player')!)
     },
@@ -26,9 +26,9 @@ describe('playbackService', () => {
 
   const setCurrentSong = (song?: Playable) => {
     const playbackState = song?.playback_state ?? 'Playing'
-    const [synced] = playableStore.syncWithVault(song || h.factory('song').make())
+    const [synced] = usePlayableStore().syncWithVault(song || h.factory('song').make())
     synced.playback_state = playbackState
-    queueStore.state.playables = reactive([synced])
+    useQueueStore().state.playables = reactive([synced])
     return synced
   }
 
@@ -60,7 +60,7 @@ describe('playbackService', () => {
       h.setReadOnlyProperty(mediaElement, 'duration', duration)
 
       const registerPlayMock = h.mock(playbackService, 'registerPlay')
-      const saveMock = h.mock(queueStore, 'savePlaybackStatus')
+      const saveMock = h.mock(useQueueStore(), 'savePlaybackStatus')
 
       mediaElement.dispatchEvent(new Event('timeupdate'))
 
@@ -92,7 +92,7 @@ describe('playbackService', () => {
       const restartMock = h.mock(playbackService, 'restart')
       const playNextMock = h.mock(playbackService, 'playNext')
 
-      preferences.temporary.repeat_mode = repeatMode
+      usePreferenceStore().repeat_mode = repeatMode
 
       playbackService.media.dispatchEvent(new Event('ended'))
 
@@ -110,7 +110,7 @@ describe('playbackService', () => {
     (preloaded, currentTime, duration, numberOfCalls) => {
       setCurrentSong()
       h.mock(playbackService, 'registerPlay')
-      h.setReadOnlyProperty(queueStore, 'next', h.factory('song').make({ preloaded }))
+      h.setReadOnlyProperty(useQueueStore(), 'next', h.factory('song').make({ preloaded }))
 
       const mediaElement = playbackService.media
 
@@ -118,7 +118,7 @@ describe('playbackService', () => {
       h.setReadOnlyProperty(mediaElement, 'duration', duration)
 
       const preloadMock = h.mock(playbackService, 'preload')
-      h.mock(queueStore, 'savePlaybackStatus')
+      h.mock(useQueueStore(), 'savePlaybackStatus')
 
       mediaElement.dispatchEvent(new Event('timeupdate'))
 
@@ -127,8 +127,8 @@ describe('playbackService', () => {
   )
 
   it('registers play', () => {
-    const recentlyPlayedStoreAddMock = h.mock(recentlyPlayedStore, 'add')
-    const registerPlayMock = h.mock(playableStore, 'registerPlay')
+    const recentlyPlayedStoreAddMock = h.mock(useRecentlyPlayedStore(), 'add')
+    const registerPlayMock = h.mock(usePlayableStore(), 'registerPlay')
     const song = h.factory('song').make()
 
     playbackService.registerPlay(song)
@@ -145,7 +145,7 @@ describe('playbackService', () => {
     }
 
     const createElementMock = h.mock(document, 'createElement', audioElement)
-    h.mock(playableStore, 'getSourceUrl').mockReturnValue('/foo?token=o5afd')
+    h.mock(usePlayableStore(), 'getSourceUrl').mockReturnValue('/foo?token=o5afd')
     const song = h.factory('song').make()
 
     playbackService.preload(song)
@@ -162,10 +162,10 @@ describe('playbackService', () => {
     ['REPEAT_ALL', 'REPEAT_ONE'],
     ['REPEAT_ONE', 'NO_REPEAT'],
   ])('it switches from repeat mode %s to repeat mode %s', (fromMode, toMode) => {
-    preferences.temporary.repeat_mode = fromMode
+    usePreferenceStore().repeat_mode = fromMode
     playbackService.rotateRepeatMode()
 
-    expect(preferences.repeat_mode).toEqual(toMode)
+    expect(usePreferenceStore().repeat_mode).toEqual(toMode)
   })
 
   it('restarts playable if playPrev is triggered after 5 seconds', async () => {
@@ -182,7 +182,7 @@ describe('playbackService', () => {
     const stopMock = h.mock(playbackService, 'stop')
     h.setReadOnlyProperty(playbackService.media, 'currentTime', 4)
     h.setReadOnlyProperty(playbackService, 'previous', undefined)
-    preferences.temporary.repeat_mode = 'NO_REPEAT'
+    usePreferenceStore().repeat_mode = 'NO_REPEAT'
 
     await playbackService.playPrev()
 
@@ -202,7 +202,7 @@ describe('playbackService', () => {
 
   it('stops if playNext is triggered when there is no next playable and repeat mode is NO_REPEAT', async () => {
     h.setReadOnlyProperty(playbackService, 'next', undefined)
-    preferences.temporary.repeat_mode = 'NO_REPEAT'
+    usePreferenceStore().repeat_mode = 'NO_REPEAT'
     const stopMock = h.mock(playbackService, 'stop')
 
     await playbackService.playNext()
@@ -254,14 +254,14 @@ describe('playbackService', () => {
 
     await playbackService.resume()
 
-    expect(queueStore.current?.playback_state).toEqual('Playing')
+    expect(useQueueStore().current?.playback_state).toEqual('Playing')
     expect(playMock).toHaveBeenCalled()
     expect(document.title).toEqual('Some song ♫ Koel')
   })
 
   it('plays first in queue if toggled when there is no current playable', async () => {
-    queueStore.state.playables = []
-    playableStore.vault.clear()
+    useQueueStore().state.playables = []
+    usePlayableStore().vault.clear()
     const playFirstInQueueMock = h.mock(playbackService, 'playFirstInQueue')
 
     await playbackService.toggle()
@@ -282,10 +282,10 @@ describe('playbackService', () => {
 
   it('queues and plays songs without shuffling', async () => {
     const songs = h.factory('song').make(5)
-    const replaceQueueMock = h.mock(queueStore, 'replaceQueueWith')
+    const replaceQueueMock = h.mock(useQueueStore(), 'replaceQueueWith')
     const playMock = h.mock(playbackService, 'play')
     const firstSongInQueue = songs[0]
-    h.setReadOnlyProperty(queueStore, 'first', firstSongInQueue)
+    h.setReadOnlyProperty(useQueueStore(), 'first', firstSongInQueue)
 
     playbackService.queueAndPlay(songs)
     await nextTick()
@@ -298,10 +298,10 @@ describe('playbackService', () => {
   it('queues and plays songs with shuffling', async () => {
     const songs = h.factory('song').make(5)
     const shuffledSongs = h.factory('song').make(5)
-    const replaceQueueMock = h.mock(queueStore, 'replaceQueueWith')
+    const replaceQueueMock = h.mock(useQueueStore(), 'replaceQueueWith')
     const playMock = h.mock(playbackService, 'play')
     const firstSongInQueue = songs[0]
-    h.setReadOnlyProperty(queueStore, 'first', firstSongInQueue)
+    h.setReadOnlyProperty(useQueueStore(), 'first', firstSongInQueue)
     vi.mocked(lodash.shuffle).mockReturnValue(shuffledSongs)
 
     playbackService.queueAndPlay(songs, true)
@@ -314,8 +314,8 @@ describe('playbackService', () => {
 
   it('plays first playable in queue', async () => {
     const songs = h.factory('song').make(5)
-    queueStore.state.playables = songs
-    h.setReadOnlyProperty(queueStore, 'first', songs[0])
+    useQueueStore().state.playables = songs
+    h.setReadOnlyProperty(useQueueStore(), 'first', songs[0])
     const playMock = h.mock(playbackService, 'play')
 
     await playbackService.playFirstInQueue()
@@ -328,7 +328,7 @@ describe('playbackService', () => {
     ['the branding cover', null],
   ])('sets the media session artwork to %s', (_, albumCover) => {
     const song = h.factory('song').make({ album_cover: albumCover! })
-    preferences.temporary.show_now_playing_notification = false
+    usePreferenceStore().show_now_playing_notification = false
 
     playbackService.showNotification(song)
 

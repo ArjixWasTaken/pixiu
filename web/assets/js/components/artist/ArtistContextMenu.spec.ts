@@ -6,10 +6,9 @@ import factory from '@/__tests__/factory'
 import { ContextMenuKey } from '@/config/symbols'
 import { downloadService } from '@/services/downloadService'
 import { playbackService } from '@/services/QueuePlaybackService'
-import { artistStore } from '@/stores/artistStore'
-import { commonStore } from '@/stores/commonStore'
-import { playableStore } from '@/stores/playableStore'
-
+import { useArtistStore } from '@/stores/artistStore'
+import { useCommonStore } from '@/stores/commonStore'
+import { usePlayableStore } from '@/stores/playableStore'
 const openModalMock = vi.fn()
 
 vi.mock('@/composables/useModal', () => ({
@@ -34,7 +33,7 @@ describe('artistContextMenu.vue', () => {
         permissions: { edit: true },
       })
 
-    const rendered = h.render(Component, {
+    const rendered = h.renderMenu(Component, {
       props: {
         artist,
       },
@@ -50,7 +49,7 @@ describe('artistContextMenu.vue', () => {
     h.createAudioPlayer()
 
     const songs = h.factory('song').make(10)
-    const fetchMock = h.mock(playableStore, 'fetchSongsForArtist').mockResolvedValue(songs)
+    const fetchMock = h.mock(usePlayableStore(), 'fetchSongsForArtist').mockResolvedValue(songs)
     const playMock = h.mock(playbackService, 'queueAndPlay')
 
     const { artist } = await renderComponent()
@@ -65,7 +64,7 @@ describe('artistContextMenu.vue', () => {
     h.createAudioPlayer()
 
     const songs = h.factory('song').make(10)
-    const fetchMock = h.mock(playableStore, 'fetchSongsForArtist').mockResolvedValue(songs)
+    const fetchMock = h.mock(usePlayableStore(), 'fetchSongsForArtist').mockResolvedValue(songs)
     const playMock = h.mock(playbackService, 'queueAndPlay')
 
     const { artist } = await renderComponent()
@@ -86,7 +85,7 @@ describe('artistContextMenu.vue', () => {
   })
 
   it('does not have an option to download if downloading is disabled', async () => {
-    commonStore.state.allows_download = false
+    useCommonStore().state.allows_download = false
     await renderComponent()
 
     expect(screen.queryByText('Download')).toBeNull()
@@ -104,7 +103,7 @@ describe('artistContextMenu.vue', () => {
   })
 
   it('links to MusicBrainz', async () => {
-    commonStore.state.uses_musicbrainz = true
+    useCommonStore().state.uses_musicbrainz = true
     const openMock = h.mock(window, 'open')
     const { artist } = await renderComponent(h.factory('artist').make())
 
@@ -114,25 +113,25 @@ describe('artistContextMenu.vue', () => {
   })
 
   it('does not link to MusicBrainz when MusicBrainz is disabled', async () => {
-    commonStore.state.uses_musicbrainz = false
+    useCommonStore().state.uses_musicbrainz = false
     await renderComponent()
 
     expect(screen.queryByText('View on MusicBrainz')).toBeNull()
   })
 
   it('does not link to MusicBrainz when the artist has no identifier', async () => {
-    commonStore.state.uses_musicbrainz = true
+    useCommonStore().state.uses_musicbrainz = true
     await renderComponent(h.factory('artist').make({ mbid: null }))
 
     expect(screen.queryByText('View on MusicBrainz')).toBeNull()
   })
 
   it('closes the menu after rating', async () => {
-    h.mock(artistStore, 'rate')
+    h.mock(useArtistStore(), 'rate')
     const menu = shallowRef<any>({ component: Component, position: { top: 0, left: 0 } })
     const artist = h.factory('artist').make({ rating: 0 })
 
-    h.render(Component, {
+    h.renderMenu(Component, {
       props: { artist },
       global: { provide: { [ContextMenuKey as symbol]: menu } },
     })

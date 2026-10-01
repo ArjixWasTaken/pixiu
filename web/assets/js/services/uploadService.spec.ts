@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vite-plus/test'
 import { createHarness } from '@/__tests__/TestHarness'
-import { albumStore } from '@/stores/albumStore'
-import { commonStore } from '@/stores/commonStore'
-import { playableStore } from '@/stores/playableStore'
+import { useAlbumStore } from '@/stores/albumStore'
+import { useCommonStore } from '@/stores/commonStore'
+import { usePlayableStore } from '@/stores/playableStore'
 import type { UploadFile } from '@/services/uploadService'
 import { uploadService } from '@/services/uploadService'
 
@@ -37,7 +37,7 @@ describe('uploadService', () => {
       uploadService.state.files = []
       uploadService.abortHandles.clear()
       uploadService.parallelUploadLimit = 5
-      commonStore.state.supports_presigned_uploads = false
+      useCommonStore().state.supports_presigned_uploads = false
       postWithProgressMock.mockClear()
       putToStorageMock.mockClear()
       postJsonMock.mockReset()
@@ -264,7 +264,7 @@ describe('uploadService', () => {
   })
 
   it('sends the file straight to storage when the server presigns uploads', async () => {
-    commonStore.state.supports_presigned_uploads = true
+    useCommonStore().state.supports_presigned_uploads = true
 
     const presigned = {
       key: '1__abc__song.mp3',
@@ -386,7 +386,7 @@ describe('uploadService', () => {
   })
 
   it('aborts a presigned upload while it is still being presigned', async () => {
-    commonStore.state.supports_presigned_uploads = true
+    useCommonStore().state.supports_presigned_uploads = true
 
     const abortMock = vi.fn()
     postJsonMock.mockReturnValue({
@@ -505,9 +505,9 @@ describe('uploadService', () => {
   it('invalidates album and artist song caches when handling an upload result', () => {
     const song = h.factory('song').make()
     const album = h.factory('album').make()
-    const invalidateMock = h.mock(playableStore, 'invalidateAlbumAndArtistSongCaches')
-    h.mock(playableStore, 'syncWithVault')
-    h.mock(albumStore, 'syncWithVault')
+    const invalidateMock = h.mock(usePlayableStore(), 'invalidateAlbumAndArtistSongCaches')
+    h.mock(usePlayableStore(), 'syncWithVault')
+    h.mock(useAlbumStore(), 'syncWithVault')
 
     uploadService.handleUploadResult({ song, album })
 

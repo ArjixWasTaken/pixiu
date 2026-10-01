@@ -1,4 +1,5 @@
-import { reactive } from 'vue'
+import { defineStore } from 'pinia'
+import { computed, reactive } from 'vue'
 import { differenceBy } from 'lodash-es'
 import { http } from '@/services/http'
 import { useVault } from '@/composables/useVault'
@@ -13,44 +14,47 @@ export interface UpdateUserData extends UserFormData {
   password?: string
 }
 
-export const userStore = {
-  ...useVault<User>(),
+export const useUserStore = defineStore('user', () => {
+  const { vault, byId, syncWithVault } = useVault<User>()
 
-  state: reactive({
+  const state = reactive({
     users: [] as User[],
     current: null! as CurrentUser,
-  }),
+  })
 
-  init(currentUser: CurrentUser) {
-    this.state.users = this.syncWithVault(currentUser)
-    this.state.current = this.state.users[0] as CurrentUser
-  },
+  const current = computed(() => state.current as CurrentUser)
 
-  async fetch() {
-    this.state.users = this.syncWithVault(await http.get<User[]>('users'))
-  },
+  const init = (currentUser: CurrentUser) => {
+    state.users = syncWithVault(currentUser)
+    state.current = state.users[0] as CurrentUser
+  }
 
-  get current() {
-    return this.state.current as CurrentUser
-  },
+  const fetch = async () => {
+    state.users = syncWithVault(await http.get<User[]>('users'))
+  }
 
-  async store(data: CreateUserData) {
+  const add = (user: MaybeArray<User>) => {
+    state.users.push(...syncWithVault(user))
+  }
+
+  const store = async (data: CreateUserData) => {
     const user = await http.post<User>('users', data)
-    this.add(user)
-    return this.byId(user.id)
-  },
+    add(user)
+    return byId(user.id)
+  }
 
-  add(user: MaybeArray<User>) {
-    this.state.users.push(...this.syncWithVault(user))
-  },
+  const update = async (user: User, data: UpdateUserData) => {
+    syncWithVault(await http.put<User>(`users/${user.id}`, data))
+  }
 
-  async update(user: User, data: UpdateUserData) {
-    this.syncWithVault(await http.put<User>(`users/${user.id}`, data))
-  },
+  const remove = (user: User) => {
+    state.users = differenceBy(state.users, [user], 'id')
+    vault.delete(user.id)
+  }
 
-  async destroy(user: User) {
+  const destroy = async (user: User) => {
     await http.delete(`users/${user.id}`)
-    this.remove(user)
+    remove(user)
 
     // Mama, just killed a man
     // Put a gun against his head
@@ -70,16 +74,27 @@ export const userStore = {
     // Mama, oooh
     // I don't want to die
     // I sometimes wish I'd never been born at all
-  },
+  }
 
-  remove(user: User) {
-    this.state.users = differenceBy(this.state.users, [user], 'id')
-    this.vault.delete(user.id)
-  },
-
-  async regenerateSubsonicApiKey() {
+  const regenerateSubsonicApiKey = async () => {
     const updated = await http.post<CurrentUser>('me/subsonic-api-key/regenerate')
-    this.state.current.subsonic_api_key = updated.subsonic_api_key
+    state.current.subsonic_api_key = updated.subsonic_api_key
     return updated.subsonic_api_key
-  },
-}
+  }
+
+  return {
+    state,
+    vault,
+    current,
+    byId,
+    syncWithVault,
+    init,
+    fetch,
+    add,
+    store,
+    update,
+    remove,
+    destroy,
+    regenerateSubsonicApiKey,
+  }
+})

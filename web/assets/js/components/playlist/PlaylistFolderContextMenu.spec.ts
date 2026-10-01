@@ -3,10 +3,10 @@ import { screen, waitFor } from '@testing-library/vue'
 import { createHarness } from '@/__tests__/TestHarness'
 import { assertOpenModal } from '@/__tests__/assertions'
 import { DialogBoxStub, MessageToasterStub } from '@/__tests__/stubs'
-import { playableStore } from '@/stores/playableStore'
+import { usePlayableStore } from '@/stores/playableStore'
 import { playbackService } from '@/services/QueuePlaybackService'
 import Router from '@/router'
-import { playlistFolderStore } from '@/stores/playlistFolderStore'
+import { usePlaylistFolderStore } from '@/stores/playlistFolderStore'
 import EditPlaylistFolderForm from '@/components/playlist/EditPlaylistFolderForm.vue'
 import CreatePlaylistFolderForm from '@/components/playlist/CreatePlaylistFolderForm.vue'
 
@@ -28,7 +28,7 @@ describe('playlistFolderContextMenu.vue', () => {
   const renderComponent = async (folder?: PlaylistFolder) => {
     folder = folder || h.factory('playlist-folder').make()
 
-    const rendered = h.render(Component, {
+    const rendered = h.renderMenu(Component, {
       props: {
         folder,
       },
@@ -43,7 +43,7 @@ describe('playlistFolderContextMenu.vue', () => {
   const createPlayableFolder = () => {
     const folder = h.factory('playlist-folder').make()
     const playlists = h.factory('playlist').make({ folder_id: folder.id }, 3)
-    h.mock(playlistFolderStore, 'playlistsInTree', playlists)
+    h.mock(usePlaylistFolderStore(), 'playlistsInTree', playlists)
 
     return { folder, playlists }
   }
@@ -58,7 +58,7 @@ describe('playlistFolderContextMenu.vue', () => {
 
   it('deletes', async () => {
     const confirmMock = h.mock(DialogBoxStub.value, 'confirm', true)
-    const deleteMock = h.mock(playlistFolderStore, 'delete')
+    const deleteMock = h.mock(usePlaylistFolderStore(), 'delete')
     const { folder } = await renderComponent()
 
     await h.user.click(screen.getByText('Delete'))
@@ -72,6 +72,7 @@ describe('playlistFolderContextMenu.vue', () => {
   it('creates a child folder', async () => {
     const { folder } = await renderComponent()
 
+    await h.user.click(screen.getByText('Add'))
     await h.user.click(screen.getByText('New folder…'))
 
     await assertOpenModal(openModalMock, CreatePlaylistFolderForm, { parent: folder })
@@ -81,7 +82,7 @@ describe('playlistFolderContextMenu.vue', () => {
     h.createAudioPlayer()
 
     const songs = h.factory('song').make(3)
-    const fetchMock = h.mock(playableStore, 'fetchForPlaylists').mockResolvedValue(songs)
+    const fetchMock = h.mock(usePlayableStore(), 'fetchForPlaylists').mockResolvedValue(songs)
     const queueMock = h.mock(playbackService, 'queueAndPlay')
     const goMock = h.mock(Router, 'go')
     const { folder, playlists } = createPlayableFolder()
@@ -92,14 +93,14 @@ describe('playlistFolderContextMenu.vue', () => {
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(playlists)
       expect(queueMock).toHaveBeenCalledWith(songs)
-      expect(goMock).toHaveBeenCalledWith('/#/queue')
+      expect(goMock).toHaveBeenCalledWith('/queue')
     })
   })
 
   it('warns if attempting to play with no songs in folder', async () => {
     h.createAudioPlayer()
 
-    const fetchMock = h.mock(playableStore, 'fetchForPlaylists').mockResolvedValue([])
+    const fetchMock = h.mock(usePlayableStore(), 'fetchForPlaylists').mockResolvedValue([])
     const queueMock = h.mock(playbackService, 'queueAndPlay')
     const goMock = h.mock(Router, 'go')
     const warnMock = h.mock(MessageToasterStub.value, 'warning')
@@ -121,7 +122,7 @@ describe('playlistFolderContextMenu.vue', () => {
     h.createAudioPlayer()
 
     const songs = h.factory('song').make(3)
-    const fetchMock = h.mock(playableStore, 'fetchForPlaylists').mockResolvedValue(songs)
+    const fetchMock = h.mock(usePlayableStore(), 'fetchForPlaylists').mockResolvedValue(songs)
     const queueMock = h.mock(playbackService, 'queueAndPlay')
     const goMock = h.mock(Router, 'go')
 
@@ -133,7 +134,7 @@ describe('playlistFolderContextMenu.vue', () => {
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(playlists)
       expect(queueMock).toHaveBeenCalledWith(songs, true)
-      expect(goMock).toHaveBeenCalledWith('/#/queue')
+      expect(goMock).toHaveBeenCalledWith('/queue')
     })
   })
 
@@ -147,7 +148,7 @@ describe('playlistFolderContextMenu.vue', () => {
   it('warns if attempting to shuffle with no songs in folder', async () => {
     h.createAudioPlayer()
 
-    const fetchMock = h.mock(playableStore, 'fetchForPlaylists').mockResolvedValue([])
+    const fetchMock = h.mock(usePlayableStore(), 'fetchForPlaylists').mockResolvedValue([])
     const queueMock = h.mock(playbackService, 'queueAndPlay')
     const goMock = h.mock(Router, 'go')
     const warnMock = h.mock(MessageToasterStub.value, 'warning')

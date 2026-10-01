@@ -1,7 +1,7 @@
 import { screen, waitFor } from '@testing-library/vue'
 import { describe, expect, it } from 'vite-plus/test'
 import { createHarness } from '@/__tests__/TestHarness'
-import { playlistFolderStore } from '@/stores/playlistFolderStore'
+import { usePlaylistFolderStore } from '@/stores/playlistFolderStore'
 import Component from './EditPlaylistFolderForm.vue'
 
 describe('editPlaylistFolderForm.vue', () => {
@@ -10,8 +10,8 @@ describe('editPlaylistFolderForm.vue', () => {
   it('updates the name and parent together', async () => {
     const folder = h.factory('playlist-folder').make({ name: 'My folder', parent_id: null })
     const parent = h.factory('playlist-folder').make({ name: 'Parent folder', parent_id: null })
-    playlistFolderStore.init([folder, parent])
-    const updateMock = h.mock(playlistFolderStore, 'update')
+    usePlaylistFolderStore().init([folder, parent])
+    const updateMock = h.mock(usePlaylistFolderStore(), 'update')
     h.render(Component, {
       props: {
         folder,
@@ -36,7 +36,7 @@ describe('editPlaylistFolderForm.vue', () => {
     const descendant = h.factory('playlist-folder').make({ name: '2026', parent_id: folder.id })
     const otherRoot = h.factory('playlist-folder').make({ name: 'Collections', parent_id: null })
     const validNestedParent = h.factory('playlist-folder').make({ name: 'Favorites', parent_id: otherRoot.id })
-    playlistFolderStore.init([root, folder, descendant, otherRoot, validNestedParent])
+    usePlaylistFolderStore().init([root, folder, descendant, otherRoot, validNestedParent])
 
     h.render(Component, {
       props: {

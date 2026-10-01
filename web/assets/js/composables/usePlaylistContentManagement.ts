@@ -1,4 +1,4 @@
-import { playlistStore } from '@/stores/playlistStore'
+import { usePlaylistStore } from '@/stores/playlistStore'
 import { eventBus } from '@/utils/eventBus'
 import { useErrorHandler } from '@/composables/useErrorHandler'
 import { useMessageToaster } from '@/composables/useMessageToaster'
@@ -15,7 +15,7 @@ export const usePlaylistContentManagement = () => {
     }
 
     try {
-      await playlistStore.addContent(playlist, playables)
+      await usePlaylistStore().addContent(playlist, playables)
       eventBus.emit('PLAYLIST_UPDATED', playlist)
       toastSuccess(`${inflect(playables)} added into "${playlist.name}."`)
     } catch (error: unknown) {
@@ -29,8 +29,8 @@ export const usePlaylistContentManagement = () => {
     }
 
     try {
-      await playlistStore.removeContent(playlist, playables)
-      eventBus.emit('PLAYLIST_CONTENT_REMOVED', playlist, playables)
+      await usePlaylistStore().removeContent(playlist, playables)
+      eventBus.emit('PLAYLIST_CONTENT_REMOVED', { playlist, playables })
       toastSuccess(`${inflect(playables)} removed from "${playlist.name}."`)
     } catch (error: unknown) {
       handleHttpError(error)

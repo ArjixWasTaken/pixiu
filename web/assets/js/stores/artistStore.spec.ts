@@ -1,75 +1,75 @@
 import { describe, expect, it } from 'vite-plus/test'
 import { createHarness } from '@/__tests__/TestHarness'
+import { queryClient } from '@/services/queryClient'
 import factory from '@/__tests__/factory'
 import { http } from '@/services/http'
-import { playableStore } from '@/stores/playableStore'
-import { artistStore } from '@/stores/artistStore'
+import { usePlayableStore } from '@/stores/playableStore'
+import { useArtistStore } from '@/stores/artistStore'
 
 describe('artistStore', () => {
-  const h = createHarness({
-    beforeEach: () => {
-      artistStore.vault.clear()
-      artistStore.state.artists = []
-    },
-  })
+  const h = createHarness()
 
   it('gets an artist by ID', () => {
     const artist = h.factory('artist').make()
-    artistStore.vault.set(artist.id, artist)
-    expect(artistStore.byId(artist.id)).toEqual(artist)
+    useArtistStore().vault.set(artist.id, artist)
+    expect(useArtistStore().byId(artist.id)).toEqual(artist)
   })
 
   it('removes artists by IDs', () => {
     const artists = h.factory('artist').make(3)
-    artists.forEach(artist => artistStore.vault.set(artist.id, artist))
-    artistStore.state.artists = artists
+    artists.forEach(artist => useArtistStore().vault.set(artist.id, artist))
+    // A list of them, as a screen keeps it.
+    queryClient.setQueryData(['artists', { sort: 'name' }], {
+      pages: [{ items: artists, nextCursor: null }],
+      pageParams: [''],
+    })
 
-    artistStore.removeByIds([artists[0].id, artists[1].id])
+    useArtistStore().removeByIds([artists[0].id, artists[1].id])
 
-    expect(artistStore.vault.size).toBe(1)
-    expect(artistStore.vault.has(artists[0].id)).toBe(false)
-    expect(artistStore.vault.has(artists[1].id)).toBe(false)
-    expect(artistStore.state.artists).toEqual([artists[2]])
+    expect(useArtistStore().vault.size).toBe(1)
+    expect(useArtistStore().vault.has(artists[0].id)).toBe(false)
+    expect(useArtistStore().vault.has(artists[1].id)).toBe(false)
+    expect(queryClient.getQueryData<any>(['artists', { sort: 'name' }]).pages[0].items).toEqual([artists[2]])
   })
 
   it('identifies an unknown artist', () => {
     const artist = factory('artist').state('unknown').make()
 
-    expect(artistStore.isUnknown(artist)).toBe(true)
-    expect(artistStore.isUnknown(artist.name)).toBe(true)
-    expect(artistStore.isUnknown(h.factory('artist').make())).toBe(false)
+    expect(useArtistStore().isUnknown(artist)).toBe(true)
+    expect(useArtistStore().isUnknown(artist.name)).toBe(true)
+    expect(useArtistStore().isUnknown(h.factory('artist').make())).toBe(false)
   })
 
   it('identifies the various artist', () => {
     const artist = factory('artist').state('various').make()
 
-    expect(artistStore.isVarious(artist)).toBe(true)
-    expect(artistStore.isVarious(artist.name)).toBe(true)
-    expect(artistStore.isVarious(h.factory('artist').make())).toBe(false)
+    expect(useArtistStore().isVarious(artist)).toBe(true)
+    expect(useArtistStore().isVarious(artist.name)).toBe(true)
+    expect(useArtistStore().isVarious(h.factory('artist').make())).toBe(false)
   })
 
   it('identifies a standard artist', () => {
-    expect(artistStore.isStandard(factory('artist').state('unknown').make())).toBe(false)
-    expect(artistStore.isStandard(factory('artist').state('various').make())).toBe(false)
-    expect(artistStore.isStandard(h.factory('artist').make())).toBe(true)
+    expect(useArtistStore().isStandard(factory('artist').state('unknown').make())).toBe(false)
+    expect(useArtistStore().isStandard(factory('artist').state('various').make())).toBe(false)
+    expect(useArtistStore().isStandard(h.factory('artist').make())).toBe(true)
   })
 
   it('syncs artists with the vault', () => {
     const artist = h.factory('artist').make({ name: 'Led Zeppelin' })
 
-    artistStore.syncWithVault(artist)
-    expect(artistStore.vault.get(artist.id)).toEqual(artist)
+    useArtistStore().syncWithVault(artist)
+    expect(useArtistStore().vault.get(artist.id)).toEqual(artist)
 
     artist.name = 'Pink Floyd'
-    artistStore.syncWithVault(artist)
+    useArtistStore().syncWithVault(artist)
 
-    expect(artistStore.vault.size).toBe(1)
-    expect(artistStore.vault.get(artist.id)?.name).toBe('Pink Floyd')
+    expect(useArtistStore().vault.size).toBe(1)
+    expect(useArtistStore().vault.get(artist.id)?.name).toBe('Pink Floyd')
   })
 
   it('updates artist', async () => {
     const artist = h.factory('artist').make({ name: 'Led Zeppelin' })
-    artistStore.syncWithVault(artist)
+    useArtistStore().syncWithVault(artist)
 
     const updatedArtist = {
       ...artist,
@@ -83,9 +83,9 @@ describe('artistStore', () => {
     }
 
     const putMock = h.mock(http, 'put').mockResolvedValue(updatedArtist)
-    const syncPropsMock = h.mock(playableStore, 'syncArtistProperties')
+    const syncPropsMock = h.mock(usePlayableStore(), 'syncArtistProperties')
 
-    await artistStore.update(artist, updateData)
+    await useArtistStore().update(artist, updateData)
 
     expect(putMock).toHaveBeenCalledWith(`artists/${artist.id}`, updateData)
     expect(syncPropsMock).toHaveBeenCalledWith(updatedArtist)

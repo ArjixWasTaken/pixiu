@@ -1,29 +1,14 @@
 import { describe, expect, it } from 'vite-plus/test'
-import { reactive } from 'vue'
 import { createHarness } from '@/__tests__/TestHarness'
-import type { ExcerptState } from '@/stores/searchStore'
-import { searchStore } from '@/stores/searchStore'
+import { useSearchStore } from '@/stores/searchStore'
 
 describe('searchStore', () => {
-  const h = createHarness({
-    beforeEach: () => {
-      searchStore.state = reactive<{
-        excerpt: ExcerptState
-        playables: Playable[]
-      }>({
-        excerpt: {
-          playables: [],
-          albums: [],
-          artists: [],
-        },
-        playables: [],
-      })
-    },
-  })
+  // Each spec has stores of its own, fresh.
+  const h = createHarness()
 
   it('resets the song result state', () => {
-    searchStore.state.playables = h.factory('song').make(3)
-    searchStore.resetPlayableResultState()
-    expect(searchStore.state.playables).toEqual([])
+    useSearchStore().state.playables = h.factory('song').make(3)
+    useSearchStore().resetPlayableResultState()
+    expect(useSearchStore().state.playables).toEqual([])
   })
 })

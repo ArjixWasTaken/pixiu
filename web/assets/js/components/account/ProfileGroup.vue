@@ -39,7 +39,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { accountService } from '@/services/accountService'
 import type { Account } from '@/services/accountService'
-import { userStore } from '@/stores/userStore'
+import { useUserStore } from '@/stores/userStore'
 import { useForm } from '@/composables/useForm'
 import { useMessageToaster } from '@/composables/useMessageToaster'
 import { useErrorHandler } from '@/composables/useErrorHandler'
@@ -47,6 +47,8 @@ import { useErrorHandler } from '@/composables/useErrorHandler'
 import M3Button from '@/components/m3/M3Button.vue'
 import M3TextField from '@/components/m3/M3TextField.vue'
 import SettingGroup from '@/components/screens/settings/SettingGroup.vue'
+
+const userStore = useUserStore()
 
 const { toastSuccess } = useMessageToaster()
 const { handleHttpError } = useErrorHandler('dialog')

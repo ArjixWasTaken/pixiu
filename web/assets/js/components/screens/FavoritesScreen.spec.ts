@@ -1,7 +1,7 @@
 import { screen, waitFor } from '@testing-library/vue'
 import { describe, expect, it } from 'vite-plus/test'
 import { createHarness } from '@/__tests__/TestHarness'
-import { playableStore } from '@/stores/playableStore'
+import { usePlayableStore } from '@/stores/playableStore'
 import Component from './FavoritesScreen.vue'
 
 describe('favoritesScreen.vue', () => {
@@ -9,12 +9,12 @@ describe('favoritesScreen.vue', () => {
 
   const renderComponent = async (favorites?: Playable[]) => {
     favorites = favorites ?? h.factory('song').make(13)
-    playableStore.state.favorites = favorites
+    usePlayableStore().state.favorites = favorites
 
-    const fetchMock = h.mock(playableStore, 'fetchFavorites').mockResolvedValue(favorites)
+    const fetchMock = h.mock(usePlayableStore(), 'fetchFavorites').mockResolvedValue(favorites)
 
     h.render(Component)
-    h.visit('/favorites')
+    await h.visit('/favorites')
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalled())
   }

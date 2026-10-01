@@ -2,7 +2,7 @@ import { ref } from 'vue'
 import { screen } from '@testing-library/vue'
 import { describe, expect, it } from 'vite-plus/test'
 import { createHarness } from '@/__tests__/TestHarness'
-import { playableStore } from '@/stores/playableStore'
+import { usePlayableStore } from '@/stores/playableStore'
 import { playbackService } from '@/services/QueuePlaybackService'
 import { PlayablesKey } from '@/config/symbols'
 import Component from './AlbumTrackListItem.vue'
@@ -19,7 +19,7 @@ describe('albumTrackListItem.vue', () => {
       length: 280,
     })
 
-    const matchMock = h.mock(playableStore, 'matchSongsByTitle', matchedSong)
+    const matchMock = h.mock(usePlayableStore(), 'matchSongsByTitle', matchedSong)
 
     const rendered = h.render(Component, {
       props: {

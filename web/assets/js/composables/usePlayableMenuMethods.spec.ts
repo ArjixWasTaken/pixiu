@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vite-plus/test'
 import { ref } from 'vue'
-import { queueStore } from '@/stores/queueStore'
-import { playableStore } from '@/stores/playableStore'
+import { useQueueStore } from '@/stores/queueStore'
+import { usePlayableStore } from '@/stores/playableStore'
 import { createHarness } from '@/__tests__/TestHarness'
 import { assertOpenModal } from '@/__tests__/assertions'
 import CreatePlaylistForm from '@/components/playlist/CreatePlaylistForm.vue'
@@ -32,13 +32,13 @@ describe('usePlayableMenuMethods', () => {
     const playables = ref<Playable[]>(songs)
     const close = vi.fn()
 
-    h.mock(queueStore, 'queue')
+    h.mock(useQueueStore(), 'queue')
 
     const { queueToBottom } = usePlayableMenuMethods(playables, close)
     await queueToBottom()
 
     expect(close).toHaveBeenCalled()
-    expect(queueStore.queue).toHaveBeenCalledWith(songs)
+    expect(useQueueStore().queue).toHaveBeenCalledWith(songs)
   })
 
   it('queues to top', async () => {
@@ -46,12 +46,12 @@ describe('usePlayableMenuMethods', () => {
     const playables = ref<Playable[]>(songs)
     const close = vi.fn()
 
-    h.mock(queueStore, 'queueToTop')
+    h.mock(useQueueStore(), 'queueToTop')
 
     const { queueToTop } = usePlayableMenuMethods(playables, close)
     await queueToTop()
 
-    expect(queueStore.queueToTop).toHaveBeenCalledWith(songs)
+    expect(useQueueStore().queueToTop).toHaveBeenCalledWith(songs)
   })
 
   it('adds to favorites', async () => {
@@ -59,12 +59,12 @@ describe('usePlayableMenuMethods', () => {
     const playables = ref<Playable[]>(songs)
     const close = vi.fn()
 
-    h.mock(playableStore, 'favorite')
+    h.mock(usePlayableStore(), 'favorite')
 
     const { addToFavorites } = usePlayableMenuMethods(playables, close)
     await addToFavorites()
 
-    expect(playableStore.favorite).toHaveBeenCalledWith(songs)
+    expect(usePlayableStore().favorite).toHaveBeenCalledWith(songs)
   })
 
   it('opens new playlist modal', async () => {

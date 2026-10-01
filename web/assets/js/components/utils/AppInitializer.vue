@@ -7,10 +7,13 @@ import { onMounted } from 'vue'
 import { useAuthorization } from '@/composables/useAuthorization'
 import { useErrorHandler } from '@/composables/useErrorHandler'
 import { useOverlay } from '@/composables/useOverlay'
-import { commonStore } from '@/stores/commonStore'
-import { preferenceStore as preferences } from '@/stores/preferenceStore'
+import { useCommonStore } from '@/stores/commonStore'
+import { usePreferenceStore } from '@/stores/preferenceStore'
 import { shouldWarnUponWindowUnload as shouldWarnAboutOfflineCaching } from '@/composables/useOfflinePlayback'
 import { useUpload } from '@/composables/useUpload'
+
+const commonStore = useCommonStore()
+const preferences = usePreferenceStore()
 
 const emits = defineEmits<{
   (e: 'success'): void

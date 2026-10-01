@@ -1,15 +1,18 @@
+import { defineStore } from 'pinia'
 import { http } from '@/services/http'
 
-export const genreStore = {
-  fetchAll: async () => await http.get<Genre[]>('genres'),
+export const useGenreStore = defineStore('genre', () => {
+  const fetchAll = async () => await http.get<Genre[]>('genres')
 
-  async fetchOne(id: Genre['id']) {
-    const genre = (await this.fetchAll()).find(genre => genre.id === id)
+  const fetchOne = async (id: Genre['id']) => {
+    const genre = (await fetchAll()).find(genre => genre.id === id)
 
     if (!genre) {
       throw new Error(`No genre ${id}`)
     }
 
     return genre
-  },
-}
+  }
+
+  return { fetchAll, fetchOne }
+})

@@ -22,11 +22,13 @@
 
 <script lang="ts" setup>
 import type { Component } from 'vue'
-import { computed, defineAsyncComponent, ref } from 'vue'
+import { useQuery } from '@tanstack/vue-query'
+import { computed, defineAsyncComponent, watch } from 'vue'
 import { eventBus } from '@/utils/eventBus'
-import { commonStore } from '@/stores/commonStore'
-import { overviewStore } from '@/stores/overviewStore'
-import { preferenceStore } from '@/stores/preferenceStore'
+import { queryClient } from '@/services/queryClient'
+import { useCommonStore } from '@/stores/commonStore'
+import { useOverviewStore } from '@/stores/overviewStore'
+import { usePreferenceStore } from '@/stores/preferenceStore'
 import { useRouter } from '@/composables/useRouter'
 import { useModal } from '@/composables/useModal'
 import { useErrorHandler } from '@/composables/useErrorHandler'
@@ -49,6 +51,10 @@ import BtnScrollToTop from '@/components/ui/BtnScrollToTop.vue'
 import ScreenBase from '@/components/screens/ScreenBase.vue'
 import EmptyLibraryHint from '@/components/ui/EmptyLibraryHint.vue'
 import M3Icon from '@/components/m3/M3Icon.vue'
+
+const commonStore = useCommonStore()
+const overviewStore = useOverviewStore()
+const preferenceStore = usePreferenceStore()
 
 const ReorderBlocksModal = defineAsyncComponent(() => import('@/components/screens/home/ReorderBlocksModal.vue'))
 
@@ -77,9 +83,6 @@ const { openModal } = useModal()
 
 const libraryEmpty = computed(() => commonStore.state.song_length === 0)
 
-const loading = ref(false)
-let initialized = false
-
 // Sort `blocks` so they appear in the order saved in the preference. Blocks
 // whose id isn't in the saved list fall to the end (Infinity), keeping their
 // canonical relative order via Array.sort's stability.
@@ -103,24 +106,32 @@ const openReorderModal = () =>
     blocks: orderedBlocks.value.map(({ id, label }) => ({ id, label })),
   })
 
-eventBus
-  .on('SONGS_DELETED', () => overviewStore.fetch())
-  .on('SONGS_UPDATED', () => overviewStore.fetch())
-  .on('SONG_UPLOADED', () => overviewStore.fetch())
+const { handleHttpError } = useErrorHandler('dialog')
 
-useRouter().onScreenActivated('Home', async () => {
-  if (!initialized) {
-    loading.value = true
-    try {
-      await overviewStore.fetch()
-      initialized = true
-    } catch (error: unknown) {
-      useErrorHandler('dialog').handleHttpError(error)
-    } finally {
-      loading.value = false
-    }
-  }
+// What Home shows lives in the overview store; the query says when to fetch it again:
+// when it's stale, and when songs change.
+const {
+  isPending: loading,
+  isStale,
+  error,
+  refetch,
+} = useQuery({
+  queryKey: ['overview'],
+  queryFn: async () => {
+    await overviewStore.fetch()
+    return overviewStore.state
+  },
 })
+watch(error, error => error && handleHttpError(error))
+
+const refresh = () => queryClient.invalidateQueries({ queryKey: ['overview'] })
+
+eventBus.on('SONGS_DELETED', refresh)
+eventBus.on('SONGS_UPDATED', refresh)
+eventBus.on('SONG_UPLOADED', refresh)
+
+// Home stays alive between visits: a visit after it went stale fetches it again.
+useRouter().onScreenActivated('Home', () => isStale.value && refetch())
 </script>
 
 <style lang="postcss" scoped>

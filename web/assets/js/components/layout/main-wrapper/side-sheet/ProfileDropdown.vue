@@ -1,5 +1,5 @@
 <template>
-  <M3MenuPopover v-model:open="open" :placement class="flex items-center" menu-class="profile-menu">
+  <M3MenuPopover v-model:open="open" :placement class="flex items-center" :min-width="220">
     <template #anchor>
       <button
         v-if="withName"
@@ -7,7 +7,6 @@
         class="account-row m3-state m3-label-large"
         data-testid="profile-dropdown-trigger"
         type="button"
-        @click="open = !open"
       >
         <M3Avatar v-if="currentUser" :name="currentUser.name" :size :src="currentUser.avatar" />
         <span class="flex-1 min-w-0 truncate text-left">{{ currentUser?.name }}</span>
@@ -20,7 +19,6 @@
         class="rounded-full cursor-pointer overflow-hidden block"
         data-testid="profile-dropdown-trigger"
         type="button"
-        @click="open = !open"
       >
         <M3Avatar v-if="currentUser" :name="currentUser.name" :size :src="currentUser.avatar" />
       </button>
@@ -46,8 +44,6 @@ import { useNewVersionNotification } from '@/composables/useNewVersionNotificati
 import { useBranding } from '@/composables/useBranding'
 import { useModal } from '@/composables/useModal'
 import { defineAsyncComponent } from '@/utils/helpers'
-import { Filter } from '@/config/hooks'
-import { applyFilters } from '@/hooks'
 
 import M3Avatar from '@/components/m3/M3Avatar.vue'
 import M3Divider from '@/components/m3/M3Divider.vue'
@@ -88,18 +84,16 @@ const close = () => (open.value = false)
 
 const openAbout = () => openModal<'ABOUT_KOEL'>(AboutKoelModal)
 
-const items = computed(() =>
-  applyFilters<ContextMenuAction[]>(Filter.PROFILE_MENU_ITEMS, [
-    { id: 'account', label: () => 'Account', action: () => go(`${url('settings')}#account`) },
-    { id: 'profile', label: () => 'Preferences', action: () => go(`${url('settings')}#preferences`) },
-    { id: 'logout', label: () => 'Log out', action: () => eventBus.emit('LOG_OUT') },
-    {
-      id: 'about',
-      label: () => (shouldNotifyNewVersion.value ? 'New version available!' : `About ${appName}`),
-      action: openAbout,
-    },
-  ]),
-)
+const items = computed<ContextMenuAction[]>(() => [
+  { id: 'account', label: () => 'Account', action: () => go(`${url('settings')}#account`) },
+  { id: 'profile', label: () => 'Preferences', action: () => go(`${url('settings')}#preferences`) },
+  { id: 'logout', label: () => 'Log out', action: () => eventBus.emit('LOG_OUT') },
+  {
+    id: 'about',
+    label: () => (shouldNotifyNewVersion.value ? 'New version available!' : `About ${appName}`),
+    action: openAbout,
+  },
+])
 
 const choose = (item: ContextMenuAction) => {
   close()
@@ -108,10 +102,6 @@ const choose = (item: ContextMenuAction) => {
 </script>
 
 <style scoped>
-:deep(.profile-menu) {
-  min-width: 220px;
-}
-
 .who {
   padding: 8px 16px;
   max-width: 280px;

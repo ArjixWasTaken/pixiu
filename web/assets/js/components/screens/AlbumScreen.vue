@@ -30,29 +30,33 @@
       </ScreenHeader>
     </template>
 
-    <ScreenTabs v-if="album" class="screen-bleed" :class="loading && 'pointer-events-none'">
-      <template #header>
-        <nav>
-          <ul>
-            <li :class="activeTab === 'songs' && 'active'">
-              <a href="#songs" @click.prevent="activeTab = 'songs'">Songs</a>
-            </li>
-            <li :class="activeTab === 'other-albums' && 'active'">
-              <a href="#other-albums" @click.prevent="activeTab = 'other-albums'">Other albums</a>
-            </li>
-            <li v-if="useEncyclopedia" :class="activeTab === 'information' && 'active'">
-              <a href="#information" @click.prevent="activeTab = 'information'">Information</a>
-            </li>
-          </ul>
-        </nav>
-      </template>
-
-      <div v-show="activeTab === 'songs'" class="songs-pane">
+    <ScreenTabs
+      v-if="album"
+      v-model="activeTab"
+      :class="loading && 'pointer-events-none'"
+      :tabs
+      class="screen-bleed"
+      id-prefix="album"
+    >
+      <div
+        v-show="activeTab === 'songs'"
+        id="album-panel-songs"
+        aria-labelledby="album-tab-songs"
+        class="songs-pane"
+        role="tabpanel"
+      >
         <SongListSkeleton v-if="loading" role="status" aria-busy="true" aria-label="Loading" />
         <SongList v-if="!loading && album" ref="songList" @sort="onSort" @press:enter="onPressEnter" @swipe="onSwipe" />
       </div>
 
-      <div v-show="activeTab === 'other-albums'" class="albums-pane" data-testid="albums-pane">
+      <div
+        v-show="activeTab === 'other-albums'"
+        id="album-panel-other-albums"
+        aria-labelledby="album-tab-other-albums"
+        class="albums-pane"
+        data-testid="albums-pane"
+        role="tabpanel"
+      >
         <template v-if="otherAlbums">
           <GridListView v-if="otherAlbums.length" class="scroll-mask-y">
             <AlbumCard v-for="otherAlbum in otherAlbums" :key="otherAlbum.id" :album="otherAlbum" />
@@ -66,7 +70,14 @@
         </GridListView>
       </div>
 
-      <div v-if="useEncyclopedia && album" v-show="activeTab === 'information'" class="info-pane">
+      <div
+        v-if="useEncyclopedia && album"
+        v-show="activeTab === 'information'"
+        id="album-panel-information"
+        aria-labelledby="album-tab-information"
+        class="info-pane"
+        role="tabpanel"
+      >
         <AlbumInfo :album mode="full" />
         <AlbumMusicBrainz :album class="mt-10" />
       </div>
@@ -78,17 +89,18 @@
 import { computed, defineAsyncComponent, ref, watch } from 'vue'
 import { eventBus } from '@/utils/eventBus'
 import { pluralize } from '@/utils/formatters'
-import { albumStore } from '@/stores/albumStore'
-import { artistStore } from '@/stores/artistStore'
-import { playableStore } from '@/stores/playableStore'
+import { useAlbumStore } from '@/stores/albumStore'
+import { useArtistStore } from '@/stores/artistStore'
+import { usePlayableStore } from '@/stores/playableStore'
 import { useErrorHandler } from '@/composables/useErrorHandler'
 import { usePlayableList } from '@/composables/usePlayableList'
 import { usePlayableListControls } from '@/composables/usePlayableListControls'
-import { useLocalStorage } from '@/composables/useLocalStorage'
+import { useUserStorage } from '@/composables/useUserStorage'
 import { useRouter } from '@/composables/useRouter'
 import { useThirdPartyServices } from '@/composables/useThirdPartyServices'
 import { useContextMenu } from '@/composables/useContextMenu'
-import { moveTabToHash, useHashTab } from '@/composables/useHash'
+import { useHashTab } from '@/composables/useHash'
+import { isNotFound } from '@/services/subsonic'
 
 import M3IconButton from '@/components/m3/M3IconButton.vue'
 import ScreenHeader from '@/components/ui/ScreenHeader.vue'
@@ -96,8 +108,13 @@ import AlbumThumbnail from '@/components/ui/album-artist/AlbumOrArtistThumbnail.
 import ScreenHeaderSkeleton from '@/components/ui/ScreenHeaderSkeleton.vue'
 import SongListSkeleton from '@/components/playable/playable-list/PlayableListSkeleton.vue'
 import ScreenTabs from '@/components/ui/ArtistAlbumScreenTabs.vue'
+import type { M3Tab } from '@/components/m3/M3Tabs.vue'
 import ScreenBase from '@/components/screens/ScreenBase.vue'
 import GridListView from '@/components/ui/GridListView.vue'
+
+const albumStore = useAlbumStore()
+const artistStore = useArtistStore()
+const playableStore = usePlayableStore()
 
 const validTabs = ['songs', 'other-albums', 'information'] as const
 type Tab = (typeof validTabs)[number]
@@ -111,7 +128,8 @@ const FavoriteButton = defineAsyncComponent(() => import('@/components/ui/Favori
 
 const { getRouteParam, go, onScreenActivated, onRouteChanged, url, triggerNotFound } = useRouter()
 const { PlayableListControls: SongListControls, config } = usePlayableListControls('Album')
-const { get: lsGet, set: lsSet } = useLocalStorage()
+const sortField = useUserStorage<MaybeArray<PlayableListSortField>>('album-sort-field', 'track')
+const sortOrder = useUserStorage<SortOrder>('album-sort-order', 'asc')
 const { useMusicBrainz } = useThirdPartyServices()
 const { openContextMenu } = useContextMenu()
 
@@ -138,6 +156,12 @@ const {
 
 const useEncyclopedia = useMusicBrainz
 
+const tabs = computed<M3Tab[]>(() => [
+  { id: 'songs', label: 'Songs' },
+  { id: 'other-albums', label: 'Other albums' },
+  ...(useEncyclopedia.value ? [{ id: 'information', label: 'Information' }] : []),
+])
+
 const isStandardArtist = computed(() => {
   if (!album.value) {
     return true
@@ -154,14 +178,6 @@ const fetchScreenData = async () => {
   }
 
   const id = getRouteParam('id')
-
-  // Links from before the tab lived in the hash: `/albums/al-1/other-albums`.
-  const legacyTab = getRouteParam<Tab>('tab')
-
-  if (legacyTab && validTabs.includes(legacyTab)) {
-    moveTabToHash(legacyTab)
-    activeTab.value = legacyTab
-  }
 
   album.value = undefined
   info.value = undefined
@@ -180,11 +196,9 @@ const fetchScreenData = async () => {
 
     context.entity = album.value
 
-    const restoredField = lsGet<PlayableListSortField>('album-sort-field', 'track')!
-    const restoredOrder = lsGet<SortOrder>('album-sort-order', 'asc')!
-    sort(restoredField, restoredOrder)
+    sort(sortField.value, sortOrder.value)
   } catch (error: unknown) {
-    if ((error as any)?.status === 404) {
+    if (isNotFound(error)) {
       triggerNotFound()
       return
     }
@@ -218,8 +232,8 @@ const fetchOtherAlbums = async () => {
 watch([activeTab, album], ([tab]) => tab === 'other-albums' && fetchOtherAlbums())
 
 const onSort = (field: MaybeArray<PlayableListSortField>, order: SortOrder) => {
-  lsSet('album-sort-field', field)
-  lsSet('album-sort-order', order)
+  sortField.value = field
+  sortOrder.value = order
 }
 
 onScreenActivated('Album', () => fetchScreenData())

@@ -2,8 +2,7 @@ import { describe, expect, it } from 'vite-plus/test'
 import { createHarness } from '@/__tests__/TestHarness'
 import { downloadService } from './downloadService'
 import { zipDownloadService } from '@/services/zipDownloadService'
-import { playableStore } from '@/stores/playableStore'
-
+import { usePlayableStore } from '@/stores/playableStore'
 describe('downloadService', () => {
   const h = createHarness()
 
@@ -22,7 +21,7 @@ describe('downloadService', () => {
     const zipMock = h.mock(zipDownloadService, 'start')
     const artist = h.factory('artist').make()
     const songs = h.factory('song').make(3)
-    h.mock(playableStore, 'fetchSongsForArtist').mockResolvedValue(songs)
+    h.mock(usePlayableStore(), 'fetchSongsForArtist').mockResolvedValue(songs)
 
     await downloadService.fromArtist(artist)
 
@@ -33,7 +32,7 @@ describe('downloadService', () => {
     const zipMock = h.mock(zipDownloadService, 'start')
     const album = h.factory('album').make()
     const songs = h.factory('song').make(3)
-    h.mock(playableStore, 'fetchSongsForAlbum').mockResolvedValue(songs)
+    h.mock(usePlayableStore(), 'fetchSongsForAlbum').mockResolvedValue(songs)
 
     await downloadService.fromAlbum(album)
 
@@ -44,7 +43,7 @@ describe('downloadService', () => {
     const zipMock = h.mock(zipDownloadService, 'start')
     const playlist = h.factory('playlist').make()
     const songs = h.factory('song').make(3)
-    h.mock(playableStore, 'fetchForPlaylist').mockResolvedValue(songs)
+    h.mock(usePlayableStore(), 'fetchForPlaylist').mockResolvedValue(songs)
 
     await downloadService.fromPlaylist(playlist)
 
@@ -53,16 +52,16 @@ describe('downloadService', () => {
 
   it('zips favorites if there are any', async () => {
     const zipMock = h.mock(zipDownloadService, 'start')
-    playableStore.state.favorites = h.factory('song').make(5)
+    usePlayableStore().state.favorites = h.factory('song').make(5)
 
     await downloadService.fromFavorites()
 
-    expect(zipMock).toHaveBeenCalledWith(playableStore.state.favorites, 'Favorites', 'none')
+    expect(zipMock).toHaveBeenCalledWith(usePlayableStore().state.favorites, 'Favorites', 'none')
   })
 
   it('does not download favorites if there are none', async () => {
     const zipMock = h.mock(zipDownloadService, 'start')
-    playableStore.state.favorites = []
+    usePlayableStore().state.favorites = []
 
     await downloadService.fromFavorites()
 

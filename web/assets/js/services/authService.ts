@@ -1,12 +1,11 @@
 import { http } from '@/services/http'
-import { useLocalStorage } from '@/composables/useLocalStorage'
+import { useAppStorage } from '@/composables/useUserStorage'
 import { use } from '@/utils/helpers'
 
-const API_TOKEN_STORAGE_KEY = 'api-token'
-const AUDIO_TOKEN_STORAGE_KEY = 'audio-token'
-const REDIRECT_KEY = 'redirect'
-
-const { get: lsGet, set: lsSet, remove: lsRemove } = useLocalStorage(false) // authentication local storage data aren't namespaced
+// Not kept per user: they say who the user is.
+const apiToken = useAppStorage<string | null>('api-token', null)
+const audioToken = useAppStorage<string | null>('audio-token', null)
+const redirect = useAppStorage<string | null>('redirect', null)
 
 export interface AuthStatus {
   /** Whether píxiū has its admin yet; until then, the login screen creates it. */
@@ -60,13 +59,13 @@ export const authService = {
     this.destroy()
   },
 
-  getApiToken: () => lsGet<string>(API_TOKEN_STORAGE_KEY),
+  getApiToken: () => apiToken.value,
 
   hasApiToken() {
     return Boolean(this.getApiToken())
   },
 
-  setApiToken: (token: string) => lsSet(API_TOKEN_STORAGE_KEY, token),
+  setApiToken: (token: string) => (apiToken.value = token),
 
   setTokensUsingCompositeToken(compositeToken: CompositeToken) {
     this.setApiToken(compositeToken.token)
@@ -74,24 +73,24 @@ export const authService = {
   },
 
   destroy: () => {
-    lsRemove(API_TOKEN_STORAGE_KEY)
-    lsRemove(AUDIO_TOKEN_STORAGE_KEY)
+    apiToken.value = null
+    audioToken.value = null
   },
 
-  setAudioToken: (token: string) => lsSet(AUDIO_TOKEN_STORAGE_KEY, token),
+  setAudioToken: (token: string) => (audioToken.value = token),
 
   getAudioToken: () => {
     // for backward compatibility, we first try to get the audio token, and fall back to the (full-privileged) API token
-    return lsGet(AUDIO_TOKEN_STORAGE_KEY) || lsGet(API_TOKEN_STORAGE_KEY)
+    return audioToken.value || apiToken.value
   },
 
-  setRedirect: (url?: string) => lsSet(REDIRECT_KEY, url || location.toString()),
+  setRedirect: (url?: string) => (redirect.value = url || location.toString()),
 
-  hasRedirect: () => Boolean(lsGet(REDIRECT_KEY)),
+  hasRedirect: () => Boolean(redirect.value),
 
   maybeRedirect: () =>
-    use(lsGet<string | null>(REDIRECT_KEY), url => {
-      lsRemove(REDIRECT_KEY)
+    use(redirect.value, url => {
+      redirect.value = null
       location.assign(url)
     }),
 }

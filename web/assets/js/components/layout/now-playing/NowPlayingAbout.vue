@@ -23,8 +23,8 @@
 
 <script lang="ts" setup>
 import { computed, ref, toRefs, watch } from 'vue'
-import { albumStore } from '@/stores/albumStore'
-import { artistStore } from '@/stores/artistStore'
+import { useAlbumStore } from '@/stores/albumStore'
+import { useArtistStore } from '@/stores/artistStore'
 import { encyclopediaService } from '@/services/encyclopediaService'
 import { useBranding } from '@/composables/useBranding'
 import { useNowPlaying } from '@/composables/useNowPlaying'
@@ -33,6 +33,9 @@ import { useRouter } from '@/composables/useRouter'
 import M3Button from '@/components/m3/M3Button.vue'
 import M3SegmentedButton from '@/components/m3/M3SegmentedButton.vue'
 import ParagraphSkeleton from '@/components/ui/ParagraphSkeleton.vue'
+
+const albumStore = useAlbumStore()
+const artistStore = useArtistStore()
 
 const props = defineProps<{ song: Song }>()
 const { song } = toRefs(props)

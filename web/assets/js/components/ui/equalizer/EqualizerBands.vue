@@ -36,7 +36,7 @@
 </template>
 
 <script lang="ts" setup>
-import { nextTick, onBeforeUnmount, ref } from 'vue'
+import { nextTick, ref } from 'vue'
 import type { Band } from '@/services/audioService'
 import { audioService } from '@/services/audioService'
 
@@ -57,50 +57,21 @@ const filterBandsEl = ref<HTMLElement>()
 const curvePoints = ref<{ x: number; y: number }[]>([])
 
 let applyingPreset = false
-let curveAnimationId = 0
 
-const updateCurvePoints = () => {
+/** The curve passes through each band's handle; read after the bands have rendered their values. */
+const updateCurvePoints = async () => {
+  await nextTick()
+
   if (!filterBandEls.value?.length || !filterBandsEl.value) {
     return
   }
 
   const containerRect = filterBandsEl.value.getBoundingClientRect()
 
-  curvePoints.value = filterBandEls.value.map(bandEl => {
-    const el = bandEl.$el as HTMLElement
-    const handle = el.querySelector<HTMLElement>('.noUi-handle')
-
-    if (!handle) {
-      return { x: 0, y: 0 }
-    }
-
-    const handleRect = handle.getBoundingClientRect()
-    const x = handleRect.left - containerRect.left + handleRect.width / 2
-    const y = handleRect.top - containerRect.top + handleRect.height / 2
-
-    return { x, y }
+  curvePoints.value = filterBandEls.value.map(band => {
+    const { x, y } = band.handleCenter()
+    return { x: x - containerRect.left, y: y - containerRect.top }
   })
-}
-
-/**
- * Continuously read handle positions over the duration of the noUi-state-tap
- * CSS transition (~300ms) so the curve animates smoothly alongside the handles.
- */
-const animateCurveToHandles = () => {
-  cancelAnimationFrame(curveAnimationId)
-
-  const start = performance.now()
-  const duration = 350
-
-  const tick = () => {
-    updateCurvePoints()
-
-    if (performance.now() - start < duration) {
-      curveAnimationId = requestAnimationFrame(tick)
-    }
-  }
-
-  curveAnimationId = requestAnimationFrame(tick)
 }
 
 const loadPreset = async (preset: EqualizerPreset, audioBands: Band[]) => {
@@ -116,7 +87,7 @@ const loadPreset = async (preset: EqualizerPreset, audioBands: Band[]) => {
 
   await nextTick()
   applyingPreset = false
-  animateCurveToHandles()
+  await updateCurvePoints()
 }
 
 const getPreamp = () => preampGain.value
@@ -138,12 +109,7 @@ const onBandChange = (band: Band) => {
   }
 }
 
-const onBandCommit = () => {
-  emit('commit')
-  animateCurveToHandles()
-}
-
-onBeforeUnmount(() => cancelAnimationFrame(curveAnimationId))
+const onBandCommit = () => emit('commit')
 
 defineExpose({ loadPreset, getPreamp })
 </script>

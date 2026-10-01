@@ -38,7 +38,7 @@
 import { computed, ref } from 'vue'
 import { requireInjection, defineAsyncComponent } from '@/utils/helpers'
 import { CurrentStreamableKey } from '@/config/symbols'
-import { playableStore } from '@/stores/playableStore'
+import { usePlayableStore } from '@/stores/playableStore'
 import { useBranding } from '@/composables/useBranding'
 import { useContextMenu } from '@/composables/useContextMenu'
 import { useNowPlaying } from '@/composables/useNowPlaying'
@@ -51,6 +51,8 @@ import M3Tabs from '@/components/m3/M3Tabs.vue'
 import NowPlayingAbout from '@/components/layout/now-playing/NowPlayingAbout.vue'
 import NowPlayingLyrics from '@/components/layout/now-playing/NowPlayingLyrics.vue'
 import NowPlayingQueue from '@/components/layout/now-playing/NowPlayingQueue.vue'
+
+const playableStore = usePlayableStore()
 
 const PlayableContextMenu = defineAsyncComponent(() => import('@/components/playable/PlayableContextMenu.vue'))
 

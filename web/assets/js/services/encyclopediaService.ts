@@ -1,46 +1,42 @@
-import { cache } from '@/services/cache'
+import { queryClient } from '@/services/queryClient'
 import { subsonic } from '@/services/subsonic'
-import { albumStore } from '@/stores/albumStore'
-import { artistStore } from '@/stores/artistStore'
-import { playableStore } from '@/stores/playableStore'
+import { useAlbumStore } from '@/stores/albumStore'
+import { useArtistStore } from '@/stores/artistStore'
+import { usePlayableStore } from '@/stores/playableStore'
 
 export const encyclopediaService = {
+  /** What píxiū knows of an artist: their image and biography. */
   async fetchForArtist(artist: Artist) {
-    artist = artistStore.syncWithVault(artist)[0]
-    const cacheKey = ['artist.info', artist.id]
+    artist = useArtistStore().syncWithVault(artist)[0]
 
-    if (cache.has(cacheKey)) {
-      return cache.get<ArtistInfo>(cacheKey)
-    }
+    return queryClient.fetchQuery({
+      queryKey: ['artist', artist.id, 'info'],
+      queryFn: async (): Promise<ArtistInfo> => {
+        const { biography } = await subsonic.artistInfo(artist.id)
 
-    const { biography } = await subsonic.artistInfo(artist.id)
-    const info: ArtistInfo = {
-      image: artist.image || null,
-      bio: biography ? { summary: biography, full: biography } : undefined,
-    }
-
-    cache.set(cacheKey, info)
-
-    return info
+        return {
+          image: artist.image || null,
+          bio: biography ? { summary: biography, full: biography } : undefined,
+        }
+      },
+    })
   },
 
   /** What píxiū knows of an album: its cover and track list. */
   async fetchForAlbum(album: Album) {
-    album = albumStore.syncWithVault(album)[0]
-    const cacheKey = ['album.info', album.id, album.name]
+    album = useAlbumStore().syncWithVault(album)[0]
 
-    if (cache.has(cacheKey)) {
-      return cache.get<AlbumInfo>(cacheKey)
-    }
+    return queryClient.fetchQuery({
+      // Under the album's own key: editing it makes this stale too.
+      queryKey: ['album', album.id, 'info'],
+      queryFn: async (): Promise<AlbumInfo> => {
+        const songs = await usePlayableStore().fetchSongsForAlbum(album)
 
-    const songs = await playableStore.fetchSongsForAlbum(album)
-    const info: AlbumInfo = {
-      cover: album.cover || null,
-      tracks: songs.map(({ title, length }) => ({ title, length })),
-    }
-
-    cache.set(cacheKey, info)
-
-    return info
+        return {
+          cover: album.cover || null,
+          tracks: songs.map(({ title, length }) => ({ title, length })),
+        }
+      },
+    })
   },
 }

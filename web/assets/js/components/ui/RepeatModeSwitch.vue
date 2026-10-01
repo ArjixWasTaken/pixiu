@@ -10,10 +10,12 @@
 
 <script lang="ts" setup>
 import { computed, toRef } from 'vue'
-import { preferenceStore } from '@/stores/preferenceStore'
+import { usePreferenceStore } from '@/stores/preferenceStore'
 import { playback } from '@/services/playbackManager'
 
 import M3IconButton from '@/components/m3/M3IconButton.vue'
+
+const preferenceStore = usePreferenceStore()
 
 const mode = toRef(preferenceStore.state, 'repeat_mode')
 

@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vite-plus/test'
 import { screen, waitFor } from '@testing-library/vue'
 import { createHarness } from '@/__tests__/TestHarness'
-import { playlistFolderStore } from '@/stores/playlistFolderStore'
+import { usePlaylistFolderStore } from '@/stores/playlistFolderStore'
 import Component from './FolderSelect.vue'
 
 describe('folderSelect', () => {
   const h = createHarness()
 
   const renderComponent = (folderId: PlaylistFolder['id'] | null = null) => {
-    playlistFolderStore.state.folders = h.factory('playlist-folder').make(3)
+    usePlaylistFolderStore().state.folders = h.factory('playlist-folder').make(3)
 
     return h.render(Component, {
       props: {
@@ -34,7 +34,7 @@ describe('folderSelect', () => {
     const child = h.factory('playlist-folder').make({ name: 'Live', parent_id: root.id })
     const grandchild = h.factory('playlist-folder').make({ name: '2026', parent_id: child.id })
     const earlierRoot = h.factory('playlist-folder').make({ name: 'Archive', parent_id: null })
-    playlistFolderStore.init([root, child, grandchild, earlierRoot])
+    usePlaylistFolderStore().init([root, child, grandchild, earlierRoot])
 
     h.render(Component, {
       props: {
@@ -108,8 +108,8 @@ describe('folderSelect', () => {
   })
 
   it('clears folder name when selecting an existing folder', async () => {
-    playlistFolderStore.state.folders = h.factory('playlist-folder').make(3)
-    const folders = playlistFolderStore.state.folders
+    usePlaylistFolderStore().state.folders = h.factory('playlist-folder').make(3)
+    const folders = usePlaylistFolderStore().state.folders
 
     const { emitted } = h.render(Component, {
       props: {

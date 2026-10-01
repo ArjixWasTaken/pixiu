@@ -62,15 +62,19 @@
 </template>
 
 <script lang="ts" setup>
-import isMobile from 'ismobilejs'
+import { useViewport } from '@/composables/useViewport'
 import { computed, ref, toRef } from 'vue'
-import { commonStore } from '@/stores/commonStore'
-import { preferenceStore as preferences } from '@/stores/preferenceStore'
+import { useCommonStore } from '@/stores/commonStore'
+import { usePreferenceStore } from '@/stores/preferenceStore'
 import { useBranding } from '@/composables/useBranding'
 
 import M3Switch from '@/components/m3/M3Switch.vue'
 
-const onMobile = isMobile.any
+const commonStore = useCommonStore()
+const preferences = usePreferenceStore()
+
+const { isTouch: onMobile } = useViewport()
+
 const { name: appName } = useBranding()
 
 const showTranscodingOption = toRef(commonStore.state, 'supports_transcoding')

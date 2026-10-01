@@ -5,7 +5,6 @@
       <div v-if="$slots.header" :class="{ tinted: tint }" class="screen-head">
         <slot name="header" />
       </div>
-      <HookSlot :context="{ screen: getCurrentScreen() }" name="screen.top" />
       <slot />
     </main>
   </section>
@@ -13,10 +12,7 @@
 
 <script lang="ts" setup>
 import { toRef } from 'vue'
-import { useRouter } from '@/composables/useRouter'
 import { useCoverTint } from '@/composables/useCoverTheme'
-
-import HookSlot from '@/components/utils/HookSlot.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -25,8 +21,6 @@ const props = withDefaults(
   }>(),
   { tintFrom: null },
 )
-
-const { getCurrentScreen } = useRouter()
 
 const tint = useCoverTint(toRef(props, 'tintFrom'))
 </script>

@@ -1,27 +1,21 @@
-import { registerHooks } from '@/registerHooks'
-import { Action } from '@/config/hooks'
-import { doAction } from '@/hooks'
+import { VueQueryPlugin } from '@tanstack/vue-query'
+import { createPinia } from 'pinia'
 import { createApp } from 'vue'
 import { focus } from '@/directives/focus'
-import { tooltip } from '@/directives/tooltip'
 import { hideBrokenIcon } from '@/directives/hideBrokenIcon'
 import { newTab } from '@/directives/newTab'
-import { RouterKey } from '@/config/symbols'
-import Router from '@/router'
-import 'nouislider/distribute/nouislider.min.css'
+import { createAppRouter } from '@/router'
+import { queryClient } from '@/services/queryClient'
 import '@/../css/app.pcss'
 import App from './App.vue'
 
-registerHooks()
-
 const app = createApp(App)
-  .provide(RouterKey, new Router())
+  .use(createPinia())
+  .use(VueQueryPlugin, { queryClient })
+  .use(createAppRouter())
   .directive('koel-focus', focus)
-  .directive('koel-tooltip', tooltip)
   .directive('koel-hide-broken-icon', hideBrokenIcon)
   .directive('koel-new-tab', newTab)
-
-doAction(Action.APPLICATION_CREATED, app)
 
 /**
  * For Ancelot, the ancient cross of war

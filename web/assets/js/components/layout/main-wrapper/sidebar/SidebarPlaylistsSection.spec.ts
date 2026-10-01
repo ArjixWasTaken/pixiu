@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vite-plus/test'
 import { fireEvent, screen } from '@testing-library/vue'
 import { createHarness } from '@/__tests__/TestHarness'
 import factory from '@/__tests__/factory'
-import { playlistFolderStore } from '@/stores/playlistFolderStore'
-import { playlistStore } from '@/stores/playlistStore'
+import { usePlaylistFolderStore } from '@/stores/playlistFolderStore'
+import { usePlaylistStore } from '@/stores/playlistStore'
 import PlaylistSidebarItem from './PlaylistSidebarItem.vue'
 import Component from './SidebarPlaylistsSection.vue'
 
@@ -25,7 +25,7 @@ describe('sidebarPlaylistsSection.vue', () => {
   }
 
   it('displays orphan playlists', () => {
-    playlistStore.state.playlists = [
+    usePlaylistStore().state.playlists = [
       factory('playlist').state('orphan').make({ name: 'Foo Playlist' }),
       factory('playlist').state('orphan').make({ name: 'Bar Playlist' }),
       factory('playlist').state('smart', 'orphan').make({ name: 'Smart Playlist' }),
@@ -42,7 +42,7 @@ describe('sidebarPlaylistsSection.vue', () => {
     const firstRoot = h.factory('playlist-folder').make({ name: 'First Root Folder', parent_id: null })
     const secondRoot = h.factory('playlist-folder').make({ name: 'Second Root Folder', parent_id: null })
     const child = h.factory('playlist-folder').make({ name: 'Child Folder', parent_id: firstRoot.id })
-    playlistFolderStore.state.folders = [firstRoot, child, secondRoot]
+    usePlaylistFolderStore().state.folders = [firstRoot, child, secondRoot]
 
     renderComponent()
 
@@ -54,8 +54,8 @@ describe('sidebarPlaylistsSection.vue', () => {
   it('moves a dropped folder to root', async () => {
     const parent = h.factory('playlist-folder').make({ parent_id: null })
     const child = h.factory('playlist-folder').make({ parent_id: parent.id })
-    playlistFolderStore.state.folders = [parent, child]
-    const moveMock = h.mock(playlistFolderStore, 'moveFolderToFolder')
+    usePlaylistFolderStore().state.folders = [parent, child]
+    const moveMock = h.mock(usePlaylistFolderStore(), 'moveFolderToFolder')
 
     renderComponent()
 

@@ -1,8 +1,6 @@
-import type { Ref } from 'vue'
-import { ref } from 'vue'
+import { computed } from 'vue'
 import { breakpointsTailwind, useBreakpoints } from '@vueuse/core'
-import { useLocalStorage } from '@/composables/useLocalStorage'
-import { logger } from '@/utils/logger'
+import { useUserStorage } from '@/composables/useUserStorage'
 
 interface Options<T extends string> {
   storageKey: string
@@ -17,8 +15,6 @@ interface Options<T extends string> {
   responsive?: boolean
 }
 
-const stores: Record<string, Ref<string[]>> = {}
-
 export const useTableColumnVisibility = <T extends string>({
   storageKey,
   validColumns,
@@ -26,27 +22,13 @@ export const useTableColumnVisibility = <T extends string>({
   alwaysVisible,
   responsive = false,
 }: Options<T>) => {
-  if (!stores[storageKey]) {
-    stores[storageKey] = ref([])
-  }
+  // The same key in several places stays one value: VueUse keeps them in step.
+  const stored = useUserStorage<T[]>(storageKey, [...defaultColumns])
 
-  const visibleColumns = stores[storageKey] as Ref<T[]>
-
-  const collectVisibleColumns = (): T[] => {
-    try {
-      const stored = useLocalStorage().get<T[]>(storageKey, [...defaultColumns])!
-      const filtered = stored.filter(column => validColumns.includes(column))
-      const merged = new Set([...filtered, ...alwaysVisible])
-      return Array.from(merged)
-    } catch (error: unknown) {
-      window.RUNNING_UNIT_TESTS || logger.error(`Failed to load columns for ${storageKey}`, error)
-      return Array.from(new Set([...defaultColumns, ...alwaysVisible]))
-    }
-  }
-
-  if (!visibleColumns.value.length) {
-    visibleColumns.value = collectVisibleColumns()
-  }
+  /** The stored columns that still exist, and the ones always shown. */
+  const visibleColumns = computed(() =>
+    Array.from(new Set([...stored.value.filter(column => validColumns.includes(column)), ...alwaysVisible])),
+  )
 
   const isConfigurable = () => {
     if (!responsive) {
@@ -77,13 +59,7 @@ export const useTableColumnVisibility = <T extends string>({
       next = [...next, column]
     }
 
-    visibleColumns.value = next
-
-    try {
-      useLocalStorage().set(storageKey, next)
-    } catch (error: unknown) {
-      window.RUNNING_UNIT_TESTS || logger.error(`Failed to persist columns for ${storageKey}`, error)
-    }
+    stored.value = next
   }
 
   const isToggleable = (column: T) => !alwaysVisible.includes(column)

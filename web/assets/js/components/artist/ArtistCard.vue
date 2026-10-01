@@ -27,8 +27,8 @@
 import { computed, toRefs } from 'vue'
 import { defineAsyncComponent } from '@/utils/helpers'
 import { pluralize } from '@/utils/formatters'
-import { artistStore } from '@/stores/artistStore'
-import { playableStore } from '@/stores/playableStore'
+import { useArtistStore } from '@/stores/artistStore'
+import { usePlayableStore } from '@/stores/playableStore'
 import { useDraggable } from '@/composables/useDragAndDrop'
 import { useRouter } from '@/composables/useRouter'
 import { playback } from '@/services/playbackManager'
@@ -36,6 +36,9 @@ import { useContextMenu } from '@/composables/useContextMenu'
 
 import BaseCard from '@/components/ui/album-artist/AlbumOrArtistCard.vue'
 import CardThumbnail from '@/components/ui/album-artist/AlbumOrArtistCardThumbnail.vue'
+
+const artistStore = useArtistStore()
+const playableStore = usePlayableStore()
 
 const props = defineProps<{ artist: Artist }>()
 

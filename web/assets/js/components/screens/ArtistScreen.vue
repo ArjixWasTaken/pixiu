@@ -25,24 +25,21 @@
       </ScreenHeader>
     </template>
 
-    <ScreenTabs v-if="artist" class="screen-bleed" :class="loading && 'pointer-events-none'">
-      <template #header>
-        <nav>
-          <ul>
-            <li :class="activeTab === 'songs' && 'active'">
-              <a href="#songs" @click.prevent="activeTab = 'songs'">Songs</a>
-            </li>
-            <li :class="activeTab === 'albums' && 'active'">
-              <a href="#albums" @click.prevent="activeTab = 'albums'">Albums</a>
-            </li>
-            <li v-if="useEncyclopedia" :class="activeTab === 'information' && 'active'">
-              <a href="#information" @click.prevent="activeTab = 'information'">Information</a>
-            </li>
-          </ul>
-        </nav>
-      </template>
-
-      <div v-show="activeTab === 'songs'" class="songs-pane">
+    <ScreenTabs
+      v-if="artist"
+      v-model="activeTab"
+      :class="loading && 'pointer-events-none'"
+      :tabs
+      class="screen-bleed"
+      id-prefix="artist"
+    >
+      <div
+        v-show="activeTab === 'songs'"
+        id="artist-panel-songs"
+        aria-labelledby="artist-tab-songs"
+        class="songs-pane"
+        role="tabpanel"
+      >
         <SongListSkeleton v-if="loading" role="status" aria-busy="true" aria-label="Loading" />
         <SongList
           v-if="!loading && artist"
@@ -53,7 +50,13 @@
         />
       </div>
 
-      <div v-show="activeTab === 'albums'" class="albums-pane">
+      <div
+        v-show="activeTab === 'albums'"
+        id="artist-panel-albums"
+        aria-labelledby="artist-tab-albums"
+        class="albums-pane"
+        role="tabpanel"
+      >
         <GridListView class="scroll-mask-y">
           <template v-if="albums">
             <AlbumCard v-for="album in albums" :key="album.id" :album :show-release-year="true" />
@@ -64,7 +67,14 @@
         </GridListView>
       </div>
 
-      <div v-if="useEncyclopedia && artist" v-show="activeTab === 'information'" class="info-pane">
+      <div
+        v-if="useEncyclopedia && artist"
+        v-show="activeTab === 'information'"
+        id="artist-panel-information"
+        aria-labelledby="artist-tab-information"
+        class="info-pane"
+        role="tabpanel"
+      >
         <ArtistInfo :artist mode="full" />
       </div>
     </ScreenTabs>
@@ -76,17 +86,18 @@ import { computed, ref, watch } from 'vue'
 import { defineAsyncComponent } from '@/utils/helpers'
 import { eventBus } from '@/utils/eventBus'
 import { pluralize } from '@/utils/formatters'
-import { albumStore } from '@/stores/albumStore'
-import { artistStore } from '@/stores/artistStore'
-import { playableStore } from '@/stores/playableStore'
+import { useAlbumStore } from '@/stores/albumStore'
+import { useArtistStore } from '@/stores/artistStore'
+import { usePlayableStore } from '@/stores/playableStore'
 import { useErrorHandler } from '@/composables/useErrorHandler'
 import { usePlayableList } from '@/composables/usePlayableList'
 import { usePlayableListControls } from '@/composables/usePlayableListControls'
-import { useLocalStorage } from '@/composables/useLocalStorage'
+import { useUserStorage } from '@/composables/useUserStorage'
 import { useThirdPartyServices } from '@/composables/useThirdPartyServices'
 import { useRouter } from '@/composables/useRouter'
 import { useContextMenu } from '@/composables/useContextMenu'
-import { moveTabToHash, useHashTab } from '@/composables/useHash'
+import { useHashTab } from '@/composables/useHash'
+import { isNotFound } from '@/services/subsonic'
 
 import M3IconButton from '@/components/m3/M3IconButton.vue'
 import ScreenHeader from '@/components/ui/ScreenHeader.vue'
@@ -94,8 +105,13 @@ import ArtistThumbnail from '@/components/ui/album-artist/AlbumOrArtistThumbnail
 import ScreenHeaderSkeleton from '@/components/ui/ScreenHeaderSkeleton.vue'
 import SongListSkeleton from '@/components/playable/playable-list/PlayableListSkeleton.vue'
 import ScreenTabs from '@/components/ui/ArtistAlbumScreenTabs.vue'
+import type { M3Tab } from '@/components/m3/M3Tabs.vue'
 import ScreenBase from '@/components/screens/ScreenBase.vue'
 import GridListView from '@/components/ui/GridListView.vue'
+
+const albumStore = useAlbumStore()
+const artistStore = useArtistStore()
+const playableStore = usePlayableStore()
 
 const ArtistInfo = defineAsyncComponent(() => import('@/components/artist/ArtistInfo.vue'))
 const AlbumCard = defineAsyncComponent(() => import('@/components/album/AlbumCard.vue'))
@@ -110,7 +126,8 @@ const { PlayableListControls: SongListControls, config } = usePlayableListContro
 const { useMusicBrainz } = useThirdPartyServices()
 const { getRouteParam, go, onScreenActivated, onRouteChanged, url, triggerNotFound } = useRouter()
 const { openContextMenu } = useContextMenu()
-const { get: lsGet, set: lsSet } = useLocalStorage()
+const sortField = useUserStorage<MaybeArray<PlayableListSortField>>('artist-sort-field', 'track')
+const sortOrder = useUserStorage<SortOrder>('artist-sort-order', 'asc')
 
 const activeTab = useHashTab(validTabs, 'songs')
 
@@ -134,6 +151,12 @@ const {
 
 const useEncyclopedia = useMusicBrainz
 
+const tabs = computed<M3Tab[]>(() => [
+  { id: 'songs', label: 'Songs' },
+  { id: 'albums', label: 'Albums' },
+  ...(useEncyclopedia.value ? [{ id: 'information', label: 'Information' }] : []),
+])
+
 const albumCount = computed(() => {
   const albums = new Set()
   songs.value.forEach(song => albums.add(song.album_id))
@@ -149,14 +172,6 @@ const fetchScreenData = async () => {
 
   const id = getRouteParam('id')
 
-  // Links from before the tab lived in the hash: `/artists/ar-1/albums`.
-  const legacyTab = getRouteParam<Tab>('tab')
-
-  if (legacyTab && validTabs.includes(legacyTab)) {
-    moveTabToHash(legacyTab)
-    activeTab.value = legacyTab
-  }
-
   albums.value = undefined
   loading.value = true
 
@@ -170,11 +185,9 @@ const fetchScreenData = async () => {
 
     context.entity = artist.value
 
-    const restoredField = lsGet<PlayableListSortField>('artist-sort-field', 'track')!
-    const restoredOrder = lsGet<SortOrder>('artist-sort-order', 'asc')!
-    sort(restoredField, restoredOrder)
+    sort(sortField.value, sortOrder.value)
   } catch (error: unknown) {
-    if ((error as any)?.status === 404) {
+    if (isNotFound(error)) {
       triggerNotFound()
       return
     }
@@ -208,8 +221,8 @@ const fetchAlbums = async () => {
 watch([activeTab, artist], ([tab]) => tab === 'albums' && fetchAlbums())
 
 const onSort = (field: MaybeArray<PlayableListSortField>, order: SortOrder) => {
-  lsSet('artist-sort-field', field)
-  lsSet('artist-sort-order', order)
+  sortField.value = field
+  sortOrder.value = order
 }
 
 onScreenActivated('Artist', () => fetchScreenData())

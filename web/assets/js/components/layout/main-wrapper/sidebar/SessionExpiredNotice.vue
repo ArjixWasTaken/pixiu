@@ -7,9 +7,11 @@
 
 <script lang="ts" setup>
 import { computed } from 'vue'
-import { huntingStore } from '@/stores/huntingStore'
+import { useHuntingStore } from '@/stores/huntingStore'
 import { useRouter } from '@/composables/useRouter'
 import M3Icon from '@/components/m3/M3Icon.vue'
+
+const huntingStore = useHuntingStore()
 
 const { url } = useRouter()
 

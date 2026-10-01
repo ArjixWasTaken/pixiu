@@ -29,7 +29,7 @@ import type { Ref } from 'vue'
 import { computed, ref } from 'vue'
 import { requireInjection, use } from '@/utils/helpers'
 import { CurrentStreamableKey } from '@/config/symbols'
-import { playableStore } from '@/stores/playableStore'
+import { usePlayableStore } from '@/stores/playableStore'
 import { playback } from '@/services/playbackManager'
 import { useBranding } from '@/composables/useBranding'
 import { useNowPlaying } from '@/composables/useNowPlaying'
@@ -38,6 +38,8 @@ import { usePlaybackProgress } from '@/composables/usePlaybackProgress'
 import FavoriteButton from '@/components/ui/FavoriteButton.vue'
 import M3IconButton from '@/components/m3/M3IconButton.vue'
 import PlayButton from '@/components/ui/FooterPlayButton.vue'
+
+const playableStore = usePlayableStore()
 
 const playable = requireInjection<Ref<Playable | undefined>>(CurrentStreamableKey, ref())
 const { cover: defaultCover } = useBranding()

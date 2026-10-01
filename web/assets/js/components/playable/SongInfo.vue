@@ -63,10 +63,10 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, onMounted, ref, toRefs } from 'vue'
+import { useQuery } from '@tanstack/vue-query'
+import { computed, toRefs, watch } from 'vue'
 import { huntingService } from '@/services/huntingService'
-import type { SongInfo } from '@/services/huntingService'
-import { huntingStore } from '@/stores/huntingStore'
+import { useHuntingStore } from '@/stores/huntingStore'
 import { formatBytes, timeAgo } from '@/utils/formatters'
 import { useBranding } from '@/composables/useBranding'
 import { useMessageToaster } from '@/composables/useMessageToaster'
@@ -74,6 +74,8 @@ import { useErrorHandler } from '@/composables/useErrorHandler'
 
 import M3Button from '@/components/m3/M3Button.vue'
 import M3ProgressIndicator from '@/components/m3/M3ProgressIndicator.vue'
+
+const huntingStore = useHuntingStore()
 
 const props = defineProps<{ song: Song }>()
 const emit = defineEmits<{ (e: 'close'): void }>()
@@ -83,7 +85,17 @@ const { cover: defaultCover } = useBranding()
 const { toastSuccess } = useMessageToaster()
 const { handleHttpError } = useErrorHandler('dialog')
 
-const info = ref<SongInfo | null>(null)
+const {
+  data: info,
+  error,
+  refetch: fetchInfo,
+} = useQuery({
+  queryKey: computed(() => ['song', song.value.id, 'info']),
+  queryFn: () => huntingService.songInfo(song.value),
+  // Where the song came from and what keeps it: shown as it is now.
+  staleTime: 0,
+})
+watch(error, error => error && handleHttpError(error))
 
 const lyricsLabel = computed(
   () =>
@@ -99,14 +111,6 @@ const lyricsLabel = computed(
 
 const close = () => emit('close')
 
-const fetchInfo = async () => {
-  try {
-    info.value = await huntingService.songInfo(song.value)
-  } catch (error: unknown) {
-    handleHttpError(error)
-  }
-}
-
 const exclude = async (watchId: number) => {
   try {
     await huntingStore.exclude(watchId, [song.value])
@@ -116,8 +120,6 @@ const exclude = async (watchId: number) => {
     handleHttpError(error)
   }
 }
-
-onMounted(fetchInfo)
 </script>
 
 <style lang="postcss" scoped>

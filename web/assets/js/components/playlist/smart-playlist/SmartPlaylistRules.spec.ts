@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vite-plus/test'
 import { screen } from '@testing-library/vue'
 import { createHarness } from '@/__tests__/TestHarness'
-import { playlistStore } from '@/stores/playlistStore'
+import { usePlaylistStore } from '@/stores/playlistStore'
 import Component from './SmartPlaylistRules.vue'
 
 describe('smartPlaylistRules', () => {
@@ -23,7 +23,7 @@ describe('smartPlaylistRules', () => {
   })
 
   it('offers another group next to the ones there are', async () => {
-    const { emitted } = renderComponent([playlistStore.createEmptySmartPlaylistRuleGroup()])
+    const { emitted } = renderComponent([usePlaylistStore().createEmptySmartPlaylistRuleGroup()])
 
     await h.user.click(screen.getByRole('button', { name: /Add another group/ }))
 
@@ -31,7 +31,7 @@ describe('smartPlaylistRules', () => {
   })
 
   it('drops a group with its last rule', async () => {
-    const { emitted } = renderComponent([playlistStore.createEmptySmartPlaylistRuleGroup()])
+    const { emitted } = renderComponent([usePlaylistStore().createEmptySmartPlaylistRuleGroup()])
 
     await h.user.click(screen.getByRole('button', { name: 'Remove this rule' }))
 

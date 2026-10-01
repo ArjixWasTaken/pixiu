@@ -30,11 +30,12 @@
 <script lang="ts" setup>
 import { computed, nextTick, ref, useTemplateRef, watch } from 'vue'
 import { orderBy } from 'lodash-es'
-import { playlistFolderStore } from '@/stores/playlistFolderStore'
-
+import { usePlaylistFolderStore } from '@/stores/playlistFolderStore'
 import M3IconButton from '@/components/m3/M3IconButton.vue'
 import M3Select from '@/components/m3/M3Select.vue'
 import M3TextField from '@/components/m3/M3TextField.vue'
+
+const playlistFolderStore = usePlaylistFolderStore()
 
 const NEW_FOLDER = '__new__'
 const PENDING_FOLDER = '__pending__'

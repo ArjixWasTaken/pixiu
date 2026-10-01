@@ -1,133 +1,123 @@
 import { describe, expect, it, vi } from 'vite-plus/test'
-import * as floating from '@floating-ui/dom'
-import { waitFor } from '@testing-library/vue'
+import { screen, waitFor } from '@testing-library/vue'
+import { defineComponent, shallowRef } from 'vue'
+import type { Component as VueComponent } from 'vue'
 import { createHarness } from '@/__tests__/TestHarness'
-import { shallowRef } from 'vue'
 import { ContextMenuKey } from '@/config/symbols'
-import { logger } from '@/utils/logger'
+import { setViewport } from '@/composables/useViewport'
+import MenuItem from './ContextMenuItem.vue'
 import Component from './ContextMenu.vue'
 
-// On a desktop: phones show menus as bottom sheets, unplaced.
-vi.mock('@/composables/useViewport', async () => {
-  const { ref } = await import('vue')
-  return { useViewport: () => ({ isMobile: ref(false), isWide: ref(false) }) }
-})
-
-// Placement runs as usual; the spec looks at how it was asked for.
-vi.mock('@floating-ui/dom', async importOriginal => {
-  const original = await importOriginal<typeof import('@floating-ui/dom')>()
-  return { ...original, computePosition: vi.fn(original.computePosition) }
-})
-
 describe('contextMenu', () => {
-  const h = createHarness()
-
-  const provide = (options: ReturnType<typeof shallowRef>) => ({
-    global: {
-      provide: {
-        [ContextMenuKey as symbol]: options,
-      },
-    },
+  const h = createHarness({
+    beforeEach: () => setViewport({ mobile: false }),
   })
 
-  it('renders the popover root', () => {
-    const { container } = h.render(Component, provide(shallowRef({ component: null, position: { top: 0, left: 0 } })))
+  /** What had focus when "Play" was chosen. */
+  const play = vi.fn(() => document.activeElement)
 
-    const root = container.querySelector<HTMLElement>('.context-menu[popover]')!
-    expect(root).toBeTruthy()
-    expect(root.getAttribute('popover')).toBe('manual')
-    expect(root.getAttribute('role')).toBe('menu')
+  const SongMenu = defineComponent({
+    components: { MenuItem },
+    setup: () => ({ play }),
+    template: '<ul role="none"><MenuItem @click="play">Play</MenuItem><MenuItem>Delete</MenuItem></ul>',
   })
 
-  it('opens when options.component is set', async () => {
-    const showSpy = vi.spyOn(HTMLElement.prototype, 'showPopover')
-    const options = shallowRef<any>({
+  const renderContextMenu = (props: { extraClass?: string } = {}) => {
+    const options = shallowRef<{ component: VueComponent | null; position: { top: number; left: number } }>({
       component: null,
       position: { top: 0, left: 0 },
     })
 
-    h.render(Component, provide(options))
+    h.render(Component, { props, global: { provide: { [ContextMenuKey as symbol]: options } } })
 
-    options.value = {
-      component: { template: '<div>Menu Content</div>' },
-      position: { top: 100, left: 200 },
+    const open = async (position = { top: 100, left: 200 }) => {
+      options.value = { component: SongMenu, position }
+      await h.tick(2)
     }
 
-    await h.tick(2)
+    return { options, open }
+  }
 
-    expect(showSpy).toHaveBeenCalled()
-    showSpy.mockRestore()
+  it('is closed until a menu is asked for', () => {
+    renderContextMenu()
+
+    expect(screen.queryByRole('menu')).toBeNull()
   })
 
-  it('closes when options.component is cleared', async () => {
-    const showSpy = vi.spyOn(HTMLElement.prototype, 'showPopover')
-    const hideSpy = vi.spyOn(HTMLElement.prototype, 'hidePopover')
-    const options = shallowRef<any>({
-      component: null,
-      position: { top: 0, left: 0 },
-    })
+  it('opens the menu asked for, at the pointer, with focus', async () => {
+    const { open } = renderContextMenu()
 
-    h.render(Component, provide(options))
+    await open({ top: 100, left: 200 })
 
-    // Open the menu first so that close can transition from open → closed.
-    options.value = {
-      component: { template: '<div>Menu</div>' },
-      position: { top: 100, left: 200 },
-    }
-
-    await h.tick(2)
-
-    options.value = {
-      component: null,
-      position: { top: 0, left: 0 },
-    }
-
-    await h.tick()
-
-    expect(hideSpy).toHaveBeenCalled()
-    showSpy.mockRestore()
-    hideSpy.mockRestore()
+    const menu = screen.getByRole('menu')
+    screen.getByRole('menuitem', { name: 'Play' })
+    await waitFor(() => expect(menu.parentElement!.style.transform).toBe('translate(200px, 100px)'))
+    await waitFor(() => expect(menu.contains(document.activeElement)).toBe(true))
   })
 
-  it('closes cleanly while it is still being placed', async () => {
-    const errorSpy = vi.spyOn(logger, 'error')
-    let place: (position: floating.ComputePositionReturn) => void = () => {}
-    vi.mocked(floating.computePosition)
-      .mockClear()
-      .mockImplementationOnce(() => new Promise(resolve => (place = resolve)))
-    const options = shallowRef<any>({ component: null, position: { top: 0, left: 0 } })
-    const { unmount } = h.render(Component, provide(options))
+  it('closes when an item is chosen', async () => {
+    const { options, open } = renderContextMenu()
+    await open()
 
-    options.value = { component: { template: '<div>Menu</div>' }, position: { top: 100, left: 200 } }
-    await waitFor(() => expect(floating.computePosition).toHaveBeenCalled())
-    unmount()
-    place({ x: 10, y: 20, placement: 'bottom-start', strategy: 'fixed', middlewareData: {} })
-    // Everything the placement had left to do.
-    await new Promise(resolve => setTimeout(resolve, 0))
+    await h.user.click(screen.getByRole('menuitem', { name: 'Play' }))
 
-    expect(errorSpy).not.toHaveBeenCalled()
+    await waitFor(() => expect(options.value.component).toBeNull())
+    await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
   })
 
-  it('applies extra class', () => {
-    const { container } = h.render(Component, {
-      props: { extraClass: 'my-custom-class' },
-      ...provide(shallowRef({ component: null, position: { top: 0, left: 0 } })),
-    })
+  it('closes on Escape and gives focus back', async () => {
+    const row = document.createElement('button')
+    document.body.append(row)
+    row.focus()
 
-    expect(container.querySelector('.my-custom-class[popover]')).toBeTruthy()
+    const { options, open } = renderContextMenu()
+    await open()
+    await waitFor(() => expect(screen.getByRole('menu').contains(document.activeElement)).toBe(true))
+
+    await h.user.keyboard('{Escape}')
+
+    await waitFor(() => expect(options.value.component).toBeNull())
+    await waitFor(() => expect(document.activeElement).toBe(row))
+    row.remove()
   })
 
-  it('slides a menu too tall for its spot up or down, to keep it whole', async () => {
-    const place = vi.mocked(floating.computePosition)
-    place.mockClear()
-    const options = shallowRef<any>({ component: null, position: { top: 0, left: 0 } })
-    h.render(Component, provide(options))
+  it('gives focus back to its opener before an item does its part, so a dialog it opens gives it back there', async () => {
+    const row = document.createElement('button')
+    document.body.append(row)
+    row.focus()
 
-    options.value = { component: { template: '<div>Menu</div>' }, position: { top: 880, left: 200 } }
-    await waitFor(() => expect(place).toHaveBeenCalled())
+    const { open } = renderContextMenu()
+    await open()
+    await waitFor(() => expect(screen.getByRole('menu').contains(document.activeElement)).toBe(true))
 
-    const middleware = place.mock.calls[0][2]!.middleware!.filter(Boolean) as floating.Middleware[]
-    const shift = middleware.find(({ name }) => name === 'shift')!
-    expect(shift.options).toMatchObject({ crossAxis: true })
+    await h.user.click(screen.getByRole('menuitem', { name: 'Play' }))
+
+    expect(play).toHaveReturnedWith(row)
+    row.remove()
+  })
+
+  it('closes when the menu is cleared', async () => {
+    const { options, open } = renderContextMenu()
+    await open()
+
+    options.value = { component: null, position: { top: 0, left: 0 } }
+
+    await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
+  })
+
+  it('applies extra class', async () => {
+    const { open } = renderContextMenu({ extraClass: 'my-custom-class' })
+    await open()
+
+    expect(screen.getByRole('menu').classList.contains('my-custom-class')).toBe(true)
+  })
+
+  it('is a bottom sheet over a scrim on phones', async () => {
+    setViewport({ mobile: true })
+    const { open } = renderContextMenu()
+    await open()
+
+    expect(screen.getByRole('menu').classList.contains('sheet')).toBe(true)
+    expect(document.querySelector('.sheet-scrim')).not.toBeNull()
   })
 })

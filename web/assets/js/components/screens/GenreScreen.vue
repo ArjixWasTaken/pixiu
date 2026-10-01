@@ -54,18 +54,21 @@
 </template>
 
 <script lang="ts" setup>
+import { useQuery } from '@tanstack/vue-query'
 import { computed, onMounted, ref, watch } from 'vue'
 import { pluralize, secondsToHumanReadable } from '@/utils/formatters'
 import { eventBus } from '@/utils/eventBus'
 import { defineAsyncComponent } from '@/utils/helpers'
-import { genreStore } from '@/stores/genreStore'
-import { playableStore } from '@/stores/playableStore'
+import { useGenreStore } from '@/stores/genreStore'
+import { usePlayableStore } from '@/stores/playableStore'
 import { playback } from '@/services/playbackManager'
+import { queryClient } from '@/services/queryClient'
 import { useRouter } from '@/composables/useRouter'
 import { useErrorHandler } from '@/composables/useErrorHandler'
 import { usePlayableList } from '@/composables/usePlayableList'
 import { usePlayableListControls } from '@/composables/usePlayableListControls'
-import { useLocalStorage } from '@/composables/useLocalStorage'
+import { useUserStorage } from '@/composables/useUserStorage'
+import { useListPages } from '@/composables/useListPages'
 import { useContextMenu } from '@/composables/useContextMenu'
 
 import M3IconButton from '@/components/m3/M3IconButton.vue'
@@ -76,9 +79,35 @@ import ScreenHeaderSkeleton from '@/components/ui/ScreenHeaderSkeleton.vue'
 import ScreenBase from '@/components/screens/ScreenBase.vue'
 import M3Icon from '@/components/m3/M3Icon.vue'
 
+const genreStore = useGenreStore()
+const playableStore = usePlayableStore()
+
 const ContextMenu = defineAsyncComponent(() => import('@/components/genre/GenreContextMenu.vue'))
 
-const songs = ref<Song[]>([])
+const { getRouteParam, isCurrentScreen, go, onRouteChanged, url } = useRouter()
+
+const sortField = useUserStorage<MaybeArray<PlayableListSortField>>('genre-sort-field', 'title')
+const sortOrder = useUserStorage<SortOrder>('genre-sort-order', 'asc')
+
+const id = ref<Genre['id'] | null>(null)
+
+const { data: genre, error } = useQuery({
+  queryKey: computed(() => ['genre', id.value]),
+  queryFn: () => genreStore.fetchOne(id.value!),
+  enabled: computed(() => Boolean(id.value)),
+})
+watch(error, error => error && useErrorHandler('dialog').handleHttpError(error))
+
+// Each sort is a list of its own; changing it starts the list from its first page.
+const {
+  items: songs,
+  isFetching: loading,
+  fetchMore: fetch,
+} = useListPages(
+  () => ['genre', id.value, 'songs', { sort: sortField.value, order: sortOrder.value }],
+  cursor => playableStore.paginateSongsByGenre(id.value!, { sort: sortField.value, order: sortOrder.value, cursor }),
+  { enabled: () => Boolean(id.value) },
+)
 
 const {
   PlayableList: SongList,
@@ -93,68 +122,14 @@ const {
 } = usePlayableList(songs, { type: 'Genre' }, { sortable: true, filterable: false })
 
 const { PlayableListControls: SongListControls, config } = usePlayableListControls('Genre')
-const { getRouteParam, isCurrentScreen, go, onRouteChanged, url } = useRouter()
 const { openContextMenu } = useContextMenu()
-const { get: lsGet, set: lsSet } = useLocalStorage()
 
-let sortField: MaybeArray<PlayableListSortField> = lsGet<PlayableListSortField>('genre-sort-field', 'title')!
-let sortOrder: SortOrder = lsGet<SortOrder>('genre-sort-order', 'asc')!
-
-const id = ref<Genre['id'] | null>(null)
-const genre = ref<Genre | null>(null)
-const loading = ref(false)
-const cursor = ref<string | null>('')
-
-const moreSongsAvailable = computed(() => cursor.value !== null)
 const showSkeletons = computed(() => loading.value && songs.value.length === 0)
 const duration = computed(() => (genre.value ? secondsToHumanReadable(genre.value.length) : ''))
 
-const fetch = async () => {
-  if (!moreSongsAvailable.value || loading.value) {
-    return
-  }
-
-  loading.value = true
-
-  try {
-    let fetched: { songs: Song[]; nextCursor: string | null }
-
-    ;[genre.value, fetched] = await Promise.all([
-      genreStore.fetchOne(id.value!),
-      playableStore.paginateSongsByGenre(id.value!, {
-        sort: sortField,
-        order: sortOrder,
-        cursor: cursor.value,
-      }),
-    ])
-
-    cursor.value = fetched.nextCursor
-    songs.value.push(...fetched.songs)
-  } catch (error: unknown) {
-    useErrorHandler('dialog').handleHttpError(error)
-  } finally {
-    loading.value = false
-  }
-}
-
-const refresh = async () => {
-  genre.value = null
-  cursor.value = ''
-  songs.value = []
-
-  await fetch()
-}
-
-const fetchWithSort = async (field: MaybeArray<PlayableListSortField>, order: SortOrder) => {
-  cursor.value = ''
-  songs.value = []
-  sortField = field
-  sortOrder = order
-
-  lsSet('genre-sort-field', field)
-  lsSet('genre-sort-order', order)
-
-  await fetch()
+const fetchWithSort = (field: MaybeArray<PlayableListSortField>, order: SortOrder) => {
+  sortField.value = field
+  sortOrder.value = order
 }
 
 const getIdFromRoute = () => getRouteParam('id') ?? null
@@ -185,15 +160,13 @@ const requestContextMenu = (event: MouseEvent) =>
   })
 
 onMounted(() => {
-  composableSort(sortField, sortOrder)
+  composableSort(sortField.value, sortOrder.value)
 
   if (isCurrentScreen('Genre')) {
     id.value = getIdFromRoute()
   }
 })
 
-watch(id, async () => id.value && (await refresh()))
-
-// We can't really tell how/if the genres have been updated, so we just refresh the list
-eventBus.on('SONGS_UPDATED', async () => genre.value && (await refresh()))
+// Which genres an edit touched isn't known: all of them are fetched again.
+eventBus.on('SONGS_UPDATED', () => queryClient.invalidateQueries({ queryKey: ['genre'] }))
 </script>

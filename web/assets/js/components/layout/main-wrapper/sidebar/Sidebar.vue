@@ -68,7 +68,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue'
 import type { RouteName } from '@/config/routes'
 import { eventBus } from '@/utils/eventBus'
-import { useLocalStorage } from '@/composables/useLocalStorage'
+import { useUserStorage } from '@/composables/useUserStorage'
 import { useRouter } from '@/composables/useRouter'
 import { useViewport } from '@/composables/useViewport'
 import type { M3NavItem } from '@/components/m3/navigation'
@@ -81,11 +81,10 @@ import SessionExpiredNotice from './SessionExpiredNotice.vue'
 import SidebarNavigation from './SidebarNavigation.vue'
 
 const { onRouteChanged, isCurrentScreen, go, url } = useRouter()
-const { get: lsGet, set: lsSet } = useLocalStorage()
 const { isMobile } = useViewport()
 
-const expanded = ref(!lsGet('sidebar-collapsed', false))
-watch(expanded, value => lsSet('sidebar-collapsed', !value))
+const collapsed = useUserStorage('sidebar-collapsed', false)
+const expanded = computed({ get: () => !collapsed.value, set: value => (collapsed.value = !value) })
 
 /** From the rail (its button, or the F key): open the drawer, where the search field is. */
 const searchOnOpen = ref(false)

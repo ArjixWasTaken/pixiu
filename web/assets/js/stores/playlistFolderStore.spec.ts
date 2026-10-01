@@ -10,31 +10,32 @@ vi.mock('@/services/http', () => ({
   },
 }))
 
-vi.mock('@/stores/playlistStore', () => ({
-  playlistStore: {
+vi.mock('@/stores/playlistStore', () => {
+  const store = {
     state: {
       playlists: [],
     },
     byFolder: vi.fn().mockReturnValue([]),
-  },
-}))
+  }
+
+  return { usePlaylistStore: () => store }
+})
 
 import { http } from '@/services/http'
-import { playlistStore } from '@/stores/playlistStore'
-import { playlistFolderStore } from './playlistFolderStore'
-
+import { usePlaylistStore } from '@/stores/playlistStore'
+import { usePlaylistFolderStore } from './playlistFolderStore'
 describe('playlistFolderStore', () => {
   const h = createHarness({
     beforeEach: () => {
-      playlistFolderStore.state.folders = []
-      playlistStore.state.playlists = []
+      usePlaylistFolderStore().state.folders = []
+      usePlaylistStore().state.playlists = []
       vi.mocked(http.patch).mockReset()
       vi.mocked(http.post).mockReset()
       vi.mocked(http.put).mockReset()
       vi.mocked(http.delete).mockReset()
-      vi.mocked(playlistStore.byFolder).mockReset()
-      vi.mocked(playlistStore.byFolder).mockImplementation(folder =>
-        playlistStore.state.playlists.filter(playlist => playlist.folder_id === folder.id),
+      vi.mocked(usePlaylistStore().byFolder).mockReset()
+      vi.mocked(usePlaylistStore().byFolder).mockImplementation(folder =>
+        usePlaylistStore().state.playlists.filter(playlist => playlist.folder_id === folder.id),
       )
     },
   })
@@ -43,24 +44,24 @@ describe('playlistFolderStore', () => {
     const zebra = h.factory('playlist-folder').make({ name: 'Zebra' })
     const alpha = h.factory('playlist-folder').make({ name: 'Alpha' })
 
-    playlistFolderStore.init([zebra, alpha])
+    usePlaylistFolderStore().init([zebra, alpha])
 
-    expect(playlistFolderStore.state.folders[0].name).toBe('Alpha')
-    expect(playlistFolderStore.state.folders[1].name).toBe('Zebra')
+    expect(usePlaylistFolderStore().state.folders[0].name).toBe('Alpha')
+    expect(usePlaylistFolderStore().state.folders[1].name).toBe('Zebra')
   })
 
   it('finds folder by id', () => {
     const rock = h.factory('playlist-folder').make({ name: 'Rock' })
     const jazz = h.factory('playlist-folder').make({ name: 'Jazz' })
 
-    playlistFolderStore.init([rock, jazz])
+    usePlaylistFolderStore().init([rock, jazz])
 
-    expect(playlistFolderStore.byId(jazz.id)!.name).toBe('Jazz')
+    expect(usePlaylistFolderStore().byId(jazz.id)!.name).toBe('Jazz')
   })
 
   it('returns undefined for non-existent id', () => {
-    playlistFolderStore.init([])
-    expect(playlistFolderStore.byId('999')).toBeUndefined()
+    usePlaylistFolderStore().init([])
+    expect(usePlaylistFolderStore().byId('999')).toBeUndefined()
   })
 
   it('returns sorted direct children', () => {
@@ -68,10 +69,14 @@ describe('playlistFolderStore', () => {
     const alpha = h.factory('playlist-folder').make({ name: 'Alpha', parent_id: null })
     const child = h.factory('playlist-folder').make({ name: 'Child', parent_id: root.id })
 
-    playlistFolderStore.init([root, child, alpha])
+    usePlaylistFolderStore().init([root, child, alpha])
 
-    expect(playlistFolderStore.byParent(null).map(folder => folder.name)).toEqual(['Alpha', 'Zebra'])
-    expect(playlistFolderStore.byParent(root)).toEqual([child])
+    expect(
+      usePlaylistFolderStore()
+        .byParent(null)
+        .map(folder => folder.name),
+    ).toEqual(['Alpha', 'Zebra'])
+    expect(usePlaylistFolderStore().byParent(root)).toEqual([child])
   })
 
   it('returns every descendant in sibling-name order', () => {
@@ -80,9 +85,9 @@ describe('playlistFolderStore', () => {
     const alpha = h.factory('playlist-folder').make({ name: 'Alpha', parent_id: root.id })
     const grandchild = h.factory('playlist-folder').make({ name: 'Grandchild', parent_id: alpha.id })
 
-    playlistFolderStore.init([zebra, grandchild, root, alpha])
+    usePlaylistFolderStore().init([zebra, grandchild, root, alpha])
 
-    expect(playlistFolderStore.descendantsOf(root)).toEqual([alpha, grandchild, zebra])
+    expect(usePlaylistFolderStore().descendantsOf(root)).toEqual([alpha, grandchild, zebra])
   })
 
   it('builds full paths', () => {
@@ -90,9 +95,9 @@ describe('playlistFolderStore', () => {
     const child = h.factory('playlist-folder').make({ name: 'Live', parent_id: root.id })
     const grandchild = h.factory('playlist-folder').make({ name: '2026', parent_id: child.id })
 
-    playlistFolderStore.init([root, child, grandchild])
+    usePlaylistFolderStore().init([root, child, grandchild])
 
-    expect(playlistFolderStore.pathFor(grandchild)).toBe('Music / Live / 2026')
+    expect(usePlaylistFolderStore().pathFor(grandchild)).toBe('Music / Live / 2026')
   })
 
   it('returns playlists from a folder and its descendants', () => {
@@ -102,26 +107,26 @@ describe('playlistFolderStore', () => {
     const directPlaylist = h.factory('playlist').make({ folder_id: root.id })
     const childPlaylist = h.factory('playlist').make({ folder_id: child.id })
     const siblingPlaylist = h.factory('playlist').make({ folder_id: sibling.id })
-    playlistFolderStore.init([root, child, sibling])
-    playlistStore.state.playlists = [directPlaylist, childPlaylist, siblingPlaylist]
+    usePlaylistFolderStore().init([root, child, sibling])
+    usePlaylistStore().state.playlists = [directPlaylist, childPlaylist, siblingPlaylist]
 
-    expect(playlistFolderStore.playlistsInTree(root)).toEqual([directPlaylist, childPlaylist])
+    expect(usePlaylistFolderStore().playlistsInTree(root)).toEqual([directPlaylist, childPlaylist])
   })
 
   it('stores a new folder via API and adds sorted', async () => {
     const alpha = h.factory('playlist-folder').make({ name: 'Alpha' })
-    playlistFolderStore.init([alpha])
+    usePlaylistFolderStore().init([alpha])
 
     const beta = h.factory('playlist-folder').make({ name: 'Beta' })
     vi.mocked(http.post).mockResolvedValue(beta)
 
-    const folder = await playlistFolderStore.store('Beta')
+    const folder = await usePlaylistFolderStore().store('Beta')
 
     expect(http.post).toHaveBeenCalledWith('playlist-folders', { name: 'Beta' })
     expect(folder.name).toBe('Beta')
-    expect(playlistFolderStore.state.folders).toHaveLength(2)
-    expect(playlistFolderStore.state.folders[0].name).toBe('Alpha')
-    expect(playlistFolderStore.state.folders[1].name).toBe('Beta')
+    expect(usePlaylistFolderStore().state.folders).toHaveLength(2)
+    expect(usePlaylistFolderStore().state.folders[0].name).toBe('Alpha')
+    expect(usePlaylistFolderStore().state.folders[1].name).toBe('Beta')
   })
 
   it('stores a new folder under a parent', async () => {
@@ -129,7 +134,7 @@ describe('playlistFolderStore', () => {
     const child = h.factory('playlist-folder').make({ name: 'Child', parent_id: parent.id })
     vi.mocked(http.post).mockResolvedValue(child)
 
-    await playlistFolderStore.store('Child', parent)
+    await usePlaylistFolderStore().store('Child', parent)
 
     expect(http.post).toHaveBeenCalledWith('playlist-folders', {
       name: 'Child',
@@ -143,40 +148,40 @@ describe('playlistFolderStore', () => {
     const grandchild = h.factory('playlist-folder').make({ parent_id: child.id })
     const directPlaylist = h.factory('playlist').make({ folder_id: folder.id })
     const childPlaylist = h.factory('playlist').make({ folder_id: child.id })
-    playlistFolderStore.init([folder, child, grandchild])
-    playlistStore.state.playlists = [directPlaylist, childPlaylist]
+    usePlaylistFolderStore().init([folder, child, grandchild])
+    usePlaylistStore().state.playlists = [directPlaylist, childPlaylist]
     vi.mocked(http.delete).mockResolvedValue({})
 
-    await playlistFolderStore.delete(folder)
+    await usePlaylistFolderStore().delete(folder)
 
     expect(http.delete).toHaveBeenCalledWith(`playlist-folders/${folder.id}`)
-    expect(playlistFolderStore.state.folders).toEqual(expect.arrayContaining([child, grandchild]))
-    expect(playlistFolderStore.state.folders).toHaveLength(2)
+    expect(usePlaylistFolderStore().state.folders).toEqual(expect.arrayContaining([child, grandchild]))
+    expect(usePlaylistFolderStore().state.folders).toHaveLength(2)
     expect(child.parent_id).toBeNull()
     expect(grandchild.parent_id).toBe(child.id)
     expect(directPlaylist.folder_id).toBeNull()
     expect(childPlaylist.folder_id).toBe(child.id)
-    expect(playlistStore.state.playlists).toEqual([directPlaylist, childPlaylist])
+    expect(usePlaylistStore().state.playlists).toEqual([directPlaylist, childPlaylist])
   })
 
   it('renames a folder', async () => {
     const folder = h.factory('playlist-folder').make({ name: 'Old' })
-    playlistFolderStore.init([folder])
+    usePlaylistFolderStore().init([folder])
     vi.mocked(http.put).mockResolvedValue({})
 
-    await playlistFolderStore.rename(folder, 'New')
+    await usePlaylistFolderStore().rename(folder, 'New')
 
     expect(http.put).toHaveBeenCalledWith(`playlist-folders/${folder.id}`, { name: 'New' })
-    expect(playlistFolderStore.byId(folder.id)!.name).toBe('New')
+    expect(usePlaylistFolderStore().byId(folder.id)!.name).toBe('New')
   })
 
   it('updates a folder name and parent together', async () => {
     const folder = h.factory('playlist-folder').make({ name: 'Old', parent_id: null })
     const parent = h.factory('playlist-folder').make({ parent_id: null })
     vi.mocked(http.patch).mockResolvedValue({})
-    playlistFolderStore.init([folder, parent])
+    usePlaylistFolderStore().init([folder, parent])
 
-    await playlistFolderStore.update(folder, { name: 'New', parent_id: parent.id })
+    await usePlaylistFolderStore().update(folder, { name: 'New', parent_id: parent.id })
 
     expect(http.patch).toHaveBeenCalledOnce()
     expect(http.patch).toHaveBeenCalledWith(`playlist-folders/${folder.id}`, {
@@ -190,14 +195,14 @@ describe('playlistFolderStore', () => {
     const folder = h.factory('playlist-folder').make({ parent_id: null })
     const parent = h.factory('playlist-folder').make({ parent_id: null })
     vi.mocked(http.patch).mockResolvedValue({})
-    playlistFolderStore.init([folder, parent])
+    usePlaylistFolderStore().init([folder, parent])
 
-    await playlistFolderStore.moveFolderToFolder(folder, parent)
+    await usePlaylistFolderStore().moveFolderToFolder(folder, parent)
 
     expect(http.patch).toHaveBeenNthCalledWith(1, `playlist-folders/${folder.id}`, { parent_id: parent.id })
     expect(folder.parent_id).toBe(parent.id)
 
-    await playlistFolderStore.moveFolderToFolder(folder, null)
+    await usePlaylistFolderStore().moveFolderToFolder(folder, null)
 
     expect(http.patch).toHaveBeenNthCalledWith(2, `playlist-folders/${folder.id}`, { parent_id: null })
     expect(folder.parent_id).toBeNull()
@@ -207,11 +212,11 @@ describe('playlistFolderStore', () => {
     const root = h.factory('playlist-folder').make({ parent_id: null })
     const child = h.factory('playlist-folder').make({ parent_id: root.id })
     const grandchild = h.factory('playlist-folder').make({ parent_id: child.id })
-    playlistFolderStore.init([root, child, grandchild])
+    usePlaylistFolderStore().init([root, child, grandchild])
 
-    await playlistFolderStore.moveFolderToFolder(child, root)
-    await playlistFolderStore.moveFolderToFolder(child, child)
-    await playlistFolderStore.moveFolderToFolder(root, grandchild)
+    await usePlaylistFolderStore().moveFolderToFolder(child, root)
+    await usePlaylistFolderStore().moveFolderToFolder(child, child)
+    await usePlaylistFolderStore().moveFolderToFolder(root, grandchild)
 
     expect(http.patch).not.toHaveBeenCalled()
     expect(root.parent_id).toBeNull()
@@ -222,9 +227,9 @@ describe('playlistFolderStore', () => {
     const folder = h.factory('playlist-folder').make({ parent_id: null })
     const parent = h.factory('playlist-folder').make({ parent_id: null })
     vi.mocked(http.patch).mockRejectedValue(new Error('boom'))
-    playlistFolderStore.init([folder, parent])
+    usePlaylistFolderStore().init([folder, parent])
 
-    await expect(playlistFolderStore.moveFolderToFolder(folder, parent)).rejects.toThrow('boom')
+    await expect(usePlaylistFolderStore().moveFolderToFolder(folder, parent)).rejects.toThrow('boom')
 
     expect(folder.parent_id).toBeNull()
   })
@@ -233,9 +238,9 @@ describe('playlistFolderStore', () => {
     const folder = h.factory('playlist-folder').make()
     const playlist = h.factory('playlist').make({ folder_id: null })
     vi.mocked(http.post).mockResolvedValue({})
-    playlistFolderStore.init([folder])
+    usePlaylistFolderStore().init([folder])
 
-    await playlistFolderStore.movePlaylistToFolder(playlist, folder)
+    await usePlaylistFolderStore().movePlaylistToFolder(playlist, folder)
 
     expect(playlist.folder_id).toBe(folder.id)
     expect(http.post).toHaveBeenCalledWith(`playlist-folders/${folder.id}/playlists`, { playlists: [playlist.id] })
@@ -246,7 +251,7 @@ describe('playlistFolderStore', () => {
     const playlist = h.factory('playlist').make({ folder_id: folder.id })
     vi.mocked(http.delete).mockResolvedValue({})
 
-    await playlistFolderStore.movePlaylistToFolder(playlist, null)
+    await usePlaylistFolderStore().movePlaylistToFolder(playlist, null)
 
     expect(playlist.folder_id).toBeNull()
     expect(http.delete).toHaveBeenCalledWith(`playlist-folders/${folder.id}/playlists`, { playlists: [playlist.id] })
@@ -257,9 +262,9 @@ describe('playlistFolderStore', () => {
     const toFolder = h.factory('playlist-folder').make()
     const playlist = h.factory('playlist').make({ folder_id: fromFolder.id })
     vi.mocked(http.post).mockResolvedValue({})
-    playlistFolderStore.init([fromFolder, toFolder])
+    usePlaylistFolderStore().init([fromFolder, toFolder])
 
-    await playlistFolderStore.movePlaylistToFolder(playlist, toFolder)
+    await usePlaylistFolderStore().movePlaylistToFolder(playlist, toFolder)
 
     expect(playlist.folder_id).toBe(toFolder.id)
     expect(http.post).toHaveBeenCalledWith(`playlist-folders/${toFolder.id}/playlists`, { playlists: [playlist.id] })
@@ -269,9 +274,9 @@ describe('playlistFolderStore', () => {
   it('no-ops when the playlist is already in the target folder', async () => {
     const folder = h.factory('playlist-folder').make()
     const playlist = h.factory('playlist').make({ folder_id: folder.id })
-    playlistFolderStore.init([folder])
+    usePlaylistFolderStore().init([folder])
 
-    await playlistFolderStore.movePlaylistToFolder(playlist, folder)
+    await usePlaylistFolderStore().movePlaylistToFolder(playlist, folder)
 
     expect(http.post).not.toHaveBeenCalled()
     expect(http.delete).not.toHaveBeenCalled()
@@ -280,7 +285,7 @@ describe('playlistFolderStore', () => {
   it('no-ops when moving an already-orphan playlist to no folder', async () => {
     const playlist = h.factory('playlist').make({ folder_id: null })
 
-    await playlistFolderStore.movePlaylistToFolder(playlist, null)
+    await usePlaylistFolderStore().movePlaylistToFolder(playlist, null)
 
     expect(http.post).not.toHaveBeenCalled()
     expect(http.delete).not.toHaveBeenCalled()
@@ -290,15 +295,15 @@ describe('playlistFolderStore', () => {
     const folder = h.factory('playlist-folder').make()
     const playlist = h.factory('playlist').make({ folder_id: null })
     vi.mocked(http.post).mockRejectedValue(new Error('boom'))
-    playlistFolderStore.init([folder])
+    usePlaylistFolderStore().init([folder])
 
-    await expect(playlistFolderStore.movePlaylistToFolder(playlist, folder)).rejects.toThrow('boom')
+    await expect(usePlaylistFolderStore().movePlaylistToFolder(playlist, folder)).rejects.toThrow('boom')
 
     expect(playlist.folder_id).toBeNull()
   })
 
   it('sorts folders alphabetically', () => {
-    const sorted = playlistFolderStore.sort([
+    const sorted = usePlaylistFolderStore().sort([
       h.factory('playlist-folder').make({ name: 'Zebra' }),
       h.factory('playlist-folder').make({ name: 'Alpha' }),
       h.factory('playlist-folder').make({ name: 'Middle' }),

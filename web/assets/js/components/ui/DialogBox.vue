@@ -1,27 +1,48 @@
 <template>
-  <dialog ref="dialog" :class="`${type}`" class="dialog-box">
-    <div class="body">
-      <M3Icon :name="icon" class="icon" />
-      <h3 class="m3-headline-small headline">{{ headline }}</h3>
-      <div v-if="body" class="m3-body-medium message">{{ body }}</div>
-    </div>
+  <AlertDialogRoot :open @update:open="value => value || answer(false)">
+    <AlertDialogPortal>
+      <AlertDialogOverlay class="dialog-scrim" />
+      <AlertDialogContent :class="type" class="dialog-box">
+        <div class="body">
+          <M3Icon :name="icon" class="icon" />
+          <AlertDialogTitle as="h3" class="m3-headline-small headline">{{ headline }}</AlertDialogTitle>
+          <AlertDialogDescription as="div" class="m3-body-medium message">{{ body }}</AlertDialogDescription>
+        </div>
 
-    <footer class="actions">
-      <M3Button v-if="showCancelButton" name="cancel" variant="text" @click.prevent="cancel">Cancel</M3Button>
-      <M3Button name="ok" variant="text">OK</M3Button>
-    </footer>
-  </dialog>
+        <footer class="actions">
+          <AlertDialogCancel v-if="showCancelButton" as-child>
+            <M3Button variant="text">Cancel</M3Button>
+          </AlertDialogCancel>
+          <M3Button variant="text" @click="answer(true)">OK</M3Button>
+        </footer>
+      </AlertDialogContent>
+    </AlertDialogPortal>
+  </AlertDialogRoot>
 </template>
 
 <script lang="ts" setup>
-import { computed, ref } from 'vue'
+import {
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogOverlay,
+  AlertDialogPortal,
+  AlertDialogRoot,
+  AlertDialogTitle,
+} from 'reka-ui'
+import { computed, onBeforeUnmount, ref } from 'vue'
 
 import M3Button from '@/components/m3/M3Button.vue'
 import M3Icon from '@/components/m3/M3Icon.vue'
 
 type DialogType = 'info' | 'success' | 'warning' | 'danger' | 'confirm'
 
-const dialog = ref<HTMLDialogElement>()
+/**
+ * The app's alerts and questions (`useDialogBox`), answered with OK (true) or
+ * Cancel, Escape (false). Reka UI runs it: focus stays inside, starting on
+ * Cancel when there is one, and goes back where it was after.
+ */
+const open = ref(false)
 const type = ref<DialogType>('info')
 const title = ref('')
 const message = ref('')
@@ -40,41 +61,30 @@ const defaultTitle = computed(
 const headline = computed(() => title.value || (type.value === 'confirm' ? message.value : defaultTitle.value))
 const body = computed(() => (!title.value && type.value === 'confirm' ? '' : message.value))
 
-// @ts-ignore
-const close = () => dialog.value?.close()
-const cancel = () => dialog.value?.dispatchEvent(new Event('cancel'))
+let resolveAnswer: ((ok: boolean) => void) | null = null
+let frame = 0
 
-const waitForInput = () =>
-  new Promise(resolve => {
-    dialog.value?.addEventListener(
-      'cancel',
-      () => {
-        close()
-        resolve(false)
-      },
-      { once: true },
-    )
+const answer = (ok: boolean) => {
+  cancelAnimationFrame(frame)
+  resolveAnswer?.(ok)
+  resolveAnswer = null
+  open.value = false
+}
 
-    dialog.value?.querySelector('[name=ok]')!.addEventListener(
-      'click',
-      () => {
-        close()
-        resolve(true)
-      },
-      { once: true },
-    )
-  })
+const show = (_type: DialogType, _message: string, _title: string = '') => {
+  // One at a time: a question still open goes unanswered.
+  answer(false)
 
-const show = async (_type: DialogType, _message: string, _title: string = '') => {
   type.value = _type
   message.value = _message
   title.value = _title
+  // On the next frame: the key that asked (Escape in a form, "Discard all changes?") would answer it too.
+  frame = requestAnimationFrame(() => (open.value = true))
 
-  // @ts-ignore
-  dialog.value.showModal()
-
-  return waitForInput()
+  return new Promise<boolean>(resolve => (resolveAnswer = resolve))
 }
+
+onBeforeUnmount(() => cancelAnimationFrame(frame))
 
 const success = async (message: string, title: string = '') => show('success', message, title)
 const info = async (message: string, title: string = '') => show('info', message, title)
@@ -86,8 +96,20 @@ defineExpose({ success, info, warning, error, confirm })
 </script>
 
 <style scoped>
+.dialog-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 1002;
+  background: color-mix(in srgb, var(--schemes-scrim) 32%, transparent);
+}
+
+/* Over everything, modals included: it asks about what they're doing. */
 .dialog-box {
-  margin: auto;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 1002;
+  transform: translate(-50%, -50%);
   min-width: min(280px, calc(100vw - 48px));
   max-width: min(560px, calc(100vw - 48px));
   padding: 24px;
@@ -96,10 +118,7 @@ defineExpose({ success, info, warning, error, confirm })
   background: var(--schemes-surface-container-high);
   color: var(--schemes-on-surface-variant);
   box-shadow: var(--m3-elevation-3);
-
-  &::backdrop {
-    background: color-mix(in srgb, var(--schemes-scrim) 32%, transparent);
-  }
+  outline: none;
 }
 
 .body {
@@ -129,6 +148,10 @@ defineExpose({ success, info, warning, error, confirm })
 .message {
   align-self: stretch;
   text-align: start;
+
+  &:empty {
+    display: none;
+  }
 }
 
 .actions {

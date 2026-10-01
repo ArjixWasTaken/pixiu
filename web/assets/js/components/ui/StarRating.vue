@@ -8,7 +8,6 @@
     <label
       v-for="star in 5"
       :key="star"
-      v-koel-tooltip
       :title="titleFor(star)"
       :class="{ lit: (hover || currentRating) >= star }"
       class="star cursor-pointer transition-[color] duration-150"
@@ -32,11 +31,14 @@
 <script lang="ts" setup>
 import type { Reactive } from 'vue'
 import { computed, ref, useId } from 'vue'
-import { albumStore } from '@/stores/albumStore'
-import { artistStore } from '@/stores/artistStore'
-import { playableStore } from '@/stores/playableStore'
-
+import { useAlbumStore } from '@/stores/albumStore'
+import { useArtistStore } from '@/stores/artistStore'
+import { usePlayableStore } from '@/stores/playableStore'
 import M3Icon from '@/components/m3/M3Icon.vue'
+
+const albumStore = useAlbumStore()
+const artistStore = useArtistStore()
+const playableStore = usePlayableStore()
 
 type Rateable = Song | Album | Artist
 

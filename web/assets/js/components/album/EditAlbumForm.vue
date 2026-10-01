@@ -36,8 +36,9 @@
 <script lang="ts" setup>
 import { onMounted, ref } from 'vue'
 import { huntingService } from '@/services/huntingService'
+import { queryClient } from '@/services/queryClient'
 import type { AlbumUpdateData } from '@/stores/albumStore'
-import { albumStore } from '@/stores/albumStore'
+import { useAlbumStore } from '@/stores/albumStore'
 import { useMessageToaster } from '@/composables/useMessageToaster'
 import { useDialogBox } from '@/composables/useDialogBox'
 import { useErrorHandler } from '@/composables/useErrorHandler'
@@ -45,6 +46,8 @@ import { useForm } from '@/composables/useForm'
 
 import M3Button from '@/components/m3/M3Button.vue'
 import M3TextField from '@/components/m3/M3TextField.vue'
+
+const albumStore = useAlbumStore()
 
 const props = defineProps<{ album: Album }>()
 const emit = defineEmits<{ (e: 'close'): void }>()
@@ -81,7 +84,12 @@ const maybeClose = async () => {
 
 onMounted(async () => {
   try {
-    const details = await huntingService.albumDetails(props.album)
+    // Fresh for editing, and kept for the album's MusicBrainz panel.
+    const details = await queryClient.fetchQuery({
+      queryKey: ['album', props.album.id, 'details'],
+      queryFn: () => huntingService.albumDetails(props.album),
+      staleTime: 0,
+    })
     Object.assign(data, {
       title: details.title,
       artist: details.artist,

@@ -10,11 +10,14 @@
 import { toRefs } from 'vue'
 import { useContextMenu } from '@/composables/useContextMenu'
 import { playback } from '@/services/playbackManager'
-import { playableStore } from '@/stores/playableStore'
+import { usePlayableStore } from '@/stores/playableStore'
 import { useRouter } from '@/composables/useRouter'
-import { queueStore } from '@/stores/queueStore'
+import { useQueueStore } from '@/stores/queueStore'
 import { useMessageToaster } from '@/composables/useMessageToaster'
 import { pluralize } from '@/utils/formatters'
+
+const playableStore = usePlayableStore()
+const queueStore = useQueueStore()
 
 const props = defineProps<{ genre: Genre }>()
 const { genre } = toRefs(props)

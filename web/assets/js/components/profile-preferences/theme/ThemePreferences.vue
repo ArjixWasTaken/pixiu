@@ -10,11 +10,13 @@
 
 <script lang="ts" setup>
 import { computed, toRef } from 'vue'
-import { themeStore } from '@/stores/themeStore'
-import { preferenceStore } from '@/stores/preferenceStore'
-
+import { useThemeStore } from '@/stores/themeStore'
+import { usePreferenceStore } from '@/stores/preferenceStore'
 import M3SegmentedButton from '@/components/m3/M3SegmentedButton.vue'
 import ThemeList from '@/components/profile-preferences/theme/ThemeList.vue'
+
+const themeStore = useThemeStore()
+const preferenceStore = usePreferenceStore()
 
 const themes = toRef(themeStore.state, 'themes')
 

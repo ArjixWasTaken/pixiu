@@ -1,22 +1,16 @@
 import { afterEach, describe, expect, it } from 'vite-plus/test'
-import { clientUrl, toClientPath } from './clientUrl'
+import { toClientPath } from './clientUrl'
 
-describe('clientUrl', () => {
-  afterEach(() => {
-    window.KOEL.clean_urls = false
+describe('toClientPath', () => {
+  afterEach(() => (window.KOEL.base_url = '/'))
+
+  it('keeps a path at the root as it is', () => {
+    expect(toClientPath('/albums/al-1')).toBe('/albums/al-1')
+    expect(toClientPath('albums')).toBe('/albums')
   })
 
-  it('points into the hash without clean URLs', () => {
-    expect(clientUrl('/songs/1')).toBe(`${window.KOEL.base_url}#/songs/1`)
-  })
-
-  it('points at a plain path with clean URLs', () => {
-    window.KOEL.clean_urls = true
-
-    expect(clientUrl('songs/1')).toBe(`${window.KOEL.base_url}songs/1`)
-  })
-
-  it.each(['#/albums', '/#/albums', 'albums', '/albums'])('reads %s as the Albums screen path', path => {
-    expect(toClientPath(path)).toBe('/albums')
+  it('takes off the base the app is served under', () => {
+    window.KOEL.base_url = '/music/'
+    expect(toClientPath('/music/albums?sort=name#x')).toBe('/albums?sort=name#x')
   })
 })

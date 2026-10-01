@@ -36,7 +36,7 @@
 import { defineAsyncComponent } from '@/utils/helpers'
 import { computed, onMounted, provide, ref, shallowRef, watch } from 'vue'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
-import { queueStore } from '@/stores/queueStore'
+import { useQueueStore } from '@/stores/queueStore'
 import { authService } from '@/services/authService'
 import {
   ContextMenuKey,
@@ -48,8 +48,8 @@ import {
 } from '@/config/symbols'
 import { useRouter } from '@/composables/useRouter'
 import { useViewport } from '@/composables/useViewport'
-import { userStore } from '@/stores/userStore'
-import type { Route } from '@/router'
+import { useUserStore } from '@/stores/userStore'
+import { activeRouter } from '@/router'
 
 import DialogBox from '@/components/ui/DialogBox.vue'
 import MessageToaster from '@/components/ui/message-toaster/MessageToaster.vue'
@@ -67,6 +67,9 @@ import GlobalEventListeners from '@/components/utils/GlobalEventListeners.vue'
 import AppInitializer from '@/components/utils/AppInitializer.vue'
 import ContextMenu from '@/components/ui/context-menu/ContextMenu.vue'
 
+const queueStore = useQueueStore()
+const userStore = useUserStore()
+
 const HotkeyListener = defineAsyncComponent(() => import('@/components/utils/HotkeyListener.vue'))
 const Auth = defineAsyncComponent(() => import('@/components/auth/Auth.vue'))
 const MainWrapper = defineAsyncComponent(() => import('@/components/layout/main-wrapper/index.vue'))
@@ -81,13 +84,13 @@ const toaster = ref<InstanceType<typeof MessageToaster>>()
 const currentStreamable = ref<Streamable>()
 const showDropZone = ref(false)
 
-const { isCurrentScreen, resolveRoute, triggerNotFound, onRouteChanged, startGuarding } = useRouter()
+const { isCurrentScreen, startGuarding } = useRouter()
 const { online } = useNetworkStatus()
 const { isMobile } = useViewport()
 
 const authenticated = ref(false)
 const initialized = ref(false)
-const currentRoute = ref<Route | null>(null)
+const currentRoute = computed(() => activeRouter().currentRoute.value)
 
 const triggerAppInitialization = () => (authenticated.value = true)
 const onInitError = () => (authenticated.value = false)
@@ -95,30 +98,26 @@ const onInitError = () => (authenticated.value = false)
 const onInitSuccess = async () => {
   initialized.value = true
   startGuarding()
-
-  if (currentRoute.value && currentRoute.value.meta?.guard?.() === false) {
-    triggerNotFound()
-  }
 }
 
 /** Signed in with a temporary password: they pick their own first. */
 const mustChangePassword = computed(() => Boolean(userStore.state.current?.password_change_required))
 
 const layout = computed(() => {
-  if (currentRoute.value?.meta?.layout) {
+  if (currentRoute.value.meta.layout) {
     return currentRoute.value.meta.layout
   }
 
   return authenticated.value ? 'default' : 'auth'
 })
 
-onMounted(() => {
+onMounted(async () => {
   // Add an ugly mac/non-mac class for OS-targeting styles.
   document.documentElement.classList.add(navigator.userAgent.includes('Mac') ? 'mac' : 'non-mac')
 
-  currentRoute.value = resolveRoute()
+  await activeRouter().isReady()
 
-  if (currentRoute.value?.meta?.public) {
+  if (currentRoute.value.meta.public) {
     // If the route is public (sign-in, email links etc.) we don't need to check for authentication.
     return
   }
@@ -143,8 +142,6 @@ watch(
   () => queueStore.current,
   song => (currentStreamable.value = song),
 )
-
-onRouteChanged(route => (currentRoute.value = route))
 
 const onDragEnd = () => (showDropZone.value = false)
 

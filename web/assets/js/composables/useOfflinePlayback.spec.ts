@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import { createHarness } from '@/__tests__/TestHarness'
-import { playableStore } from '@/stores/playableStore'
+import { usePlayableStore } from '@/stores/playableStore'
 import { offlineManifest } from '@/services/offlineManifest'
 import { logger } from '@/utils/logger'
 import { useOfflinePlayback } from './useOfflinePlayback'
@@ -65,7 +65,7 @@ describe('useOfflinePlayback', () => {
   it('sends CACHE_AUDIO message to SW', () => {
     const song = h.factory('song').make()
     const sourceUrl = 'http://localhost/play/abc123?t=token'
-    h.mock(playableStore, 'getSourceUrl').mockReturnValue(sourceUrl)
+    h.mock(usePlayableStore(), 'getSourceUrl').mockReturnValue(sourceUrl)
 
     makeAvailableOffline(song)
 
@@ -79,7 +79,7 @@ describe('useOfflinePlayback', () => {
   it('sends DELETE_AUDIO_CACHE message to SW', () => {
     const song = h.factory('song').make()
     const sourceUrl = 'http://localhost/play/abc123?t=token'
-    h.mock(playableStore, 'getSourceUrl').mockReturnValue(sourceUrl)
+    h.mock(usePlayableStore(), 'getSourceUrl').mockReturnValue(sourceUrl)
 
     removeOfflineCache(song)
 
@@ -109,7 +109,7 @@ describe('useOfflinePlayback', () => {
 
   it('marks song as cached on CACHE_AUDIO_COMPLETE and persists to manifest', () => {
     const song = h.factory('song').make()
-    h.mock(playableStore, 'byId').mockReturnValue(song)
+    h.mock(usePlayableStore(), 'byId').mockReturnValue(song)
 
     cachingProgress.value.set(song.id, 0.5)
 
@@ -161,7 +161,7 @@ describe('useOfflinePlayback', () => {
   it('sends GET_CACHE_STATUS message to SW', () => {
     const songs = [h.factory('song').make(), h.factory('song').make()]
     const urls = ['http://localhost/play/a?t=t1', 'http://localhost/play/b?t=t2']
-    h.mock(playableStore, 'getSourceUrl').mockReturnValueOnce(urls[0]).mockReturnValueOnce(urls[1])
+    h.mock(usePlayableStore(), 'getSourceUrl').mockReturnValueOnce(urls[0]).mockReturnValueOnce(urls[1])
 
     checkCacheStatus(songs)
 
@@ -189,8 +189,8 @@ describe('useOfflinePlayback', () => {
   it('clears all offline cache', async () => {
     const song = h.factory('song').make()
     const sourceUrl = 'http://localhost/play/x?t=token'
-    h.mock(playableStore, 'byId').mockReturnValue(song)
-    h.mock(playableStore, 'getSourceUrl').mockReturnValue(sourceUrl)
+    h.mock(usePlayableStore(), 'byId').mockReturnValue(song)
+    h.mock(usePlayableStore(), 'getSourceUrl').mockReturnValue(sourceUrl)
 
     cachedSongIds.value.add(song.id)
     manifestEntries.value = [{ playable: song, cachedAt: Date.now(), size: 0 }]

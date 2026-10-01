@@ -2,7 +2,7 @@
   <li
     :class="{ droppable, 'drop-target-path': isOnDropTargetPath }"
     class="playlist-folder relative"
-    :draggable="!isMobile.any"
+    :draggable="!isTouch"
     @dragleave="onDragLeave"
     @dragover="onDragOver"
     @dragstart.stop="onDragStart"
@@ -32,11 +32,11 @@
 </template>
 
 <script lang="ts" setup>
-import isMobile from 'ismobilejs'
+import { useViewport } from '@/composables/useViewport'
 import { computed, inject, onBeforeUnmount, onMounted, ref, toRefs } from 'vue'
 import { defineAsyncComponent } from '@/utils/helpers'
-import { playlistFolderStore } from '@/stores/playlistFolderStore'
-import { playlistStore } from '@/stores/playlistStore'
+import { usePlaylistFolderStore } from '@/stores/playlistFolderStore'
+import { usePlaylistStore } from '@/stores/playlistStore'
 import { setDragText, useDraggable, useDroppable } from '@/composables/useDragAndDrop'
 import { useContextMenu } from '@/composables/useContextMenu'
 import { DraggedPlaylistFolderKey, DraggedPlaylistKey, PlaylistFolderDropTargetKey } from '@/config/symbols'
@@ -44,6 +44,11 @@ import { DraggedPlaylistFolderKey, DraggedPlaylistKey, PlaylistFolderDropTargetK
 import PlaylistSidebarItem from './PlaylistSidebarItem.vue'
 import SidebarItem from './SidebarItem.vue'
 import M3Icon from '@/components/m3/M3Icon.vue'
+
+const playlistFolderStore = usePlaylistFolderStore()
+const playlistStore = usePlaylistStore()
+
+const { isTouch } = useViewport()
 
 const props = defineProps<{ folder: PlaylistFolder }>()
 

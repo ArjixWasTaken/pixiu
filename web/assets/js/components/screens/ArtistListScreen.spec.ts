@@ -2,9 +2,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vite-plus/test'
 import { screen, waitFor } from '@testing-library/vue'
 import { createHarness } from '@/__tests__/TestHarness'
 import { setViewport } from '@/composables/useViewport'
-import { artistStore } from '@/stores/artistStore'
-import { commonStore } from '@/stores/commonStore'
-import { preferenceStore } from '@/stores/preferenceStore'
+import { useArtistStore } from '@/stores/artistStore'
+import { useCommonStore } from '@/stores/commonStore'
+import { usePreferenceStore } from '@/stores/preferenceStore'
 import Component from './ArtistListScreen.vue'
 
 const artistGridStub = {
@@ -26,9 +26,9 @@ describe('artistListScreen.vue', () => {
 
   const renderComponent = async () => {
     const artists = h.factory('artist').make(9)
-    const paginateMock = h.mock(artistStore, 'paginate').mockResolvedValueOnce('next-cursor-token')
-
-    artistStore.state.artists = artists
+    const paginateMock = h
+      .mock(useArtistStore(), 'paginate')
+      .mockResolvedValue({ items: useArtistStore().syncWithVault(artists), nextCursor: 'next-cursor-token' })
 
     const rendered = h.render(Component, {
       global: {
@@ -39,6 +39,8 @@ describe('artistListScreen.vue', () => {
       },
     })
 
+    // An empty library has nothing to fetch.
+    useCommonStore().state.song_length && (await waitFor(() => expect(paginateMock).toHaveBeenCalled()))
     await h.tick(2)
 
     return {
@@ -53,7 +55,7 @@ describe('artistListScreen.vue', () => {
   })
 
   it('shows a message when the library is empty', async () => {
-    commonStore.state.song_length = 0
+    useCommonStore().state.song_length = 0
 
     await renderComponent()
 
@@ -61,7 +63,7 @@ describe('artistListScreen.vue', () => {
   })
 
   it('renders the table when the view mode is table', async () => {
-    preferenceStore.temporary.artists_view_mode = 'table'
+    usePreferenceStore().artists_view_mode = 'table'
     await renderComponent()
 
     expect(screen.queryByTestId('artist-grid')).toBeNull()
@@ -69,7 +71,7 @@ describe('artistListScreen.vue', () => {
   })
 
   it('switches between grid and table via the view mode toggle', async () => {
-    preferenceStore.temporary.artists_view_mode = 'grid'
+    usePreferenceStore().artists_view_mode = 'grid'
     await renderComponent()
 
     screen.getByTestId('artist-grid')
@@ -102,23 +104,16 @@ describe('artistListScreen.vue', () => {
       }),
     )
 
+    // Back to all of them: the list kept from before, not fetched again.
     await h.user.click(screen.getByRole('button', { name: 'Favorites only' }))
+    await h.tick(2)
 
-    await waitFor(() =>
-      expect(paginateMock).toHaveBeenNthCalledWith(3, {
-        favorites_only: false,
-        cursor: '',
-        order: 'asc',
-        sort: 'name',
-      }),
-    )
+    expect(paginateMock).toHaveBeenCalledTimes(2)
   })
 
   it('filters out unfavorited artists in favorites mode', async () => {
-    const artists = h.factory('artist').make({ favorite: true }, 5)
-    artistStore.state.artists = artists
-
-    h.mock(artistStore, 'paginate').mockResolvedValue(null)
+    const artists = useArtistStore().syncWithVault(h.factory('artist').make({ favorite: true }, 5))
+    h.mock(useArtistStore(), 'paginate').mockResolvedValue({ items: artists, nextCursor: null })
 
     h.render(Component, {
       global: {
@@ -131,22 +126,19 @@ describe('artistListScreen.vue', () => {
 
     await h.tick(2)
 
-    preferenceStore.artists_favorites_only = true
-    await h.tick()
+    usePreferenceStore().artists_favorites_only = true
 
-    expect(screen.getAllByTestId('artist-card')).toHaveLength(5)
+    await waitFor(() => expect(screen.getAllByTestId('artist-card')).toHaveLength(5))
 
-    artistStore.state.artists[0].favorite = false
+    artists[0].favorite = false
     await h.tick()
 
     expect(screen.getAllByTestId('artist-card')).toHaveLength(4)
   })
 
   it('shows empty state when no favorite artists', async () => {
-    artistStore.state.artists = []
-
-    h.mock(artistStore, 'paginate').mockResolvedValue(null)
-    preferenceStore.artists_favorites_only = true
+    h.mock(useArtistStore(), 'paginate').mockResolvedValue({ items: [], nextCursor: null })
+    usePreferenceStore().artists_favorites_only = true
 
     h.render(Component, {
       global: {

@@ -1,7 +1,7 @@
-import isMobile from 'ismobilejs'
 import { useThrottleFn } from '@vueuse/core'
 import { watch } from 'vue'
 import { volumeManager } from '@/services/volumeManager'
+import { iOS } from '@/utils/supports'
 
 export abstract class BasePlaybackService {
   public media!: HTMLMediaElement
@@ -37,7 +37,8 @@ export abstract class BasePlaybackService {
     navigator.mediaSession.setActionHandler('previoustrack', () => this.playPrev())
     navigator.mediaSession.setActionHandler('nexttrack', () => this.playNext())
 
-    if (!isMobile.apple) {
+    // On iOS, seek handlers take the lock screen's previous and next buttons.
+    if (!iOS()) {
       navigator.mediaSession.setActionHandler('seekbackward', details => this.rewind(details.seekOffset || 10))
       navigator.mediaSession.setActionHandler('seekforward', details => this.forward(details.seekOffset || 10))
     }

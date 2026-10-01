@@ -12,7 +12,7 @@
     <VirtualScroller
       ref="virtualScroller"
       v-slot="{ item }: { item: PlayableRow }"
-      :item-height="calculatedItemHeight"
+      :item-height="songItemHeight"
       :items="rows"
       @scrolled-to-end="$emit('scrolled-to-end')"
     >
@@ -20,7 +20,7 @@
         :key="item.playable.id"
         :item="item"
         :show-disc="showDiscLabel(item.playable)"
-        :draggable="!isMobile.any"
+        :draggable="!isTouch"
         @click="onClick(item, $event)"
         @dragleave="onDragLeave"
         @dragstart="onDragStart(item, $event)"
@@ -36,17 +36,16 @@
 </template>
 
 <script lang="ts" setup>
-import { useThrottleFn } from '@vueuse/core'
-import isMobile from 'ismobilejs'
+import { useEventListener, useSwipe, useThrottleFn } from '@vueuse/core'
+import { useViewport } from '@/composables/useViewport'
 import type { Ref } from 'vue'
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { defineAsyncComponent, requireInjection } from '@/utils/helpers'
-import { preferenceStore as preferences } from '@/stores/preferenceStore'
-import { queueStore } from '@/stores/queueStore'
+import { usePreferenceStore } from '@/stores/preferenceStore'
+import { useQueueStore } from '@/stores/queueStore'
 import { useDraggable, useDroppable } from '@/composables/useDragAndDrop'
 import { useListSelection } from '@/composables/useListSelection'
 import { playback } from '@/services/playbackManager'
-import { useSwipeDirection } from '@/composables/useSwipeDirection'
 import { useContextMenu } from '@/composables/useContextMenu'
 import { useSizeVariable } from '@/composables/useSizeVariable'
 
@@ -61,6 +60,11 @@ import {
 import PlayableListItem from '@/components/playable/playable-list/PlayableListItem.vue'
 import VirtualScroller from '@/components/ui/VirtualScroller.vue'
 import PlayableListHeader from '@/components/playable/playable-list/PlayableListHeader.vue'
+
+const preferences = usePreferenceStore()
+const queueStore = useQueueStore()
+
+const { isTouch } = useViewport()
 
 const emit = defineEmits<{
   (e: 'press:enter', event: KeyboardEvent): void
@@ -87,9 +91,20 @@ const wrapper = ref<HTMLElement>()
 const virtualScroller = ref<InstanceType<typeof VirtualScroller>>()
 const sortFields = ref<PlayableListSortField[]>([])
 
-useSwipeDirection(
-  () => wrapper.value,
-  direction => emit('swipe', direction),
+// A swipe or a wheel turn up or down, for the screen to fold its header.
+useSwipe(wrapper, {
+  threshold: 30,
+  onSwipeEnd: (_, direction) => (direction === 'up' || direction === 'down') && emit('swipe', direction),
+})
+
+useEventListener(
+  wrapper,
+  'wheel',
+  useThrottleFn(
+    (event: WheelEvent) => Math.abs(event.deltaY) >= 5 && emit('swipe', event.deltaY > 0 ? 'down' : 'up'),
+    50,
+  ),
+  { passive: true },
 )
 
 const rows = computed(() => {
@@ -233,7 +248,7 @@ const onDragEnd = () => {
 
 const onClick = (row: PlayableRow, event: MouseEvent) => {
   // If we're on a touch device, or if Ctrl/Cmd key is pressed, just toggle selection.
-  if (isMobile.any) {
+  if (isTouch.value) {
     toggleSelected(row)
     return
   }
@@ -310,21 +325,8 @@ const showDiscLabel = (row: Playable) => {
   return discIndexMap.value[index] !== undefined
 }
 
+/** The height of a row, as an estimate: the scroller measures each (those with a disc label are taller). */
 const songItemHeight = useSizeVariable('--m3-row-height', 72)
-const discNumberHeight = useSizeVariable('--m3-disc-height', 44)
-
-const calculatedItemHeight = computed(() => {
-  if (noDiscLabel.value) {
-    return songItemHeight.value
-  }
-
-  const discCount = Object.keys(discIndexMap.value).length
-  const totalAdditionalPixels = discCount * discNumberHeight.value
-
-  const totalHeight = rows.value.length * songItemHeight.value + totalAdditionalPixels
-
-  return totalHeight / rows.value.length
-})
 
 const scrollToPlayable = (playable: Playable) => {
   const index = rows.value.findIndex(row => row.playable.id === playable.id)

@@ -17,10 +17,12 @@
 
 <script lang="ts" setup>
 import { onMounted, provide, ref, toRefs } from 'vue'
-import { playableStore } from '@/stores/playableStore'
+import { usePlayableStore } from '@/stores/playableStore'
 import { PlayablesKey } from '@/config/symbols'
 
 import TrackListItem from '@/components/album/AlbumTrackListItem.vue'
+
+const playableStore = usePlayableStore()
 
 const props = defineProps<{ album: Album; tracks: AlbumTrack[] }>()
 const { album, tracks } = toRefs(props)

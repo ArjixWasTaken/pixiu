@@ -19,10 +19,11 @@
 
 <script lang="ts" setup>
 import { computed, toRefs } from 'vue'
-import { themeStore } from '@/stores/themeStore'
-
+import { useThemeStore } from '@/stores/themeStore'
 import M3Card from '@/components/m3/M3Card.vue'
 import M3Icon from '@/components/m3/M3Icon.vue'
+
+const themeStore = useThemeStore()
 
 const props = defineProps<{ theme: Theme }>()
 

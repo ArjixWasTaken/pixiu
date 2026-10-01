@@ -1,15 +1,15 @@
 import { screen, waitFor } from '@testing-library/vue'
 import { describe, expect, it } from 'vite-plus/test'
 import { createHarness } from '@/__tests__/TestHarness'
-import { recentlyPlayedStore } from '@/stores/recentlyPlayedStore'
+import { useRecentlyPlayedStore } from '@/stores/recentlyPlayedStore'
 import Component from './RecentlyPlayedScreen.vue'
 
 describe('recentlyPlayedScreen.vue', () => {
   const h = createHarness()
 
   const renderComponent = async (playables: Playable[] = []) => {
-    recentlyPlayedStore.state.playables = playables
-    const fetchMock = h.mock(recentlyPlayedStore, 'fetch')
+    useRecentlyPlayedStore().state.playables = playables
+    const fetchMock = h.mock(useRecentlyPlayedStore(), 'fetch')
 
     h.render(Component, {
       global: {
@@ -19,7 +19,7 @@ describe('recentlyPlayedScreen.vue', () => {
       },
     })
 
-    h.visit('/recently-played')
+    await h.visit('/recently-played')
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalled())
   }

@@ -26,7 +26,7 @@ describe('searchForm.vue', () => {
 
     await h.user.click(screen.getByRole('searchbox'))
 
-    expect(mock).toHaveBeenCalledWith('/#/search')
+    expect(mock).toHaveBeenCalledWith('/search')
   })
 
   it('emits an event when search query is changed', async () => {
@@ -44,18 +44,18 @@ describe('searchForm.vue', () => {
 
     await h.type(screen.getByRole('searchbox'), 'hey{Enter}')
 
-    expect(goMock).toHaveBeenCalledWith('/#/search')
+    expect(goMock).toHaveBeenCalledWith('/search')
   })
 
   it('leaves the search behind when leaving the results', async () => {
     h.render(Component)
-    h.visit('/search')
+    await h.visit('/search')
     await h.type(screen.getByRole('searchbox'), 'coldplay')
 
-    h.visit('/search')
+    await h.visit('/search')
     expect(screen.getByRole<HTMLInputElement>('searchbox').value).toBe('coldplay')
 
-    h.visit('/home')
+    await h.visit('/home')
     await h.tick()
     expect(screen.getByRole<HTMLInputElement>('searchbox').value).toBe('')
   })

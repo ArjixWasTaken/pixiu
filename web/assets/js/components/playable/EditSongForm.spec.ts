@@ -4,7 +4,7 @@ import { createHarness } from '@/__tests__/TestHarness'
 import { arrayify } from '@/utils/helpers'
 import { eventBus } from '@/utils/eventBus'
 import type { SongUpdateResult } from '@/stores/playableStore'
-import { playableStore as songStore } from '@/stores/playableStore'
+import { usePlayableStore } from '@/stores/playableStore'
 import { MessageToasterStub } from '@/__tests__/stubs'
 import Component from './EditSongForm.vue'
 
@@ -40,7 +40,7 @@ describe('editSongForm.vue', () => {
       },
     }
 
-    const updateMock = h.mock(songStore, 'updateSongs').mockResolvedValue(result)
+    const updateMock = h.mock(usePlayableStore(), 'updateSongs').mockResolvedValue(result)
     const emitMock = h.mock(eventBus, 'emit')
     const alertMock = h.mock(MessageToasterStub.value, 'success')
 
@@ -96,7 +96,7 @@ describe('editSongForm.vue', () => {
       },
     }
 
-    const updateMock = h.mock(songStore, 'updateSongs').mockResolvedValue(result)
+    const updateMock = h.mock(usePlayableStore(), 'updateSongs').mockResolvedValue(result)
     const emitMock = h.mock(eventBus, 'emit')
     const alertMock = h.mock(MessageToasterStub.value, 'success')
 

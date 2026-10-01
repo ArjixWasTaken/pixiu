@@ -1,8 +1,9 @@
 import { computed, ref, toRaw } from 'vue'
-import { playableStore } from '@/stores/playableStore'
+import { usePlayableStore } from '@/stores/playableStore'
 import { offlineManifest } from '@/services/offlineManifest'
 import type { OfflineManifestEntry } from '@/services/offlineManifest'
-import { http } from '@/services/http'
+import { isNotFound, subsonic } from '@/services/subsonic'
+import { streamSongId } from '@/utils/streamCache'
 import { eventBus } from '@/utils/eventBus'
 import { logger } from '@/utils/logger'
 
@@ -74,8 +75,8 @@ const loadManifest = async () => {
     cachedSongIds.value.add(entry.playable.id)
 
     // Restore the playable into the vault if it's not already there
-    if (!playableStore.byId(entry.playable.id)) {
-      playableStore.syncWithVault(entry.playable)
+    if (!usePlayableStore().byId(entry.playable.id)) {
+      usePlayableStore().syncWithVault(entry.playable)
     }
   }
 
@@ -96,13 +97,22 @@ const loadManifest = async () => {
  */
 const syncWithServer = async (entries: OfflineManifestEntry[]) => {
   try {
-    const cachedIds = entries.map(e => e.playable.id)
-    const freshPlayables = await http.silently.post<Playable[]>('songs/by-ids', { ids: cachedIds })
-    const freshIds = new Set(freshPlayables.map(p => p.id))
+    // Each song asked for again: one gone from the server (Subsonic's "not found") lets go of its copy.
+    const results = await Promise.allSettled(entries.map(({ playable }) => subsonic.song(playable.id)))
+    const freshPlayables: Playable[] = []
+    const goneIds = new Set<Playable['id']>()
+
+    results.forEach((result, index) => {
+      if (result.status === 'fulfilled') {
+        freshPlayables.push(result.value)
+      } else if (isNotFound(result.reason)) {
+        goneIds.add(entries[index].playable.id)
+      }
+    })
 
     // Update existing entries with fresh data
     for (const playable of freshPlayables) {
-      playableStore.syncWithVault(playable)
+      usePlayableStore().syncWithVault(playable)
       offlineManifest.put({ playable, cachedAt: Date.now(), size: 0 })
     }
 
@@ -110,7 +120,7 @@ const syncWithServer = async (entries: OfflineManifestEntry[]) => {
     const sw = getSW()
 
     for (const entry of entries) {
-      if (!freshIds.has(entry.playable.id)) {
+      if (goneIds.has(entry.playable.id)) {
         cachedSongIds.value.delete(entry.playable.id)
         offlineManifest.remove(entry.playable.id)
 
@@ -118,13 +128,13 @@ const syncWithServer = async (entries: OfflineManifestEntry[]) => {
           sw.postMessage({
             type: 'DELETE_AUDIO_CACHE',
             songId: entry.playable.id,
-            sourceUrl: playableStore.getSourceUrl(entry.playable),
+            sourceUrl: usePlayableStore().getSourceUrl(entry.playable),
           })
         }
       }
     }
 
-    manifestEntries.value = manifestEntries.value.filter(e => freshIds.has(e.playable.id))
+    manifestEntries.value = manifestEntries.value.filter(e => !goneIds.has(e.playable.id))
   } catch (e) {
     logger.warn('Failed to sync offline cache with server:', e)
   }
@@ -180,7 +190,7 @@ const setupMessageListener = () => {
 
         for (const [url, isCachedUrl] of Object.entries(statuses)) {
           if (isCachedUrl) {
-            const songId = extractSongIdFromUrl(url)
+            const songId = streamSongId(url)
             if (songId) {
               cachedSongIds.value.add(songId)
             }
@@ -193,7 +203,7 @@ const setupMessageListener = () => {
 }
 
 const persistManifestEntry = (songId: Song['id']) => {
-  const playable = playableStore.byId(songId)
+  const playable = usePlayableStore().byId(songId)
 
   if (!playable) return
 
@@ -223,7 +233,7 @@ const setupSongDeletionListener = () => {
         sw.postMessage({
           type: 'DELETE_AUDIO_CACHE',
           songId: song.id,
-          sourceUrl: playableStore.getSourceUrl(song),
+          sourceUrl: usePlayableStore().getSourceUrl(song),
         })
       }
     }
@@ -233,11 +243,6 @@ const setupSongDeletionListener = () => {
 }
 
 let listenerSetup = false
-
-const extractSongIdFromUrl = (url: string): Song['id'] | null => {
-  const match = url.match(/\/play\/([^/?]+)/)
-  return match?.[1] || null
-}
 
 export const shouldWarnUponWindowUnload = () => cachingProgress.value.size > 0
 
@@ -253,7 +258,7 @@ export const useOfflinePlayback = () => {
     const sw = getSW()
     if (!sw) return
 
-    const sourceUrl = playableStore.getSourceUrl(playable)
+    const sourceUrl = usePlayableStore().getSourceUrl(playable)
 
     cachingProgress.value.set(playable.id, 0)
     cachingErrors.value.delete(playable.id)
@@ -268,7 +273,7 @@ export const useOfflinePlayback = () => {
     const sw = getSW()
     if (!sw) return
 
-    const sourceUrl = playableStore.getSourceUrl(playable)
+    const sourceUrl = usePlayableStore().getSourceUrl(playable)
 
     sw.postMessage({
       type: 'DELETE_AUDIO_CACHE',
@@ -284,7 +289,7 @@ export const useOfflinePlayback = () => {
     const entries = [...manifestEntries.value]
 
     for (const entry of entries) {
-      const sourceUrl = playableStore.getSourceUrl(entry.playable)
+      const sourceUrl = usePlayableStore().getSourceUrl(entry.playable)
       sw.postMessage({
         type: 'DELETE_AUDIO_CACHE',
         songId: entry.playable.id,
@@ -310,7 +315,7 @@ export const useOfflinePlayback = () => {
     const sw = getSW()
     if (!sw) return
 
-    const sourceUrls = playables.map(p => playableStore.getSourceUrl(p))
+    const sourceUrls = playables.map(p => usePlayableStore().getSourceUrl(p))
 
     sw.postMessage({
       type: 'GET_CACHE_STATUS',

@@ -12,24 +12,7 @@
       <PlayableThumbnail :numbered="inAlbum" :playable @clicked="play" />
 
       <span class="content">
-        <span class="title m3-body-large">
-          <M3Icon
-            v-if="cachingOffline"
-            :size="16"
-            class="spin opacity-60"
-            name="progress_activity"
-            title="Caching for offline playback"
-          />
-          <M3Icon
-            v-else-if="cachingFailed"
-            :size="16"
-            :title="`Error: ${cachingErrorMessage}`"
-            class="text-(--schemes-error)"
-            name="error"
-          />
-          <OfflineMark v-else-if="cachedOffline" />
-          <span class="truncate">{{ playable.title }}</span>
-        </span>
+        <span class="title m3-body-large truncate">{{ playable.title }}</span>
         <span class="supporting m3-body-medium">{{ supporting }}</span>
       </span>
 
@@ -38,12 +21,7 @@
           <StarRating :rateable="playable" size="xs" />
         </span>
         <span v-if="shouldShowColumn('duration')" class="time m3-label-medium">{{ fmtLength }}</span>
-        <FavoriteButton
-          v-if="shouldShowColumn('favorite')"
-          :class="{ reveal: !playable.favorite }"
-          :favorite="playable.favorite"
-          @toggle="toggleFavorite"
-        />
+        <OfflineButton :class="{ reveal: offlineIdle }" :playable />
         <M3IconButton
           :icon-size="20"
           class="more reveal"
@@ -64,14 +42,11 @@ import { useTableColumnVisibility } from '@/composables/useTableColumnVisibility
 import { useOfflinePlayback } from '@/composables/useOfflinePlayback'
 import { PlayableListConfigKey, PlayableListContextKey } from '@/config/symbols'
 import { playableListColumnConfig } from '@/config/tables'
-import { playableStore } from '@/stores/playableStore'
 import { useViewport } from '@/composables/useViewport'
 
 import PlayableThumbnail from '@/components/playable/PlayableThumbnail.vue'
-import M3Icon from '@/components/m3/M3Icon.vue'
 import M3IconButton from '@/components/m3/M3IconButton.vue'
-import OfflineMark from '@/components/ui/OfflineMark.vue'
-import FavoriteButton from '@/components/ui/FavoriteButton.vue'
+import OfflineButton from '@/components/ui/OfflineButton.vue'
 import StarRating from '@/components/ui/StarRating.vue'
 
 const props = withDefaults(defineProps<{ item: PlayableRow; showDisc?: boolean }>(), {
@@ -92,11 +67,11 @@ const { item } = toRefs(props)
 
 const playable = computed<Playable>(() => item.value.playable)
 const playing = computed(() => ['Playing', 'Paused'].includes(playable.value.playback_state!))
-const { isCached, isCaching, hasCachingError, getCachingError } = useOfflinePlayback()
-const cachedOffline = computed(() => isCached(playable.value))
-const cachingOffline = computed(() => isCaching(playable.value))
-const cachingFailed = computed(() => hasCachingError(playable.value))
-const cachingErrorMessage = computed(() => getCachingError(playable.value))
+const { isCached, isCaching, hasCachingError } = useOfflinePlayback()
+/** Neither kept offline nor on its way: the button shows only with the row's other actions. */
+const offlineIdle = computed(
+  () => !isCached(playable.value) && !isCaching(playable.value) && !hasCachingError(playable.value),
+)
 
 const fmtLength = secondsToHis(playable.value.length)
 const artist = computed(() => playable.value.artist_name)
@@ -124,8 +99,6 @@ const supporting = computed(() =>
 )
 
 const play = () => emit('play', playable.value)
-
-const toggleFavorite = () => playableStore.toggleFavorite(playable.value)
 </script>
 
 <style lang="postcss" scoped>
@@ -191,9 +164,6 @@ const toggleFavorite = () => playableStore.toggleFavorite(playable.value)
 }
 
 .title {
-  display: flex;
-  align-items: center;
-  gap: 6px;
   min-width: 0;
 }
 
@@ -245,9 +215,5 @@ const toggleFavorite = () => playableStore.toggleFavorite(playable.value)
       opacity: 1;
     }
   }
-}
-
-.spin {
-  animation: m3-spin 1s linear infinite;
 }
 </style>

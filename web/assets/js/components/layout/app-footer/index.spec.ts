@@ -2,7 +2,7 @@ import { waitFor } from '@testing-library/vue'
 import { describe, expect, it } from 'vite-plus/test'
 import { createHarness } from '@/__tests__/TestHarness'
 import { playbackService } from '@/services/QueuePlaybackService'
-import { preferenceStore } from '@/stores/preferenceStore'
+import { usePreferenceStore } from '@/stores/preferenceStore'
 import { playbackManager } from '@/services/playbackManager'
 import Component from './index.vue'
 
@@ -14,7 +14,7 @@ describe('index.vue', () => {
     const useQueuePlaybackMock = h.mock(playbackManager, 'useQueuePlayback').mockReturnValue(playbackService)
 
     h.render(Component)
-    preferenceStore.initialized.value = true
+    usePreferenceStore().initialized = true
 
     await waitFor(() => expect(useQueuePlaybackMock).toHaveBeenCalled())
   })

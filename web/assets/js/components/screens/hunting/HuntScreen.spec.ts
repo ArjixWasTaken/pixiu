@@ -9,7 +9,7 @@ describe('huntScreen.vue', () => {
 
   it('searches for the words it was sent with', async () => {
     const search = h.mock(huntingService, 'search').mockResolvedValue({ tracks: [], albums: [] })
-    h.visit('/discover?q=lo%20%26%20behold')
+    await h.visit('/discover?q=lo%20%26%20behold')
     h.render(Component)
 
     await waitFor(() => expect(search).toHaveBeenCalledWith('lo & behold'))
@@ -17,9 +17,9 @@ describe('huntScreen.vue', () => {
     expect(screen.getByRole<HTMLInputElement>('searchbox').value).toBe('lo & behold')
   })
 
-  it('waits for a search without them', () => {
+  it('waits for a search without them', async () => {
     const search = h.mock(huntingService, 'search')
-    h.visit('/discover')
+    await h.visit('/discover')
     h.render(Component)
 
     screen.getByText('Find music on YouTube Music')

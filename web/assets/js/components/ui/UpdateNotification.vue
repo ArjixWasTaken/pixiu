@@ -6,13 +6,14 @@
   >
     <M3Icon name="rocket_launch" :size="18" class="shrink-0 text-(--schemes-on-surface-variant)" />
     <span class="whitespace-nowrap">{{ appName }} has been updated.</span>
-    <M3Button @click="forceReloadWindow">Reload</M3Button>
+    <M3Button @click="reload">Reload</M3Button>
   </article>
 </template>
 
 <script lang="ts" setup>
-import { onBeforeUnmount, ref } from 'vue'
+import { onBeforeUnmount, ref, watch } from 'vue'
 import { useEventListener } from '@vueuse/core'
+import { useRegisterSW } from 'virtual:pwa-register/vue'
 import { forceReloadWindow } from '@/utils/helpers'
 import { useBranding } from '@/composables/useBranding'
 import { isNewerVersionDeployed } from '@/utils/deployment'
@@ -36,6 +37,13 @@ useEventListener(window, 'vite:preloadError', async () => {
     showNotice()
   }
 })
+
+// The service worker (offline playback) is registered here; a newer one waits
+// until the user reloads into it.
+const { needRefresh, updateServiceWorker } = useRegisterSW()
+watch(needRefresh, waiting => waiting && showNotice())
+
+const reload = () => (needRefresh.value ? updateServiceWorker(true) : forceReloadWindow())
 </script>
 
 <style lang="postcss" scoped>

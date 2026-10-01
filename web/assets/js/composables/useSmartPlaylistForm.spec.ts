@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vite-plus/test'
 import { nextTick } from 'vue'
 import { createHarness } from '@/__tests__/TestHarness'
-import { playlistStore } from '@/stores/playlistStore'
+import { usePlaylistStore } from '@/stores/playlistStore'
 import { useSmartPlaylistForm } from './useSmartPlaylistForm'
 
 describe('useSmartPlaylistForm', () => {
@@ -15,7 +15,7 @@ describe('useSmartPlaylistForm', () => {
   }
 
   it('starts on the details tab, with a copy of the groups it was given', () => {
-    const group = playlistStore.createEmptySmartPlaylistRuleGroup()
+    const group = usePlaylistStore().createEmptySmartPlaylistRuleGroup()
     const { tabs, currentTab, ruleGroups, rulesChanged } = useSmartPlaylistForm([group])
 
     expect(tabs.map(tab => tab.id)).toEqual(['details', 'rules'])

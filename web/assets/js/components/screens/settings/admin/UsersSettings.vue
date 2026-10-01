@@ -48,13 +48,14 @@ import { useAuthorization } from '@/composables/useAuthorization'
 import { useDialogBox } from '@/composables/useDialogBox'
 import { useErrorHandler } from '@/composables/useErrorHandler'
 import { useMessageToaster } from '@/composables/useMessageToaster'
-import { huntingStore } from '@/stores/huntingStore'
-
+import { useHuntingStore } from '@/stores/huntingStore'
 import AccountRow from '@/components/screens/settings/admin/AccountRow.vue'
 import AddAccountForm from '@/components/screens/settings/admin/AddAccountForm.vue'
 import PendingRegistrations from '@/components/screens/settings/admin/PendingRegistrations.vue'
 import SettingGroup from '@/components/screens/settings/SettingGroup.vue'
 import M3Button from '@/components/m3/M3Button.vue'
+
+const huntingStore = useHuntingStore()
 
 const { currentUser } = useAuthorization()
 const { showConfirmDialog } = useDialogBox()

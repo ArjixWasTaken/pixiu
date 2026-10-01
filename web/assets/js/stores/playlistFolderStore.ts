@@ -1,36 +1,37 @@
+import { defineStore } from 'pinia'
 import type { UnwrapNestedRefs } from 'vue'
 import { reactive } from 'vue'
 import { http } from '@/services/http'
 import { differenceBy, orderBy } from 'lodash-es'
-import { playlistStore } from '@/stores/playlistStore'
+import { usePlaylistStore } from '@/stores/playlistStore'
 
 type PlaylistFolderUpdateData = Partial<Pick<PlaylistFolder, 'name' | 'parent_id'>>
 
-export const playlistFolderStore = {
-  state: reactive<{ folders: PlaylistFolder[] }>({
+const sort = (folders: PlaylistFolder[] | UnwrapNestedRefs<PlaylistFolder>[]) => orderBy(folders, 'name')
+
+export const usePlaylistFolderStore = defineStore('playlistFolder', () => {
+  const state = reactive<{ folders: PlaylistFolder[] }>({
     folders: [],
-  }),
+  })
 
-  init(folders: PlaylistFolder[]) {
-    this.state.folders = this.sort(reactive(folders))
-  },
+  const init = (folders: PlaylistFolder[]) => {
+    state.folders = sort(reactive(folders))
+  }
 
-  byId(id: PlaylistFolder['id']) {
-    return this.state.folders.find(folder => folder.id === id)
-  },
+  const byId = (id: PlaylistFolder['id']) => state.folders.find(folder => folder.id === id)
 
-  byParent(parent: PlaylistFolder | null) {
+  const byParent = (parent: PlaylistFolder | null) => {
     const folders = parent
-      ? this.state.folders.filter(folder => folder.parent_id === parent.id)
-      : this.state.folders.filter(folder => folder.parent_id === null)
+      ? state.folders.filter(folder => folder.parent_id === parent.id)
+      : state.folders.filter(folder => folder.parent_id === null)
 
-    return this.sort(folders)
-  },
+    return sort(folders)
+  }
 
-  descendantsOf(folder: PlaylistFolder) {
+  const descendantsOf = (folder: PlaylistFolder) => {
     const descendants: PlaylistFolder[] = []
     const visitedFolderIds = new Set<PlaylistFolder['id']>([folder.id])
-    const foldersToVisit = [...this.byParent(folder)].reverse()
+    const foldersToVisit = [...byParent(folder)].reverse()
 
     while (foldersToVisit.length) {
       const descendant = foldersToVisit.pop()!
@@ -41,13 +42,13 @@ export const playlistFolderStore = {
 
       visitedFolderIds.add(descendant.id)
       descendants.push(descendant)
-      foldersToVisit.push(...this.byParent(descendant).reverse())
+      foldersToVisit.push(...byParent(descendant).reverse())
     }
 
     return descendants
-  },
+  }
 
-  pathFor(folder: PlaylistFolder) {
+  const pathFor = (folder: PlaylistFolder) => {
     const path: PlaylistFolder['name'][] = []
     const visitedFolderIds = new Set<PlaylistFolder['id']>()
     let currentFolder: PlaylistFolder | undefined = folder
@@ -55,17 +56,16 @@ export const playlistFolderStore = {
     while (currentFolder && !visitedFolderIds.has(currentFolder.id)) {
       visitedFolderIds.add(currentFolder.id)
       path.unshift(currentFolder.name)
-      currentFolder = currentFolder.parent_id ? this.byId(currentFolder.parent_id) : undefined
+      currentFolder = currentFolder.parent_id ? byId(currentFolder.parent_id) : undefined
     }
 
     return path.join(' / ')
-  },
+  }
 
-  playlistsInTree(folder: PlaylistFolder) {
-    return [folder, ...this.descendantsOf(folder)].flatMap(currentFolder => playlistStore.byFolder(currentFolder))
-  },
+  const playlistsInTree = (folder: PlaylistFolder) =>
+    [folder, ...descendantsOf(folder)].flatMap(currentFolder => usePlaylistStore().byFolder(currentFolder))
 
-  async store(name: PlaylistFolder['name'], parent?: PlaylistFolder | null) {
+  const store = async (name: PlaylistFolder['name'], parent?: PlaylistFolder | null) => {
     const data: { name: PlaylistFolder['name']; parent_id?: PlaylistFolder['id'] | null } = { name }
 
     if (parent !== undefined) {
@@ -74,15 +74,15 @@ export const playlistFolderStore = {
 
     const folder = reactive(await http.post<PlaylistFolder>('playlist-folders', data))
 
-    this.state.folders.push(folder)
-    this.state.folders = orderBy(this.state.folders, 'name')
+    state.folders.push(folder)
+    state.folders = orderBy(state.folders, 'name')
 
     return folder
-  },
+  }
 
-  async delete(folder: PlaylistFolder) {
-    const childFolders = this.byParent(folder)
-    const playlists = playlistStore.byFolder(folder)
+  const destroy = async (folder: PlaylistFolder) => {
+    const childFolders = byParent(folder)
+    const playlists = usePlaylistStore().byFolder(folder)
 
     await http.delete(`playlist-folders/${folder.id}`)
 
@@ -92,34 +92,34 @@ export const playlistFolderStore = {
     playlists.forEach(playlist => {
       playlist.folder_id = null
     })
-    this.state.folders = differenceBy(this.state.folders, [folder], 'id')
-  },
+    state.folders = differenceBy(state.folders, [folder], 'id')
+  }
 
-  async rename(folder: PlaylistFolder, name: PlaylistFolder['name']) {
+  const rename = async (folder: PlaylistFolder, name: PlaylistFolder['name']) => {
     await http.put(`playlist-folders/${folder.id}`, { name })
-    this.byId(folder.id)!.name = name
-  },
+    byId(folder.id)!.name = name
+  }
 
-  async update(folder: PlaylistFolder, data: PlaylistFolderUpdateData) {
+  const update = async (folder: PlaylistFolder, data: PlaylistFolderUpdateData) => {
     await http.patch(`playlist-folders/${folder.id}`, data)
-    Object.assign(this.byId(folder.id)!, data)
-  },
+    Object.assign(byId(folder.id)!, data)
+  }
 
-  async moveFolderToFolder(folder: PlaylistFolder, parent: PlaylistFolder | null) {
+  const moveFolderToFolder = async (folder: PlaylistFolder, parent: PlaylistFolder | null) => {
     const parentId = parent?.id ?? null
 
     if (
       folder.parent_id === parentId ||
       parent?.id === folder.id ||
-      (parent && this.descendantsOf(folder).some(descendant => descendant.id === parent.id))
+      (parent && descendantsOf(folder).some(descendant => descendant.id === parent.id))
     ) {
       return
     }
 
-    await this.update(folder, { parent_id: parentId })
-  },
+    await update(folder, { parent_id: parentId })
+  }
 
-  async movePlaylistToFolder(playlist: Playlist, folder: PlaylistFolder | null) {
+  const movePlaylistToFolder = async (playlist: Playlist, folder: PlaylistFolder | null) => {
     const targetFolderId = folder?.id ?? null
 
     if (playlist.folder_id === targetFolderId) {
@@ -142,7 +142,22 @@ export const playlistFolderStore = {
       playlist.folder_id = sourceFolderId
       throw error
     }
-  },
+  }
 
-  sort: (folders: PlaylistFolder[] | UnwrapNestedRefs<PlaylistFolder>[]) => orderBy(folders, 'name'),
-}
+  return {
+    state,
+    init,
+    byId,
+    byParent,
+    descendantsOf,
+    pathFor,
+    playlistsInTree,
+    store,
+    delete: destroy,
+    rename,
+    update,
+    moveFolderToFolder,
+    movePlaylistToFolder,
+    sort,
+  }
+})

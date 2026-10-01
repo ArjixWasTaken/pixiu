@@ -8,7 +8,7 @@ const goMock = vi.fn()
 vi.mock('@/composables/useRouter', () => ({
   useRouter: () => ({
     go: goMock,
-    url: (name: string) => `/#/${name}`,
+    url: (name: string) => `/${name}`,
   }),
 }))
 
@@ -19,6 +19,6 @@ describe('viewAllRecentlyPlayedPlayablesButton.vue', () => {
     h.render(Component)
     await h.user.click(screen.getByText('View all'))
 
-    expect(goMock).toHaveBeenCalledWith('/#/recently-played')
+    expect(goMock).toHaveBeenCalledWith('/recently-played')
   })
 })

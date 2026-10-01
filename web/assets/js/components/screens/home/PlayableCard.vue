@@ -13,29 +13,12 @@
   >
     <PlayableThumbnail :playable @clicked="play" />
     <span class="flex-1 min-w-0 flex flex-col">
-      <span class="title m3-body-large flex gap-2 items-center">
-        <M3Icon
-          v-if="cachingOffline"
-          :size="16"
-          class="opacity-60"
-          name="progress_activity"
-          title="Caching for offline playback"
-        />
-        <M3Icon
-          v-else-if="cachingFailed"
-          :size="16"
-          :title="`Error: ${cachingErrorMessage}`"
-          class="text-(--schemes-error)"
-          name="error"
-        />
-        <OfflineMark v-else-if="cachedOffline" />
-        <span class="truncate">{{ playable.title }}</span>
-      </span>
+      <span class="title m3-body-large truncate">{{ playable.title }}</span>
       <span class="supporting m3-body-medium truncate">{{ artist }}</span>
     </span>
     <span class="trailing">
       <span class="time m3-label-medium">{{ fmtLength }}</span>
-      <FavoriteButton :class="{ reveal: !playable.favorite }" :favorite="playable.favorite" @toggle="toggleFavorite" />
+      <OfflineButton :class="{ reveal: offlineIdle }" :playable />
       <M3IconButton :icon-size="20" class="reveal" icon="more_vert" label="More actions" @click.stop="onContextMenu" />
     </span>
   </li>
@@ -49,12 +32,8 @@ import { useDraggable } from '@/composables/useDragAndDrop'
 import { useContextMenu } from '@/composables/useContextMenu'
 import { useOfflinePlayback } from '@/composables/useOfflinePlayback'
 import { playback } from '@/services/playbackManager'
-import { playableStore } from '@/stores/playableStore'
-
 import PlayableThumbnail from '@/components/playable/PlayableThumbnail.vue'
-import OfflineMark from '@/components/ui/OfflineMark.vue'
-import FavoriteButton from '@/components/ui/FavoriteButton.vue'
-import M3Icon from '@/components/m3/M3Icon.vue'
+import OfflineButton from '@/components/ui/OfflineButton.vue'
 import M3IconButton from '@/components/m3/M3IconButton.vue'
 
 const PlayableContextMenu = defineAsyncComponent(() => import('@/components/playable/PlayableContextMenu.vue'))
@@ -64,14 +43,14 @@ const { playable } = toRefs(props)
 
 const { startDragging } = useDraggable('playables')
 const { openContextMenu } = useContextMenu()
-const { isCached, isCaching, hasCachingError, getCachingError } = useOfflinePlayback()
+const { isCached, isCaching, hasCachingError } = useOfflinePlayback()
 
 const artist = computed(() => playable.value.artist_name || '')
 const playing = computed(() => ['Playing', 'Paused'].includes(playable.value.playback_state!))
-const cachedOffline = computed(() => isCached(playable.value))
-const cachingOffline = computed(() => isCaching(playable.value))
-const cachingFailed = computed(() => hasCachingError(playable.value))
-const cachingErrorMessage = computed(() => getCachingError(playable.value))
+/** Neither kept offline nor on its way: the button shows only with the card's other actions. */
+const offlineIdle = computed(
+  () => !isCached(playable.value) && !isCaching(playable.value) && !hasCachingError(playable.value),
+)
 const fmtLength = secondsToHis(playable.value.length)
 
 const play = () => {
@@ -83,8 +62,6 @@ const play = () => {
     playback().play(playable.value)
   }
 }
-
-const toggleFavorite = () => playableStore.toggleFavorite(playable.value)
 
 const onDragStart = (event: DragEvent) => startDragging(event, [playable.value])
 

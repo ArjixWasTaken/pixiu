@@ -1,15 +1,15 @@
 import { describe, expect, it, vi } from 'vite-plus/test'
 import { createHarness } from '@/__tests__/TestHarness'
-import { playableStore } from '@/stores/playableStore'
-import { playlistFolderStore } from '@/stores/playlistFolderStore'
-import { playlistStore } from '@/stores/playlistStore'
+import { usePlayableStore } from '@/stores/playableStore'
+import { usePlaylistFolderStore } from '@/stores/playlistFolderStore'
+import { usePlaylistStore } from '@/stores/playlistStore'
 import { useDraggable, useDroppable } from './useDragAndDrop'
 
 describe('useDragAndDrop', () => {
   const h = createHarness({
     afterEach: () => {
-      playlistFolderStore.state.folders = []
-      playlistStore.state.playlists = []
+      usePlaylistFolderStore().state.folders = []
+      usePlaylistStore().state.playlists = []
     },
   })
 
@@ -123,9 +123,9 @@ describe('useDragAndDrop', () => {
       const directPlaylist = h.factory('playlist').make({ folder_id: root.id })
       const childPlaylist = h.factory('playlist').make({ folder_id: child.id })
       const songs = h.factory('song').make(3)
-      playlistFolderStore.init([root, child])
-      playlistStore.state.playlists = [directPlaylist, childPlaylist]
-      const fetchMock = h.mock(playableStore, 'fetchForPlaylists').mockResolvedValue(songs)
+      usePlaylistFolderStore().init([root, child])
+      usePlaylistStore().state.playlists = [directPlaylist, childPlaylist]
+      const fetchMock = h.mock(usePlayableStore(), 'fetchForPlaylists').mockResolvedValue(songs)
       const { resolveDroppedItems } = useDroppable(['playlist-folder'])
       const event = createDragEvent(['application/x-koel.playlist-folder'], {
         'application/x-koel.playlist-folder': JSON.stringify(root.id),

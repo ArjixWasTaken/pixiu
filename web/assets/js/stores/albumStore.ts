@@ -1,13 +1,13 @@
+import { defineStore } from 'pinia'
 import type { Reactive } from 'vue'
-import { reactive } from 'vue'
-import { differenceBy, unionBy } from 'lodash-es'
-import { cache } from '@/services/cache'
+import { queryClient } from '@/services/queryClient'
 import { huntingService } from '@/services/huntingService'
 import { library } from '@/services/library'
 import { subsonic } from '@/services/subsonic'
 import { logger } from '@/utils/logger'
 import { useVault } from '@/composables/useVault'
-import { playableStore as songStore } from '@/stores/playableStore'
+import { dropFromListPages } from '@/composables/useListPages'
+import { usePlayableStore } from '@/stores/playableStore'
 
 const UNKNOWN_ALBUM_NAME = 'Unknown Album'
 
@@ -22,81 +22,69 @@ interface AlbumListPaginateParams extends CursorPaginateParams<AlbumListSortFiel
   favorites_only: boolean
 }
 
-export const albumStore = {
-  ...useVault<Album>(),
+const isUnknown = (album: Album | Album['name']) =>
+  (typeof album === 'string' ? album : album.name) === UNKNOWN_ALBUM_NAME
 
-  state: reactive({
-    albums: [] as Album[],
-  }),
+export const useAlbumStore = defineStore('album', () => {
+  const { vault, byId, syncWithVault } = useVault<Album>()
 
-  removeByIds(ids: Album['id'][]) {
-    this.state.albums = differenceBy(
-      this.state.albums,
-      ids.map(id => this.byId(id)),
-      'id',
-    )
+  const removeByIds = (ids: Album['id'][]) => {
     ids.forEach(id => {
-      this.vault.delete(id)
-      cache.remove(['album', id])
+      vault.delete(id)
+      queryClient.removeQueries({ queryKey: ['album', id] })
     })
-  },
-
-  isUnknown: (album: Album | Album['name']) => {
-    if (typeof album === 'string') {
-      return album === UNKNOWN_ALBUM_NAME
-    }
-
-    return album.name === UNKNOWN_ALBUM_NAME
-  },
+    dropFromListPages(['albums'], ids)
+  }
 
   /** Changes the album's tags; píxiū moves its files to match. */
-  async update(album: Album, data: AlbumUpdateData) {
+  const update = async (album: Album, data: AlbumUpdateData) => {
     await huntingService.editAlbum(album, data)
 
-    cache.remove(['album', album.id])
-    cache.remove(['album.songs', album.id])
-    const updated = this.syncWithVault(await subsonic.album(album.id))
-    this.state.albums = unionBy(this.state.albums, updated, 'id')
+    await queryClient.invalidateQueries({ queryKey: ['album', album.id] })
+    const updated = syncWithVault(await subsonic.album(album.id))
 
+    const songStore = usePlayableStore()
     songStore.syncWithVault(await subsonic.albumSongs(album.id))
     songStore.syncAlbumProperties(updated[0])
-  },
+  }
 
-  /**
-   * Fetch the (blurry) thumbnail-sized version of an album's cover.
-   */
-  async fetchThumbnail(id: Album['id']) {
-    return (await this.resolve(id))?.thumbnail ?? null
-  },
-
-  async resolve(id: Album['id']) {
-    let album = this.byId(id)
+  const resolve = async (id: Album['id']) => {
+    let album = byId(id)
 
     if (!album) {
       try {
-        album = this.syncWithVault(await cache.remember(['album', id], async () => await subsonic.album(id)))[0]
+        album = syncWithVault(
+          await queryClient.fetchQuery({ queryKey: ['album', id], queryFn: () => subsonic.album(id) }),
+        )[0]
       } catch (error: unknown) {
         logger.error(error)
       }
     }
 
     return album
-  },
+  }
 
-  async paginate(params: AlbumListPaginateParams) {
+  /**
+   * Fetch the (blurry) thumbnail-sized version of an album's cover.
+   */
+  const fetchThumbnail = async (id: Album['id']) => (await resolve(id))?.thumbnail ?? null
+
+  /** A page of the album list (see useListPages). */
+  const paginate = async (params: AlbumListPaginateParams) => {
     const { items, nextCursor } = await library.albums(params)
-    this.state.albums = unionBy(this.state.albums, this.syncWithVault(items), 'id')
 
-    return nextCursor
-  },
+    return { items: syncWithVault(items), nextCursor }
+  }
 
-  async fetchForArtist(artist: Artist | Artist['id']) {
+  const fetchForArtist = async (artist: Artist | Artist['id']) => {
     const id = typeof artist === 'string' ? artist : artist.id
 
-    return this.syncWithVault(await cache.remember(['artist-albums', id], async () => await subsonic.artistAlbums(id)))
-  },
+    return syncWithVault(
+      await queryClient.fetchQuery({ queryKey: ['artist', id, 'albums'], queryFn: () => subsonic.artistAlbums(id) }),
+    )
+  }
 
-  async toggleFavorite(album: Reactive<Album>) {
+  const toggleFavorite = async (album: Reactive<Album>) => {
     // Don't wait for the HTTP response to update the status, just toggle right away.
     // We'll update the liked status again after the HTTP request.
     album.favorite = !album.favorite
@@ -107,9 +95,9 @@ export const albumStore = {
       album.favorite = !album.favorite
       throw error
     }
-  },
+  }
 
-  async rate(album: Reactive<Album>, rating: number) {
+  const rate = async (album: Reactive<Album>, rating: number) => {
     const previous = album.rating
     album.rating = rating
 
@@ -122,10 +110,20 @@ export const albumStore = {
 
       throw error
     }
-  },
+  }
 
-  reset() {
-    this.vault.clear()
-    this.state.albums = []
-  },
-}
+  return {
+    vault,
+    byId,
+    syncWithVault,
+    removeByIds,
+    isUnknown,
+    update,
+    fetchThumbnail,
+    resolve,
+    paginate,
+    fetchForArtist,
+    toggleFavorite,
+    rate,
+  }
+})

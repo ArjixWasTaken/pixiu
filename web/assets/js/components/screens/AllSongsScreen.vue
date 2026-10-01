@@ -45,14 +45,14 @@
 <script lang="ts" setup>
 import { computed, onMounted, ref, toRef } from 'vue'
 import { pluralize, secondsToHumanReadable } from '@/utils/formatters'
-import { commonStore } from '@/stores/commonStore'
-import { queueStore } from '@/stores/queueStore'
-import { playableStore } from '@/stores/playableStore'
+import { useCommonStore } from '@/stores/commonStore'
+import { useQueueStore } from '@/stores/queueStore'
+import { usePlayableStore } from '@/stores/playableStore'
 import { useRouter } from '@/composables/useRouter'
-import { useErrorHandler } from '@/composables/useErrorHandler'
+import { useListPages } from '@/composables/useListPages'
 import { usePlayableList } from '@/composables/usePlayableList'
 import { usePlayableListControls } from '@/composables/usePlayableListControls'
-import { useLocalStorage } from '@/composables/useLocalStorage'
+import { useUserStorage } from '@/composables/useUserStorage'
 import { playback } from '@/services/playbackManager'
 
 import ScreenHeader from '@/components/ui/ScreenHeader.vue'
@@ -61,7 +61,24 @@ import ScreenEmptyState from '@/components/ui/ScreenEmptyState.vue'
 import ScreenBase from '@/components/screens/ScreenBase.vue'
 import M3Icon from '@/components/m3/M3Icon.vue'
 
+const commonStore = useCommonStore()
+const queueStore = useQueueStore()
+const playableStore = usePlayableStore()
+
 const totalSongCount = toRef(commonStore.state, 'song_count')
+
+const sortField = useUserStorage<MaybeArray<PlayableListSortField>>('all-songs-sort-field', 'title')
+const sortOrder = useUserStorage<SortOrder>('all-songs-sort-order', 'asc')
+
+// Each sort is a list of its own; changing it starts the list from its first page.
+const {
+  items: allSongs,
+  isFetching: loading,
+  fetchMore: fetchSongs,
+} = useListPages(
+  () => ['songs', { sort: sortField.value, order: sortOrder.value }],
+  cursor => playableStore.paginateSongs({ sort: sortField.value, order: sortOrder.value, cursor }),
+)
 const totalDuration = computed(() => secondsToHumanReadable(commonStore.state.song_length))
 
 const {
@@ -75,67 +92,33 @@ const {
   playSelected,
   onSwipe,
   sort: composableSort,
-} = usePlayableList(toRef(playableStore.state, 'playables'), { type: 'Songs' }, { filterable: false, sortable: true })
+} = usePlayableList(allSongs, { type: 'Songs' }, { filterable: false, sortable: true })
 
 const { PlayableListControls: SongListControls, config } = usePlayableListControls('Songs')
 const { go, url } = useRouter()
-const { get: lsGet, set: lsSet } = useLocalStorage()
 
-const loading = ref(false)
-let sortField: MaybeArray<PlayableListSortField> = lsGet<PlayableListSortField>('all-songs-sort-field', 'title')!
-let sortOrder: SortOrder = lsGet<SortOrder>('all-songs-sort-order', 'asc')!
-
-const cursor = ref<string | null>('')
-const moreSongsAvailable = computed(() => cursor.value !== null)
 const showSkeletons = computed(() => loading.value && songs.value.length === 0)
-
-const fetchSongs = async () => {
-  if (!moreSongsAvailable.value || loading.value) {
-    return
-  }
-
-  loading.value = true
-
-  try {
-    cursor.value = await playableStore.paginateSongs({
-      sort: sortField,
-      order: sortOrder,
-      cursor: cursor.value,
-    })
-  } catch (error: any) {
-    useErrorHandler().handleHttpError(error)
-  } finally {
-    loading.value = false
-  }
-}
 
 const playAll = async (shuffle: boolean) => {
   if (shuffle) {
     await queueStore.fetchRandom()
   } else {
-    await queueStore.fetchInOrder(Array.isArray(sortField) ? sortField[0] : sortField, sortOrder)
+    await queueStore.fetchInOrder(
+      Array.isArray(sortField.value) ? sortField.value[0] : sortField.value,
+      sortOrder.value,
+    )
   }
 
   go(url('queue'))
   await playback().playFirstInQueue()
 }
 
-const sort = async (field: MaybeArray<PlayableListSortField>, order: SortOrder) => {
-  cursor.value = ''
-  playableStore.state.playables = []
-  sortField = field
-  sortOrder = order
-
-  lsSet('all-songs-sort-field', field)
-  lsSet('all-songs-sort-order', order)
-
-  await fetchSongs()
+const sort = (field: MaybeArray<PlayableListSortField>, order: SortOrder) => {
+  sortField.value = field
+  sortOrder.value = order
 }
 
-onMounted(async () => {
-  composableSort(sortField, sortOrder)
-  await fetchSongs()
-})
+onMounted(() => composableSort(sortField.value, sortOrder.value))
 </script>
 
 <style lang="postcss" scoped>

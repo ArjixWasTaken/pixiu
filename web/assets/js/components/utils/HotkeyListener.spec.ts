@@ -11,7 +11,7 @@ const rewindMock = vi.fn()
 vi.mock('@/composables/useRouter', () => ({
   useRouter: () => ({
     go: goMock,
-    url: (name: string) => `/#/${name}`,
+    url: (name: string) => `/${name}`,
     isCurrentScreen: isCurrentScreenMock,
   }),
 }))
@@ -41,7 +41,7 @@ describe('hotkeyListener.vue', () => {
     h.render(Component)
     pressKey('h')
 
-    expect(goMock).toHaveBeenCalledWith('/#/home')
+    expect(goMock).toHaveBeenCalledWith('/home')
   })
 
   it('seeks forward on ArrowRight', () => {

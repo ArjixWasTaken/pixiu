@@ -1,18 +1,7 @@
-import { describe, expect, it, vi } from 'vite-plus/test'
-import { screen } from '@testing-library/vue'
+import { describe, expect, it } from 'vite-plus/test'
+import { fireEvent, screen } from '@testing-library/vue'
 import { createHarness } from '@/__tests__/TestHarness'
 import Component from './EqualizerBand.vue'
-
-vi.mock('nouislider', () => ({
-  default: {
-    create: vi.fn((el: any) => {
-      el.noUiSlider = {
-        on: vi.fn(),
-        set: vi.fn(),
-      }
-    }),
-  },
-}))
 
 describe('equalizerBand.vue', () => {
   const h = createHarness()
@@ -33,5 +22,19 @@ describe('equalizerBand.vue', () => {
     })
 
     expect(container.querySelector('.slider')).toBeTruthy()
+  })
+
+  it('is a slider named by its label, that sets the gain and commits on release', async () => {
+    const { emitted } = h.render(Component, {
+      props: { type: 'gain', modelValue: 0 },
+      slots: { default: '1K' },
+    })
+
+    const slider = screen.getByRole<HTMLInputElement>('slider', { name: '1K' })
+    await fireEvent.update(slider, '4.5')
+    await fireEvent.change(slider)
+
+    expect(emitted()['update:modelValue'].at(-1)).toEqual([4.5])
+    expect(emitted().commit).toBeTruthy()
   })
 })

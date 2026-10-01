@@ -34,9 +34,11 @@
 
 <script lang="ts" setup>
 import { intersectionBy } from 'lodash-es'
-import { computed, ref, toRef } from 'vue'
+import { keepPreviousData, useQuery } from '@tanstack/vue-query'
+import { computed, ref } from 'vue'
 import { eventBus } from '@/utils/eventBus'
-import { searchStore } from '@/stores/searchStore'
+import { queryClient } from '@/services/queryClient'
+import { useSearchStore } from '@/stores/searchStore'
 import { useRouter } from '@/composables/useRouter'
 
 import ScreenHeader from '@/components/ui/ScreenHeader.vue'
@@ -48,28 +50,29 @@ import PlayableExcerptResultsBlock from '@/components/screens/search/PlayableExc
 import ArtistResultsBlock from '@/components/screens/search/ArtistExcerptResultsBlock.vue'
 import AlbumResultsBlock from '@/components/screens/search/AlbumExcerptResultsBlock.vue'
 
+const searchStore = useSearchStore()
+
 const { url } = useRouter()
 
-const excerpt = toRef(searchStore.state, 'excerpt')
 const q = ref('')
-const searching = ref(false)
+
+// Each search kept by its words: typing back to earlier ones shows them at once, and
+// what was found shows while the next is looked for.
+const { data, isFetching: searching } = useQuery({
+  queryKey: computed(() => ['search', q.value]),
+  queryFn: () => searchStore.excerptSearch(q.value),
+  enabled: computed(() => q.value !== ''),
+  placeholderData: keepPreviousData,
+})
+
+const excerpt = computed(() => data.value ?? { playables: [], albums: [], artists: [] })
 
 const discoverUrl = computed(() => `${url('hunt')}?q=${encodeURIComponent(q.value)}`)
 
-const doSearch = async () => {
-  searching.value = true
-  await searchStore.excerptSearch(q.value)
-  searching.value = false
-}
-
-eventBus
-  .on('SEARCH_KEYWORDS_CHANGED', async _q => {
-    q.value = _q
-    await doSearch()
-  })
-  .on('SONGS_DELETED', async songs => {
-    if (intersectionBy(songs, excerpt.value.playables, 'id').length !== 0) {
-      await doSearch()
-    }
-  })
+eventBus.on('SEARCH_KEYWORDS_CHANGED', keywords => (q.value = keywords))
+eventBus.on('SONGS_DELETED', songs => {
+  if (intersectionBy(songs, excerpt.value.playables, 'id').length !== 0) {
+    queryClient.invalidateQueries({ queryKey: ['search'] })
+  }
+})
 </script>

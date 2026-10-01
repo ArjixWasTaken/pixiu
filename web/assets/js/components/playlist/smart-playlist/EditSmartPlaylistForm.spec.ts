@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vite-plus/test'
 import { screen, waitFor } from '@testing-library/vue'
 import { createHarness } from '@/__tests__/TestHarness'
-import { playlistFolderStore } from '@/stores/playlistFolderStore'
-import { playlistStore } from '@/stores/playlistStore'
+import { usePlaylistFolderStore } from '@/stores/playlistFolderStore'
+import { usePlaylistStore } from '@/stores/playlistStore'
 import { eventBus } from '@/utils/eventBus'
 import models from '@/config/smart-playlist/models'
 import Component from './EditSmartPlaylistForm.vue'
@@ -35,8 +35,8 @@ describe('editSmartPlaylistForm', () => {
 
   const renderComponent = (playlist?: Playlist) => {
     playlist = playlist ?? createSmartPlaylist()
-    playlistFolderStore.state.folders = h.factory('playlist-folder').make(2)
-    playlistStore.state.playlists = [playlist]
+    usePlaylistFolderStore().state.folders = h.factory('playlist-folder').make(2)
+    usePlaylistStore().state.playlists = [playlist]
 
     return {
       ...h.render(Component, {
@@ -63,8 +63,8 @@ describe('editSmartPlaylistForm', () => {
     expect(screen.getByRole<HTMLInputElement>('textbox', { name: 'Value' }).value).toBe('rock')
   })
 
-  it('submits changes with name and rules to playlistStore.update', async () => {
-    const updateMock = h.mock(playlistStore, 'update')
+  it('submits changes with name and rules to usePlaylistStore().update', async () => {
+    const updateMock = h.mock(usePlaylistStore(), 'update')
     const { playlist } = renderComponent()
 
     await h.type(screen.getByRole('textbox', { name: 'Name' }), 'Updated Playlist')
@@ -84,7 +84,7 @@ describe('editSmartPlaylistForm', () => {
   })
 
   it('omits cover from payload when unchanged', async () => {
-    const updateMock = h.mock(playlistStore, 'update')
+    const updateMock = h.mock(usePlaylistStore(), 'update')
     renderComponent()
 
     await h.type(screen.getByRole('textbox', { name: 'Name' }), 'Updated')
@@ -98,7 +98,7 @@ describe('editSmartPlaylistForm', () => {
   })
 
   it('emits PLAYLIST_UPDATED on successful update', async () => {
-    h.mock(playlistStore, 'update').mockResolvedValue(undefined)
+    h.mock(usePlaylistStore(), 'update').mockResolvedValue(undefined)
     const emitMock = h.mock(eventBus, 'emit')
 
     const { playlist } = renderComponent()
@@ -112,7 +112,7 @@ describe('editSmartPlaylistForm', () => {
   })
 
   it('saves another group of rules', async () => {
-    const updateMock = h.mock(playlistStore, 'update')
+    const updateMock = h.mock(usePlaylistStore(), 'update')
     renderComponent()
 
     await h.user.click(screen.getByRole('tab', { name: 'Rules' }))

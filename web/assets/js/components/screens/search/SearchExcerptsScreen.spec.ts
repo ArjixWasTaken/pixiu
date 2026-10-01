@@ -2,14 +2,14 @@ import { describe, expect, it } from 'vite-plus/test'
 import { screen, waitFor } from '@testing-library/vue'
 import { createHarness } from '@/__tests__/TestHarness'
 import { eventBus } from '@/utils/eventBus'
-import { searchStore } from '@/stores/searchStore'
+import { useSearchStore } from '@/stores/searchStore'
 import Component from './SearchExcerptsScreen.vue'
 
 describe('searchExcerptsScreen.vue', () => {
   const h = createHarness()
 
   it('executes searching when the search keyword is changed', async () => {
-    const mock = h.mock(searchStore, 'excerptSearch')
+    const mock = h.mock(useSearchStore(), 'excerptSearch').mockResolvedValue({ playables: [], albums: [], artists: [] })
     h.render(Component)
 
     eventBus.emit('SEARCH_KEYWORDS_CHANGED', 'search me')
@@ -18,7 +18,7 @@ describe('searchExcerptsScreen.vue', () => {
   })
 
   it('offers to search YouTube Music for the same words', async () => {
-    h.mock(searchStore, 'excerptSearch')
+    h.mock(useSearchStore(), 'excerptSearch').mockResolvedValue({ playables: [], albums: [], artists: [] })
     h.render(Component)
 
     eventBus.emit('SEARCH_KEYWORDS_CHANGED', 'lo & behold')

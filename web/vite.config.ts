@@ -6,6 +6,7 @@ import tailwindcss from '@tailwindcss/vite'
 import { resolve } from 'path'
 import { createHash } from 'crypto'
 import { visualizer } from 'rollup-plugin-visualizer'
+import { VitePWA } from 'vite-plugin-pwa'
 
 const projectRoot = import.meta.dirname
 
@@ -71,6 +72,37 @@ export default defineConfig({
   plugins: [
     vue(),
     tailwindcss(),
+    // The service worker (assets/js/service-worker.ts): the player opens offline, and plays
+    // the songs made available offline. Registered by the player itself (useRegisterSW);
+    // off in specs, where its registration module is a no-op.
+    VitePWA({
+      disable: Boolean(process.env.VITEST),
+      strategies: 'injectManifest',
+      srcDir: 'assets/js',
+      filename: 'service-worker.ts',
+      injectRegister: false,
+      registerType: 'prompt',
+      injectManifest: {
+        globPatterns: ['**/*.{js,css,html,png,webp,svg,woff2}'],
+        // The README's logo, which the player doesn't show.
+        globIgnores: ['img/logo.png'],
+      },
+      manifest: {
+        name: 'píxiū',
+        short_name: 'píxiū',
+        description: 'Your music, from your server.',
+        lang: 'en',
+        start_url: '/',
+        scope: '/',
+        display: 'standalone',
+        theme_color: '#271e19',
+        background_color: '#271e19',
+        icons: [
+          { src: '/img/emblem-192.png', sizes: '192x192', type: 'image/png' },
+          { src: '/img/emblem-512.webp', sizes: '512x512', type: 'image/webp' },
+        ],
+      },
+    }),
     ...(process.env.VITEST
       ? []
       : [

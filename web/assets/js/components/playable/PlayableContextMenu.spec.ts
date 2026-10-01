@@ -8,10 +8,10 @@ import { arrayify } from '@/utils/helpers'
 import { screen } from '@testing-library/vue'
 import { downloadService } from '@/services/downloadService'
 import { playbackService } from '@/services/QueuePlaybackService'
-import { commonStore } from '@/stores/commonStore'
-import { playlistStore } from '@/stores/playlistStore'
-import { queueStore } from '@/stores/queueStore'
-import { playableStore } from '@/stores/playableStore'
+import { useCommonStore } from '@/stores/commonStore'
+import { usePlaylistStore } from '@/stores/playlistStore'
+import { useQueueStore } from '@/stores/queueStore'
+import { usePlayableStore } from '@/stores/playableStore'
 import { MessageToasterStub } from '@/__tests__/stubs'
 import Router from '@/router'
 import CreatePlaylistForm from '@/components/playlist/CreatePlaylistForm.vue'
@@ -49,7 +49,7 @@ Object.defineProperty(navigator, 'serviceWorker', {
 describe('playableContextMenu.vue', () => {
   const h = createHarness({
     beforeEach: () => {
-      queueStore.state.playables = []
+      useQueueStore().state.playables = []
       openModalMock.mockClear()
       makeAvailableOfflineMock.mockClear()
       removeOfflineCacheMock.mockClear()
@@ -60,7 +60,7 @@ describe('playableContextMenu.vue', () => {
   const renderComponent = async (playables?: MaybeArray<Playable>) => {
     playables = playables ? arrayify(playables) : h.factory('song').make(5)
 
-    const rendered = h.render(Component, {
+    const rendered = h.renderMenu(Component, {
       props: {
         playables,
       },
@@ -75,9 +75,9 @@ describe('playableContextMenu.vue', () => {
   }
 
   const fillQueue = () => {
-    queueStore.state.playables = h.factory('song').make(5)
-    playableStore.syncWithVault(queueStore.state.playables)
-    queueStore.state.playables[2].playback_state = 'Playing'
+    useQueueStore().state.playables = h.factory('song').make(5)
+    usePlayableStore().syncWithVault(useQueueStore().state.playables)
+    useQueueStore().state.playables[2].playback_state = 'Playing'
   }
 
   it('plays', async () => {
@@ -119,9 +119,10 @@ describe('playableContextMenu.vue', () => {
     const song = h.factory('song').make()
     await renderComponent(song)
 
+    await h.user.click(screen.getByText('Go to'))
     await h.user.click(screen.getByText(`Album: ${song.album_name}`))
 
-    expect(goMock).toHaveBeenCalledWith(`/#/albums/${song.album_id}`)
+    expect(goMock).toHaveBeenCalledWith(`/albums/${song.album_id}`)
   })
 
   it('goes to artist details screen', async () => {
@@ -129,9 +130,10 @@ describe('playableContextMenu.vue', () => {
     const song = h.factory('song').make()
     await renderComponent(song)
 
+    await h.user.click(screen.getByText('Go to'))
     await h.user.click(screen.getByText(`Artist: ${song.artist_name}`))
 
-    expect(goMock).toHaveBeenCalledWith(`/#/artists/${song.artist_id}`)
+    expect(goMock).toHaveBeenCalledWith(`/artists/${song.artist_id}`)
   })
 
   it('downloads', async () => {
@@ -144,9 +146,10 @@ describe('playableContextMenu.vue', () => {
   })
 
   it('queues', async () => {
-    const queueMock = h.mock(queueStore, 'queue')
+    const queueMock = h.mock(useQueueStore(), 'queue')
     const { playables } = await renderComponent()
 
+    await h.user.click(screen.getByText('Add to'))
     await h.user.click(screen.getByText('Queue'))
 
     expect(queueMock).toHaveBeenCalledWith(playables)
@@ -154,9 +157,10 @@ describe('playableContextMenu.vue', () => {
 
   it('queues after current', async () => {
     fillQueue()
-    const queueMock = h.mock(queueStore, 'queueAfterCurrent')
+    const queueMock = h.mock(useQueueStore(), 'queueAfterCurrent')
     const { playables } = await renderComponent()
 
+    await h.user.click(screen.getByText('Add to'))
     await h.user.click(screen.getByText('After current song'))
 
     expect(queueMock).toHaveBeenCalledWith(playables)
@@ -164,9 +168,10 @@ describe('playableContextMenu.vue', () => {
 
   it('queues to bottom', async () => {
     fillQueue()
-    const queueMock = h.mock(queueStore, 'queue')
+    const queueMock = h.mock(useQueueStore(), 'queue')
     const { playables } = await renderComponent()
 
+    await h.user.click(screen.getByText('Add to'))
     await h.user.click(screen.getByText('Bottom of queue'))
 
     expect(queueMock).toHaveBeenCalledWith(playables)
@@ -174,9 +179,10 @@ describe('playableContextMenu.vue', () => {
 
   it('queues to top', async () => {
     fillQueue()
-    const queueMock = h.mock(queueStore, 'queueToTop')
+    const queueMock = h.mock(useQueueStore(), 'queueToTop')
     const { playables } = await renderComponent()
 
+    await h.user.click(screen.getByText('Add to'))
     await h.user.click(screen.getByText('Top of queue'))
 
     expect(queueMock).toHaveBeenCalledWith(playables)
@@ -184,9 +190,9 @@ describe('playableContextMenu.vue', () => {
 
   it('removes from queue', async () => {
     fillQueue()
-    const removeMock = h.mock(queueStore, 'unqueue')
+    const removeMock = h.mock(useQueueStore(), 'unqueue')
 
-    h.visit('/queue')
+    await h.visit('/queue')
     const { playables } = await renderComponent()
 
     await h.user.click(screen.getByText('Remove from queue'))
@@ -197,32 +203,34 @@ describe('playableContextMenu.vue', () => {
   it('does not show "Remove from queue" when not on Queue screen', async () => {
     fillQueue()
 
-    h.visit('/songs')
+    await h.visit('/songs')
     await renderComponent()
 
     expect(screen.queryByText('Remove from queue')).toBeNull()
   })
 
   it('adds to favorites', async () => {
-    const likeMock = h.mock(playableStore, 'favorite')
+    const likeMock = h.mock(usePlayableStore(), 'favorite')
     const { playables } = await renderComponent()
 
+    await h.user.click(screen.getByText('Add to'))
     await h.user.click(screen.getByText('Favorites'))
 
     expect(likeMock).toHaveBeenCalledWith(playables)
   })
 
   it('does not have an option to add to favorites for Favorites screen', async () => {
-    h.visit('/favorites')
+    await h.visit('/favorites')
     await renderComponent()
 
+    await h.user.click(screen.getByText('Add to'))
     expect(screen.queryByText('Favorites')).toBeNull()
   })
 
   it('removes from favorites', async () => {
-    const unlikeMock = h.mock(playableStore, 'undoFavorite')
+    const unlikeMock = h.mock(usePlayableStore(), 'undoFavorite')
 
-    h.visit('/favorites')
+    await h.visit('/favorites')
     const { playables } = await renderComponent()
 
     await h.user.click(screen.getByText('Remove from favorites'))
@@ -231,40 +239,43 @@ describe('playableContextMenu.vue', () => {
   })
 
   it('lists and adds to existing playlist', async () => {
-    playlistStore.state.playlists = h.factory('playlist').make(3)
-    playlistStore.state.playlists.forEach(playlist => (playlist.permissions = { edit: true, delete: true }))
-    const addMock = h.mock(playlistStore, 'addContent')
+    usePlaylistStore().state.playlists = h.factory('playlist').make(3)
+    usePlaylistStore().state.playlists.forEach(playlist => (playlist.permissions = { edit: true, delete: true }))
+    const addMock = h.mock(usePlaylistStore(), 'addContent')
     h.mock(MessageToasterStub.value, 'success')
     const { playables } = await renderComponent()
 
-    playlistStore.state.playlists.forEach(playlist => screen.queryByText(playlist.name))
+    await h.user.click(screen.getByText('Add to'))
+    usePlaylistStore().state.playlists.forEach(playlist => screen.getByText(playlist.name))
 
-    await h.user.click(screen.getByText(playlistStore.state.playlists[0].name))
+    await h.user.click(screen.getByText(usePlaylistStore().state.playlists[0].name))
 
-    expect(addMock).toHaveBeenCalledWith(playlistStore.state.playlists[0], playables)
+    expect(addMock).toHaveBeenCalledWith(usePlaylistStore().state.playlists[0], playables)
   })
 
   it('does not list mirrors of watched playlists', async () => {
-    playlistStore.state.playlists = [
+    usePlaylistStore().state.playlists = [
       h.factory('playlist').make({ name: 'My Mirror', permissions: { edit: false, delete: false } }),
     ]
 
     await renderComponent()
 
+    await h.user.click(screen.getByText('Add to'))
     expect(screen.queryByText('My Mirror')).toBeNull()
   })
 
   it('does not list smart playlists', async () => {
-    playlistStore.state.playlists = h.factory('playlist').make(3)
-    playlistStore.state.playlists.push(factory('playlist').state('smart').make({ name: 'My Smart Playlist' }))
+    usePlaylistStore().state.playlists = h.factory('playlist').make(3)
+    usePlaylistStore().state.playlists.push(factory('playlist').state('smart').make({ name: 'My Smart Playlist' }))
 
     await renderComponent()
 
+    await h.user.click(screen.getByText('Add to'))
     expect(screen.queryByText('My Smart Playlist')).toBeNull()
   })
 
   it('does not have an option to remove from playlist if not on Playlist screen', async () => {
-    h.visit('/songs')
+    await h.visit('/songs')
     await renderComponent()
 
     expect(screen.queryByText('Remove from playlist')).toBeNull()
@@ -286,6 +297,7 @@ describe('playableContextMenu.vue', () => {
     h.actingAsUser()
     const { playables } = await renderComponent()
 
+    await h.user.click(screen.getByText('Add to'))
     await h.user.click(screen.getByText('New playlist…'))
 
     await assertOpenModal(openModalMock, CreatePlaylistForm, { folder: null, playables })
@@ -313,7 +325,7 @@ describe('playableContextMenu.vue', () => {
   })
 
   it('links to MusicBrainz', async () => {
-    commonStore.state.uses_musicbrainz = true
+    useCommonStore().state.uses_musicbrainz = true
     const openMock = h.mock(window, 'open')
     const song = h.factory('song').make()
 
@@ -324,32 +336,32 @@ describe('playableContextMenu.vue', () => {
   })
 
   it('does not link to MusicBrainz when MusicBrainz is disabled', async () => {
-    commonStore.state.uses_musicbrainz = false
+    useCommonStore().state.uses_musicbrainz = false
     await renderComponent(h.factory('song').make())
 
     expect(screen.queryByText('View on MusicBrainz')).toBeNull()
   })
 
   it('does not link to MusicBrainz when the song has no identifier', async () => {
-    commonStore.state.uses_musicbrainz = true
+    useCommonStore().state.uses_musicbrainz = true
     await renderComponent(h.factory('song').make({ mbid: null }))
 
     expect(screen.queryByText('View on MusicBrainz')).toBeNull()
   })
 
   it('does not link to MusicBrainz when multiple playables are selected', async () => {
-    commonStore.state.uses_musicbrainz = true
+    useCommonStore().state.uses_musicbrainz = true
     await renderComponent(h.factory('song').make(3))
 
     expect(screen.queryByText('View on MusicBrainz')).toBeNull()
   })
 
   it('closes the menu after rating', async () => {
-    h.mock(playableStore, 'rate')
+    h.mock(usePlayableStore(), 'rate')
     const menu = shallowRef<any>({ component: Component, position: { top: 0, left: 0 } })
     const song = h.factory('song').make({ rating: 0 })
 
-    h.render(Component, {
+    h.renderMenu(Component, {
       props: { playables: [song] },
       global: { provide: { [ContextMenuKey as symbol]: menu } },
     })

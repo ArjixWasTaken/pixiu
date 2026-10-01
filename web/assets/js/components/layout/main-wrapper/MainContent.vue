@@ -3,102 +3,52 @@
     <TopBar v-if="isMobile" />
     <NowPlayingPanel v-if="!isMobile" />
     <div class="screens">
-      <!--
-      Most of the views are render-expensive and have their own UI states (viewport/scroll position), e.g. the playable
-      lists), so we use v-show.
-      For those that don't need to maintain their own UI state, we use v-if to avoid rendering them when not needed.
-    -->
-      <HomeScreen v-if="screenLoaded('Home')" v-show="screen === 'Home'" />
-      <QueueScreen v-if="screenLoaded('Queue')" v-show="screen === 'Queue'" />
-      <AllSongsScreen v-if="screenLoaded('Songs')" v-show="screen === 'Songs'" />
-      <AlbumListScreen v-if="screenLoaded('Albums')" v-show="screen === 'Albums'" />
-      <ArtistListScreen v-if="screenLoaded('Artists')" v-show="screen === 'Artists'" />
-      <PlaylistScreen v-if="screenLoaded('Playlist')" v-show="screen === 'Playlist'" />
-      <FavoritesScreen v-if="screenLoaded('Favorites')" v-show="screen === 'Favorites'" />
-      <RecentlyPlayedScreen v-if="screenLoaded('RecentlyPlayed')" v-show="screen === 'RecentlyPlayed'" />
-      <OfflineSongsScreen v-if="screenLoaded('OfflineSongs')" v-show="screen === 'OfflineSongs'" />
-      <UploadScreen v-if="screenLoaded('Upload')" v-show="screen === 'Upload'" />
-      <SearchExcerptsScreen v-if="screenLoaded('Search.Excerpt')" v-show="screen === 'Search.Excerpt'" />
-      <GenreScreen v-if="screenLoaded('Genre')" v-show="screen === 'Genre'" />
-      <GenreListScreen v-if="screenLoaded('Genres')" v-show="screen === 'Genres'" />
-
-      <SearchSongResultsScreen v-if="screen === 'Search.Playables'" />
-      <AlbumScreen v-if="screen === 'Album'" />
-      <ArtistScreen v-if="screen === 'Artist'" />
-      <SettingsScreen v-if="screen === 'Settings'" />
-      <HuntScreen v-if="screenLoaded('Hunt')" v-show="screen === 'Hunt'" />
-      <WatchesScreen v-if="screen === 'Watches'" />
-      <JobsScreen v-if="screen === 'Jobs'" />
-      <OrphansScreen v-if="screen === 'Orphans'" />
-      <NotFoundScreen v-if="screen === '404'" />
-
-      <template v-for="(component, name) in addedScreens" :key="name">
-        <component :is="component" v-if="screen === name" />
-      </template>
+      <NotFoundScreen v-if="notFound" />
+      <!-- The 404 screen shows in place: the kept screens stay as they were. -->
+      <div v-show="!notFound" class="screens">
+        <RouterView v-slot="{ Component, route }">
+          <KeepAlive :include="keptAlive">
+            <component :is="Component" :key="route.meta.screen" />
+          </KeepAlive>
+        </RouterView>
+      </div>
     </div>
   </section>
 </template>
 
 <script lang="ts" setup>
-import { onMounted, reactive, ref } from 'vue'
-import type { Component } from 'vue'
-import { Filter } from '@/config/hooks'
-import { applyFilters } from '@/hooks'
+import { RouterView } from 'vue-router'
+import { notFound } from '@/router'
 import { defineAsyncComponent } from '@/utils/helpers'
-import { useRouter } from '@/composables/useRouter'
 import { useViewport } from '@/composables/useViewport'
 
 import TopBar from '@/components/layout/main-wrapper/TopBar.vue'
 import NowPlayingPanel from '@/components/layout/now-playing/NowPlayingPanel.vue'
 
-const AlbumListScreen = defineAsyncComponent(() => import('@/components/screens/AlbumListScreen.vue'))
-const AlbumScreen = defineAsyncComponent(() => import('@/components/screens/AlbumScreen.vue'))
-const AllSongsScreen = defineAsyncComponent(() => import('@/components/screens/AllSongsScreen.vue'))
-const ArtistListScreen = defineAsyncComponent(() => import('@/components/screens/ArtistListScreen.vue'))
-const ArtistScreen = defineAsyncComponent(() => import('@/components/screens/ArtistScreen.vue'))
-const FavoritesScreen = defineAsyncComponent(() => import('@/components/screens/FavoritesScreen.vue'))
-const GenreListScreen = defineAsyncComponent(() => import('@/components/screens/GenreListScreen.vue'))
-const GenreScreen = defineAsyncComponent(() => import('@/components/screens/GenreScreen.vue'))
-const HomeScreen = defineAsyncComponent(() => import('@/components/screens/HomeScreen.vue'))
 const NotFoundScreen = defineAsyncComponent(() => import('@/components/screens/NotFoundScreen.vue'))
-const PlaylistScreen = defineAsyncComponent(() => import('@/components/screens/PlaylistScreen.vue'))
-// QueueScreen and OfflineSongsScreen must NOT be lazy-loaded, so they work offline.
-import QueueScreen from '@/components/screens/QueueScreen.vue'
-import OfflineSongsScreen from '@/components/screens/OfflineSongsScreen.vue'
-const RecentlyPlayedScreen = defineAsyncComponent(() => import('@/components/screens/RecentlyPlayedScreen.vue'))
-const SearchExcerptsScreen = defineAsyncComponent(() => import('@/components/screens/search/SearchExcerptsScreen.vue'))
-const SearchSongResultsScreen = defineAsyncComponent(
-  () => import('@/components/screens/search/SearchPlayableResultsScreen.vue'),
-)
-const SettingsScreen = defineAsyncComponent(() => import('@/components/screens/SettingsScreen.vue'))
-const HuntScreen = defineAsyncComponent(() => import('@/components/screens/hunting/HuntScreen.vue'))
-const WatchesScreen = defineAsyncComponent(() => import('@/components/screens/hunting/WatchesScreen.vue'))
-const JobsScreen = defineAsyncComponent(() => import('@/components/screens/hunting/JobsScreen.vue'))
-const OrphansScreen = defineAsyncComponent(() => import('@/components/screens/hunting/OrphansScreen.vue'))
-const UploadScreen = defineAsyncComponent(() => import('@/components/screens/UploadScreen.vue'))
 
-const addedScreens = applyFilters<Partial<Record<ScreenName, Component>>>(Filter.SCREENS, {})
+/**
+ * Screens with lists and state of their own (scroll position, a filter) stay
+ * alive when left; the others start afresh each time.
+ */
+const keptAlive = [
+  'HomeScreen',
+  'QueueScreen',
+  'AllSongsScreen',
+  'AlbumListScreen',
+  'ArtistListScreen',
+  'PlaylistScreen',
+  'FavoritesScreen',
+  'RecentlyPlayedScreen',
+  'OfflineSongsScreen',
+  'UploadScreen',
+  'SearchExcerptsScreen',
+  'GenreScreen',
+  'GenreListScreen',
+  'HuntScreen',
+]
 
 const { isMobile } = useViewport()
-const { onRouteChanged, getCurrentScreen } = useRouter()
-
-const screen = ref<ScreenName>('Home')
-const loadedScreens = reactive<ScreenName[]>([])
-
-onRouteChanged(route => {
-  if (!loadedScreens.includes(route.screen)) {
-    loadedScreens.push(route.screen)
-  }
-
-  screen.value = route.screen
-})
-
-const screenLoaded = (screenName: ScreenName) => loadedScreens.includes(screenName)
-
-onMounted(() => {
-  screen.value = getCurrentScreen()
-  loadedScreens.push(screen.value)
-})
 </script>
 
 <style scoped>

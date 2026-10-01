@@ -23,7 +23,7 @@ describe('ssoComplete.vue', () => {
   it('says when the sign-in code no longer works, which is no error', async () => {
     const error = vi.spyOn(logger, 'error')
     const exchange = h.mock(authService, 'exchangeSsoCode').mockRejectedValue(expired())
-    h.visit('/sso/abc_DEF-1')
+    await h.visit('/sso/abc_DEF-1')
     h.render(Component)
 
     await screen.findByText('That sign-in expired')
@@ -35,7 +35,7 @@ describe('ssoComplete.vue', () => {
   it('logs an exchange that failed otherwise', async () => {
     const error = vi.spyOn(logger, 'error').mockImplementation(() => {})
     h.mock(authService, 'exchangeSsoCode').mockRejectedValue(new Error('offline'))
-    h.visit('/sso/abc')
+    await h.visit('/sso/abc')
     h.render(Component)
 
     await screen.findByText('That sign-in expired')

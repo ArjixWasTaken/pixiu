@@ -2,7 +2,7 @@ import { fireEvent, screen } from '@testing-library/vue'
 import { describe, expect, it, vi } from 'vite-plus/test'
 import { nextTick } from 'vue'
 import { createHarness } from '@/__tests__/TestHarness'
-import { preferenceStore } from '@/stores/preferenceStore'
+import { usePreferenceStore } from '@/stores/preferenceStore'
 import Component from './ReorderBlocksModal.vue'
 
 const blocks = [
@@ -44,8 +44,8 @@ const rowIds = (container: Element) =>
 describe('ReorderBlocksModal', () => {
   const h = createHarness({
     beforeEach: () => {
-      preferenceStore.temporary.home_blocks_order = []
-      preferenceStore.temporary.home_blocks_hidden = []
+      usePreferenceStore().home_blocks_order = []
+      usePreferenceStore().home_blocks_hidden = []
     },
   })
 
@@ -94,7 +94,7 @@ describe('ReorderBlocksModal', () => {
     expect(sourceIdx).toBeGreaterThan(targetIdx)
   })
 
-  it('persists the current order to preferenceStore.home_blocks_order on dragend', async () => {
+  it('persists the current order to usePreferenceStore().home_blocks_order on dragend', async () => {
     const { container } = h.render(Component, { props: { blocks } })
     const rows = Array.from(container.querySelectorAll<HTMLElement>('[draggable="true"]'))
 
@@ -106,15 +106,15 @@ describe('ReorderBlocksModal', () => {
     await nextTick()
     dispatch(rows[0], 'dragend')
 
-    const saved = preferenceStore.home_blocks_order
+    const saved = usePreferenceStore().home_blocks_order
     const sourceIdx = saved.indexOf('recently-played-songs')
     const targetIdx = saved.indexOf('most-played-albums')
     expect(sourceIdx).toBeGreaterThan(targetIdx)
   })
 
   it('skips persisting on dragend when the order has not actually changed', async () => {
-    preferenceStore.temporary.home_blocks_order = blocks.map(block => block.id)
-    const updateSpy = vi.spyOn(preferenceStore, 'update' as never)
+    usePreferenceStore().home_blocks_order = blocks.map(block => block.id)
+    const saveSpy = vi.spyOn(Storage.prototype, 'setItem')
 
     const { container } = h.render(Component, { props: { blocks } })
     const rows = Array.from(container.querySelectorAll<HTMLElement>('[draggable="true"]'))
@@ -123,18 +123,18 @@ describe('ReorderBlocksModal', () => {
     dispatch(rows[0], 'dragend')
     await nextTick()
 
-    expect(updateSpy).not.toHaveBeenCalled()
+    expect(saveSpy).not.toHaveBeenCalled()
   })
 
   it('hides a block when it is unticked, and shows it again', async () => {
     h.render(Component, { props: { blocks } })
 
     await h.user.click(screen.getByRole('checkbox', { name: 'Show Top albums' }))
-    expect(preferenceStore.home_blocks_hidden).toEqual(['most-played-albums'])
+    expect(usePreferenceStore().home_blocks_hidden).toEqual(['most-played-albums'])
     expect(screen.getByRole<HTMLInputElement>('checkbox', { name: 'Show Top albums' }).checked).toBe(false)
 
     await h.user.click(screen.getByRole('checkbox', { name: 'Show Top albums' }))
-    expect(preferenceStore.home_blocks_hidden).toEqual([])
+    expect(usePreferenceStore().home_blocks_hidden).toEqual([])
   })
 
   it('emits close when the Close button is clicked', async () => {

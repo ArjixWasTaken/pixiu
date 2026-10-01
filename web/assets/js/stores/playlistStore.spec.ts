@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vite-plus/test'
 import { createHarness } from '@/__tests__/TestHarness'
 import factory from '@/__tests__/factory'
-import { cache } from '@/services/cache'
+import { queryClient } from '@/services/queryClient'
 import { http } from '@/services/http'
-import { playlistStore } from '@/stores/playlistStore'
-
+import { usePlaylistStore } from '@/stores/playlistStore'
 const ruleGroups: SmartPlaylistRuleGroup[] = [
   {
     id: 'c328a77e-3edf-46ed-8c8b-398ec443e6ad',
@@ -67,7 +66,7 @@ describe('playlistStore', () => {
   const h = createHarness()
 
   it('serializes playlist for storage', () => {
-    expect(playlistStore.serializeSmartPlaylistRulesForStorage(ruleGroups)).toEqual(serializedRuleGroups)
+    expect(usePlaylistStore().serializeSmartPlaylistRulesForStorage(ruleGroups)).toEqual(serializedRuleGroups)
   })
 
   it('sets up a smart playlist with properly unserialized rules', () => {
@@ -76,7 +75,7 @@ describe('playlistStore', () => {
       rules: serializedRuleGroups as unknown as SmartPlaylistRuleGroup[],
     })
 
-    playlistStore.setupSmartPlaylist(playlist)
+    usePlaylistStore().setupSmartPlaylist(playlist)
 
     expect(playlist.rules).toEqual(ruleGroups)
   })
@@ -85,36 +84,34 @@ describe('playlistStore', () => {
     const playlist = factory('playlist').state('smart').make()
     const postMock = h.mock(http, 'post')
 
-    await playlistStore.addContent(playlist, h.factory('song').make(3))
+    await usePlaylistStore().addContent(playlist, h.factory('song').make(3))
     expect(postMock).not.toHaveBeenCalled()
 
-    await playlistStore.removeContent(playlist, h.factory('song').make(3))
+    await usePlaylistStore().removeContent(playlist, h.factory('song').make(3))
     expect(postMock).not.toHaveBeenCalled()
   })
 
   it('updates a smart playlist', async () => {
     const playlist = factory('playlist').state('smart').make()
-    playlistStore.state.playlists = [playlist]
+    usePlaylistStore().state.playlists = [playlist]
     const rules = h.factory('smart-playlist-rule-group').make(2)
-    const serializeMock = h.mock(playlistStore, 'serializeSmartPlaylistRulesForStorage', ['Whatever'])
     const putMock = h.mock(http, 'put').mockResolvedValue(playlist)
-    const removeMock = h.mock(cache, 'remove')
+    queryClient.setQueryData(['playlist', playlist.id, 'songs'], [])
 
-    await playlistStore.update(playlist, {
+    await usePlaylistStore().update(playlist, {
       rules,
       name: 'Foo',
       description: 'Bar',
     })
 
-    expect(serializeMock).toHaveBeenCalledWith(rules)
-
     expect(putMock).toHaveBeenCalledWith(`playlists/${playlist.id}`, {
       name: 'Foo',
       description: 'Bar',
-      rules: ['Whatever'],
+      rules: usePlaylistStore().serializeSmartPlaylistRulesForStorage(rules),
       folder_id: undefined,
     })
 
-    expect(removeMock).toHaveBeenCalledWith(['playlist.songs', playlist.id])
+    // A smart playlist's songs follow its rules: fetched afresh.
+    expect(queryClient.getQueryState(['playlist', playlist.id, 'songs'])?.isInvalidated).toBe(true)
   })
 })

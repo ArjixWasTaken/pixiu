@@ -1,9 +1,11 @@
 <template>
   <article>
-    <button ref="button" class="w-full focus:text-(--schemes-primary)" title="Sort">
-      <M3Icon name="swap_vert" />
-    </button>
-    <Popover ref="popover" :anchor="button" placement="bottom-end" class="context-menu normal-case tracking-normal">
+    <Popover v-model:open="open" class="context-menu normal-case tracking-normal" placement="bottom-end">
+      <template #anchor>
+        <button class="w-full focus:text-(--schemes-primary)" title="Sort" type="button">
+          <M3Icon name="swap_vert" />
+        </button>
+      </template>
       <menu>
         <li
           v-for="item in menuItems"
@@ -55,8 +57,7 @@ interface MenuItem {
 
 const { shouldShowColumn, toggleColumn, isToggleable } = useTableColumnVisibility(artistTableColumnConfig)
 
-const button = ref<HTMLButtonElement>()
-const popover = ref<InstanceType<typeof Popover>>()
+const open = ref(false)
 
 const menuItems = computed<MenuItem[]>(() => [
   { column: 'name', label: 'Name', field: 'name' },
@@ -66,7 +67,7 @@ const menuItems = computed<MenuItem[]>(() => [
 
 const sort = (field: ArtistListSortField) => {
   emit('sort', field)
-  popover.value?.hide()
+  open.value = false
 }
 
 const toggle = (column: ArtistTableColumnName) => {
@@ -75,7 +76,7 @@ const toggle = (column: ArtistTableColumnName) => {
   }
 
   toggleColumn(column)
-  popover.value?.hide()
+  open.value = false
 }
 </script>
 

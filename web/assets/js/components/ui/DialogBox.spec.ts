@@ -1,49 +1,87 @@
-import { describe, expect, it, vi } from 'vite-plus/test'
-import { screen } from '@testing-library/vue'
-import { nextTick } from 'vue'
+import { describe, expect, it } from 'vite-plus/test'
+import { screen, waitFor } from '@testing-library/vue'
+import { defineComponent, h as createElement, ref } from 'vue'
 import { createHarness } from '@/__tests__/TestHarness'
 import Component from './DialogBox.vue'
 
 describe('dialogBox', () => {
-  const h = createHarness({
-    beforeEach: () => {
-      HTMLDialogElement.prototype.showModal = vi.fn()
-      HTMLDialogElement.prototype.close = vi.fn()
-    },
-  })
+  const h = createHarness()
 
+  /** Renders the dialog box, handing back what `useDialogBox` would call. */
   const renderComponent = () => {
-    return h.render(Component)
+    const box = ref<InstanceType<typeof Component>>()
+    h.render(defineComponent({ setup: () => () => createElement(Component, { ref: box }) }))
+    return () => box.value!
   }
 
-  it('renders OK button', () => {
+  it('shows nothing until asked', () => {
     renderComponent()
-    screen.getByRole('button', { name: 'OK', hidden: true })
+
+    expect(screen.queryByRole('alertdialog')).toBeNull()
   })
 
-  it('does not show Cancel button by default', () => {
-    renderComponent()
-    expect(screen.queryByRole('button', { name: 'Cancel', hidden: true })).toBeNull()
+  it('tells, with OK only', async () => {
+    const box = renderComponent()
+
+    const answered = box().error('The file could not be read.')
+
+    await screen.findByRole('alertdialog', { name: 'Something went wrong' })
+    screen.getByText('The file could not be read.')
+    expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull()
+
+    await h.user.click(screen.getByRole('button', { name: 'OK' }))
+
+    expect(await answered).toBe(true)
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
   })
 
-  it('renders a dialog element', () => {
-    renderComponent()
-    expect(document.querySelector('dialog')).toBeTruthy()
+  it('makes a bare question the headline, and focuses Cancel', async () => {
+    const box = renderComponent()
+
+    box().confirm('Discard 1 file?')
+
+    await screen.findByRole('alertdialog', { name: 'Discard 1 file?' })
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Cancel' })))
   })
 
-  it('has info class by default', () => {
-    renderComponent()
-    expect(document.querySelector('dialog.info')).toBeTruthy()
+  it('answers false on Cancel, and on Escape', async () => {
+    const box = renderComponent()
+
+    let answered = box().confirm('Delete the playlist?')
+    await h.user.click(await screen.findByRole('button', { name: 'Cancel' }))
+    expect(await answered).toBe(false)
+
+    answered = box().confirm('Delete the playlist?')
+    await screen.findByRole('alertdialog')
+    await h.user.keyboard('{Escape}')
+    expect(await answered).toBe(false)
   })
 
-  it('makes a bare question the headline', async () => {
-    const { container } = renderComponent()
-    const dialog = (container.querySelector('dialog') as any)['__vueParentComponent'].exposed
+  it('is not answered by the Escape that asked it', async () => {
+    const box = renderComponent()
+    let answered: Promise<boolean> | undefined
+    const form = document.createElement('form')
+    form.addEventListener('keydown', () => (answered ??= box().confirm('Discard all changes?')))
+    document.body.append(form)
+    const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
 
-    dialog.confirm('Discard 1 file?')
-    await nextTick()
+    // As in a browser: the form asks, Vue renders before the next listener,
+    // and the same Escape then reaches the document, where dialogs listen.
+    form.dispatchEvent(escape)
+    await h.tick()
+    document.dispatchEvent(escape)
 
-    screen.getByRole('heading', { name: 'Discard 1 file?', hidden: true })
-    expect(screen.queryByText('Are you sure?')).toBeNull()
+    await h.user.click(await screen.findByRole('button', { name: 'OK' }))
+    expect(await answered).toBe(true)
+    form.remove()
+  })
+
+  it('answers true on OK', async () => {
+    const box = renderComponent()
+
+    const answered = box().confirm('Delete the playlist?')
+    await h.user.click(await screen.findByRole('button', { name: 'OK' }))
+
+    expect(await answered).toBe(true)
   })
 })

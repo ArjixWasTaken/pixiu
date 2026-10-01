@@ -7,10 +7,13 @@ import type { KeyFilter } from '@vueuse/core'
 import { onKeyStroke as baseOnKeyStroke } from '@vueuse/core'
 import { eventBus } from '@/utils/eventBus'
 import { volumeManager } from '@/services/volumeManager'
-import { queueStore } from '@/stores/queueStore'
+import { useQueueStore } from '@/stores/queueStore'
 import { useRouter } from '@/composables/useRouter'
-import { playableStore } from '@/stores/playableStore'
+import { usePlayableStore } from '@/stores/playableStore'
 import { playback } from '@/services/playbackManager'
+
+const queueStore = useQueueStore()
+const playableStore = usePlayableStore()
 
 const { isCurrentScreen, go, url } = useRouter()
 

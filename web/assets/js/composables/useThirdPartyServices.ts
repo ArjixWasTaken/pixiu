@@ -1,6 +1,5 @@
 import { toRef } from 'vue'
-import { commonStore } from '@/stores/commonStore'
-
+import { useCommonStore } from '@/stores/commonStore'
 export const useThirdPartyServices = () => ({
-  useMusicBrainz: toRef(commonStore.state, 'uses_musicbrainz'),
+  useMusicBrainz: toRef(useCommonStore().state, 'uses_musicbrainz'),
 })

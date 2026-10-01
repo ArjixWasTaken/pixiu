@@ -62,10 +62,10 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, onMounted, ref } from 'vue'
+import { useQuery } from '@tanstack/vue-query'
+import { computed, ref, watch } from 'vue'
 import { huntingService } from '@/services/huntingService'
-import type { Sources } from '@/services/huntingService'
-import { huntingStore } from '@/stores/huntingStore'
+import { useHuntingStore } from '@/stores/huntingStore'
 import { timeAgo } from '@/utils/formatters'
 import { useDialogBox } from '@/composables/useDialogBox'
 import { useMessageToaster } from '@/composables/useMessageToaster'
@@ -76,12 +76,22 @@ import M3Button from '@/components/m3/M3Button.vue'
 import SettingGroup from '@/components/screens/settings/SettingGroup.vue'
 import LoginBrowser from '@/components/screens/settings/LoginBrowser.vue'
 
+const huntingStore = useHuntingStore()
+
 const { showConfirmDialog } = useDialogBox()
 const { toastSuccess, toastWarning } = useMessageToaster()
 const { handleHttpError } = useErrorHandler('dialog')
 
-const sources = ref<Sources | null>(null)
 const signingIn = ref(false)
+
+const {
+  data: sources,
+  error,
+  refetch: fetchSources,
+} = useQuery({ queryKey: ['hunting', 'sources'], queryFn: () => huntingService.sources() })
+watch(error, error => error && handleHttpError(error))
+// A sign-in left open (in another tab, say) shows as one.
+watch(sources, sources => sources && (signingIn.value = sources.login_open))
 
 const when = (iso: string | null) => (iso ? timeAgo(iso) : 'Never')
 
@@ -105,15 +115,6 @@ const look = computed(() => {
       return { alert: 'info' as const, title: 'Not connected', text: 'Searching and downloading work without one.' }
   }
 })
-
-const fetchSources = async () => {
-  try {
-    sources.value = await huntingService.sources()
-    signingIn.value = sources.value.login_open
-  } catch (error: unknown) {
-    handleHttpError(error)
-  }
-}
 
 const act = async (action: () => Promise<unknown>, message?: string) => {
   try {
@@ -163,8 +164,6 @@ const onSignedIn = async () => {
   await fetchSources()
   await huntingStore.refresh()
 }
-
-onMounted(fetchSources)
 </script>
 
 <style scoped>

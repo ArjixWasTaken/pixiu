@@ -14,12 +14,13 @@
 
 <script lang="ts" setup>
 import { toRef, toRefs } from 'vue'
-import { overviewStore } from '@/stores/overviewStore'
-
+import { useOverviewStore } from '@/stores/overviewStore'
 import AlbumCard from '@/components/album/AlbumCard.vue'
 import AlbumCardSkeleton from '@/components/ui/album-artist/ArtistAlbumCardSkeleton.vue'
 import Carousel from '@/components/ui/Carousel.vue'
 import HomeScreenBlock from '@/components/screens/home/HomeScreenBlock.vue'
+
+const overviewStore = useOverviewStore()
 
 const props = withDefaults(defineProps<{ loading?: boolean }>(), { loading: false })
 const { loading } = toRefs(props)

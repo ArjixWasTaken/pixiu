@@ -12,16 +12,21 @@
 
 <script lang="ts" setup>
 import { computed, ref } from 'vue'
-import { commonStore } from '@/stores/commonStore'
-import { queueStore } from '@/stores/queueStore'
-import { recentlyPlayedStore } from '@/stores/recentlyPlayedStore'
-import { playableStore } from '@/stores/playableStore'
+import { useCommonStore } from '@/stores/commonStore'
+import { useQueueStore } from '@/stores/queueStore'
+import { useRecentlyPlayedStore } from '@/stores/recentlyPlayedStore'
+import { usePlayableStore } from '@/stores/playableStore'
 import { useRouter } from '@/composables/useRouter'
 import { requireInjection } from '@/utils/helpers'
 import { CurrentStreamableKey } from '@/config/symbols'
 import { playback } from '@/services/playbackManager'
 
 import M3IconButton from '@/components/m3/M3IconButton.vue'
+
+const commonStore = useCommonStore()
+const queueStore = useQueueStore()
+const recentlyPlayedStore = useRecentlyPlayedStore()
+const playableStore = usePlayableStore()
 
 withDefaults(defineProps<{ size?: 's' | 'm'; shape?: 'round' | 'square' }>(), { size: 'm', shape: 'square' })
 

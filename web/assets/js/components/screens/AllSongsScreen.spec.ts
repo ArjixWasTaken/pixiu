@@ -2,29 +2,27 @@ import { screen, waitFor } from '@testing-library/vue'
 import { describe, expect, it } from 'vite-plus/test'
 import { createHarness } from '@/__tests__/TestHarness'
 import Router from '@/router'
-import { commonStore } from '@/stores/commonStore'
-import { queueStore } from '@/stores/queueStore'
-import { playableStore } from '@/stores/playableStore'
+import { useCommonStore } from '@/stores/commonStore'
+import { useQueueStore } from '@/stores/queueStore'
+import { usePlayableStore } from '@/stores/playableStore'
 import { playbackService } from '@/services/QueuePlaybackService'
 import Component from './AllSongsScreen.vue'
 
 describe('allSongsScreen.vue', () => {
   const h = createHarness({
     beforeEach: () => {
-      commonStore.state.song_count = 420
-      commonStore.state.song_length = 123_456
-      playableStore.state.playables = h.factory('song').make(20)
+      useCommonStore().state.song_count = 420
+      useCommonStore().state.song_length = 123_456
       h.actingAsUser()
     },
   })
 
   const renderComponent = async () => {
-    const fetchMock = h.mock(playableStore, 'paginateSongs').mockResolvedValue('next-cursor-token')
+    const fetchMock = h
+      .mock(usePlayableStore(), 'paginateSongs')
+      .mockResolvedValue({ items: h.factory('song').make(20), nextCursor: 'next-cursor-token' })
 
-    h.router.$currentRoute.value = {
-      screen: 'Songs',
-      path: '/songs',
-    }
+    await h.visit('/songs')
 
     const rendered = h.render(Component, {
       global: {
@@ -47,23 +45,25 @@ describe('allSongsScreen.vue', () => {
 
   it('renders', async () => {
     const [{ html }] = await renderComponent()
-    await waitFor(() => expect(html()).toMatchSnapshot())
+    // Once its cover (loaded on demand) shows: the snapshot is of the screen as it settles.
+    await waitFor(() => screen.getAllByTestId('thumbnail'))
+    expect(html()).toMatchSnapshot()
   })
 
   it('shuffles', async () => {
     h.createAudioPlayer()
 
-    const queueMock = h.mock(queueStore, 'fetchRandom')
+    const queueMock = h.mock(useQueueStore(), 'fetchRandom')
     const playMock = h.mock(playbackService, 'playFirstInQueue')
     const goMock = h.mock(Router, 'go')
     await renderComponent()
 
-    await h.user.click(screen.getByRole('button', { name: 'Shuffle' }))
+    await h.user.click(await screen.findByRole('button', { name: 'Shuffle' }))
 
     await waitFor(() => {
       expect(queueMock).toHaveBeenCalled()
       expect(playMock).toHaveBeenCalled()
-      expect(goMock).toHaveBeenCalledWith('/#/queue')
+      expect(goMock).toHaveBeenCalledWith('/queue')
     })
   })
 })

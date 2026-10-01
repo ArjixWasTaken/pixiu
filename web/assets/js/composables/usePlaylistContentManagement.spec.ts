@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vite-plus/test'
-import { playlistStore } from '@/stores/playlistStore'
+import { usePlaylistStore } from '@/stores/playlistStore'
 import { eventBus } from '@/utils/eventBus'
 import { createHarness } from '@/__tests__/TestHarness'
 
@@ -24,36 +24,36 @@ describe('usePlaylistContentManagement', () => {
     const playlist = h.factory('playlist').make({ is_smart: false })
     const songs = [h.factory('song').make()]
     const emitMock = h.mock(eventBus, 'emit')
-    h.mock(playlistStore, 'addContent').mockResolvedValue(undefined)
+    h.mock(usePlaylistStore(), 'addContent').mockResolvedValue(undefined)
 
     const { addToPlaylist } = usePlaylistContentManagement()
     await addToPlaylist(playlist, songs)
 
-    expect(playlistStore.addContent).toHaveBeenCalledWith(playlist, songs)
+    expect(usePlaylistStore().addContent).toHaveBeenCalledWith(playlist, songs)
     expect(emitMock).toHaveBeenCalledWith('PLAYLIST_UPDATED', playlist)
   })
 
   it('does not add to smart playlists', async () => {
     const playlist = h.factory('playlist').make({ is_smart: true })
     const songs = [h.factory('song').make()]
-    h.mock(playlistStore, 'addContent')
+    h.mock(usePlaylistStore(), 'addContent')
 
     const { addToPlaylist } = usePlaylistContentManagement()
     await addToPlaylist(playlist, songs)
 
-    expect(playlistStore.addContent).not.toHaveBeenCalled()
+    expect(usePlaylistStore().addContent).not.toHaveBeenCalled()
   })
 
   it('removes content from a playlist', async () => {
     const playlist = h.factory('playlist').make({ is_smart: false })
     const songs = [h.factory('song').make()]
     const emitMock = h.mock(eventBus, 'emit')
-    h.mock(playlistStore, 'removeContent').mockResolvedValue(undefined)
+    h.mock(usePlaylistStore(), 'removeContent').mockResolvedValue(undefined)
 
     const { removeFromPlaylist } = usePlaylistContentManagement()
     await removeFromPlaylist(playlist, songs)
 
-    expect(playlistStore.removeContent).toHaveBeenCalledWith(playlist, songs)
-    expect(emitMock).toHaveBeenCalledWith('PLAYLIST_CONTENT_REMOVED', playlist, songs)
+    expect(usePlaylistStore().removeContent).toHaveBeenCalledWith(playlist, songs)
+    expect(emitMock).toHaveBeenCalledWith('PLAYLIST_CONTENT_REMOVED', { playlist, playables: songs })
   })
 })

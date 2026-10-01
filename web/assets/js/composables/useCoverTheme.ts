@@ -1,9 +1,8 @@
 import type { Ref } from 'vue'
 import { ref, watch } from 'vue'
 import { paintRoot, schemeFrom, sourceColorOf } from '@/services/coverColors'
-import { queueStore } from '@/stores/queueStore'
-import { themeStore } from '@/stores/themeStore'
-
+import { useQueueStore } from '@/stores/queueStore'
+import { useThemeStore } from '@/stores/themeStore'
 /**
  * With "From what's playing" chosen, the whole player takes its colors from
  * the cover playing; with nothing playing, or a cover it can't read, Orange's.
@@ -13,7 +12,7 @@ export const useCoverTheme = () => {
   let latest = 0
 
   watch(
-    [() => queueStore.current?.album_cover, () => themeStore.followsCover, () => themeStore.state.dark],
+    [() => useQueueStore().current?.album_cover, () => useThemeStore().followsCover, () => useThemeStore().state.dark],
     async ([cover, follows, dark]) => {
       const run = ++latest
       const source = follows && cover ? await sourceColorOf(cover) : null
@@ -35,7 +34,7 @@ export const useCoverTint = (cover: Ref<string | null | undefined>) => {
   let latest = 0
 
   watch(
-    [cover, () => themeStore.state.dark],
+    [cover, () => useThemeStore().state.dark],
     async ([url, dark]) => {
       const run = ++latest
       const source = url ? await sourceColorOf(url) : null

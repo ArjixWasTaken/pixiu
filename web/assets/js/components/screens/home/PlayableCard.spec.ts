@@ -1,12 +1,11 @@
 import { screen } from '@testing-library/vue'
 import { describe, expect, it, vi } from 'vite-plus/test'
 import { createHarness } from '@/__tests__/TestHarness'
-import { playableStore } from '@/stores/playableStore'
-
 const isCachedMock = vi.fn().mockReturnValue(false)
 const isCachingMock = vi.fn().mockReturnValue(false)
 const hasCachingErrorMock = vi.fn().mockReturnValue(false)
 const getCachingErrorMock = vi.fn().mockReturnValue(undefined)
+const makeAvailableOfflineMock = vi.fn()
 const playMock = vi.fn()
 
 vi.mock('@/services/playbackManager', () => ({
@@ -19,6 +18,11 @@ vi.mock('@/composables/useOfflinePlayback', () => ({
     isCaching: isCachingMock,
     hasCachingError: hasCachingErrorMock,
     getCachingError: getCachingErrorMock,
+    getCachingProgress: () => 0,
+    makeAvailableOffline: makeAvailableOfflineMock,
+    removeOfflineCache: vi.fn(),
+    // A service worker runs.
+    swReady: true,
   }),
 }))
 
@@ -35,6 +39,7 @@ describe('playableCard.vue', () => {
       hasCachingErrorMock.mockReturnValue(false)
       getCachingErrorMock.mockClear()
       getCachingErrorMock.mockReturnValue(undefined)
+      makeAvailableOfflineMock.mockClear()
       playMock.mockClear()
     },
   })
@@ -76,48 +81,22 @@ describe('playableCard.vue', () => {
     expect(screen.getByTestId('song-card').getAttribute('draggable')).toBe('true')
   })
 
-  it('shows offline mark for cached songs', () => {
-    isCachedMock.mockReturnValue(true)
-    renderCard()
-    screen.getByTitle('Available offline')
+  it('makes the song available offline from its button', async () => {
+    const { props } = renderCard()
+
+    await h.user.click(screen.getByRole('button', { name: 'Make available offline' }))
+
+    expect(makeAvailableOfflineMock).toHaveBeenCalledWith(props.playable)
+    expect(playMock).not.toHaveBeenCalled()
   })
 
-  it('does not show offline mark for non-cached songs', () => {
-    renderCard()
-    expect(screen.queryByTitle('Available offline')).toBeNull()
-  })
+  it('does so without starting playback when the button is activated with Enter', async () => {
+    const { props } = renderCard()
 
-  it('shows spinner when caching offline', () => {
-    isCachingMock.mockReturnValue(true)
-    renderCard()
-    screen.getByTitle('Caching for offline playback')
-  })
-
-  it('shows spinner instead of offline mark when caching', () => {
-    isCachingMock.mockReturnValue(true)
-    isCachedMock.mockReturnValue(true)
-    renderCard()
-    screen.getByTitle('Caching for offline playback')
-    expect(screen.queryByTitle('Available offline')).toBeNull()
-  })
-
-  it('toggles favorite state when the Favorite button is clicked', async () => {
-    const toggleFavoriteMock = h.mock(playableStore, 'toggleFavorite')
-    const { props } = renderCard({ favorite: false })
-
-    await h.user.click(screen.getByRole('button', { name: 'Add to favorites' }))
-
-    expect(toggleFavoriteMock).toHaveBeenCalledWith(props.playable)
-  })
-
-  it('toggles favorite without starting playback when the button is activated with Enter', async () => {
-    const toggleFavoriteMock = h.mock(playableStore, 'toggleFavorite')
-    const { props } = renderCard({ favorite: false })
-
-    screen.getByRole('button', { name: 'Add to favorites' }).focus()
+    screen.getByRole('button', { name: 'Make available offline' }).focus()
     await h.user.keyboard('{Enter}')
 
-    expect(toggleFavoriteMock).toHaveBeenCalledWith(props.playable)
+    expect(makeAvailableOfflineMock).toHaveBeenCalledWith(props.playable)
     expect(playMock).not.toHaveBeenCalled()
   })
 
@@ -128,17 +107,5 @@ describe('playableCard.vue', () => {
     await h.user.keyboard('{Enter}')
 
     expect(playMock).toHaveBeenCalledWith(props.playable)
-  })
-
-  it('renders the button as undo-able for a favorite song', () => {
-    renderCard({ favorite: true })
-    screen.getByRole('button', { name: 'Remove from favorites' })
-  })
-
-  it('shows error icon when caching fails', () => {
-    hasCachingErrorMock.mockReturnValue(true)
-    getCachingErrorMock.mockReturnValue('Network error')
-    renderCard()
-    screen.getByTitle('Error: Network error')
   })
 })

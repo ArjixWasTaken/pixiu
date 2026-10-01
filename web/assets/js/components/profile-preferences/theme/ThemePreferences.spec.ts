@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vite-plus/test'
 import { createHarness } from '@/__tests__/TestHarness'
 import { screen } from '@testing-library/vue'
 import themes from '@/config/themes'
-import { themeStore } from '@/stores/themeStore'
+import { useThemeStore } from '@/stores/themeStore'
 import Component from './ThemePreferences.vue'
 
 describe('themePreferences.vue', () => {
@@ -16,7 +16,7 @@ describe('themePreferences.vue', () => {
   })
 
   it('switches to light mode', async () => {
-    const setDarkModeMock = h.mock(themeStore, 'setDarkMode')
+    const setDarkModeMock = h.mock(useThemeStore(), 'setDarkMode')
     h.render(Component)
 
     await h.user.click(screen.getByRole('button', { name: 'Light' }))
@@ -25,7 +25,7 @@ describe('themePreferences.vue', () => {
   })
 
   it('follows the system', async () => {
-    const setDarkModeMock = h.mock(themeStore, 'setDarkMode')
+    const setDarkModeMock = h.mock(useThemeStore(), 'setDarkMode')
     h.render(Component)
 
     await h.user.click(screen.getByRole('button', { name: 'System' }))

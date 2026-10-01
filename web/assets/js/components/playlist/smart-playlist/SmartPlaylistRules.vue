@@ -20,10 +20,11 @@
 </template>
 
 <script lang="ts" setup>
-import { playlistStore } from '@/stores/playlistStore'
-
+import { usePlaylistStore } from '@/stores/playlistStore'
 import M3Button from '@/components/m3/M3Button.vue'
 import SmartPlaylistRuleGroup from '@/components/playlist/smart-playlist/SmartPlaylistRuleGroup.vue'
+
+const playlistStore = usePlaylistStore()
 
 const groups = defineModel<SmartPlaylistRuleGroup[]>({ required: true })
 

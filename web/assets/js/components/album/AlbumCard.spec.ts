@@ -3,7 +3,7 @@ import type { Mock } from 'vite-plus/test'
 import { describe, expect, it, vi } from 'vite-plus/test'
 import { createHarness } from '@/__tests__/TestHarness'
 import { playbackService } from '@/services/QueuePlaybackService'
-import { playableStore } from '@/stores/playableStore'
+import { usePlayableStore } from '@/stores/playableStore'
 import { useContextMenu } from '@/composables/useContextMenu'
 import { setViewport } from '@/composables/useViewport'
 import { assertOpenContextMenu } from '@/__tests__/assertions'
@@ -20,9 +20,9 @@ describe('albumCard', () => {
 
   const createAlbum = (overrides: Partial<Album> = {}) =>
     h.factory('album').make({
-      id: 'iv',
+      id: 'al-4',
       name: 'IV',
-      artist_id: 'led-zeppelin',
+      artist_id: 'ar-1',
       artist_name: 'Led Zeppelin',
       cover: 'https://example.com/cover.jpg',
       favorite: false,
@@ -49,7 +49,7 @@ describe('albumCard', () => {
 
     await h.user.click(screen.getByTestId('artist-album-card'))
 
-    expect(goMock).toHaveBeenCalledWith('/#/albums/iv')
+    expect(goMock).toHaveBeenCalledWith('/albums/al-4')
   })
 
   it('shuffles on double click', async () => {
@@ -57,7 +57,7 @@ describe('albumCard', () => {
     h.mock(Router, 'go')
 
     const songs = h.factory('song').make(10)
-    const fetchMock = h.mock(playableStore, 'fetchSongsForAlbum').mockResolvedValue(songs)
+    const fetchMock = h.mock(usePlayableStore(), 'fetchSongsForAlbum').mockResolvedValue(songs)
     const shuffleMock = h.mock(playbackService, 'queueAndPlay').mockResolvedValue(void 0)
     const { album } = renderComponent()
 

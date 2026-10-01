@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vite-plus/test'
 import { createHarness } from '@/__tests__/TestHarness'
-import { playlistFolderStore } from '@/stores/playlistFolderStore'
-import { playlistStore } from '@/stores/playlistStore'
+import { usePlaylistFolderStore } from '@/stores/playlistFolderStore'
+import { usePlaylistStore } from '@/stores/playlistStore'
 import { screen, waitFor } from '@testing-library/vue'
 import Component from './EditPlaylistForm.vue'
 
@@ -10,7 +10,7 @@ describe('editPlaylistForm.vue', () => {
 
   const renderComponent = (playlist?: Playlist) => {
     playlist = playlist || h.factory('playlist').make()
-    playlistStore.state.playlists = [playlist]
+    usePlaylistStore().state.playlists = [playlist]
 
     const rendered = h.render(Component, {
       props: {
@@ -25,13 +25,13 @@ describe('editPlaylistForm.vue', () => {
   }
 
   it('edits the playlist with no changes to cover', async () => {
-    const updateMock = h.mock(playlistStore, 'update')
-    playlistFolderStore.state.folders = h.factory('playlist-folder').make(3)
+    const updateMock = h.mock(usePlaylistStore(), 'update')
+    usePlaylistFolderStore().state.folders = h.factory('playlist-folder').make(3)
 
     const { playlist } = renderComponent(
       h.factory('playlist').make({
         name: 'My playlist',
-        folder_id: playlistFolderStore.state.folders[0].id,
+        folder_id: usePlaylistFolderStore().state.folders[0].id,
       }),
     )
 

@@ -25,13 +25,15 @@ import { pick } from 'lodash-es'
 import { toRaw } from 'vue'
 
 import type { UpdatePlaylistData } from '@/stores/playlistStore'
-import { playlistStore } from '@/stores/playlistStore'
+import { usePlaylistStore } from '@/stores/playlistStore'
 import { useDialogBox } from '@/composables/useDialogBox'
 import { useMessageToaster } from '@/composables/useMessageToaster'
 import { useForm } from '@/composables/useForm'
 
 import M3Button from '@/components/m3/M3Button.vue'
 import PlaylistDetails from '@/components/playlist/PlaylistDetails.vue'
+
+const playlistStore = usePlaylistStore()
 
 const props = defineProps<{ playlist: Playlist }>()
 const emit = defineEmits<{ (e: 'close'): void }>()

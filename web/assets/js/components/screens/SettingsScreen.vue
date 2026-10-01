@@ -28,11 +28,8 @@
 <script lang="ts" setup>
 import type { Component } from 'vue'
 import { computed, watch } from 'vue'
-import { Filter } from '@/config/hooks'
-import { applyFilters } from '@/hooks'
-import { moveTabToHash, useHash } from '@/composables/useHash'
+import { useHash } from '@/composables/useHash'
 import { usePolicies } from '@/composables/usePolicies'
-import { useRouter } from '@/composables/useRouter'
 
 import M3Tabs from '@/components/m3/M3Tabs.vue'
 import ScreenHeader from '@/components/ui/ScreenHeader.vue'
@@ -61,9 +58,8 @@ export interface SettingsTab {
 }
 
 const { currentUserCan } = usePolicies()
-const { getRouteParam, onScreenActivated } = useRouter()
 
-const allTabs = applyFilters<SettingsTab[]>(Filter.SETTINGS_TABS, [
+const allTabs: SettingsTab[] = [
   { id: 'account', label: 'Account', icon: 'account_circle', component: AccountSettings, columns: true },
   { id: 'preferences', label: 'Preferences', icon: 'tune', component: PreferencesSettings, columns: true },
   { id: 'youtube-music', label: 'YouTube Music', icon: 'smart_display', component: YouTubeMusicSettings },
@@ -94,7 +90,7 @@ const allTabs = applyFilters<SettingsTab[]>(Filter.SETTINGS_TABS, [
     columns: true,
     visible: () => currentUserCan.manageUsers(),
   },
-])
+]
 
 const tabs = computed(() => allTabs.filter(tab => tab.visible?.() ?? true))
 
@@ -104,18 +100,6 @@ const hash = useHash()
 const currentTabId = computed({
   get: () => (tabs.value.some(tab => tab.id === hash.value) ? hash.value : tabs.value[0]?.id),
   set: id => (hash.value = id ?? ''),
-})
-
-/** Links from before the tab lived in the hash: `?tab=users`. */
-const legacyTabIds: Record<string, string> = { users: 'admin-users', 'sign-in': 'admin-sign-in', email: 'admin-email' }
-
-onScreenActivated('Settings', () => {
-  const legacy = getRouteParam('tab')
-
-  if (legacy) {
-    moveTabToHash(legacy, legacyTabIds[legacy] ?? legacy)
-    hash.value = legacyTabIds[legacy] ?? legacy
-  }
 })
 
 // Another tab starts at its top, not where the last one was scrolled to.

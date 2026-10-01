@@ -5,29 +5,6 @@ declare module '*.svg'
 
 declare type Closure<T = unknown | any> = (...args: Array<unknown | any>) => T
 
-declare module 'ismobilejs' {
-  let apple: { device: boolean }
-  let any: boolean
-  let phone: boolean
-}
-
-declare module 'nouislider' {
-  function create(
-    el: HTMLElement,
-    config: {
-      connect: boolean[]
-      start: number
-      range: {
-        min: number
-        max: number
-      }
-      orientation: 'horizontal' | 'vertical'
-      direction: 'ltr' | 'rtl'
-      step?: number
-    },
-  ): void
-}
-
 interface Constructable<T> {
   new (...args: any): T
 }
@@ -50,7 +27,6 @@ type SSOProvider = 'Google' | 'OpenID Connect' | 'Reverse Proxy'
 
 interface KoelGlobals {
   base_url: string
-  clean_urls?: boolean
   build: string | null
   is_demo: boolean
   pusher: {
@@ -417,16 +393,6 @@ interface Favorite {
   readonly created_at: string
 }
 
-interface EqualizerBandElement extends HTMLElement {
-  noUiSlider: {
-    destroy: () => void
-    on: (eventName: 'change' | 'slide', handler: (value: string[], handle: number) => void) => void
-    set: (options: number | any[]) => void
-  }
-
-  isPreamp: boolean
-}
-
 interface OverlayState {
   dismissible: boolean
   type: 'loading' | 'success' | 'info' | 'warning' | 'error'
@@ -481,16 +447,6 @@ interface ScreenNames {
 }
 
 declare type ScreenName = keyof ScreenNames
-
-interface HookSlotNames {
-  'sidebar.footer': true
-  'screen.top': true
-}
-
-declare type HookSlotName = keyof HookSlotNames
-
-/** Route names added outside the built-in route table; add one by merging a key into this interface from another declaration file. */
-interface RouteNames {}
 
 declare type CardLayout = 'full' | 'compact'
 

@@ -1,19 +1,22 @@
-import isMobile from 'ismobilejs'
+import { defineStore } from 'pinia'
 import { differenceBy, orderBy, unionBy, uniqBy } from 'lodash-es'
-import { Reactive, reactive, watch } from 'vue'
+import type { Reactive } from 'vue'
+import { reactive, watch } from 'vue'
+import { useViewport } from '@/composables/useViewport'
 import { arrayify, moveItemsInList, use } from '@/utils/helpers'
 import { logger } from '@/utils/logger'
 import { normalizeForComparison, secondsToHumanReadable } from '@/utils/formatters'
-import { cache } from '@/services/cache'
+import { queryClient } from '@/services/queryClient'
 import { http } from '@/services/http'
 import { library } from '@/services/library'
 import { subsonic } from '@/services/subsonic'
 import { useVault } from '@/composables/useVault'
-import { preferenceStore } from '@/stores/preferenceStore'
-import { albumStore } from '@/stores/albumStore'
-import { artistStore } from '@/stores/artistStore'
-import { overviewStore } from '@/stores/overviewStore'
-import { playlistStore } from '@/stores/playlistStore'
+import { dropFromListPages } from '@/composables/useListPages'
+import { usePreferenceStore } from '@/stores/preferenceStore'
+import { useAlbumStore } from '@/stores/albumStore'
+import { useArtistStore } from '@/stores/artistStore'
+import { useOverviewStore } from '@/stores/overviewStore'
+import { usePlaylistStore } from '@/stores/playlistStore'
 
 export interface SongUpdateData {
   title?: string
@@ -41,125 +44,128 @@ export interface SongUpdateResult {
 export type SongListPaginateParams = PaginateParams<PlayableListSortField>
 export type SongListCursorPaginateParams = CursorPaginateParams<PlayableListSortField>
 
-const watchPlayCount = (playable: Playable) => {
-  watch(
-    () => playable.play_count,
-    () => overviewStore.refreshPlayStats(),
-  )
+const getFormattedLength = (playables: MaybeArray<Playable>) =>
+  secondsToHumanReadable(arrayify(playables).reduce((total, p) => total + p.length, 0))
+
+const matchSongsByTitle = (title: string, songs: Song[]) => {
+  const normalizedTitle = normalizeForComparison(title)
+  return songs.find(song => normalizeForComparison(song.title) === normalizedTitle) ?? null
 }
 
-export const playableStore = {
-  ...useVault<Playable>({
+const ensureNotDeleted = (songs: MaybeArray<Song>) => arrayify(songs).filter(({ deleted }) => !deleted)
+
+/**
+ * Increase the play count for a playable.
+ */
+const registerPlay = async (playable: Playable) => {
+  // A Subsonic scrobble counts the play; koel's start time is in seconds.
+  await subsonic.scrobble(playable.id, true, playable.play_start_time ? playable.play_start_time * 1000 : undefined)
+
+  playable.play_count++
+  playable.played_at = new Date().toISOString()
+}
+
+const getSourceUrl = (playable: Playable) => {
+  const preferences = usePreferenceStore()
+
+  return useViewport().isTouch.value && preferences.transcode_on_mobile
+    ? subsonic.streamUrl(playable.id, preferences.transcode_quality)
+    : subsonic.streamUrl(playable.id)
+}
+
+/** Songs (and other playables), each kept once and shared by every list showing it. */
+export const usePlayableStore = defineStore('playable', () => {
+  const { vault, syncWithVault } = useVault<Playable>({
     onItemAdded: playable => {
       playable.playback_state = 'Stopped'
-      watchPlayCount(playable)
+      // Most played songs on Home follow the counts.
+      watch(
+        () => playable.play_count,
+        () => useOverviewStore().refreshPlayStats(),
+      )
     },
-  }),
+  })
 
-  state: reactive<{ playables: Playable[]; favorites: Playable[] }>({
-    playables: [],
+  const state = reactive<{ favorites: Playable[] }>({
     favorites: [],
-  }),
+  })
 
-  getFormattedLength: (playables: MaybeArray<Playable>) =>
-    secondsToHumanReadable(arrayify(playables).reduce((total, p) => total + p.length, 0)),
-
-  findPlaying() {
-    for (const playable of this.vault.values()) {
+  const findPlaying = () => {
+    for (const playable of vault.values()) {
       if (playable.playback_state !== 'Stopped') {
         return playable
       }
     }
 
     return undefined
-  },
+  }
 
-  byId(id: Playable['id']) {
-    const playable = this.vault.get(id)
+  const byId = (id: Playable['id']) => {
+    const playable = vault.get(id)
 
-    if (!playable) {
-      return undefined
-    }
-
-    if (playable.deleted) {
+    if (!playable || playable.deleted) {
       return undefined
     }
 
     return playable
-  },
+  }
 
-  byIds<T extends Playable = Playable>(ids: T['id'][]) {
+  const byIds = <T extends Playable = Playable>(ids: T['id'][]) => {
     const playables: Playable[] = []
-    ids.forEach(id => use(this.byId(id), song => playables.push(song!)))
+    ids.forEach(id => use(byId(id), song => playables.push(song!)))
     return playables as T[]
-  },
+  }
 
-  byAlbum(album: Album) {
-    return Array.from(this.vault.values()).filter(playable => playable.album_id === album.id) as Song[]
-  },
+  const byAlbum = (album: Album) =>
+    Array.from(vault.values()).filter(playable => playable.album_id === album.id) as Song[]
 
-  syncAlbumProperties(album: Album) {
-    this.byAlbum(album).forEach(a => {
+  const syncAlbumProperties = (album: Album) => {
+    byAlbum(album).forEach(a => {
       a.album_cover = album.cover
       a.album_name = album.name
     })
-  },
+  }
 
-  byArtist(artist: Artist) {
-    return Array.from(this.vault.values()).filter(playable => playable.artist_id === artist.id) as Song[]
-  },
+  const byArtist = (artist: Artist) =>
+    Array.from(vault.values()).filter(playable => playable.artist_id === artist.id) as Song[]
 
-  byAlbumArtist(artist: Artist) {
-    return Array.from(this.vault.values()).filter(playable => playable.album_artist_id === artist.id) as Song[]
-  },
+  const byAlbumArtist = (artist: Artist) =>
+    Array.from(vault.values()).filter(playable => playable.album_artist_id === artist.id) as Song[]
 
-  syncArtistProperties(artist: Artist) {
-    this.byArtist(artist).forEach(a => {
+  const syncArtistProperties = (artist: Artist) => {
+    byArtist(artist).forEach(a => {
       a.artist_name = artist.name
     })
 
-    this.byAlbumArtist(artist).forEach(a => {
+    byAlbumArtist(artist).forEach(a => {
       a.album_artist_name = artist.name
     })
-  },
+  }
 
-  async resolve(id: Playable['id']) {
-    let playable = this.byId(id)
+  const resolve = async (id: Playable['id']) => {
+    let playable = byId(id)
 
     if (!playable) {
       try {
-        playable = this.syncWithVault(await subsonic.song(id))[0]
+        playable = syncWithVault(await subsonic.song(id))[0]
       } catch (error: unknown) {
         logger.error(error)
       }
     }
 
     return playable
-  },
+  }
 
-  matchSongsByTitle: (title: string, songs: Song[]) => {
-    const normalizedTitle = normalizeForComparison(title)
-    return songs.find(song => normalizeForComparison(song.title) === normalizedTitle) ?? null
-  },
-
-  /**
-   * Increase the play count for a playable.
-   */
-  registerPlay: async (playable: Playable) => {
-    // A Subsonic scrobble counts the play; koel's start time is in seconds.
-    await subsonic.scrobble(playable.id, true, playable.play_start_time ? playable.play_start_time * 1000 : undefined)
-
-    playable.play_count++
-    playable.played_at = new Date().toISOString()
-  },
-
-  async updateSongs(songsToUpdate: Song[], data: SongUpdateData) {
+  const updateSongs = async (songsToUpdate: Song[], data: SongUpdateData) => {
     const result = await http.put<SongUpdateResult>('songs', {
       data,
       songs: songsToUpdate.map(song => song.id),
     })
 
-    this.syncWithVault(result.songs)
+    syncWithVault(result.songs)
+
+    const albumStore = useAlbumStore()
+    const artistStore = useArtistStore()
 
     albumStore.syncWithVault(result.albums)
     artistStore.syncWithVault(result.artists)
@@ -168,106 +174,97 @@ export const playableStore = {
     artistStore.removeByIds(result.removed.artist_ids)
 
     return result
-  },
+  }
 
-  getSourceUrl: (playable: Playable) => {
-    return isMobile.any && preferenceStore.transcode_on_mobile
-      ? subsonic.streamUrl(playable.id, preferenceStore.transcode_quality)
-      : subsonic.streamUrl(playable.id)
-  },
-
-  ensureNotDeleted: (songs: MaybeArray<Song>) => arrayify(songs).filter(({ deleted }) => !deleted),
-
-  async fetchSongsForAlbum(album: Album | Album['id']) {
+  const fetchSongsForAlbum = async (album: Album | Album['id']) => {
     const id = typeof album === 'string' ? album : album.id
 
-    return this.ensureNotDeleted(
-      (await cache.remember([`album.songs`, id], async () =>
-        this.syncWithVault(await subsonic.albumSongs(id)),
-      )) as Song[],
+    return ensureNotDeleted(
+      (await queryClient.fetchQuery({
+        queryKey: ['album', id, 'songs'],
+        queryFn: async () => syncWithVault(await subsonic.albumSongs(id)),
+      })) as Song[],
     )
-  },
+  }
 
-  invalidateAlbumAndArtistSongCaches(song: Song) {
-    cache.remove(['album.songs', song.album_id])
-    cache.remove(['artist.songs', song.artist_id])
-  },
+  const invalidateAlbumAndArtistSongCaches = async (song: Song) => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['album', song.album_id, 'songs'] }),
+      queryClient.invalidateQueries({ queryKey: ['artist', song.artist_id, 'songs'] }),
+    ])
+  }
 
-  async fetchSongsForArtist(artist: Artist | Artist['id']) {
+  const fetchSongsForArtist = async (artist: Artist | Artist['id']) => {
     const id = typeof artist === 'string' ? artist : artist.id
 
-    return this.ensureNotDeleted(
-      (await cache.remember([`artist.songs`, id], async () =>
-        this.syncWithVault((await library.songs({ artist: id, sort: 'album_name', limit: 500 })).items),
-      )) as Song[],
+    return ensureNotDeleted(
+      (await queryClient.fetchQuery({
+        queryKey: ['artist', id, 'songs'],
+        queryFn: async () => syncWithVault((await library.songs({ artist: id, sort: 'album_name', limit: 500 })).items),
+      })) as Song[],
     )
-  },
+  }
 
-  async fetchForPlaylist(playlist: Playlist | Playlist['id'], refresh = false) {
+  const fetchForPlaylist = async (playlist: Playlist | Playlist['id'], refresh = false) => {
     const id = typeof playlist === 'string' ? playlist : playlist.id
 
-    if (refresh) {
-      cache.remove(['playlist.songs', id])
-    }
-
-    const songs = this.ensureNotDeleted(
-      (await cache.remember([`playlist.songs`, id], async () =>
-        this.syncWithVault(await subsonic.playlistSongs(id)),
-      )) as Song[],
+    const songs = ensureNotDeleted(
+      (await queryClient.fetchQuery({
+        queryKey: ['playlist', id, 'songs'],
+        queryFn: async () => syncWithVault(await subsonic.playlistSongs(id)),
+        // Asked for afresh: whatever was kept is old. (An undefined staleTime would mean always.)
+        ...(refresh && { staleTime: 0 }),
+      })) as Song[],
     )
 
-    playlistStore.byId(id)!.playables = songs
+    usePlaylistStore().byId(id)!.playables = songs
 
     return songs
-  },
+  }
 
-  async fetchForPlaylists(playlists: Playlist[]) {
+  const fetchForPlaylists = async (playlists: Playlist[]) => {
     const playables: Playable[] = []
 
     for await (const playlist of playlists) {
-      playables.push(...(await this.fetchForPlaylist(playlist)))
+      playables.push(...(await fetchForPlaylist(playlist)))
     }
 
     return uniqBy(playables, 'id')
-  },
+  }
 
-  async paginateSongsByGenre(genre: Genre | Genre['id'], params: SongListCursorPaginateParams) {
+  const paginateSongsByGenre = async (genre: Genre | Genre['id'], params: SongListCursorPaginateParams) => {
     const id = typeof genre === 'string' ? genre : genre.id
 
     const { items, nextCursor } = await library.songs({ ...params, genre: id })
 
-    return {
-      songs: this.syncWithVault(items) as Song[],
-      nextCursor,
-    }
-  },
+    return { items: syncWithVault(items) as Song[], nextCursor }
+  }
 
-  async fetchSongsByGenre(genre: Genre | Genre['id'], random = false, limit = 500) {
+  const fetchSongsByGenre = async (genre: Genre | Genre['id'], random = false, limit = 500) => {
     const id = typeof genre === 'string' ? genre : genre.id
 
-    return this.syncWithVault(
+    return syncWithVault(
       random
         ? await subsonic.randomSongs(limit, id)
         : (await library.songs({ genre: id, sort: 'album_name', limit })).items,
     )
-  },
+  }
 
-  async paginateSongs(params: SongListCursorPaginateParams) {
+  /** A page of all the songs (see useListPages). */
+  const paginateSongs = async (params: SongListCursorPaginateParams) => {
     const { items, nextCursor } = await library.songs(params)
-    this.state.playables = unionBy(this.state.playables, this.syncWithVault(items), 'id')
 
-    return nextCursor
-  },
+    return { items: syncWithVault(items), nextCursor }
+  }
 
-  getMostPlayedSongs(count: number) {
-    return orderBy(
-      Array.from(this.vault.values()).filter(playable => !playable.deleted && playable.play_count > 0),
+  const getMostPlayedSongs = (count: number) =>
+    orderBy(
+      Array.from(vault.values()).filter(playable => !playable.deleted && playable.play_count > 0),
       'play_count',
       'desc',
     ).slice(0, count) as Song[]
-  },
 
-  async deleteSongsFromFilesystem(songs: Song[]) {
+  const deleteSongsFromFilesystem = async (songs: Song[]) => {
     const ids = songs.map(song => {
       // Whenever a vault sync is requested (e.g., upon playlist/album/artist fetching)
       // songs marked as "deleted" will be excluded.
@@ -276,14 +273,18 @@ export const playableStore = {
     })
 
     await http.delete('songs', { songs: ids })
-  },
 
-  async fetchFavorites() {
-    this.state.favorites = this.syncWithVault(await subsonic.starredSongs())
-    return this.state.favorites
-  },
+    // Gone from the lists kept, too: all songs, and each genre's.
+    dropFromListPages(['songs'], ids)
+    dropFromListPages(['genre'], ids)
+  }
 
-  async toggleFavorite(playable: Reactive<Playable>) {
+  const fetchFavorites = async () => {
+    state.favorites = syncWithVault(await subsonic.starredSongs())
+    return state.favorites
+  }
+
+  const toggleFavorite = async (playable: Reactive<Playable>) => {
     // Don't wait for the HTTP response to update the status, just toggle right away.
     // We'll update the liked status again after the HTTP request.
     playable.favorite = !playable.favorite
@@ -295,12 +296,12 @@ export const playableStore = {
       throw error
     }
 
-    this.state.favorites = playable.favorite
-      ? unionBy(this.state.favorites, arrayify(playable), 'id')
-      : differenceBy(this.state.favorites, arrayify(playable), 'id')
-  },
+    state.favorites = playable.favorite
+      ? unionBy(state.favorites, arrayify(playable), 'id')
+      : differenceBy(state.favorites, arrayify(playable), 'id')
+  }
 
-  async rate(song: Reactive<Song>, rating: number) {
+  const rate = async (song: Reactive<Song>, rating: number) => {
     const previous = song.rating
     song.rating = rating
 
@@ -310,32 +311,65 @@ export const playableStore = {
       song.rating = previous
       throw e
     }
-  },
+  }
 
-  async favorite(playables: MaybeArray<Playable>) {
+  const favorite = async (playables: MaybeArray<Playable>) => {
     playables = arrayify(playables)
     playables.forEach(playable => (playable.favorite = true))
 
     await subsonic.star(playables.map(playable => playable.id))
 
-    this.state.favorites = unionBy(this.state.favorites, playables, 'id')
-  },
+    state.favorites = unionBy(state.favorites, playables, 'id')
+  }
 
-  async undoFavorite(playables: MaybeArray<Playable>) {
+  const undoFavorite = async (playables: MaybeArray<Playable>) => {
     playables = arrayify(playables)
     playables.forEach(playable => (playable.favorite = false))
 
     await subsonic.unstar(playables.map(playable => playable.id))
 
-    this.state.favorites = differenceBy(this.state.favorites, playables, 'id')
-  },
+    state.favorites = differenceBy(state.favorites, playables, 'id')
+  }
 
   // Stars have no order on the server, so a new order lasts until reload.
-  async moveFavoritesInList(playables: MaybeArray<Playable>, target: Playable, placement: Placement) {
-    this.state.favorites.splice(
-      0,
-      this.state.favorites.length,
-      ...moveItemsInList(this.state.favorites, playables, target, placement),
-    )
-  },
-}
+  const moveFavoritesInList = async (playables: MaybeArray<Playable>, target: Playable, placement: Placement) => {
+    state.favorites.splice(0, state.favorites.length, ...moveItemsInList(state.favorites, playables, target, placement))
+  }
+
+  return {
+    state,
+    vault,
+    syncWithVault,
+    getFormattedLength,
+    findPlaying,
+    byId,
+    byIds,
+    byAlbum,
+    syncAlbumProperties,
+    byArtist,
+    byAlbumArtist,
+    syncArtistProperties,
+    resolve,
+    matchSongsByTitle,
+    registerPlay,
+    updateSongs,
+    getSourceUrl,
+    ensureNotDeleted,
+    fetchSongsForAlbum,
+    invalidateAlbumAndArtistSongCaches,
+    fetchSongsForArtist,
+    fetchForPlaylist,
+    fetchForPlaylists,
+    paginateSongsByGenre,
+    fetchSongsByGenre,
+    paginateSongs,
+    getMostPlayedSongs,
+    deleteSongsFromFilesystem,
+    fetchFavorites,
+    toggleFavorite,
+    rate,
+    favorite,
+    undoFavorite,
+    moveFavoritesInList,
+  }
+})

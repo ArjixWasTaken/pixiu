@@ -26,10 +26,13 @@ import { useRouter } from '@/composables/useRouter'
 import { useContextMenu } from '@/composables/useContextMenu'
 import { useModal } from '@/composables/useModal'
 import { useMessageToaster } from '@/composables/useMessageToaster'
-import { playableStore } from '@/stores/playableStore'
+import { usePlayableStore } from '@/stores/playableStore'
 import { playback } from '@/services/playbackManager'
-import { playlistFolderStore } from '@/stores/playlistFolderStore'
+import { usePlaylistFolderStore } from '@/stores/playlistFolderStore'
 import { useDialogBox } from '@/composables/useDialogBox'
+
+const playableStore = usePlayableStore()
+const playlistFolderStore = usePlaylistFolderStore()
 
 const props = defineProps<{ folder: PlaylistFolder }>()
 const { folder } = toRefs(props)

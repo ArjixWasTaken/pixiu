@@ -15,13 +15,14 @@
 
 <script lang="ts" setup>
 import { ref, toRef, toRefs } from 'vue'
-import { overviewStore } from '@/stores/overviewStore'
-
+import { useOverviewStore } from '@/stores/overviewStore'
 import M3IconButton from '@/components/m3/M3IconButton.vue'
 import HomeScreenBlock from '@/components/screens/home/HomeScreenBlock.vue'
 import PlayableCardGrid from '@/components/screens/home/PlayableCardGrid.vue'
 import PlayableCardGridSkeleton from '@/components/screens/home/PlayableCardGridSkeleton.vue'
 import M3Icon from '@/components/m3/M3Icon.vue'
+
+const overviewStore = useOverviewStore()
 
 const props = withDefaults(defineProps<{ loading?: boolean }>(), { loading: false })
 const { loading } = toRefs(props)

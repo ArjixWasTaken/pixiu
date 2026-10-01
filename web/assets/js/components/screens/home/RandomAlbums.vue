@@ -19,7 +19,7 @@
 
 <script lang="ts" setup>
 import { ref, toRef, toRefs } from 'vue'
-import { overviewStore } from '@/stores/overviewStore'
+import { useOverviewStore } from '@/stores/overviewStore'
 import { useErrorHandler } from '@/composables/useErrorHandler'
 
 import AlbumCard from '@/components/album/AlbumCard.vue'
@@ -28,6 +28,8 @@ import M3IconButton from '@/components/m3/M3IconButton.vue'
 import Carousel from '@/components/ui/Carousel.vue'
 import HomeScreenBlock from '@/components/screens/home/HomeScreenBlock.vue'
 import M3Icon from '@/components/m3/M3Icon.vue'
+
+const overviewStore = useOverviewStore()
 
 const props = withDefaults(defineProps<{ loading?: boolean }>(), { loading: false })
 const { loading } = toRefs(props)

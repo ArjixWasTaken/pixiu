@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vite-plus/test'
 import { createHarness } from '@/__tests__/TestHarness'
-import { overviewStore } from '@/stores/overviewStore'
+import { useOverviewStore } from '@/stores/overviewStore'
 import TopAlbums from './TopAlbums.vue'
 
 describe('topAlbums.vue', () => {
   const h = createHarness()
 
   it('displays the albums', () => {
-    overviewStore.state.mostPlayedAlbums = h.factory('album').make(6)
+    useOverviewStore().state.mostPlayedAlbums = h.factory('album').make(6)
     expect(
       h
         .render(TopAlbums, {

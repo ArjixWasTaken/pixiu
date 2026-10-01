@@ -7,8 +7,10 @@ import { onMounted } from 'vue'
 import { useRouter } from '@/composables/useRouter'
 import { eventBus } from '@/utils/eventBus'
 import { authService } from '@/services/authService'
-import { huntingStore } from '@/stores/huntingStore'
+import { useHuntingStore } from '@/stores/huntingStore'
 import { forceReloadWindow } from '@/utils/helpers'
+
+const huntingStore = useHuntingStore()
 
 let go: ReturnType<typeof useRouter>['go']
 

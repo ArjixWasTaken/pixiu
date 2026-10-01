@@ -2,8 +2,7 @@ import { describe, it, vi } from 'vite-plus/test'
 import { ref, computed } from 'vue'
 import { screen } from '@testing-library/vue'
 import { createHarness } from '@/__tests__/TestHarness'
-import { playableStore } from '@/stores/playableStore'
-
+import { usePlayableStore } from '@/stores/playableStore'
 const cachedSongIds = ref(new Set<string>())
 
 vi.mock('@/composables/useOfflinePlayback', () => ({
@@ -44,7 +43,7 @@ describe('offlineSongsScreen', () => {
     songs.forEach(s => {
       cachedSongIds.value.add(s.id)
     })
-    h.mock(playableStore, 'byId').mockImplementation((id: string) => songs.find(song => song.id === id))
+    h.mock(usePlayableStore(), 'byId').mockImplementation((id: string) => songs.find(song => song.id === id))
 
     h.render(Component)
     screen.getByText('3 songs')

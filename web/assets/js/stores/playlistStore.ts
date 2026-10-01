@@ -1,3 +1,4 @@
+import { defineStore } from 'pinia'
 import { differenceBy, orderBy } from 'lodash-es'
 import { reactive } from 'vue'
 import { moveItemsInList } from '@/utils/helpers'
@@ -5,7 +6,8 @@ import { logger } from '@/utils/logger'
 import { uuid } from '@/utils/crypto'
 import { http } from '@/services/http'
 import { subsonic } from '@/services/subsonic'
-import { cache } from '@/services/cache'
+import { queryClient } from '@/services/queryClient'
+import { usePlaylistFolderStore } from '@/stores/playlistFolderStore'
 import models from '@/config/smart-playlist/models'
 import operators from '@/config/smart-playlist/operators'
 
@@ -24,65 +26,92 @@ export interface UpdatePlaylistData {
   rules?: SmartPlaylistRuleGroup[]
 }
 
-export const playlistStore = {
-  state: reactive({
-    playlists: [] as Playlist[],
-  }),
+/**
+ * Set up a smart playlist by properly construct its structure from serialized database values.
+ */
+const setupSmartPlaylist = (playlist: Playlist) => {
+  playlist.rules.forEach(group => {
+    group.rules.forEach(rule => {
+      const serializedRule = rule as unknown as SerializedSmartPlaylistRule
+      const model = models.find(model => model.name === serializedRule.model)
 
-  init(playlists: Playlist[]) {
-    this.sort(reactive(playlists)).forEach(playlist => {
+      if (!model) {
+        logger.error(`Invalid model ${rule.model} found in smart playlist ${playlist.name} (ID ${playlist.id})`)
+        return
+      }
+
+      rule.model = model
+    })
+  })
+}
+
+/**
+ * Serialize the rule (groups) to be storage-ready.
+ */
+const serializeSmartPlaylistRulesForStorage = (ruleGroups: SmartPlaylistRuleGroup[]) => {
+  if (!ruleGroups || !ruleGroups.length) {
+    return null
+  }
+
+  const serializedGroups = JSON.parse(JSON.stringify(ruleGroups))
+
+  serializedGroups.forEach((group: any): void => {
+    group.rules.forEach((rule: any) => {
+      rule.model = rule.model.name
+    })
+  })
+
+  return serializedGroups
+}
+
+const sort = (playlists: Playlist[]) => orderBy(playlists, ['is_smart', 'name'], ['desc', 'asc'])
+
+const createEmptySmartPlaylistRule = (): SmartPlaylistRule => ({
+  id: uuid(),
+  model: models[0],
+  operator: operators[0].operator,
+  value: [''],
+})
+
+const createEmptySmartPlaylistRuleGroup = (): SmartPlaylistRuleGroup => ({
+  id: uuid(),
+  rules: [createEmptySmartPlaylistRule()],
+})
+
+export const usePlaylistStore = defineStore('playlist', () => {
+  const state = reactive({
+    playlists: [] as Playlist[],
+  })
+
+  const init = (playlists: Playlist[]) => {
+    sort(reactive(playlists)).forEach(playlist => {
       if (!playlist.is_smart) {
-        this.state.playlists.push(playlist)
+        state.playlists.push(playlist)
       } else {
         try {
-          this.setupSmartPlaylist(playlist)
-          this.state.playlists.push(playlist)
+          setupSmartPlaylist(playlist)
+          state.playlists.push(playlist)
         } catch (error: unknown) {
           logger.warn(`Failed to setup smart playlist "${playlist.name}".`, error)
         }
       }
     })
-  },
+  }
 
-  /**
-   * Set up a smart playlist by properly construct its structure from serialized database values.
-   */
-  setupSmartPlaylist: (playlist: Playlist) => {
-    playlist.rules.forEach(group => {
-      group.rules.forEach(rule => {
-        const serializedRule = rule as unknown as SerializedSmartPlaylistRule
-        const model = models.find(model => model.name === serializedRule.model)
+  const byId = (id: Playlist['id']) => state.playlists.find(playlist => playlist.id === id)
 
-        if (!model) {
-          logger.error(`Invalid model ${rule.model} found in smart playlist ${playlist.name} (ID ${playlist.id})`)
-          return
-        }
-
-        rule.model = model
-      })
-    })
-  },
-
-  byId(id: Playlist['id']) {
-    return this.state.playlists.find(playlist => playlist.id === id)
-  },
-
-  byFolder(folder: PlaylistFolder) {
-    return this.state.playlists.filter(({ folder_id }) => folder_id === folder.id)
-  },
+  const byFolder = (folder: PlaylistFolder) => state.playlists.filter(({ folder_id }) => folder_id === folder.id)
 
   /** The folder chosen in a form: an existing one, or a new one by name. */
-  async resolveFolder(data: { folder_id?: PlaylistFolder['id'] | null; folder_name?: string | null }) {
+  const resolveFolder = async (data: { folder_id?: PlaylistFolder['id'] | null; folder_name?: string | null }) => {
     if (data.folder_name) {
-      // Imported here: the folder store imports this one.
-      const { playlistFolderStore } = await import('@/stores/playlistFolderStore')
-      return (await playlistFolderStore.store(data.folder_name)).id
+      return (await usePlaylistFolderStore().store(data.folder_name)).id
     }
 
     return data.folder_id ?? null
-  },
+  }
 
-  async fileInFolder(playlist: Playlist, folderId: PlaylistFolder['id'] | null) {
+  const fileInFolder = async (playlist: Playlist, folderId: PlaylistFolder['id'] | null) => {
     if (playlist.folder_id === folderId) {
       return
     }
@@ -94,10 +123,10 @@ export const playlistStore = {
     }
 
     playlist.folder_id = folderId
-  },
+  }
 
-  async store(data: CreatePlaylistData, songs: Playable[] = []) {
-    const folderId = await this.resolveFolder(data)
+  const store = async (data: CreatePlaylistData, songs: Playable[] = []) => {
+    const folderId = await resolveFolder(data)
     let created: Playlist
 
     if (data.rules) {
@@ -106,7 +135,7 @@ export const playlistStore = {
           name: data.name,
           description: data.description,
           folder_id: folderId,
-          rules: this.serializeSmartPlaylistRulesForStorage(data.rules),
+          rules: serializeSmartPlaylistRulesForStorage(data.rules),
         }),
       )
     } else {
@@ -120,39 +149,39 @@ export const playlistStore = {
         created.description = data.description
       }
 
-      await this.fileInFolder(created, folderId)
+      await fileInFolder(created, folderId)
     }
 
     const playlist = reactive(created)
 
     if (playlist.is_smart) {
-      this.setupSmartPlaylist(playlist)
+      setupSmartPlaylist(playlist)
     }
 
-    this.state.playlists.push(playlist)
-    this.state.playlists = this.sort(this.state.playlists)
+    state.playlists.push(playlist)
+    state.playlists = sort(state.playlists)
 
     return playlist
-  },
+  }
 
-  async delete(playlist: Playlist) {
+  const destroy = async (playlist: Playlist) => {
     await subsonic.deletePlaylist(playlist.id)
-    this.state.playlists = differenceBy(this.state.playlists, [playlist], 'id')
-  },
+    state.playlists = differenceBy(state.playlists, [playlist], 'id')
+  }
 
-  async addContent(playlist: Playlist, playables: Playable[]) {
+  const addContent = async (playlist: Playlist, playables: Playable[]) => {
     // Smart playlists pick their own songs; mirrors of watched playlists follow YouTube Music.
     if (playlist.is_smart || !playlist.permissions.edit) {
       return playlist
     }
 
     await subsonic.updatePlaylist(playlist.id, { songIdToAdd: playables.map(song => song.id) })
-    cache.remove(['playlist.songs', playlist.id])
+    await queryClient.invalidateQueries({ queryKey: ['playlist', playlist.id, 'songs'] })
 
     return playlist
-  },
+  }
 
-  removeContent: async (playlist: Playlist, playables: Playable[]) => {
+  const removeContent = async (playlist: Playlist, playables: Playable[]) => {
     if (playlist.is_smart) {
       return playlist
     }
@@ -164,69 +193,31 @@ export const playlistStore = {
       playlist.id,
       current.filter(song => !removed.has(song.id)).map(song => song.id),
     )
-    cache.remove(['playlist.songs', playlist.id])
+    await queryClient.invalidateQueries({ queryKey: ['playlist', playlist.id, 'songs'] })
 
     return playlist
-  },
+  }
 
-  async update(playlist: Playlist, data: UpdatePlaylistData) {
+  const update = async (playlist: Playlist, data: UpdatePlaylistData) => {
     await http.put(`playlists/${playlist.id}`, {
       name: data.name,
       description: data.description,
-      rules: data.rules ? this.serializeSmartPlaylistRulesForStorage(data.rules) : undefined,
+      rules: data.rules ? serializeSmartPlaylistRulesForStorage(data.rules) : undefined,
     })
 
     // A form without a folder field leaves the playlist where it is.
-    const folderId =
-      data.folder_id === undefined && !data.folder_name ? playlist.folder_id : await this.resolveFolder(data)
-    await this.fileInFolder(this.byId(playlist.id) ?? playlist, folderId)
+    const folderId = data.folder_id === undefined && !data.folder_name ? playlist.folder_id : await resolveFolder(data)
+    await fileInFolder(byId(playlist.id) ?? playlist, folderId)
     data = { ...data, folder_id: folderId, folder_name: undefined }
 
     if (playlist.is_smart) {
-      cache.remove(['playlist.songs', playlist.id])
+      await queryClient.invalidateQueries({ queryKey: ['playlist', playlist.id, 'songs'] })
     }
 
-    Object.assign(this.byId(playlist.id)!, data)
-  },
+    Object.assign(byId(playlist.id)!, data)
+  }
 
-  createEmptySmartPlaylistRule: (): SmartPlaylistRule => ({
-    id: uuid(),
-    model: models[0],
-    operator: operators[0].operator,
-    value: [''],
-  }),
-
-  createEmptySmartPlaylistRuleGroup(): SmartPlaylistRuleGroup {
-    return {
-      id: uuid(),
-      rules: [this.createEmptySmartPlaylistRule()],
-    }
-  },
-
-  /**
-   * Serialize the rule (groups) to be storage-ready.
-   */
-  serializeSmartPlaylistRulesForStorage: (ruleGroups: SmartPlaylistRuleGroup[]) => {
-    if (!ruleGroups || !ruleGroups.length) {
-      return null
-    }
-
-    const serializedGroups = JSON.parse(JSON.stringify(ruleGroups))
-
-    serializedGroups.forEach((group: any): void => {
-      group.rules.forEach((rule: any) => {
-        rule.model = rule.model.name
-      })
-    })
-
-    return serializedGroups
-  },
-
-  sort: (playlists: Playlist[]) => {
-    return orderBy(playlists, ['is_smart', 'name'], ['desc', 'asc'])
-  },
-
-  moveItemsInPlaylist: async (
+  const moveItemsInPlaylist = async (
     playlist: Playlist,
     playables: MaybeArray<Playable>,
     target: Playable,
@@ -245,5 +236,25 @@ export const playlistStore = {
         playlist.playables!.map(({ id }) => id),
       )
     }
-  },
-}
+  }
+
+  return {
+    state,
+    init,
+    setupSmartPlaylist,
+    byId,
+    byFolder,
+    resolveFolder,
+    fileInFolder,
+    store,
+    delete: destroy,
+    addContent,
+    removeContent,
+    update,
+    createEmptySmartPlaylistRule,
+    createEmptySmartPlaylistRuleGroup,
+    serializeSmartPlaylistRulesForStorage,
+    sort,
+    moveItemsInPlaylist,
+  }
+})

@@ -140,10 +140,10 @@ import { computed, ref, toRef, toRefs } from 'vue'
 import { defineAsyncComponent } from '@/utils/helpers'
 import { pluralize, secondsToHis } from '@/utils/formatters'
 import { eventBus } from '@/utils/eventBus'
-import { commonStore } from '@/stores/commonStore'
-import { playlistStore } from '@/stores/playlistStore'
-import { queueStore } from '@/stores/queueStore'
-import { playableStore } from '@/stores/playableStore'
+import { useCommonStore } from '@/stores/commonStore'
+import { usePlaylistStore } from '@/stores/playlistStore'
+import { useQueueStore } from '@/stores/queueStore'
+import { usePlayableStore } from '@/stores/playableStore'
 import { useDownload } from '@/composables/useDownload'
 import { useRouter } from '@/composables/useRouter'
 import { useMessageToaster } from '@/composables/useMessageToaster'
@@ -155,8 +155,7 @@ import { useContextMenu } from '@/composables/useContextMenu'
 import { useModal } from '@/composables/useModal'
 import { useOfflinePlayback } from '@/composables/useOfflinePlayback'
 import { playback } from '@/services/playbackManager'
-import { huntingStore } from '@/stores/huntingStore'
-
+import { useHuntingStore } from '@/stores/huntingStore'
 import { useViewport } from '@/composables/useViewport'
 import { useBranding } from '@/composables/useBranding'
 
@@ -164,6 +163,12 @@ import FavoriteButton from '@/components/ui/FavoriteButton.vue'
 import M3Icon from '@/components/m3/M3Icon.vue'
 import M3IconButton from '@/components/m3/M3IconButton.vue'
 import StarRating from '@/components/ui/StarRating.vue'
+
+const commonStore = useCommonStore()
+const playlistStore = usePlaylistStore()
+const queueStore = useQueueStore()
+const playableStore = usePlayableStore()
+const huntingStore = useHuntingStore()
 
 const props = defineProps<{ playables: Playable[] }>()
 const { playables } = toRefs(props)

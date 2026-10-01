@@ -27,10 +27,13 @@ export const useContextMenu = () => {
       : Record<string, never>,
   ) => {
     if (position instanceof MouseEvent) {
-      position = {
-        top: position.clientY,
-        left: position.clientX,
-      }
+      const target = position.currentTarget
+
+      // From the keyboard (Enter on a ⋮ button) there's no pointer: under what was pressed.
+      position =
+        position.detail === 0 && target instanceof Element
+          ? { top: target.getBoundingClientRect().bottom, left: target.getBoundingClientRect().left }
+          : { top: position.clientY, left: position.clientX }
     }
 
     contextMenuOptions.value = {

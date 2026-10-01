@@ -2,12 +2,11 @@ import { ref } from 'vue'
 import { pluralize } from '@/utils/formatters'
 import { arrayify } from '@/utils/helpers'
 import { logger } from '@/utils/logger'
-import { albumStore } from '@/stores/albumStore'
-import { artistStore } from '@/stores/artistStore'
-import { playlistStore } from '@/stores/playlistStore'
-import { playlistFolderStore } from '@/stores/playlistFolderStore'
-import { playableStore } from '@/stores/playableStore'
-
+import { useAlbumStore } from '@/stores/albumStore'
+import { useArtistStore } from '@/stores/artistStore'
+import { usePlaylistStore } from '@/stores/playlistStore'
+import { usePlaylistFolderStore } from '@/stores/playlistFolderStore'
+import { usePlayableStore } from '@/stores/playableStore'
 type Draggable = MaybeArray<Playable> | Album | Artist | Genre | Playlist | PlaylistFolder
 const draggableTypes = <const>['playables', 'album', 'artist', 'genre', 'playlist', 'playlist-folder']
 type DraggableType = (typeof draggableTypes)[number]
@@ -191,10 +190,10 @@ export const useDroppable = (acceptedTypes: DraggableType[]) => {
       switch (getDragType(event)) {
         case 'playlist':
           const id = String(JSON.parse(event.dataTransfer!.getData('application/x-koel.playlist')))
-          return playlistStore.byId(id) as T | undefined
+          return usePlaylistStore().byId(id) as T | undefined
         case 'playlist-folder':
           const folderId = String(JSON.parse(event.dataTransfer!.getData('application/x-koel.playlist-folder')))
-          return playlistFolderStore.byId(folderId) as T | undefined
+          return usePlaylistFolderStore().byId(folderId) as T | undefined
         default:
           return undefined
       }
@@ -216,23 +215,23 @@ export const useDroppable = (acceptedTypes: DraggableType[]) => {
 
       switch (type) {
         case 'playables':
-          return playableStore.byIds(<string[]>data)
+          return usePlayableStore().byIds(<string[]>data)
         case 'album':
-          const album = await albumStore.resolve(data)
-          return album ? await playableStore.fetchSongsForAlbum(album) : <Song[]>[]
+          const album = await useAlbumStore().resolve(data)
+          return album ? await usePlayableStore().fetchSongsForAlbum(album) : <Song[]>[]
         case 'artist':
-          const artist = await artistStore.resolve(data)
-          return artist ? await playableStore.fetchSongsForArtist(artist) : <Song[]>[]
+          const artist = await useArtistStore().resolve(data)
+          return artist ? await usePlayableStore().fetchSongsForArtist(artist) : <Song[]>[]
         case 'playlist':
-          const playlist = playlistStore.byId(<string>data)
-          return playlist ? await playableStore.fetchForPlaylist(playlist) : <Song[]>[]
+          const playlist = usePlaylistStore().byId(<string>data)
+          return playlist ? await usePlayableStore().fetchForPlaylist(playlist) : <Song[]>[]
         case 'playlist-folder':
-          const folder = playlistFolderStore.byId(<string>data)
+          const folder = usePlaylistFolderStore().byId(<string>data)
           return folder
-            ? await playableStore.fetchForPlaylists(playlistFolderStore.playlistsInTree(folder))
+            ? await usePlayableStore().fetchForPlaylists(usePlaylistFolderStore().playlistsInTree(folder))
             : <Song[]>[]
         case 'genre':
-          return await playableStore.fetchSongsByGenre(<string>data)
+          return await usePlayableStore().fetchSongsByGenre(<string>data)
         default:
           throw new Error(`Unknown drag type: ${type}`)
       }
