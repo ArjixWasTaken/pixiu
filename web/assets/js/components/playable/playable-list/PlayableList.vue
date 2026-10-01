@@ -12,7 +12,7 @@
     <VirtualScroller
       ref="virtualScroller"
       v-slot="{ item }: { item: PlayableRow }"
-      :item-height="calculatedItemHeight"
+      :item-height="songItemHeight"
       :items="rows"
       @scrolled-to-end="$emit('scrolled-to-end')"
     >
@@ -322,21 +322,8 @@ const showDiscLabel = (row: Playable) => {
   return discIndexMap.value[index] !== undefined
 }
 
+/** The height of a row, as an estimate: the scroller measures each (those with a disc label are taller). */
 const songItemHeight = useSizeVariable('--m3-row-height', 72)
-const discNumberHeight = useSizeVariable('--m3-disc-height', 44)
-
-const calculatedItemHeight = computed(() => {
-  if (noDiscLabel.value) {
-    return songItemHeight.value
-  }
-
-  const discCount = Object.keys(discIndexMap.value).length
-  const totalAdditionalPixels = discCount * discNumberHeight.value
-
-  const totalHeight = rows.value.length * songItemHeight.value + totalAdditionalPixels
-
-  return totalHeight / rows.value.length
-})
 
 const scrollToPlayable = (playable: Playable) => {
   const index = rows.value.findIndex(row => row.playable.id === playable.id)

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vite-plus/test'
-import { defineComponent, nextTick, h as vnode } from 'vue'
+import { defineComponent, nextTick, ref, h as vnode } from 'vue'
 import { screen } from '@testing-library/vue'
 import { createHarness } from '@/__tests__/TestHarness'
 import Component from './VirtualScroller.vue'
@@ -7,45 +7,77 @@ import Component from './VirtualScroller.vue'
 describe('virtualScroller.vue', () => {
   const h = createHarness()
 
-  it('renders items via scoped slot', () => {
-    const items = [
-      { id: 1, name: 'Item 1' },
-      { id: 2, name: 'Item 2' },
-    ]
+  const makeItems = (count: number) => Array.from({ length: count }, (_, i) => ({ id: i, name: `Item ${i}` }))
 
-    const { container } = h.render(Component, {
-      props: { items, itemHeight: 40 },
-      slots: {
-        default: (props: { item: { name: string } }) => props.item.name,
-      },
+  /**
+   * jsdom lays nothing out: heights as a browser would give them. Rows are
+   * 64px (or `rowHeight` says otherwise); what scrolls is 320px tall.
+   */
+  const layOut = (rowHeight: (index: number) => number = () => 64) =>
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (this: HTMLElement) {
+      if (this.dataset.index) {
+        return rowHeight(Number(this.dataset.index))
+      }
+
+      return this.matches('.screen-body, .virtual-scroller:not(.nested)') ? 320 : 0
     })
 
-    expect(container.querySelector('.virtual-scroller')).toBeTruthy()
+  const renderList = async (items: { name: string }[]) => {
+    const rendered = h.render(Component, {
+      props: { items, itemHeight: 64 },
+      slots: { default: ({ item }: { item: { name: string } }) => vnode('span', item.name) },
+    })
+
+    await nextTick()
+
+    return { ...rendered, list: rendered.container.querySelector<HTMLElement>('.virtual-scroller')! }
+  }
+
+  it('renders the rows in view, and a few around', async () => {
+    layOut()
+    await renderList(makeItems(100))
+
+    // Five in view, five more below.
+    screen.getByText('Item 0')
+    screen.getByText('Item 9')
+    expect(screen.queryByText('Item 10')).toBeNull()
   })
 
-  it('exposes scrollToIndex that scrolls to the correct position', () => {
-    const items = Array.from({ length: 100 }, (_, i) => ({ id: i, name: `Item ${i}` }))
-    const itemHeight = 64
+  it('measures each row', async () => {
+    // The first row is taller (a disc label above it): 100px, not 64.
+    layOut(index => (index === 0 ? 100 : 64))
 
-    const { container } = h.render(Component, {
-      props: { items, itemHeight },
-      slots: {
-        default: (props: { item: { name: string } }) => props.item.name,
-      },
-    })
+    const { list } = await renderList(makeItems(100))
+    await nextTick()
 
-    const scrollerEl = container.querySelector('.virtual-scroller') as HTMLElement
-    const scrollToMock = vi.fn()
-    scrollerEl.scrollTo = scrollToMock
+    expect(list.firstElementChild!.getAttribute('style')).toContain(`height: ${100 + 99 * 64}px`)
+  })
 
-    const instance = (scrollerEl as any)['__vueParentComponent']
-    instance?.exposed?.scrollToIndex(50)
+  it('scrolls to an item', async () => {
+    layOut()
+    const scroller = ref<InstanceType<typeof Component>>()
+    const items = makeItems(100)
+    const { container } = h.render(
+      defineComponent({ setup: () => () => vnode(Component, { ref: scroller, items, itemHeight: 64 }) }),
+    )
+    await nextTick()
+    const list = container.querySelector<HTMLElement>('.virtual-scroller')!
+    list.scrollTo = vi.fn()
 
-    expect(scrollToMock).toHaveBeenCalledWith(expect.objectContaining({ behavior: 'smooth' }))
+    scroller.value!.scrollToIndex(50)
+
+    expect(list.scrollTo).toHaveBeenCalledWith(expect.objectContaining({ behavior: 'smooth' }))
+  })
+
+  it('says when the end is near', async () => {
+    layOut()
+    const { emitted } = await renderList(makeItems(3))
+
+    expect(emitted('scrolled-to-end')).toHaveLength(1)
   })
 
   it('scrolls with the screen it is on', async () => {
-    const items = Array.from({ length: 100 }, (_, i) => ({ id: i, name: `Item ${i}` }))
+    const items = makeItems(100)
 
     // A screen whose header takes the first 100px, above the list.
     const Screen = defineComponent({
@@ -59,26 +91,25 @@ describe('virtualScroller.vue', () => {
         ]),
     })
 
+    layOut()
+    let scrollTop = 0
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+      return { top: this.classList.contains('virtual-scroller') ? 100 - scrollTop : 0 } as DOMRect
+    })
+
     const { container } = h.render(Screen)
     const body = container.querySelector<HTMLElement>('.screen-body')!
-    let scrollTop = 0
     Object.defineProperty(body, 'scrollTop', { get: () => scrollTop })
-    Object.defineProperty(body, 'scrollHeight', { get: () => 100 + 100 * 64 })
-
-    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
-      const top = this.classList.contains('virtual-scroller') ? 100 - scrollTop : 0
-      return { top } as DOMRect
-    })
 
     await nextTick()
     expect(container.querySelector('.virtual-scroller')!.classList.contains('nested')).toBe(true)
 
     scrollTop = 100 + 50 * 64
     body.dispatchEvent(new Event('scroll'))
-    await new Promise(requestAnimationFrame)
     await nextTick()
 
     screen.getByText('Item 45')
+    screen.getByText('Item 50')
     expect(screen.queryByText('Item 0')).toBeNull()
   })
 })

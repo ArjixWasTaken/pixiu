@@ -1,47 +1,52 @@
 <template>
-  <div ref="scroller" :class="{ nested }" class="scroll-mask-y virtual-scroller will-change-transform overflow-scroll">
-    <div :style="{ height: `${totalHeight}px` }" class="will-change-transform overflow-hidden">
+  <div ref="list" :class="{ nested }" class="scroll-mask-y virtual-scroller overflow-scroll">
+    <div :style="{ height: `${virtualizer.getTotalSize()}px` }" class="relative">
       <div :style="{ transform: `translateY(${offsetY}px)` }" class="will-change-transform items-wrapper">
-        <slot v-for="item in renderedItems" :item="item" />
+        <div v-for="row in rows" :key="row.index" :ref="measure" :data-index="row.index">
+          <slot :item="items[row.index]" />
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script lang="ts" setup>
-import { computed, ref, toRefs } from 'vue'
-import { useScrollViewport } from '@/composables/useScrollViewport'
+import { useVirtualizer } from '@tanstack/vue-virtual'
+import { computed, toRefs, watch } from 'vue'
+import { useScrollContainer } from '@/composables/useScrollContainer'
 
+/**
+ * A long list, of which only the rows in view (and a few around) are rendered.
+ * `itemHeight` is the estimate; each row's real height is measured.
+ */
 const props = defineProps<{ items: any[]; itemHeight: number }>()
-const emit = defineEmits<{
-  (e: 'scrolled-to-end'): void
-}>()
+const emit = defineEmits<{ (e: 'scrolled-to-end'): void }>()
 
 const { items, itemHeight } = toRefs(props)
 
-const scroller = ref<HTMLElement>()
-const renderAhead = 5
+const { list, scroller, nested, margin } = useScrollContainer()
 
-const {
-  scrollTop,
-  height: scrollerHeight,
-  nested,
-  nearEnd,
-  scrollTo,
-} = useScrollViewport(scroller, () => nearEnd(itemHeight.value) && emit('scrolled-to-end'))
+const virtualizer = useVirtualizer(
+  computed(() => ({
+    count: items.value.length,
+    getScrollElement: () => scroller.value,
+    estimateSize: () => itemHeight.value,
+    overscan: 5,
+    scrollMargin: margin.value,
+  })),
+)
 
-const totalHeight = computed(() => items.value.length * itemHeight.value)
-const startPosition = computed(() => Math.max(0, Math.floor(scrollTop.value / itemHeight.value) - renderAhead))
-const offsetY = computed(() => startPosition.value * itemHeight.value)
+const rows = computed(() => virtualizer.value.getVirtualItems())
+const offsetY = computed(() => (rows.value[0]?.start ?? margin.value) - margin.value)
 
-const renderedItems = computed(() => {
-  let count = Math.ceil(scrollerHeight.value / itemHeight.value) + 2 * renderAhead
-  count = Math.min(items.value.length - startPosition.value, count)
-  return items.value.slice(startPosition.value, startPosition.value + count)
-})
+const measure = (el: unknown) => el instanceof Element && virtualizer.value.measureElement(el)
 
-const scrollToIndex = (index: number) =>
-  scrollTo(index * itemHeight.value - scrollerHeight.value / 2 + itemHeight.value / 2)
+/** The last rows are rendered: the end is near. */
+const nearEnd = computed(() => items.value.length > 0 && rows.value.at(-1)?.index === items.value.length - 1)
+
+watch(nearEnd, near => near && emit('scrolled-to-end'))
+
+const scrollToIndex = (index: number) => virtualizer.value.scrollToIndex(index, { align: 'center', behavior: 'smooth' })
 
 defineExpose({ scrollToIndex })
 </script>
