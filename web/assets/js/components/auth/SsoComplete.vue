@@ -22,6 +22,7 @@
 <script lang="ts" setup>
 import { onMounted, ref } from 'vue'
 import { authService } from '@/services/authService'
+import { getHttpErrorBody, isHttpError } from '@/services/http'
 import { useRouter } from '@/composables/useRouter'
 import { logger } from '@/utils/logger'
 
@@ -41,7 +42,10 @@ onMounted(async () => {
     // Signed in: the player loads afresh, as after any sign-in.
     location.assign('/')
   } catch (error: unknown) {
-    logger.error(error)
+    // An old or used code is no fault: the screen says so.
+    if (!(isHttpError(error) && getHttpErrorBody(error)?.code === 'expired')) {
+      logger.error(error)
+    }
     failed.value = true
   }
 })

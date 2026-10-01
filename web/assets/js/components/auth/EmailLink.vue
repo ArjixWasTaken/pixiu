@@ -33,8 +33,12 @@ onMounted(async () => {
   try {
     state.value = (await authService.verifyEmail(token)) ? 'opened' : 'confirmed'
   } catch (error: unknown) {
-    logger.error(error)
-    state.value = isHttpError(error) && getHttpErrorBody(error)?.code === 'expired' ? 'expired' : 'failed'
+    // A used or old link is no fault: the screen says so.
+    const expired = isHttpError(error) && getHttpErrorBody(error)?.code === 'expired'
+    if (!expired) {
+      logger.error(error)
+    }
+    state.value = expired ? 'expired' : 'failed'
   }
 })
 </script>

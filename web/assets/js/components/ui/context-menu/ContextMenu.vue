@@ -40,8 +40,10 @@ let resizeObserver: ResizeObserver | undefined
 const positionAt = async (clientX: number, clientY: number) => {
   anchor = { clientX, clientY }
 
+  const menu = el.value
+
   // On phones, the menu is a bottom sheet placed by CSS.
-  if (!el.value || isMobile.value) {
+  if (!menu || isMobile.value) {
     return
   }
   const virtualAnchor = {
@@ -56,7 +58,7 @@ const positionAt = async (clientX: number, clientY: number) => {
       right: clientX,
     }),
   }
-  const { x, y } = await computePosition(virtualAnchor, el.value, {
+  const { x, y } = await computePosition(virtualAnchor, menu, {
     placement: 'bottom-start',
     // A menu taller than the room above and below its anchor slides up or
     // down to stay whole, rather than running off the screen. (It can't
@@ -64,8 +66,13 @@ const positionAt = async (clientX: number, clientY: number) => {
     middleware: [flip(), shift({ padding: 8, crossAxis: true })],
     strategy: 'fixed',
   })
-  el.value.style.left = `${x}px`
-  el.value.style.top = `${y}px`
+
+  // Closed while it was measured.
+  if (el.value !== menu) {
+    return
+  }
+  menu.style.left = `${x}px`
+  menu.style.top = `${y}px`
 }
 
 const positionSubmenu = async (parent: HTMLElement, submenu: HTMLElement) => {

@@ -4,6 +4,7 @@ import { waitFor } from '@testing-library/vue'
 import { createHarness } from '@/__tests__/TestHarness'
 import { shallowRef } from 'vue'
 import { ContextMenuKey } from '@/config/symbols'
+import { logger } from '@/utils/logger'
 import Component from './ContextMenu.vue'
 
 // On a desktop: phones show menus as bottom sheets, unplaced.
@@ -86,6 +87,25 @@ describe('contextMenu', () => {
     expect(hideSpy).toHaveBeenCalled()
     showSpy.mockRestore()
     hideSpy.mockRestore()
+  })
+
+  it('closes cleanly while it is still being placed', async () => {
+    const errorSpy = vi.spyOn(logger, 'error')
+    let place: (position: floating.ComputePositionReturn) => void = () => {}
+    vi.mocked(floating.computePosition)
+      .mockClear()
+      .mockImplementationOnce(() => new Promise(resolve => (place = resolve)))
+    const options = shallowRef<any>({ component: null, position: { top: 0, left: 0 } })
+    const { unmount } = h.render(Component, provide(options))
+
+    options.value = { component: { template: '<div>Menu</div>' }, position: { top: 100, left: 200 } }
+    await waitFor(() => expect(floating.computePosition).toHaveBeenCalled())
+    unmount()
+    place({ x: 10, y: 20, placement: 'bottom-start', strategy: 'fixed', middlewareData: {} })
+    // Everything the placement had left to do.
+    await new Promise(resolve => setTimeout(resolve, 0))
+
+    expect(errorSpy).not.toHaveBeenCalled()
   })
 
   it('applies extra class', () => {

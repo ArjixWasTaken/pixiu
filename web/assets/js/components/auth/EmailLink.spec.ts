@@ -1,8 +1,9 @@
-import { describe, expect, it } from 'vite-plus/test'
+import { describe, expect, it, vi } from 'vite-plus/test'
 import { screen } from '@testing-library/vue'
 import { HTTPError } from 'ky'
 import { createHarness } from '@/__tests__/TestHarness'
 import { authService } from '@/services/authService'
+import { logger } from '@/utils/logger'
 import Component from './EmailLink.vue'
 
 const expired = () => {
@@ -37,12 +38,24 @@ describe('emailLink.vue', () => {
     await screen.findByText('Your account is ready')
   })
 
-  it('says when a confirmation link no longer works', async () => {
+  it('says when a confirmation link no longer works, which is no error', async () => {
+    const error = vi.spyOn(logger, 'error')
     h.mock(authService, 'verifyEmail').mockRejectedValue(expired())
     h.visit('/verify-email/used')
     h.render(Component)
 
     await screen.findByText('This link no longer works')
+    expect(error).not.toHaveBeenCalled()
+  })
+
+  it('logs a confirmation that failed otherwise', async () => {
+    const error = vi.spyOn(logger, 'error').mockImplementation(() => {})
+    h.mock(authService, 'verifyEmail').mockRejectedValue(new Error('offline'))
+    h.visit('/verify-email/abc')
+    h.render(Component)
+
+    await screen.findByText('That did not work')
+    expect(error).toHaveBeenCalled()
   })
 
   it('sets a new password from a reset link', async () => {
