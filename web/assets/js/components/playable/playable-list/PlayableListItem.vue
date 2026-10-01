@@ -1,6 +1,6 @@
 <template>
   <div class="px-3">
-    <h4 v-if="isSong(playable) && showDisc && playable.disc" class="disc m3-title-small">Disc {{ playable.disc }}</h4>
+    <h4 v-if="showDisc && playable.disc" class="disc m3-title-small">Disc {{ playable.disc }}</h4>
 
     <article
       :class="{ playing, selected: item.selected }"
@@ -9,7 +9,7 @@
       tabindex="0"
       @dblclick.prevent.stop="play"
     >
-      <PlayableThumbnail :playable @clicked="play" />
+      <PlayableThumbnail :numbered="inAlbum" :playable @clicked="play" />
 
       <span class="content">
         <span class="title m3-body-large">
@@ -34,14 +34,19 @@
       </span>
 
       <span class="trailing">
-        <span v-if="shouldShowColumn('rating') && isSong(playable)" class="rating">
+        <span v-if="shouldShowColumn('rating')" class="rating">
           <StarRating :rateable="playable" size="xs" />
         </span>
         <span v-if="shouldShowColumn('duration')" class="time m3-label-medium">{{ fmtLength }}</span>
-        <FavoriteButton v-if="shouldShowColumn('favorite')" :favorite="playable.favorite" @toggle="toggleFavorite" />
+        <FavoriteButton
+          v-if="shouldShowColumn('favorite')"
+          :class="{ reveal: !playable.favorite }"
+          :favorite="playable.favorite"
+          @toggle="toggleFavorite"
+        />
         <M3IconButton
           :icon-size="20"
-          class="more"
+          class="more reveal"
           icon="more_vert"
           label="More actions"
           @click.stop="emit('request-context-menu', $event)"
@@ -53,8 +58,7 @@
 
 <script lang="ts" setup>
 import { computed, toRefs } from 'vue'
-import { getPlayableProp, requireInjection } from '@/utils/helpers'
-import { isSong } from '@/utils/typeGuards'
+import { requireInjection } from '@/utils/helpers'
 import { secondsToHis, timeAgo } from '@/utils/formatters'
 import { useTableColumnVisibility } from '@/composables/useTableColumnVisibility'
 import { useOfflinePlayback } from '@/composables/useOfflinePlayback'
@@ -89,27 +93,32 @@ const { item } = toRefs(props)
 const playable = computed<Playable>(() => item.value.playable)
 const playing = computed(() => ['Playing', 'Paused'].includes(playable.value.playback_state!))
 const { isCached, isCaching, hasCachingError, getCachingError } = useOfflinePlayback()
-const cachedOffline = computed(() => isSong(playable.value) && isCached(playable.value))
-const cachingOffline = computed(() => isSong(playable.value) && isCaching(playable.value))
-const cachingFailed = computed(() => isSong(playable.value) && hasCachingError(playable.value))
+const cachedOffline = computed(() => isCached(playable.value))
+const cachingOffline = computed(() => isCaching(playable.value))
+const cachingFailed = computed(() => hasCachingError(playable.value))
 const cachingErrorMessage = computed(() => getCachingError(playable.value))
 
 const fmtLength = secondsToHis(playable.value.length)
-const artist = computed(() => getPlayableProp(playable.value, 'artist_name', 'podcast_author'))
-const album = computed(() => getPlayableProp(playable.value, 'album_name', 'podcast_title'))
+const artist = computed(() => playable.value.artist_name)
+const album = computed(() => playable.value.album_name)
 
 const { isMobile } = useViewport()
 
-/** When it was played, on Recently Played. */
+/** In an album, the cover is the album's: rows show their track number instead. */
+const inAlbum = computed(() => context.type === 'Album')
+
+/** When it was played, on Recently played. */
 const played = computed(() =>
-  context.type === 'RecentlyPlayed' && isSong(playable.value) && playable.value.played_at
-    ? `played ${timeAgo(playable.value.played_at)}`
-    : null,
+  context.type === 'RecentlyPlayed' && playable.value.played_at ? `played ${timeAgo(playable.value.played_at)}` : null,
 )
 
 /** "Artist · album" on wide screens; phones show the length instead of the album. */
 const supporting = computed(() =>
-  [artist.value, isMobile.value ? fmtLength : shouldShowColumn('album') ? album.value : null, played.value]
+  [
+    artist.value,
+    isMobile.value ? fmtLength : shouldShowColumn('album') && !inAlbum.value ? album.value : null,
+    played.value,
+  ]
     .filter(Boolean)
     .join(' · '),
 )
@@ -121,17 +130,20 @@ const toggleFavorite = () => playableStore.toggleFavorite(playable.value)
 
 <style lang="postcss" scoped>
 .disc {
-  padding: 16px 16px 8px;
+  display: flex;
+  align-items: flex-end;
+  height: var(--m3-disc-height);
+  padding: 0 16px 8px;
   color: var(--schemes-on-surface-variant);
 }
 
 .song-item {
   display: flex;
   align-items: center;
-  gap: 16px;
-  height: 72px;
-  padding: 8px 8px 8px 16px;
-  border-radius: 16px;
+  gap: var(--m3-gutter);
+  height: var(--m3-row-height);
+  padding: 0 8px 0 var(--m3-gutter);
+  border-radius: 12px;
   color: var(--schemes-on-surface);
   outline: none;
 
@@ -220,6 +232,18 @@ const toggleFavorite = () => playableStore.toggleFavorite(playable.value)
 
   @media (max-width: 768px) {
     display: none;
+  }
+}
+
+/* With a mouse, a row's actions show when it is pointed at, focused or selected. */
+@media (hover: hover) {
+  .reveal {
+    opacity: 0;
+    transition: opacity 100ms linear;
+
+    .song-item:is(:hover, :focus-within, .selected) & {
+      opacity: 1;
+    }
   }
 }
 

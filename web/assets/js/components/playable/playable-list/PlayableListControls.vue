@@ -48,8 +48,6 @@
       <M3IconButton v-if="config.refresh" icon="refresh" label="Refresh" @click.prevent="refresh" />
 
       <slot />
-
-      <ListFilter v-if="config.filter && allPlayables.length" class="ml-2" />
     </div>
 
     <Popover
@@ -67,26 +65,23 @@
 <script lang="ts" setup>
 import type { Ref } from 'vue'
 import { computed, ref, toRef, watch } from 'vue'
-import { FilteredPlayablesKey, PlayablesKey, SelectedPlayablesKey } from '@/config/symbols'
+import { FilteredPlayablesKey, SelectedPlayablesKey } from '@/config/symbols'
 import { requireInjection } from '@/utils/helpers'
 
 import AddToMenu from '@/components/playable/AddToMenu.vue'
 import M3Button from '@/components/m3/M3Button.vue'
 import M3IconButton from '@/components/m3/M3IconButton.vue'
-import ListFilter from '@/components/ui/ListFilter.vue'
 import Popover from '@/components/ui/Popover.vue'
 
 const props = defineProps<{ config: PlayableListControlsConfig }>()
 
 const emit = defineEmits<{
   (e: 'play-all' | 'play-selected', shuffle: boolean): void
-  (e: 'filter', keywords: string): void
   (e: 'clear-queue' | 'delete-playlist' | 'refresh'): void
 }>()
 
 const config = toRef(props, 'config')
 
-const [allPlayables] = requireInjection<[Ref<Playable[]>]>(PlayablesKey)
 const [filteredPlayables] = requireInjection<[Ref<Playable[]>]>(FilteredPlayablesKey)
 const [selectedPlayables] = requireInjection<[Ref<Playable[]>]>(SelectedPlayablesKey)
 
@@ -98,7 +93,7 @@ const showAddToButton = computed(() => Boolean(selectedPlayables.value.length))
 
 // When the AddTo trigger button disappears (no items selected), the Popover
 // is unmounted via v-if without firing @toggle(false), so we reset the menu
-// open-state flag explicitly. Otherwise the trigger's "Cancel" / "Add To…"
+// open-state flag explicitly. Otherwise the trigger's "Cancel" / "Add to…"
 // label could be stuck on "Cancel" if items are reselected later.
 watch(showAddToButton, visible => {
   if (!visible) {

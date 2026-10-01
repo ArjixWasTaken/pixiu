@@ -20,6 +20,9 @@
       </span>
       <span class="m3-label-medium">{{ item.label }}</span>
     </component>
+    <div v-if="$slots.bottom" class="bottom">
+      <slot name="bottom" />
+    </div>
   </nav>
 </template>
 
@@ -51,6 +54,11 @@ const onClick = (item: M3NavItem, event: MouseEvent) => {
   width: 80px;
   padding: 12px 0;
   overflow-y: auto;
+}
+
+.bottom {
+  margin-top: auto;
+  padding-top: 12px;
 }
 
 .top {

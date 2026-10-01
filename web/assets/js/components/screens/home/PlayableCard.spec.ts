@@ -105,7 +105,7 @@ describe('playableCard.vue', () => {
     const toggleFavoriteMock = h.mock(playableStore, 'toggleFavorite')
     const { props } = renderCard({ favorite: false })
 
-    await h.user.click(screen.getByRole('button', { name: 'Favorite' }))
+    await h.user.click(screen.getByRole('button', { name: 'Add to favorites' }))
 
     expect(toggleFavoriteMock).toHaveBeenCalledWith(props.playable)
   })
@@ -114,7 +114,7 @@ describe('playableCard.vue', () => {
     const toggleFavoriteMock = h.mock(playableStore, 'toggleFavorite')
     const { props } = renderCard({ favorite: false })
 
-    screen.getByRole('button', { name: 'Favorite' }).focus()
+    screen.getByRole('button', { name: 'Add to favorites' }).focus()
     await h.user.keyboard('{Enter}')
 
     expect(toggleFavoriteMock).toHaveBeenCalledWith(props.playable)
@@ -132,7 +132,7 @@ describe('playableCard.vue', () => {
 
   it('renders the button as undo-able for a favorite song', () => {
     renderCard({ favorite: true })
-    screen.getByRole('button', { name: 'Undo Favorite' })
+    screen.getByRole('button', { name: 'Remove from favorites' })
   })
 
   it('shows error icon when caching fails', () => {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vite-plus/test'
 import { createHarness } from '@/__tests__/TestHarness'
 import { screen } from '@testing-library/vue'
+import themes from '@/config/themes'
 import Component from './ThemeList.vue'
 
 describe('themeList.vue', () => {
@@ -9,7 +10,7 @@ describe('themeList.vue', () => {
   it('renders a list of themes', async () => {
     h.render(Component, {
       props: {
-        themes: h.factory('theme').make(9),
+        themes,
       },
       global: {
         stubs: {
@@ -18,6 +19,6 @@ describe('themeList.vue', () => {
       },
     })
 
-    expect(screen.queryAllByTestId('theme-card')).toHaveLength(9)
+    expect(screen.queryAllByTestId('theme-card')).toHaveLength(themes.length)
   })
 })

@@ -19,7 +19,7 @@ describe('equalizerSavePresetForm.vue', () => {
   it('emits submit with the trimmed name on form submit', async () => {
     const { emitted } = h.render(Component)
 
-    const input = screen.getByPlaceholderText('Preset name') as HTMLInputElement
+    const input = screen.getByRole<HTMLInputElement>('textbox', { name: 'Preset name' })
     await fireEvent.update(input, '  My Bass Boost  ')
     await fireEvent.submit(input.form!)
 
@@ -29,7 +29,7 @@ describe('equalizerSavePresetForm.vue', () => {
   it('does not emit submit when the name is whitespace-only', async () => {
     const { emitted } = h.render(Component)
 
-    const input = screen.getByPlaceholderText('Preset name') as HTMLInputElement
+    const input = screen.getByRole<HTMLInputElement>('textbox', { name: 'Preset name' })
     await fireEvent.update(input, '   ')
     await fireEvent.submit(input.form!)
 
@@ -49,7 +49,7 @@ describe('equalizerSavePresetForm.vue', () => {
     mockShowConfirmDialog.mockResolvedValueOnce(true)
     const { emitted } = h.render(Component)
 
-    const input = screen.getByPlaceholderText('Preset name') as HTMLInputElement
+    const input = screen.getByRole<HTMLInputElement>('textbox', { name: 'Preset name' })
     await fireEvent.update(input, 'Custom')
     await fireEvent.click(screen.getByText('Cancel'))
 
@@ -61,7 +61,7 @@ describe('equalizerSavePresetForm.vue', () => {
     mockShowConfirmDialog.mockResolvedValueOnce(false)
     const { emitted } = h.render(Component)
 
-    const input = screen.getByPlaceholderText('Preset name') as HTMLInputElement
+    const input = screen.getByRole<HTMLInputElement>('textbox', { name: 'Preset name' })
     await fireEvent.update(input, 'Custom')
     await fireEvent.click(screen.getByText('Cancel'))
 
@@ -72,7 +72,7 @@ describe('equalizerSavePresetForm.vue', () => {
   it('emits cancel via Escape when pristine', async () => {
     const { emitted } = h.render(Component)
 
-    const input = screen.getByPlaceholderText('Preset name')
+    const input = screen.getByRole('textbox', { name: 'Preset name' })
     await fireEvent.keyDown(input, { key: 'Escape' })
 
     expect(emitted().cancel).toHaveLength(1)

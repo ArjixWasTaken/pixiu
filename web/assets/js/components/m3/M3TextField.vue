@@ -90,14 +90,14 @@ const hasValue = computed(() => (value.value !== null && String(value.value) !==
   display: flex;
   align-items: center;
   gap: 12px;
-  min-height: 56px;
+  min-height: var(--m3-field-height);
   padding: 0 16px;
 }
 
 .multiline .field {
   align-items: flex-start;
-  padding-top: 16px;
-  padding-bottom: 16px;
+  padding-top: var(--m3-field-pad-y);
+  padding-bottom: var(--m3-field-pad-y);
 }
 
 input,
@@ -163,7 +163,7 @@ legend {
 }
 
 .multiline .label {
-  top: 28px;
+  top: calc(var(--m3-field-pad-y) + var(--static-body-large-line-height) * 0.5px);
 }
 
 .m3-text-field:focus-within,

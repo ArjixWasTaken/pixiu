@@ -2,9 +2,7 @@ import isMobile from 'ismobilejs'
 import { differenceBy, orderBy, unionBy, uniqBy } from 'lodash-es'
 import { Reactive, reactive, watch } from 'vue'
 import { arrayify, moveItemsInList, use } from '@/utils/helpers'
-import { isSong } from '@/utils/typeGuards'
 import { logger } from '@/utils/logger'
-import { sha256 } from '@/utils/crypto'
 import { normalizeForComparison, secondsToHumanReadable } from '@/utils/formatters'
 import { cache } from '@/services/cache'
 import { http } from '@/services/http'
@@ -16,7 +14,6 @@ import { albumStore } from '@/stores/albumStore'
 import { artistStore } from '@/stores/artistStore'
 import { overviewStore } from '@/stores/overviewStore'
 import { playlistStore } from '@/stores/playlistStore'
-import { clientUrl } from '@/utils/clientUrl'
 
 export interface SongUpdateData {
   title?: string
@@ -84,7 +81,7 @@ export const playableStore = {
       return undefined
     }
 
-    if (isSong(playable) && playable.deleted) {
+    if (playable.deleted) {
       return undefined
     }
 
@@ -98,9 +95,7 @@ export const playableStore = {
   },
 
   byAlbum(album: Album) {
-    return Array.from(this.vault.values()).filter(
-      playable => isSong(playable) && playable.album_id === album.id,
-    ) as Song[]
+    return Array.from(this.vault.values()).filter(playable => playable.album_id === album.id) as Song[]
   },
 
   syncAlbumProperties(album: Album) {
@@ -111,15 +106,11 @@ export const playableStore = {
   },
 
   byArtist(artist: Artist) {
-    return Array.from(this.vault.values()).filter(
-      playable => isSong(playable) && playable.artist_id === artist.id,
-    ) as Song[]
+    return Array.from(this.vault.values()).filter(playable => playable.artist_id === artist.id) as Song[]
   },
 
   byAlbumArtist(artist: Artist) {
-    return Array.from(this.vault.values()).filter(
-      playable => isSong(playable) && playable.album_artist_id === artist.id,
-    ) as Song[]
+    return Array.from(this.vault.values()).filter(playable => playable.album_artist_id === artist.id) as Song[]
   },
 
   syncArtistProperties(artist: Artist) {
@@ -159,20 +150,10 @@ export const playableStore = {
     await subsonic.scrobble(playable.id, true, playable.play_start_time ? playable.play_start_time * 1000 : undefined)
 
     playable.play_count++
-
-    if (isSong(playable)) {
-      playable.played_at = new Date().toISOString()
-    }
+    playable.played_at = new Date().toISOString()
   },
 
-  // Koel scrobbles to Last.fm here; píxiū counted the play in registerPlay.
-  scrobble: async (_song: Song) => {},
-
   async updateSongs(songsToUpdate: Song[], data: SongUpdateData) {
-    if (songsToUpdate.some(song => !isSong(song))) {
-      throw new Error('Only songs can be updated.')
-    }
-
     const result = await http.put<SongUpdateResult>('songs', {
       data,
       songs: songsToUpdate.map(song => song.id),
@@ -194,8 +175,6 @@ export const playableStore = {
       ? subsonic.streamUrl(playable.id, preferenceStore.transcode_quality)
       : subsonic.streamUrl(playable.id)
   },
-
-  getShareableUrl: (song: Playable) => clientUrl(`/songs/${song.id}`),
 
   ensureNotDeleted: (songs: MaybeArray<Song>) => arrayify(songs).filter(({ deleted }) => !deleted),
 
@@ -252,22 +231,6 @@ export const playableStore = {
     return uniqBy(playables, 'id')
   },
 
-  async fetchEpisodesInPodcast(podcast: Podcast | Podcast['id'], refresh = false) {
-    const id = typeof podcast === 'string' ? podcast : podcast.id
-
-    if (refresh) {
-      cache.remove(['podcast.episodes', id])
-    }
-
-    return await cache.remember(
-      [`podcast.episodes`, id],
-      async () =>
-        this.syncWithVault(
-          await http.get<Episode[]>(`podcasts/${id}/episodes${refresh ? '?refresh=true' : ''}`),
-        ) as Episode[],
-    )
-  },
-
   async paginateSongsByGenre(genre: Genre | Genre['id'], params: SongListCursorPaginateParams) {
     const id = typeof genre === 'string' ? genre : genre.id
 
@@ -298,9 +261,7 @@ export const playableStore = {
 
   getMostPlayedSongs(count: number) {
     return orderBy(
-      Array.from(this.vault.values()).filter(
-        playable => isSong(playable) && !playable.deleted && playable.play_count > 0,
-      ),
+      Array.from(this.vault.values()).filter(playable => !playable.deleted && playable.play_count > 0),
       'play_count',
       'desc',
     ).slice(0, count) as Song[]
@@ -315,63 +276,6 @@ export const playableStore = {
     })
 
     await http.delete('songs', { songs: ids })
-  },
-
-  async publicizeSongs(songs: Song[]) {
-    if (songs.some(song => !isSong(song))) {
-      throw new Error('This action is only supported for songs.')
-    }
-
-    await http.put('songs/publicize', {
-      songs: songs.map(song => song.id),
-    })
-
-    songs.forEach(song => (song.is_public = true))
-  },
-
-  async privatizeSongs(songs: Song[]) {
-    if (songs.some(song => !isSong(song))) {
-      throw new Error('This action is only supported for songs.')
-    }
-
-    const privatizedIds = await http.put<Song['id'][]>('songs/privatize', {
-      songs: songs.map(({ id }) => id),
-    })
-
-    privatizedIds.forEach(id => {
-      const song = this.byId(id) as Song
-      song && (song.is_public = false)
-    })
-
-    return privatizedIds
-  },
-
-  async resolveSongsFromMediaReferences(data: MediaReference[], shuffle = false) {
-    const songReferences = data.filter(item => item.type === 'songs') as Array<Pick<Song, 'type' | 'id'>>
-    const songs = this.byIds(songReferences.map(item => item.id)) as Song[]
-
-    const folderReferences = data.filter(item => item.type === 'folders') as Array<Pick<Folder, 'type' | 'id'>>
-
-    if (!folderReferences.length) {
-      return songs
-    }
-
-    const folders = folderReferences.map(item => item.id).sort()
-
-    const cacheKey = ['folders', await sha256(JSON.stringify(folders))]
-
-    const fetcher = () => http.post<Song[]>(`songs/by-folders?shuffle=${shuffle}`, { folders })
-
-    const songsFromFolders = this.syncWithVault(
-      shuffle ? await fetcher() : await cache.remember(cacheKey, async () => await fetcher()),
-    )
-
-    return unionBy(songs, songsFromFolders as Song[], 'id')
-  },
-
-  async fetchSongsInFolder(folderId: Folder['id'] | null) {
-    const query = folderId ? `?folder=${folderId}` : ''
-    return this.syncWithVault(await http.get<Song[]>(`songs/in-folder${query}`))
   },
 
   async fetchFavorites() {

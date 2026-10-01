@@ -8,16 +8,12 @@ export interface ExcerptState {
   playables: Playable[]
   albums: Album[]
   artists: Artist[]
-  podcasts: Podcast[]
-  radio_stations: RadioStation[]
 }
 
 export interface ExcerptSearchResult {
   songs: Playable[] // backward compatibility
   albums: Album[]
   artists: Artist[]
-  podcasts: Podcast[]
-  radio_stations: RadioStation[]
 }
 
 export const searchStore = {
@@ -26,8 +22,6 @@ export const searchStore = {
       playables: [],
       albums: [],
       artists: [],
-      podcasts: [],
-      radio_stations: [],
     } as ExcerptState,
     playables: [] as Playable[],
   }),
@@ -38,8 +32,6 @@ export const searchStore = {
     this.state.excerpt.playables = playableStore.syncWithVault(result.songs)
     this.state.excerpt.albums = albumStore.syncWithVault(result.albums)
     this.state.excerpt.artists = artistStore.syncWithVault(result.artists)
-    this.state.excerpt.podcasts = []
-    this.state.excerpt.radio_stations = []
   },
 
   async playableSearch(q: string) {

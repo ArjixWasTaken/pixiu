@@ -1,6 +1,6 @@
 <template>
   <div class="skeleton">
-    <div class="song-list-header h-[35px] flex bg-k-fg-5 gap-4 px-4">
+    <div class="song-list-header h-[35px] flex bg-(--schemes-surface-container-high) gap-4 px-4">
       <span class="title">
         <span class="text" />
       </span>
@@ -11,7 +11,7 @@
         <span class="text" />
       </span>
     </div>
-    <div v-for="key in 40" :key class="flex gap-4 px-4 py-3 border-b border-k-fg-10">
+    <div v-for="key in 40" :key class="flex gap-4 px-4 py-3 border-b border-(--schemes-outline-variant)">
       <div class="title flex gap-3">
         <div class="thumbnail block h-[48px] aspect-square rounded-sm pulse" />
         <div class="flex-1 flex-col space-y-2 content-center">
@@ -34,7 +34,7 @@
 <style lang="postcss" scoped>
 @reference '@css/app.pcss';
 .song-list-header {
-  @apply h-[35px] flex bg-k-fg-5;
+  @apply h-[35px] flex bg-(--schemes-surface-container-high);
 }
 
 .song-list-header > span {
@@ -42,7 +42,7 @@
 }
 
 .song-list-header span span {
-  @apply block h-[1.2rem] rounded-full bg-k-fg-10 w-2/5;
+  @apply block h-[1.2rem] rounded-full bg-(--schemes-surface-container-highest) w-2/5;
 }
 
 .title {

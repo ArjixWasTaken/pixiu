@@ -15,8 +15,6 @@ describe('searchStore', () => {
           playables: [],
           albums: [],
           artists: [],
-          podcasts: [],
-          radio_stations: [],
         },
         playables: [],
       })

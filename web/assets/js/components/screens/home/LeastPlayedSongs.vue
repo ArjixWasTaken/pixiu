@@ -1,10 +1,9 @@
 <template>
-  <HomeScreenBlock>
-    <template #header>Hidden Gems</template>
+  <HomeScreenBlock v-if="loading || playables.length">
+    <template #header>Least played</template>
     <PlayableCardGridSkeleton v-if="loading" class="-mx-6" role="status" aria-busy="true" aria-label="Loading" />
     <template v-else>
-      <PlayableCardGrid v-if="playables.length" class="-mx-6" :playables />
-      <p v-else>No songs to rediscover.</p>
+      <PlayableCardGrid class="-mx-6" :playables />
     </template>
   </HomeScreenBlock>
 </template>

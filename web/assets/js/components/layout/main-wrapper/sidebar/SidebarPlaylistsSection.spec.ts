@@ -33,7 +33,7 @@ describe('sidebarPlaylistsSection.vue', () => {
 
     renderComponent()
 
-    ;['Favorites', 'Recently Played', 'Foo Playlist', 'Bar Playlist', 'Smart Playlist'].forEach(text => {
+    ;['Favorites', 'Recently played', 'Foo Playlist', 'Bar Playlist', 'Smart Playlist'].forEach(text => {
       screen.getByText(text)
     })
   })

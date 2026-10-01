@@ -5,18 +5,6 @@ declare module '*.svg'
 
 declare type Closure<T = unknown | any> = (...args: Array<unknown | any>) => T
 
-declare module 'sketch-js' {
-  function create(config: Record<string, any>): any
-}
-
-declare module 'youtube-player' {
-  import type { YouTubePlayer } from 'youtube-player/dist/types'
-
-  function createYouTubePlayer(name: string, options: Record<string, any>): YouTubePlayer
-
-  export default createYouTubePlayer
-}
-
 declare module 'ismobilejs' {
   let apple: { device: boolean }
   let any: boolean
@@ -179,7 +167,7 @@ interface Album {
 }
 
 interface IStreamable {
-  readonly type: Song['type'] | Episode['type'] | RadioStation['type']
+  readonly type: Song['type']
   readonly id: string
   favorite: boolean
   playback_state?: PlaybackState
@@ -187,18 +175,16 @@ interface IStreamable {
 }
 
 interface BasePlayable extends IStreamable {
-  type: Song['type'] | Episode['type']
+  type: Song['type']
   title: string
   readonly length: number
   play_count_registered?: boolean
-  scrobble_registered?: boolean
   play_count: number
   rating: number // 0-5, current user's rating; 0 = unrated
   play_start_time?: number
   preloaded?: boolean
   playback_state?: PlaybackState
   fmt_length?: string
-  embed_stream_url?: string // only when embedded
 }
 
 interface Song extends BasePlayable {
@@ -224,53 +210,10 @@ interface Song extends BasePlayable {
   deleted?: boolean
   /** When the user last played it. */
   played_at?: string | null
-  collaboration?: {
-    user: PlaylistCollaborator
-    added_at: string | null
-    fmt_added_at: string | null
-  }
 }
 
-interface Episode extends BasePlayable {
-  type: 'episodes'
-  episode_link: string | null
-  episode_description: string
-  episode_image: string
-  podcast_id: string
-  podcast_title: string
-  podcast_author: string
-}
-
-interface RadioStation extends IStreamable {
-  readonly type: 'radio-stations'
-  name: string
-  url: string
-  homepage_url: string | null
-  logo: string | null
-  description: string
-  is_public: boolean
-  permissions: {
-    edit: boolean
-    delete: boolean
-  }
-}
-
-type Playable = Song | Episode
-type Streamable = Playable | RadioStation
-type Embeddable = Playable | Playlist | Artist | Album
-
-interface Embed {
-  type: 'embeds'
-  id: string
-  user_id: User['id']
-  embeddable_id: Embeddable['id']
-  embeddable_type: 'playable' | 'playlist' | 'artist' | 'album'
-}
-
-type WidgetReadyEmbed = Embed & {
-  embeddable: Embeddable
-  playables: Playable[]
-}
+type Playable = Song
+type Streamable = Playable
 
 interface QueueState {
   type: 'queue-states'
@@ -342,7 +285,7 @@ interface FavoriteList {
 }
 
 interface RecentlyPlayedList {
-  name: 'Recently Played'
+  name: 'Recently played'
   playables: Playable[]
 }
 
@@ -354,10 +297,6 @@ interface PlaylistFolder {
   // we don't need to keep track of the playlists here, as they can be computed using their folder_id value
 }
 
-type PlaylistCollaborator = Pick<User, 'id' | 'name' | 'avatar'> & {
-  type: 'playlist-collaborators'
-}
-
 interface Playlist {
   type: 'playlists'
   readonly id: string
@@ -366,7 +305,6 @@ interface Playlist {
   description: string
   folder_id: PlaylistFolder['id'] | null
   is_smart: boolean
-  is_collaborative: boolean
   rules: SmartPlaylistRuleGroup[]
   cover: string | null
   playables?: Playable[]
@@ -378,41 +316,6 @@ interface Playlist {
 
 type PlaylistLike = Playlist | FavoriteList | RecentlyPlayedList
 
-interface Podcast {
-  readonly type: 'podcasts'
-  readonly id: string
-  readonly title: string
-  readonly url: string
-  readonly link: string
-  readonly image: string
-  readonly description: string
-  readonly author: string
-  readonly subscribed_at: string
-  readonly last_played_at: string
-  readonly state: {
-    current_episode: Playable['id'] | null
-    progresses: Record<Playable['id'], number>
-  }
-  favorite: boolean
-  rating: number // 0-5, current user's rating; 0 = unrated
-}
-
-interface YouTubeVideo {
-  readonly id: {
-    videoId: string
-  }
-
-  readonly snippet: {
-    title: string
-    description: string
-    thumbnails: {
-      default: {
-        url: string
-      }
-    }
-  }
-}
-
 interface UserPreferences extends Record<string, any> {
   volume: number
   show_now_playing_notification: boolean
@@ -423,37 +326,23 @@ interface UserPreferences extends Record<string, any> {
   equalizer_presets: EqualizerPreset[]
   albums_view_mode: ViewMode
   artists_view_mode: ViewMode
-  radio_stations_view_mode: ViewMode
   albums_sort_field: AlbumListSortField
   artists_sort_field: ArtistListSortField
   genres_sort_field: GenreListSortField
-  podcasts_sort_field: PodcastListSortField
-  radio_stations_sort_field: RadioStationListSortField
   albums_sort_order: SortOrder
   artists_sort_order: SortOrder
-  podcasts_sort_order: SortOrder
   genres_sort_order: SortOrder
-  radio_stations_sort_order: SortOrder
   albums_favorites_only: boolean
   artists_favorites_only: boolean
-  podcasts_favorites_only: boolean
-  radio_stations_favorites_only: boolean
   transcode_on_mobile: boolean
   transcode_quality: number
-  support_bar_no_bugging: boolean
-  show_album_art_overlay: boolean
   lyrics_zoom_level: number | null
   theme?: Theme['id'] | null
   /** `null`: follow the system's light or dark mode. */
   dark_mode?: boolean | null
-  visualizer?: Visualizer['id'] | null
   active_extra_panel_tab: SideSheetTab | null
-  make_uploads_public: boolean
   detect_duplicate_uploads: boolean
-  include_public_media: boolean
   crossfade_duration: number
-  lastfm_session_key?: string
-  listenbrainz_token?: string
   home_blocks_order: string[]
   /** Home blocks switched off. */
   home_blocks_hidden: string[]
@@ -461,7 +350,7 @@ interface UserPreferences extends Record<string, any> {
   equalizer_enabled: boolean
 }
 
-type Ability = 'manage settings' | 'manage users' | 'manage songs' | 'manage podcasts' | 'manage radio stations'
+type Ability = 'manage settings' | 'manage users' | 'manage songs'
 type Role = ('admin' | 'manager' | 'user' | 'guest') & string
 
 interface User {
@@ -513,19 +402,6 @@ type CurrentUser = User & {
   username?: string
 }
 
-type AiProvider = 'openai' | 'anthropic' | 'gemini' | 'deepseek' | 'groq' | 'mistral' | 'openrouter' | 'xai'
-
-interface AiSettings {
-  enabled: boolean
-  provider: AiProvider | null
-  has_api_key: boolean
-}
-
-interface Settings {
-  media_path?: string
-  ai?: AiSettings
-}
-
 interface Interaction {
   type: 'interactions'
   readonly id: number
@@ -536,7 +412,7 @@ interface Interaction {
 interface Favorite {
   readonly type: 'favorites'
   readonly favoriteable_id: string
-  readonly favoriteable_type: 'playable' | 'podcast' | 'album' | 'artist'
+  readonly favoriteable_type: 'playable' | 'album' | 'artist'
   readonly user_id: User['id']
   readonly created_at: string
 }
@@ -574,14 +450,11 @@ declare type PlaybackState = 'Stopped' | 'Playing' | 'Paused'
 /** Keyed by screen name; add a screen by merging a key into this interface from another declaration file. */
 interface ScreenNames {
   '404': true
-  AI: true
   Album: true
   Albums: true
   Artist: true
   Artists: true
   Default: true
-  Embed: true
-  Episode: true
   Favorites: true
   Genre: true
   Genres: true
@@ -591,16 +464,10 @@ interface ScreenNames {
   Orphans: true
   Watches: true
   'Invitation.Accept': true
-  MediaBrowser: true
   OfflineSongs: true
   'Password.Reset': true
   Playlist: true
-  'Playlist.Collaborate': true
-  Podcast: true
-  Podcasts: true
-  Profile: true
   Queue: true
-  'Radio.Stations': true
   RecentlyPlayed: true
   ResetPassword: true
   'Search.Excerpt': true
@@ -611,8 +478,6 @@ interface ScreenNames {
   Upload: true
   Users: true
   VerifyEmail: true
-  Visualizer: true
-  YouTube: true
 }
 
 declare type ScreenName = keyof ScreenNames
@@ -638,28 +503,12 @@ interface PlayableListControlsConfig {
   addTo: AddToMenuConfig
   clearQueue: boolean
   refresh: boolean
-  filter: boolean
 }
-
-type ThemeableProperty =
-  | '--color-fg'
-  | '--color-bg'
-  | '--color-highlight'
-  | '--bg-image'
-  | '--bg-position'
-  | '--bg-attachment'
-  | '--bg-size'
-  | '--font-family'
-  | '--font-size'
 
 interface Theme {
   id: string
   name: string
   thumbnail_color: string
-  thumbnail_image?: string
-  selected?: boolean
-  properties?: Partial<Record<ThemeableProperty, string>>
-  is_custom?: boolean
 }
 
 type ViewMode = 'grid' | 'list' | 'table'
@@ -670,7 +519,6 @@ interface PlayableListConfig {
   filterable: boolean
   sortable: boolean
   reorderable: boolean
-  collaborative: boolean
   hasCustomOrderSort: boolean
   hasHeader: boolean
 }
@@ -708,10 +556,7 @@ type PlayableListSortField =
       | 'rating'
       | 'favorite'
     >
-  | keyof Pick<Episode, 'podcast_author' | 'podcast_title'>
   | 'position'
-  | 'collaboration.user.name'
-  | 'collaboration.added_at'
 
 type AlbumListSortField = keyof Pick<
   Album,
@@ -719,16 +564,7 @@ type AlbumListSortField = keyof Pick<
 >
 type ArtistListSortField = keyof Pick<Artist, 'name' | 'created_at' | 'rating' | 'favorite'>
 type GenreListSortField = keyof Pick<Genre, 'name' | 'song_count'>
-type PodcastListSortField = keyof Pick<Podcast, 'title' | 'last_played_at' | 'subscribed_at' | 'author'>
-type RadioStationListSortField = keyof Pick<RadioStation, 'name' | 'created_at' | 'favorite'>
-
-type RadioStationTableColumnName = 'name' | 'description' | 'created_at' | 'favorite'
-type SortField =
-  | PodcastListSortField
-  | AlbumListSortField
-  | ArtistListSortField
-  | RadioStationListSortField
-  | GenreListSortField
+type SortField = AlbumListSortField | ArtistListSortField | GenreListSortField
 
 interface BasicListSorterDropDownItem<T extends SortField> {
   label: string
@@ -789,17 +625,7 @@ interface Genre {
   length: number
 }
 
-type SideSheetTab = 'Lyrics' | 'Artist' | 'Album' | 'YouTube'
-
-interface Visualizer {
-  init: (container: HTMLElement) => Promise<Closure>
-  id: string
-  name: string
-  credits?: {
-    author: string
-    url: string
-  }
-}
+type SideSheetTab = 'Lyrics' | 'Artist' | 'Album'
 
 type PlayableListColumnName =
   | 'title'
@@ -813,100 +639,12 @@ type PlayableListColumnName =
   | 'favorite'
   | 'year'
   | 'genre'
-  | 'playlist_collaborator'
-  | 'playlist_added_at'
 
 type AlbumTableColumnName = 'name' | 'artist' | 'time' | 'year' | 'rating' | 'favorite'
 
 type ArtistTableColumnName = 'name' | 'rating' | 'favorite'
 
-interface Folder {
-  type: 'folders'
-  id: string
-  parent_id: string | null
-  name: string
-  is_uploads: boolean
-}
-
-interface MediaRow {
-  item: Folder | Song
-  selected: boolean
-}
-
-type MediaReference = Pick<Folder, 'type' | 'id'> | Pick<Song, 'type' | 'id'>
-
-interface LiveEvent {
-  type: 'live-events'
-  id: string
-  name: string
-  dates: {
-    start: string
-    end: string | null
-  }
-  url: string
-  image: string
-  venue: {
-    name: string
-    url: string
-    city: string
-  }
-}
-
-interface EmbedLayout {
-  id: string
-  name: string
-}
-
-interface EmbedOptions {
-  theme: Theme['id']
-  layout: EmbedLayout['id']
-  preview: boolean
-}
-
 interface LrcLine {
   time: number
   text: string
-}
-
-interface AiChatMessage {
-  id: string
-  role: 'user' | 'assistant'
-  content: string
-  error: boolean
-}
-
-interface AiResponse {
-  message: string
-  action:
-    | 'play_songs'
-    | 'suggest_songs'
-    | 'create_smart_playlist'
-    | 'add_radio_station'
-    | 'play_radio_station'
-    | 'add_to_favorites'
-    | 'remove_from_favorites'
-    | 'add_to_playlist'
-    | 'remove_from_playlist'
-    | 'show_lyrics'
-    | 'update_lyrics'
-    | 'update_album'
-    | 'update_artist'
-    | null
-  conversation_id: string | null
-  data: {
-    type?: 'playable' | 'album' | 'artist' | 'radio-station' | 'podcast'
-    songs?: Song[]
-    queue?: boolean
-    albums?: Album[]
-    artists?: Artist[]
-    stations?: RadioStation[]
-    podcasts?: Podcast[]
-    playlist?: Playlist
-    station?: RadioStation
-    song?: Song
-    album?: Album
-    artist?: Artist
-    lyrics?: string
-    list?: string
-  }
 }

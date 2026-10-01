@@ -1,6 +1,6 @@
 <template>
   <div class="album-table-wrap relative flex flex-col flex-1 overflow-auto" data-testid="album-table">
-    <div class="album-table-header sortable flex z-2 bg-k-fg-3 pl-5 sticky top-0">
+    <div class="album-table-header sortable flex z-2 bg-(--schemes-surface-container-high) pl-5 sticky top-0">
       <span
         class="name"
         role="button"
@@ -10,8 +10,12 @@
         @keydown.enter.space.prevent="onSort('name')"
       >
         Name
-        <Icon v-if="field === 'name' && order === 'asc'" :icon="faCaretUp" class="ml-2 text-k-highlight" />
-        <Icon v-if="field === 'name' && order === 'desc'" :icon="faCaretDown" class="ml-2 text-k-highlight" />
+        <M3Icon v-if="field === 'name' && order === 'asc'" name="arrow_drop_up" class="ml-2 text-(--schemes-primary)" />
+        <M3Icon
+          v-if="field === 'name' && order === 'desc'"
+          name="arrow_drop_down"
+          class="ml-2 text-(--schemes-primary)"
+        />
       </span>
       <span
         v-if="shouldShowColumn('artist')"
@@ -23,8 +27,16 @@
         @keydown.enter.space.prevent="onSort('artist_name')"
       >
         Artist
-        <Icon v-if="field === 'artist_name' && order === 'asc'" :icon="faCaretUp" class="ml-2 text-k-highlight" />
-        <Icon v-if="field === 'artist_name' && order === 'desc'" :icon="faCaretDown" class="ml-2 text-k-highlight" />
+        <M3Icon
+          v-if="field === 'artist_name' && order === 'asc'"
+          name="arrow_drop_up"
+          class="ml-2 text-(--schemes-primary)"
+        />
+        <M3Icon
+          v-if="field === 'artist_name' && order === 'desc'"
+          name="arrow_drop_down"
+          class="ml-2 text-(--schemes-primary)"
+        />
       </span>
       <span
         v-if="shouldShowColumn('time')"
@@ -36,8 +48,16 @@
         @keydown.enter.space.prevent="onSort('length')"
       >
         Time
-        <Icon v-if="field === 'length' && order === 'asc'" :icon="faCaretUp" class="ml-2 text-k-highlight" />
-        <Icon v-if="field === 'length' && order === 'desc'" :icon="faCaretDown" class="ml-2 text-k-highlight" />
+        <M3Icon
+          v-if="field === 'length' && order === 'asc'"
+          name="arrow_drop_up"
+          class="ml-2 text-(--schemes-primary)"
+        />
+        <M3Icon
+          v-if="field === 'length' && order === 'desc'"
+          name="arrow_drop_down"
+          class="ml-2 text-(--schemes-primary)"
+        />
       </span>
       <span
         v-if="shouldShowColumn('year')"
@@ -49,8 +69,12 @@
         @keydown.enter.space.prevent="onSort('year')"
       >
         Year
-        <Icon v-if="field === 'year' && order === 'asc'" :icon="faCaretUp" class="ml-2 text-k-highlight" />
-        <Icon v-if="field === 'year' && order === 'desc'" :icon="faCaretDown" class="ml-2 text-k-highlight" />
+        <M3Icon v-if="field === 'year' && order === 'asc'" name="arrow_drop_up" class="ml-2 text-(--schemes-primary)" />
+        <M3Icon
+          v-if="field === 'year' && order === 'desc'"
+          name="arrow_drop_down"
+          class="ml-2 text-(--schemes-primary)"
+        />
       </span>
       <span
         v-if="shouldShowColumn('rating')"
@@ -62,8 +86,16 @@
         @keydown.enter.space.prevent="onSort('rating')"
       >
         Rating
-        <Icon v-if="field === 'rating' && order === 'asc'" :icon="faCaretUp" class="ml-2 text-k-highlight" />
-        <Icon v-if="field === 'rating' && order === 'desc'" :icon="faCaretDown" class="ml-2 text-k-highlight" />
+        <M3Icon
+          v-if="field === 'rating' && order === 'asc'"
+          name="arrow_drop_up"
+          class="ml-2 text-(--schemes-primary)"
+        />
+        <M3Icon
+          v-if="field === 'rating' && order === 'desc'"
+          name="arrow_drop_down"
+          class="ml-2 text-(--schemes-primary)"
+        />
       </span>
       <span
         v-if="shouldShowColumn('favorite')"
@@ -74,16 +106,24 @@
         @click="onSort('favorite')"
         @keydown.enter.space.prevent="onSort('favorite')"
       >
-        <Icon :icon="faHeart" />
-        <Icon v-if="field === 'favorite' && order === 'asc'" :icon="faCaretUp" class="ml-2 text-k-highlight" />
-        <Icon v-if="field === 'favorite' && order === 'desc'" :icon="faCaretDown" class="ml-2 text-k-highlight" />
+        <M3Icon name="favorite" fill />
+        <M3Icon
+          v-if="field === 'favorite' && order === 'asc'"
+          name="arrow_drop_up"
+          class="ml-2 text-(--schemes-primary)"
+        />
+        <M3Icon
+          v-if="field === 'favorite' && order === 'desc'"
+          name="arrow_drop_down"
+          class="ml-2 text-(--schemes-primary)"
+        />
       </span>
       <span class="extra">
         <AlbumTableHeaderActionMenu :field :order @sort="onSort" />
       </span>
     </div>
 
-    <VirtualScroller :items="albums" :item-height="64" @scrolled-to-end="$emit('scrolled-to-end')">
+    <VirtualScroller :items="albums" :item-height="rowHeight" @scrolled-to-end="$emit('scrolled-to-end')">
       <template #default="{ item }: { item: Album }">
         <AlbumRow :album="item" @toggle-favorite="emit('toggle-favorite', $event)" />
       </template>
@@ -92,14 +132,15 @@
 </template>
 
 <script lang="ts" setup>
-import { faCaretDown, faCaretUp, faHeart } from '@fortawesome/free-solid-svg-icons'
 import { toRefs } from 'vue'
 import { useTableColumnVisibility } from '@/composables/useTableColumnVisibility'
+import { useSizeVariable } from '@/composables/useSizeVariable'
 import { albumTableColumnConfig } from '@/config/tables'
 
 import VirtualScroller from '@/components/ui/VirtualScroller.vue'
 import AlbumRow from '@/components/album/AlbumRow.vue'
 import AlbumTableHeaderActionMenu from '@/components/album/AlbumTableHeaderActionMenu.vue'
+import M3Icon from '@/components/m3/M3Icon.vue'
 
 const props = defineProps<{
   albums: Album[]
@@ -114,6 +155,7 @@ const emit = defineEmits<{
 }>()
 
 const { shouldShowColumn } = useTableColumnVisibility(albumTableColumnConfig)
+const rowHeight = useSizeVariable('--m3-row-height', 72)
 const { field, order } = toRefs(props)
 
 const onSort = (clicked: AlbumListSortField) => {
@@ -158,7 +200,7 @@ const onSort = (clicked: AlbumListSortField) => {
   }
 
   .album-table-header {
-    @apply tracking-widest uppercase cursor-pointer text-k-fg-70;
+    @apply tracking-widest uppercase cursor-pointer text-(--schemes-on-surface-variant);
 
     .extra {
       @apply px-0;

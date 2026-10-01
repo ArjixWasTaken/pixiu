@@ -45,14 +45,14 @@ withDefaults(
   display: flex;
   align-items: center;
   gap: 16px;
-  min-height: 56px;
-  padding: 8px 24px 8px 16px;
+  min-height: var(--m3-list-item-height);
+  padding: var(--m3-list-item-pad-y) 24px var(--m3-list-item-pad-y) 16px;
   color: var(--schemes-on-surface);
   list-style: none;
   text-align: start;
 
   &.two-line {
-    min-height: 72px;
+    min-height: var(--m3-list-item-height-2);
   }
 
   &.interactive {

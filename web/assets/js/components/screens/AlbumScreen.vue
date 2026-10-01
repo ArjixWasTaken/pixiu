@@ -1,5 +1,5 @@
 <template>
-  <ScreenBase :background-image="album?.cover">
+  <ScreenBase :tint-from="album?.cover">
     <template #header>
       <ScreenHeaderSkeleton v-if="loading && !album" role="status" aria-busy="true" aria-label="Loading" />
 
@@ -14,23 +14,15 @@
           <a v-if="isStandardArtist" :href="url('artists.show', { id: album.artist_id })" class="artist">
             {{ album.artist_name }}
           </a>
-          <span v-else class="text-k-fg">{{ album.artist_name }}</span>
+          <span v-else class="text-(--schemes-on-surface)">{{ album.artist_name }}</span>
           <span v-if="album.year">{{ album.year }}</span>
           <span>{{ pluralize(songs, 'song') }}</span>
           <span>{{ duration }}</span>
         </template>
 
         <template #controls>
-          <SongListControls
-            v-if="songs.length"
-            :config="songsControls"
-            @filter="applyFilter"
-            @play-all="playAll"
-            @play-selected="playSelected"
-          >
-            <FavoriteButton v-if="album.favorite" :favorite="album.favorite" @toggle="toggleFavorite" />
-
-            <StarRating :rateable="album" class="px-2" />
+          <SongListControls v-if="songs.length" :config @play-all="playAll" @play-selected="playSelected">
+            <FavoriteButton :favorite="album.favorite" @toggle="toggleFavorite" />
 
             <M3IconButton icon="more_vert" label="More actions" @click="requestContextMenu" />
           </SongListControls>
@@ -65,7 +57,9 @@
           <GridListView v-if="otherAlbums.length" class="scroll-mask-y">
             <AlbumCard v-for="otherAlbum in otherAlbums" :key="otherAlbum.id" :album="otherAlbum" />
           </GridListView>
-          <p v-else class="p-6 text-k-fg-50">No other albums by {{ album.artist_name }} found in the library.</p>
+          <p v-else class="p-6 text-(--schemes-on-surface-variant)">
+            No other albums by {{ album.artist_name }} found in the library.
+          </p>
         </template>
         <GridListView v-else>
           <AlbumCardSkeleton v-for="i in 6" :key="i" />
@@ -113,18 +107,15 @@ const AlbumCard = defineAsyncComponent(() => import('@/components/album/AlbumCar
 const ContextMenu = defineAsyncComponent(() => import('@/components/album/AlbumContextMenu.vue'))
 const AlbumCardSkeleton = defineAsyncComponent(() => import('@/components/ui/album-artist/ArtistAlbumCardSkeleton.vue'))
 const FavoriteButton = defineAsyncComponent(() => import('@/components/ui/FavoriteButton.vue'))
-const StarRating = defineAsyncComponent(() => import('@/components/ui/StarRating.vue'))
 
 const { getRouteParam, go, onScreenActivated, onRouteChanged, url, triggerNotFound } = useRouter()
 const { PlayableListControls: SongListControls, config } = usePlayableListControls('Album')
 const { get: lsGet, set: lsSet } = useLocalStorage()
-const { useLastfm, useMusicBrainz } = useThirdPartyServices()
+const { useMusicBrainz } = useThirdPartyServices()
 const { openContextMenu } = useContextMenu()
 
 const activeTab = ref<Tab>('songs')
 
-// Filtering lists songs, so only the Songs tab offers it.
-const songsControls = computed(() => (activeTab.value === 'songs' ? config : { ...config, filter: false }))
 const album = ref<Album | undefined>()
 const songs = ref<Song[]>([])
 const loading = ref(false)
@@ -141,11 +132,10 @@ const {
   onPressEnter,
   playAll,
   playSelected,
-  applyFilter,
   onSwipe,
 } = usePlayableList(songs, { type: 'Album' })
 
-const useEncyclopedia = computed(() => useMusicBrainz.value || useLastfm.value)
+const useEncyclopedia = useMusicBrainz
 
 const isStandardArtist = computed(() => {
   if (!album.value) {

@@ -18,7 +18,7 @@ import M3IconButton from '@/components/m3/M3IconButton.vue'
 const props = withDefaults(defineProps<{ favorite: boolean; size?: 'sm' | 'md' }>(), { size: 'sm' })
 const emit = defineEmits<{ (e: 'toggle'): void }>()
 
-const title = computed(() => (props.favorite ? 'Undo Favorite' : 'Favorite'))
+const title = computed(() => (props.favorite ? 'Remove from favorites' : 'Add to favorites'))
 </script>
 
 <style scoped>

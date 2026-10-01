@@ -1,14 +1,13 @@
 <template>
-  <HomeScreenBlock>
-    <template #header>New Artists</template>
+  <HomeScreenBlock v-if="loading || artists.length">
+    <template #header>New artists</template>
     <Carousel>
       <template v-if="loading">
         <ArtistCardSkeleton v-for="i in 6" :key="i" />
       </template>
-      <template v-else-if="artists.length">
+      <template v-else>
         <ArtistCard v-for="artist in artists" :key="artist.id" :artist />
       </template>
-      <p v-else class="text-k-fg-50">No new artists.</p>
     </Carousel>
   </HomeScreenBlock>
 </template>

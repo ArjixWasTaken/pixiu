@@ -13,10 +13,10 @@
               tabindex="0"
               @click="queueAfterCurrent"
             >
-              After Current
+              After current song
             </li>
-            <li class="bottom-queue" data-testid="queue-bottom" tabindex="0" @click="queueToBottom">Bottom of Queue</li>
-            <li class="top-queue" data-testid="queue-top" tabindex="0" @click="queueToTop">Top of Queue</li>
+            <li class="bottom-queue" data-testid="queue-bottom" tabindex="0" @click="queueToBottom">Bottom of queue</li>
+            <li class="top-queue" data-testid="queue-top" tabindex="0" @click="queueToTop">Top of queue</li>
           </template>
           <li v-else data-testid="queue" tabindex="0" @click="queueToBottom">Queue</li>
         </template>
@@ -44,9 +44,7 @@
       </ul>
     </section>
 
-    <Btn variant="ghost" class="w-full! border! border-solid! border-white/20!" @click.prevent="addToNewPlaylist">
-      New Playlist…
-    </Btn>
+    <M3Button variant="outlined" class="w-full!" @click.prevent="addToNewPlaylist"> New playlist… </M3Button>
   </div>
 </template>
 
@@ -57,7 +55,7 @@ import { playlistStore } from '@/stores/playlistStore'
 import { queueStore } from '@/stores/queueStore'
 import { usePlayableMenuMethods } from '@/composables/usePlayableMenuMethods'
 
-import Btn from '@/components/ui/form/Btn.vue'
+import M3Button from '@/components/m3/M3Button.vue'
 
 const props = defineProps<{ playables: Playable[]; config: AddToMenuConfig }>()
 const emit = defineEmits<{ (e: 'closing'): void }>()
@@ -81,7 +79,7 @@ watch(playables, () => playables.value.length || close())
 <style lang="postcss" scoped>
 @reference '@css/app.pcss';
 li {
-  @apply h-9 leading-9 py-0 px-3 truncate rounded-sm bg-k-fg-5 cursor-pointer
-  hover:bg-k-highlight hover:text-k-highlight-fg;
+  @apply h-9 leading-9 py-0 px-3 truncate rounded-sm bg-(--schemes-surface-container-high) cursor-pointer
+  hover:bg-(--schemes-primary) hover:text-(--schemes-on-primary);
 }
 </style>

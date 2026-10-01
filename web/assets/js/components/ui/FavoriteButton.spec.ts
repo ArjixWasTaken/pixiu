@@ -7,8 +7,8 @@ describe('favoriteButton.vue', () => {
   const h = createHarness()
 
   it.each([
-    [true, 'Undo Favorite'],
-    [false, 'Favorite'],
+    [true, 'Remove from favorites'],
+    [false, 'Add to favorites'],
   ])('renders and emits the toggle event when clicked', async (favorite, label) => {
     const { emitted } = h.render(Component, {
       props: {

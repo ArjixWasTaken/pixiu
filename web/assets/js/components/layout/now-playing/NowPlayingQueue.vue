@@ -41,7 +41,7 @@
 import { computed } from 'vue'
 import { queueStore } from '@/stores/queueStore'
 import { playback } from '@/services/playbackManager'
-import { getPlayableProp, defineAsyncComponent } from '@/utils/helpers'
+import { defineAsyncComponent } from '@/utils/helpers'
 import { pluralize, secondsToHis, secondsToHumanReadable } from '@/utils/formatters'
 import { useContextMenu } from '@/composables/useContextMenu'
 import { useModal } from '@/composables/useModal'
@@ -72,7 +72,7 @@ const meta = computed(() => {
   return `${pluralize(upNext.value, 'song')} left · ${secondsToHumanReadable(seconds)}`
 })
 
-const artistOf = (playable: Playable) => getPlayableProp(playable, 'artist_name', 'podcast_author')
+const artistOf = (playable: Playable) => playable.artist_name
 
 const play = (playable: Playable) => playback().play(playable)
 

@@ -1,10 +1,7 @@
 <template>
   <SettingGroup>
     <template #title>Profile</template>
-    <template #subtitle>
-      You sign in with your username or email. píxiū calls you by your display name, and sends password resets and
-      alerts to the email.
-    </template>
+    <template #subtitle> You sign in with your username or email. </template>
 
     <form v-if="account" class="flex flex-col gap-4" data-testid="profile-form" @submit.prevent="handleSubmit">
       <div class="grid md:grid-cols-2 gap-4">

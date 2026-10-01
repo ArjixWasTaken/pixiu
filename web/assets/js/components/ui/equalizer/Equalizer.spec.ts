@@ -65,7 +65,7 @@ describe('equalizer.vue', () => {
 
   it('turns off, bypassing the bands, and on again', async () => {
     h.render(Component)
-    const toggle = screen.getByRole('checkbox', { name: 'Equalizer on' })
+    const toggle = screen.getByRole('switch', { name: 'Equalizer on' })
     screen.getByText('On')
 
     await h.user.click(toggle)

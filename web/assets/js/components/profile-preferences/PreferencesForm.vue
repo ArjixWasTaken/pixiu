@@ -1,124 +1,98 @@
 <template>
   <div class="space-y-4">
-    <FormRow v-if="isPlus">
-      <label class="pref-row">
-        <span>Make uploaded songs public by default</span>
-        <CheckBox v-model="preferences.make_uploads_public" name="make_uploads_public" />
-      </label>
-    </FormRow>
-    <FormRow v-if="isPlus">
-      <label class="pref-row">
-        <span
-          >Show other users' public songs, albums, artists, and radio stations in your library (reload required)</span
+    <label class="pref-row">
+      <span>Playing a song plays the rest of its playlist, album, artist or genre</span>
+      <M3Switch v-model="preferences.continuous_playback" name="continuous_playback" />
+    </label>
+    <label v-if="supportsNotifications" class="pref-row">
+      <span>Show a notification when a song starts</span>
+      <M3Switch :model-value="notifying" name="notify" @update:model-value="toggleNotifications" />
+    </label>
+    <label v-if="!onMobile" class="pref-row">
+      <span>Confirm before closing {{ appName }}</span>
+      <M3Switch v-model="preferences.confirm_before_closing" name="confirm_closing" />
+    </label>
+    <div v-if="showTranscodingOption" class="pref-row">
+      <span>
+        Convert and play media at
+        <select
+          v-model="preferences.transcode_quality"
+          :disabled="!preferences.transcode_on_mobile"
+          class="appearance-auto rounded-sm"
         >
-        <CheckBox v-model="preferences.include_public_media" name="include_public_media" />
-      </label>
-    </FormRow>
-    <FormRow>
-      <label class="pref-row">
-        <span>{{ continuousPlaybackLabel }}</span>
-        <CheckBox v-model="preferences.continuous_playback" name="continuous_playback" />
-      </label>
-    </FormRow>
-    <FormRow v-if="onMobile">
-      <label class="pref-row">
-        <span>Show "Now Playing" notification</span>
-        <CheckBox v-model="preferences.show_now_playing_notification" name="notify" />
-      </label>
-    </FormRow>
-    <FormRow v-if="!onMobile">
-      <label class="pref-row">
-        <span>Confirm before closing {{ appName }}</span>
-        <CheckBox v-model="preferences.confirm_before_closing" name="confirm_closing" />
-      </label>
-    </FormRow>
-    <FormRow v-if="showTranscodingOption">
-      <div class="pref-row">
-        <span>
-          Convert and play media at
-          <select
-            v-model="preferences.transcode_quality"
-            :disabled="!preferences.transcode_on_mobile"
-            class="appearance-auto rounded-sm"
-          >
-            <option v-for="quality in [64, 96, 128, 192, 256, 320]" :key="quality" :value="quality">
-              {{ quality }}
-            </option>
-          </select>
-          kbps on mobile
-        </span>
-        <CheckBox
-          v-model="preferences.transcode_on_mobile"
-          data-testid="transcode_on_mobile"
-          name="transcode_on_mobile"
-        />
-      </div>
-    </FormRow>
-    <FormRow>
-      <div class="pref-row">
-        <span class="flex-1">
-          <span class="flex items-center gap-3">
-            <label id="crossfade-label" for="crossfade-slider" class="shrink-0">Crossfade songs</label>
-            <input
-              id="crossfade-slider"
-              v-model.number="preferences.crossfade_duration"
-              type="range"
-              min="0"
-              max="15"
-              step="1"
-              data-testid="crossfade-slider"
-              class="crossfade-slider flex-1 min-w-32 max-w-96"
-            />
-            <span class="text-k-fg-50 shrink-0">
-              {{ crossfadeEnabled ? `${preferences.crossfade_duration}s` : 'Off' }}
-            </span>
+          <option v-for="quality in [64, 96, 128, 192, 256, 320]" :key="quality" :value="quality">
+            {{ quality }}
+          </option>
+        </select>
+        kbps on mobile
+      </span>
+      <M3Switch
+        v-model="preferences.transcode_on_mobile"
+        data-testid="transcode_on_mobile"
+        name="transcode_on_mobile"
+      />
+    </div>
+    <div class="pref-row">
+      <span class="flex-1">
+        <span class="flex items-center gap-3">
+          <label id="crossfade-label" for="crossfade-slider" class="shrink-0">Crossfade songs</label>
+          <input
+            id="crossfade-slider"
+            v-model.number="preferences.crossfade_duration"
+            type="range"
+            min="0"
+            max="15"
+            step="1"
+            data-testid="crossfade-slider"
+            class="crossfade-slider flex-1 min-w-32 max-w-96"
+          />
+          <span class="text-(--schemes-on-surface-variant) shrink-0">
+            {{ crossfadeEnabled ? `${preferences.crossfade_duration}s` : 'Off' }}
           </span>
         </span>
-        <CheckBox
-          :model-value="crossfadeEnabled"
-          name="crossfade"
-          data-testid="crossfade-toggle"
-          @update:model-value="toggleCrossfade"
-        />
-      </div>
-    </FormRow>
+      </span>
+      <M3Switch
+        :model-value="crossfadeEnabled"
+        name="crossfade"
+        data-testid="crossfade-toggle"
+        @update:model-value="toggleCrossfade"
+      />
+    </div>
   </div>
 </template>
 
 <script lang="ts" setup>
 import isMobile from 'ismobilejs'
-import { computed, toRef } from 'vue'
+import { computed, ref, toRef } from 'vue'
 import { commonStore } from '@/stores/commonStore'
 import { preferenceStore as preferences } from '@/stores/preferenceStore'
-import { useKoelPlus } from '@/composables/useKoelPlus'
 import { useBranding } from '@/composables/useBranding'
 
-import CheckBox from '@/components/ui/form/CheckBox.vue'
-import FormRow from '@/components/ui/form/FormRow.vue'
+import M3Switch from '@/components/m3/M3Switch.vue'
 
 const onMobile = isMobile.any
-const { isPlus } = useKoelPlus()
 const { name: appName } = useBranding()
 
 const showTranscodingOption = toRef(commonStore.state, 'supports_transcoding')
+
+const supportsNotifications = 'Notification' in window
+const permission = ref(supportsNotifications ? Notification.permission : 'denied')
+const notifying = computed(() => preferences.show_now_playing_notification && permission.value === 'granted')
+
+/** Asks for the browser's permission when turned on, and stays off without it. */
+const toggleNotifications = async (enabled: boolean | undefined) => {
+  if (enabled && permission.value !== 'granted') {
+    permission.value = await Notification.requestPermission()
+  }
+
+  preferences.show_now_playing_notification = Boolean(enabled) && permission.value === 'granted'
+}
 
 const crossfadeEnabled = computed(() => preferences.crossfade_duration > 0)
 
 const toggleCrossfade = (enabled: boolean | undefined) => {
   preferences.crossfade_duration = enabled ? 7 : 0
 }
-
-const continuousPlaybackLabel = computed(() => {
-  const types = ['playlist', 'album', 'artist', 'genre', 'podcast']
-
-  if (commonStore.state.uses_media_browser) {
-    types.push('folder')
-  }
-
-  types[types.length - 1] = `or ${types[types.length - 1]}`
-
-  return `Playing a song or episode triggers continuous playback of the entire ${types.join(', ')}`
-})
 </script>
 
 <style lang="postcss" scoped>
@@ -136,7 +110,7 @@ const continuousPlaybackLabel = computed(() => {
   height: 4px;
   border-radius: 2px;
   outline: none;
-  @apply bg-k-fg-10;
+  @apply bg-(--schemes-surface-container-highest);
   cursor: pointer;
 }
 
@@ -147,7 +121,7 @@ const continuousPlaybackLabel = computed(() => {
   border-radius: 50%;
   border: 0;
   cursor: pointer;
-  @apply bg-k-fg;
+  @apply bg-(--schemes-on-surface);
 }
 
 .crossfade-slider::-moz-range-thumb {
@@ -156,6 +130,6 @@ const continuousPlaybackLabel = computed(() => {
   border-radius: 50%;
   border: 0;
   cursor: pointer;
-  @apply bg-k-fg;
+  @apply bg-(--schemes-on-surface);
 }
 </style>

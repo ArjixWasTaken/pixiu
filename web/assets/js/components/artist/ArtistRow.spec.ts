@@ -38,7 +38,7 @@ describe('artistRow.vue', () => {
   it('emits toggle-favorite when the favorite button is clicked', async () => {
     const { artist, emitted } = renderComponent({ favorite: true })
 
-    await h.user.click(screen.getByRole('button', { name: 'Undo Favorite' }))
+    await h.user.click(screen.getByRole('button', { name: 'Remove from favorites' }))
 
     expect(emitted('toggle-favorite')?.[0]).toEqual([artist])
   })

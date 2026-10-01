@@ -2,7 +2,7 @@
   <ul role="none">
     <MenuItem @click="play">Play</MenuItem>
     <MenuItem @click="shuffle">Shuffle</MenuItem>
-    <MenuItem @click="queue">Add to Queue</MenuItem>
+    <MenuItem @click="queue">Add to queue</MenuItem>
   </ul>
 </template>
 

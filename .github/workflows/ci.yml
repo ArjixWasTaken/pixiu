@@ -56,27 +56,21 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      # The pnpm version comes from `packageManager` in web/package.json.
-      - uses: pnpm/action-setup@v4
-        with:
-          package_json_file: web/package.json
-
-      - uses: actions/setup-node@v5
+      # Puts nub and this Node on PATH, and caches nub's store by the lockfile.
+      - uses: nubjs/setup-nub@v0
         with:
           node-version: 24
-          cache: pnpm
-          cache-dependency-path: web/pnpm-lock.yaml
 
-      - run: pnpm install --frozen-lockfile
+      - run: nub ci
 
       - name: Types
-        run: pnpm typecheck
+        run: nub run typecheck
 
       - name: Lint and format
-        run: pnpm check
+        run: nub run check
 
       - name: Test
-        run: pnpm test --run
+        run: nub run test --run
 
       - name: Build
-        run: pnpm build
+        run: nub run build

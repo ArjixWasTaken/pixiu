@@ -2,8 +2,7 @@
   <SettingGroup>
     <template #title>API keys</template>
     <template #subtitle>
-      Subsonic apps that support API keys sign in with one instead of your password. Revoking a key signs its app out.
-      Each browser signed in to this player has a key named “Web session”.
+      Subsonic apps can sign in with a key instead of your password. Revoking a key signs its app out.
     </template>
 
     <form class="flex gap-3 items-center mb-4" @submit.prevent="handleSubmit">

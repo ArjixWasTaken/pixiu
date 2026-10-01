@@ -13,7 +13,7 @@ exports[`genreContextMenu.vue > renders 1`] = `
     <!--v-if-->
   </li>
   <li class="focus:outline-hidden" role="menuitem" tabindex="-1">
-    <!--v-if--><span class="label flex-1 min-w-0 max-w-56 truncate">Add to Queue</span>
+    <!--v-if--><span class="label flex-1 min-w-0 max-w-56 truncate">Add to queue</span>
     <!--v-if-->
     <!--v-if-->
   </li>

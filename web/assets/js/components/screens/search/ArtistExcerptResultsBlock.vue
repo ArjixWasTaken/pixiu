@@ -9,7 +9,7 @@
       <template v-else-if="artists.length">
         <ArtistCard v-for="artist in artists" :key="artist.id" :artist />
       </template>
-      <p v-else class="text-k-fg-50">None found.</p>
+      <p v-else class="text-(--schemes-on-surface-variant)">None found.</p>
     </Carousel>
   </SearchResultBlock>
 </template>

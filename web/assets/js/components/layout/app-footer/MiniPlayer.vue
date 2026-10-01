@@ -27,7 +27,7 @@
 <script lang="ts" setup>
 import type { Ref } from 'vue'
 import { computed, ref } from 'vue'
-import { getPlayableProp, requireInjection, use } from '@/utils/helpers'
+import { requireInjection, use } from '@/utils/helpers'
 import { CurrentStreamableKey } from '@/config/symbols'
 import { playableStore } from '@/stores/playableStore'
 import { playback } from '@/services/playbackManager'
@@ -44,10 +44,8 @@ const { cover: defaultCover } = useBranding()
 const nowPlaying = useNowPlaying()
 const { percent } = usePlaybackProgress()
 
-const cover = computed(() =>
-  playable.value ? getPlayableProp(playable.value, 'album_cover', 'episode_image') : defaultCover,
-)
-const artist = computed(() => (playable.value ? getPlayableProp(playable.value, 'artist_name', 'podcast_author') : ''))
+const cover = computed(() => (playable.value ? playable.value.album_cover : defaultCover))
+const artist = computed(() => (playable.value ? playable.value.artist_name : ''))
 
 const toggleFavorite = () => use(playable.value, p => playableStore.toggleFavorite(p))
 const playNext = () => playback().playNext()

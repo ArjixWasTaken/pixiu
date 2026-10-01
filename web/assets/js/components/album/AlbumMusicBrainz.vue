@@ -7,48 +7,51 @@
       <a :href="`https://musicbrainz.org/release/${details.mbid}`" rel="noopener" target="_blank">a release</a
       >{{ details.enriched_at ? ` ${timeAgo(details.enriched_at)}` : '' }}; its tags follow it.
     </p>
-    <p v-else-if="details.enrichment === 'review'" class="text-k-warning">
+    <p v-else-if="details.enrichment === 'review'" class="text-(--schemes-tertiary)">
       píxiū isn’t sure which release this is. Pick one below, or paste a MusicBrainz release link.
     </p>
     <p v-else-if="details.enrichment === 'unmatched'">MusicBrainz knows nothing like it.</p>
-    <p v-else class="text-k-fg-70">Not looked up yet.</p>
+    <p v-else class="text-(--schemes-on-surface-variant)">Not looked up yet.</p>
 
     <ul v-if="details.candidates.length" class="flex flex-col gap-2">
       <li
         v-for="candidate in details.candidates"
         :key="candidate.id"
-        class="flex items-center gap-4 p-3 rounded-lg bg-k-fg-5"
+        class="flex items-center gap-4 p-3 rounded-lg bg-(--schemes-surface-container-high)"
       >
-        <span class="w-12 text-center tabular-nums text-k-fg-70">{{ Math.round(candidate.score * 100) }}%</span>
+        <span class="w-12 text-center tabular-nums text-(--schemes-on-surface-variant)"
+          >{{ Math.round(candidate.score * 100) }}%</span
+        >
         <div class="flex-1 min-w-0">
           <p class="truncate">
             <a :href="`https://musicbrainz.org/release/${candidate.id}`" rel="noopener" target="_blank">{{
               candidate.title
             }}</a>
-            <span class="text-k-fg-70"> · {{ candidate.artist }}</span>
+            <span class="text-(--schemes-on-surface-variant)"> · {{ candidate.artist }}</span>
           </p>
-          <p class="text-sm text-k-fg-50">
+          <p class="text-sm text-(--schemes-on-surface-variant)">
             {{ [candidate.date, candidate.country, candidate.format].filter(Boolean).join(' · ') }}
             · {{ pluralize(candidate.track_count, 'track') }}
           </p>
         </div>
-        <Btn size="small" @click.prevent="lookUp(candidate.id)">Use this</Btn>
+        <M3Button @click.prevent="lookUp(candidate.id)">Use this</M3Button>
       </li>
     </ul>
 
-    <form class="flex gap-2 max-w-[640px]" @submit.prevent="handleSubmit">
-      <TextInput
+    <form class="flex gap-2 items-start max-w-[640px]" @submit.prevent="handleSubmit">
+      <M3TextField
         v-model="data.release"
         class="flex-1"
+        label="MusicBrainz release link"
         name="release"
-        placeholder="A MusicBrainz release link"
+        placeholder="https://musicbrainz.org/release/…"
         required
       />
-      <Btn type="submit">Use it</Btn>
+      <M3Button class="mt-2" type="submit">Use it</M3Button>
     </form>
 
     <div>
-      <Btn variant="ghost" @click.prevent="lookUp()">Look it up again</Btn>
+      <M3Button variant="text" @click.prevent="lookUp()">Look it up again</M3Button>
     </div>
   </section>
 </template>
@@ -62,8 +65,8 @@ import { useForm } from '@/composables/useForm'
 import { useMessageToaster } from '@/composables/useMessageToaster'
 import { useErrorHandler } from '@/composables/useErrorHandler'
 
-import Btn from '@/components/ui/form/Btn.vue'
-import TextInput from '@/components/ui/form/TextInput.vue'
+import M3Button from '@/components/m3/M3Button.vue'
+import M3TextField from '@/components/m3/M3TextField.vue'
 
 const props = defineProps<{ album: Album }>()
 

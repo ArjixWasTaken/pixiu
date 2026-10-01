@@ -20,7 +20,7 @@
     </main>
 
     <footer>
-      <Btn variant="destructive" data-testid="close-modal-btn" rounded @click.prevent="close">Close</Btn>
+      <M3Button data-testid="close-modal-btn" variant="text" @click.prevent="close">Close</M3Button>
     </footer>
   </div>
 </template>
@@ -29,7 +29,7 @@
 import { useNewVersionNotification } from '@/composables/useNewVersionNotification'
 import { useBranding } from '@/composables/useBranding'
 
-import Btn from '@/components/ui/form/Btn.vue'
+import M3Button from '@/components/m3/M3Button.vue'
 
 const emit = defineEmits<{ (e: 'close'): void }>()
 const { name: appName, logo } = useBranding()
@@ -45,6 +45,6 @@ p {
 }
 
 a {
-  @apply text-k-fg hover:text-k-highlight;
+  @apply text-(--schemes-on-surface) hover:text-(--schemes-primary);
 }
 </style>

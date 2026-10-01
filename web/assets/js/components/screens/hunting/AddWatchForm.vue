@@ -14,11 +14,11 @@
 
     <div v-if="isArtist" class="flex flex-wrap gap-6">
       <label class="flex items-center gap-2 m3-body-large">
-        <CheckBox v-model="data.onlyNew" name="only_new" />
+        <M3Switch v-model="data.onlyNew" name="only_new" />
         Only releases from now on
       </label>
       <label class="flex items-center gap-2 m3-body-large">
-        <CheckBox v-model="data.singles" name="singles" />
+        <M3Switch v-model="data.singles" name="singles" />
         Singles and EPs too
       </label>
     </div>
@@ -38,7 +38,7 @@ import { useForm } from '@/composables/useForm'
 import { useMessageToaster } from '@/composables/useMessageToaster'
 import { useErrorHandler } from '@/composables/useErrorHandler'
 
-import CheckBox from '@/components/ui/form/CheckBox.vue'
+import M3Switch from '@/components/m3/M3Switch.vue'
 import M3Button from '@/components/m3/M3Button.vue'
 import M3TextField from '@/components/m3/M3TextField.vue'
 

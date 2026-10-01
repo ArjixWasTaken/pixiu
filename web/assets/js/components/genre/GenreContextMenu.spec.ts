@@ -71,7 +71,7 @@ describe('genreContextMenu.vue', () => {
     const queueMock = h.mock(queueStore, 'queue')
 
     const { genre } = await renderComponent()
-    await h.user.click(screen.getByText('Add to Queue'))
+    await h.user.click(screen.getByText('Add to queue'))
     await h.tick()
 
     expect(fetchMock).toHaveBeenCalledWith(genre)

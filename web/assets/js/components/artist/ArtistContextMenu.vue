@@ -1,9 +1,9 @@
 <template>
   <ul role="none">
-    <MenuItem @click="play">Play All</MenuItem>
-    <MenuItem @click="shuffle">Shuffle All</MenuItem>
+    <MenuItem @click="play">Play all</MenuItem>
+    <MenuItem @click="shuffle">Shuffle all</MenuItem>
     <Separator />
-    <MenuItem @click="toggleFavorite">{{ artist.favorite ? 'Undo Favorite' : 'Favorite' }}</MenuItem>
+    <MenuItem @click="toggleFavorite">{{ artist.favorite ? 'Remove from favorites' : 'Add to favorites' }}</MenuItem>
     <Separator />
     <li
       tabindex="-1"
@@ -17,10 +17,6 @@
     <template v-if="isStandardArtist && allowDownload">
       <Separator />
       <MenuItem @click="download">Download</MenuItem>
-    </template>
-    <template v-if="allowEmbedding">
-      <Separator />
-      <MenuItem @click="showEmbedModal">Embed…</MenuItem>
     </template>
     <template v-if="musicBrainzUrl">
       <Separator />
@@ -48,14 +44,12 @@ const props = defineProps<{ artist: Artist }>()
 const { artist } = toRefs(props)
 
 const EditArtistForm = defineAsyncComponent(() => import('@/components/artist/EditArtistForm.vue'))
-const CreateEmbedForm = defineAsyncComponent(() => import('@/components/embed/CreateEmbedForm.vue'))
 
 const { go, url } = useRouter()
 const { MenuItem, Separator, closeContextMenu, trigger } = useContextMenu()
 const { openModal } = useModal()
 
 const allowDownload = toRef(commonStore.state, 'allows_download')
-const allowEmbedding = toRef(commonStore.state, 'allows_embedding')
 // Artists follow their albums' tags; píxiū has no artist editor.
 const allowEdit = computed(() => false)
 
@@ -85,6 +79,4 @@ const { fromArtist } = useDownload()
 const download = () => trigger(() => fromArtist(artist.value))
 const toggleFavorite = () => trigger(() => artistStore.toggleFavorite(artist.value))
 const requestEditForm = () => trigger(() => openModal<'EDIT_ARTIST_FORM'>(EditArtistForm, { artist: artist.value }))
-const showEmbedModal = () =>
-  trigger(() => openModal<'CREATE_EMBED_FORM'>(CreateEmbedForm, { embeddable: artist.value }))
 </script>

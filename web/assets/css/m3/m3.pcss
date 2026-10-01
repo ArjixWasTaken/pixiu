@@ -7,6 +7,103 @@
   --m3-elevation-4: 0 2px 3px rgb(0 0 0 / 0.3), 0 6px 10px 4px rgb(0 0 0 / 0.15);
   --m3-elevation-5: 0 4px 4px rgb(0 0 0 / 0.3), 0 8px 12px 6px rgb(0 0 0 / 0.15);
   --m3-ease: cubic-bezier(0.2, 0, 0, 1);
+
+  /*
+   * Sizes. The defaults are M3's touch sizes; a mouse on a wide screen gets
+   * the compact set below. No target drops under 24px (WCAG 2.2 AA).
+   */
+  --m3-icon-size: 24px;
+  --m3-button-height: 40px;
+  --m3-button-height-m: 56px;
+  --m3-button-pad: 24px;
+  --m3-icon-button: 40px;
+  --m3-icon-button-m: 56px;
+  --m3-icon-button-icon: 24px;
+  --m3-field-height: 56px;
+  --m3-field-pad-y: 16px;
+  --m3-tab-height: 48px;
+  --m3-tab-height-icon: 64px;
+  --m3-tab-icon: inline-flex;
+  --m3-list-item-height: 56px;
+  --m3-list-item-height-2: 72px;
+  --m3-list-item-pad-y: 8px;
+  --m3-menu-item-height: 48px;
+  --m3-chip-height: 32px;
+  --m3-segment-height: 40px;
+  --m3-row-height: 72px;
+  --m3-row-cover: 56px;
+  --m3-disc-height: 44px;
+  --m3-nav-width: 360px;
+  --m3-nav-item-height: 56px;
+  --m3-player-height: 88px;
+  --m3-slider-height: 44px;
+  --m3-slider-track: 16px;
+  --m3-header-cover: 180px;
+  --m3-group-padding: 24px;
+  --m3-gutter: 24px;
+}
+
+@media (pointer: fine) and (min-width: 769px) {
+  :root {
+    --m3-button-height: 32px;
+    --m3-button-height-m: 40px;
+    --m3-button-pad: 16px;
+    --m3-icon-button: 32px;
+    --m3-icon-button-m: 40px;
+    --m3-icon-button-icon: 20px;
+    --m3-field-height: 40px;
+    --m3-field-pad-y: 10px;
+    --m3-tab-height: 40px;
+    --m3-tab-height-icon: 40px;
+    --m3-tab-icon: none;
+    --m3-list-item-height: 40px;
+    --m3-list-item-height-2: 48px;
+    --m3-list-item-pad-y: 4px;
+    --m3-menu-item-height: 32px;
+    --m3-chip-height: 28px;
+    --m3-segment-height: 32px;
+    --m3-row-height: 48px;
+    --m3-row-cover: 40px;
+    --m3-disc-height: 36px;
+    --m3-nav-width: 240px;
+    --m3-nav-item-height: 36px;
+    --m3-player-height: 64px;
+    --m3-slider-height: 24px;
+    --m3-slider-track: 6px;
+    --m3-header-cover: 128px;
+    --m3-group-padding: 16px;
+    --m3-gutter: 16px;
+
+    /* The type scale drops a step. */
+    --static-display-large-size: 45;
+    --static-display-large-line-height: 52;
+    --static-display-medium-size: 36;
+    --static-display-medium-line-height: 44;
+    --static-display-small-size: 32;
+    --static-display-small-line-height: 40;
+    --static-headline-large-size: 28;
+    --static-headline-large-line-height: 36;
+    --static-headline-medium-size: 24;
+    --static-headline-medium-line-height: 32;
+    --static-headline-small-size: 20;
+    --static-headline-small-line-height: 28;
+    --static-title-large-size: 18;
+    --static-title-large-line-height: 24;
+    --static-title-medium-size: 14;
+    --static-title-medium-line-height: 20;
+    --static-title-small-size: 13;
+    --static-title-small-line-height: 18;
+    --static-body-large-size: 14;
+    --static-body-large-line-height: 20;
+    --static-body-medium-size: 13;
+    --static-body-medium-line-height: 18;
+  }
+}
+
+/* Durations and counts line up. */
+time,
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
 }
 
 .material-symbols-outlined {
@@ -101,92 +198,5 @@
 @keyframes m3-spin {
   to {
     transform: rotate(360deg);
-  }
-}
-
-/* koel's form controls (components/ui/form) as outlined M3 fields. */
-.k-field {
-  min-height: 48px;
-  padding: 0 16px;
-  border: 1px solid var(--schemes-outline);
-  border-radius: 4px;
-  background: transparent;
-  color: var(--schemes-on-surface);
-  font-size: calc(var(--static-body-large-size) * 1px);
-  caret-color: var(--schemes-primary);
-
-  &::placeholder {
-    color: var(--schemes-on-surface-variant);
-  }
-
-  &:focus,
-  &:focus-within {
-    outline: 2px solid var(--schemes-primary);
-    outline-offset: -2px;
-  }
-
-  &:disabled,
-  &[readonly] {
-    opacity: 0.38;
-    cursor: not-allowed;
-  }
-
-  & select {
-    background: transparent;
-  }
-
-  & option {
-    background: var(--schemes-surface-container);
-    color: var(--schemes-on-surface);
-  }
-}
-
-/* koel's checkbox is a switch. */
-.k-switch {
-  position: relative;
-  display: inline-block;
-  flex-shrink: 0;
-  width: 52px;
-  height: 32px;
-  margin-right: 8px;
-  vertical-align: middle;
-  border: 2px solid var(--schemes-outline);
-  border-radius: 16px;
-  background: var(--schemes-surface-container-highest);
-  cursor: pointer;
-  appearance: none;
-  transition: background-color 150ms linear;
-
-  &::after {
-    content: '';
-    position: absolute;
-    top: 50%;
-    left: 6px;
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-    background: var(--schemes-outline);
-    transform: translateY(-50%);
-    transition:
-      left 200ms var(--m3-ease),
-      width 200ms var(--m3-ease),
-      height 200ms var(--m3-ease);
-  }
-
-  &:checked {
-    border-color: var(--schemes-primary);
-    background: var(--schemes-primary);
-
-    &::after {
-      left: 22px;
-      width: 24px;
-      height: 24px;
-      background: var(--schemes-on-primary);
-    }
-  }
-
-  &:disabled {
-    opacity: 0.38;
-    cursor: not-allowed;
   }
 }

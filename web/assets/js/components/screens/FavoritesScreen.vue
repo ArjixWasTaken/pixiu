@@ -2,7 +2,7 @@
   <ScreenBase>
     <template #header>
       <ScreenHeader :layout="playables.length === 0 ? 'collapsed' : headerLayout">
-        Your Favorites
+        Favorites
 
         <template #thumbnail>
           <ThumbnailStack :thumbnails="thumbnails" />
@@ -19,21 +19,15 @@
             title="Download all favorites"
             @click.prevent="download"
           >
-            Download All
+            Download all
           </a>
           <a v-if="canToggleOffline" role="button" @click.prevent="toggleOffline">
-            {{ allCached ? 'Remove Offline' : 'Make Offline' }}
+            {{ allCached ? 'Remove offline copies' : 'Make available offline' }}
           </a>
         </template>
 
         <template #controls>
-          <PlayableListControls
-            v-if="playables.length"
-            :config
-            @filter="applyFilter"
-            @play-all="playAll"
-            @play-selected="playSelected"
-          />
+          <PlayableListControls v-if="playables.length" :config @play-all="playAll" @play-selected="playSelected" />
         </template>
       </ScreenHeader>
     </template>
@@ -52,20 +46,18 @@
 
     <ScreenEmptyState v-else>
       <template #icon>
-        <Icon :icon="faHeartBroken" />
+        <M3Icon name="heart_broken" />
       </template>
       No favorites yet.
       <span class="secondary block">
         Click the&nbsp;
-        <Icon :icon="faHeart" />&nbsp; icon to mark a song as favorite.
+        <M3Icon name="favorite" />&nbsp; icon to mark a song as favorite.
       </span>
     </ScreenEmptyState>
   </ScreenBase>
 </template>
 
 <script lang="ts" setup>
-import { faHeartBroken } from '@fortawesome/free-solid-svg-icons'
-import { faHeart } from '@fortawesome/free-regular-svg-icons'
 import { computed, ref } from 'vue'
 import { pluralize } from '@/utils/formatters'
 import { playableStore } from '@/stores/playableStore'
@@ -81,6 +73,7 @@ import ScreenHeader from '@/components/ui/ScreenHeader.vue'
 import ScreenEmptyState from '@/components/ui/ScreenEmptyState.vue'
 import ScreenBase from '@/components/screens/ScreenBase.vue'
 import PlayableListSkeleton from '@/components/playable/playable-list/PlayableListSkeleton.vue'
+import M3Icon from '@/components/m3/M3Icon.vue'
 
 const allPlayables = ref<Playable[]>([])
 
@@ -97,7 +90,6 @@ const {
   onPressEnter,
   playAll,
   playSelected,
-  applyFilter,
   onSwipe,
   sort: baseSort,
   config: listConfig,

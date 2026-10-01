@@ -77,10 +77,10 @@ describe('equalizerHeader.vue', () => {
     renderHeader({ isModified: true, selectedId: null })
 
     await fireEvent.click(screen.getByText('Save as…'))
-    screen.getByPlaceholderText('Preset name')
+    screen.getByRole('textbox', { name: 'Preset name' })
 
     await fireEvent.click(screen.getByText('Cancel'))
-    expect(screen.queryByPlaceholderText('Preset name')).toBeNull()
+    expect(screen.queryByRole('textbox', { name: 'Preset name' })).toBeNull()
   })
 
   it('emits save with the entered name when the form is submitted, and closes the dialog', async () => {
@@ -88,12 +88,12 @@ describe('equalizerHeader.vue', () => {
 
     await fireEvent.click(screen.getByText('Save as…'))
 
-    const input = screen.getByPlaceholderText('Preset name') as HTMLInputElement
+    const input = screen.getByRole<HTMLInputElement>('textbox', { name: 'Preset name' })
     await fireEvent.update(input, 'Bass Boost')
     await fireEvent.click(screen.getByText('Save'))
 
     expect(emitted().save).toEqual([['Bass Boost']])
-    expect(screen.queryByPlaceholderText('Preset name')).toBeNull()
+    expect(screen.queryByRole('textbox', { name: 'Preset name' })).toBeNull()
   })
 
   it('emits select with the new id when a preset is chosen', async () => {

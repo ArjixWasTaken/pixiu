@@ -10,6 +10,9 @@
 import MainContent from '@/components/layout/main-wrapper/MainContent.vue'
 import SideBar from '@/components/layout/main-wrapper/sidebar/Sidebar.vue'
 import ModalWrapper from '@/components/layout/ModalWrapper.vue'
+import { useCoverTheme } from '@/composables/useCoverTheme'
+
+useCoverTheme()
 </script>
 
 <style scoped>

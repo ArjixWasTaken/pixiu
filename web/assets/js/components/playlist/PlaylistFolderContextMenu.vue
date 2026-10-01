@@ -1,16 +1,16 @@
 <template>
   <ul role="none">
     <template v-if="playable">
-      <MenuItem @click="play">Play All</MenuItem>
-      <MenuItem @click="shuffle">Shuffle All</MenuItem>
+      <MenuItem @click="play">Play all</MenuItem>
+      <MenuItem @click="shuffle">Shuffle all</MenuItem>
       <Separator />
     </template>
     <MenuItem>
       Add
       <template #subMenuItems>
-        <MenuItem @click="createPlaylist">New Playlist…</MenuItem>
-        <MenuItem @click="createSmartPlaylist">New Smart Playlist…</MenuItem>
-        <MenuItem @click="createFolder">New Folder…</MenuItem>
+        <MenuItem @click="createPlaylist">New playlist…</MenuItem>
+        <MenuItem @click="createSmartPlaylist">New smart playlist…</MenuItem>
+        <MenuItem @click="createFolder">New folder…</MenuItem>
       </template>
     </MenuItem>
     <Separator />

@@ -1,5 +1,5 @@
 import { screen } from '@testing-library/vue'
-import { describe, expect, it } from 'vite-plus/test'
+import { describe, expect, it, vi } from 'vite-plus/test'
 import { createHarness } from '@/__tests__/TestHarness'
 import { commonStore } from '@/stores/commonStore'
 import { preferenceStore as preferences } from '@/stores/preferenceStore'
@@ -18,6 +18,22 @@ describe('preferencesForm', () => {
     commonStore.state.supports_transcoding = false
     h.render(Component)
     expect(screen.queryByTestId('transcode_on_mobile')).toBeNull()
+  })
+
+  it.each<[NotificationPermission, boolean]>([
+    ['granted', true],
+    ['denied', false],
+  ])('asks for permission before showing notifications (%s)', async (answer, on) => {
+    const requestPermission = vi.fn().mockResolvedValue(answer)
+    vi.stubGlobal('Notification', { permission: 'default', requestPermission })
+    preferences.show_now_playing_notification = false
+    h.render(Component)
+
+    await h.user.click(screen.getByRole('switch', { name: 'Show a notification when a song starts' }))
+
+    expect(requestPermission).toHaveBeenCalled()
+    expect(preferences.show_now_playing_notification).toBe(on)
+    vi.unstubAllGlobals()
   })
 
   it('shows crossfade controls', () => {

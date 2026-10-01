@@ -1,9 +1,5 @@
 <template>
-  <div
-    ref="scroller"
-    class="scroll-mask-y virtual-scroller will-change-transform overflow-scroll"
-    @scroll.passive="onScroll"
-  >
+  <div ref="scroller" :class="{ nested }" class="scroll-mask-y virtual-scroller will-change-transform overflow-scroll">
     <div :style="{ height: `${totalHeight}px` }" class="will-change-transform overflow-hidden">
       <div :style="{ transform: `translateY(${offsetY}px)` }" class="will-change-transform items-wrapper">
         <slot v-for="item in renderedItems" :item="item" />
@@ -13,20 +9,26 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, onBeforeUnmount, onMounted, ref, toRefs } from 'vue'
+import { computed, ref, toRefs } from 'vue'
+import { useScrollViewport } from '@/composables/useScrollViewport'
 
 const props = defineProps<{ items: any[]; itemHeight: number }>()
 const emit = defineEmits<{
   (e: 'scrolled-to-end'): void
-  (e: 'scroll', event: Event): void
 }>()
 
 const { items, itemHeight } = toRefs(props)
 
 const scroller = ref<HTMLElement>()
-const scrollerHeight = ref(0)
 const renderAhead = 5
-const scrollTop = ref(0)
+
+const {
+  scrollTop,
+  height: scrollerHeight,
+  nested,
+  nearEnd,
+  scrollTo,
+} = useScrollViewport(scroller, () => nearEnd(itemHeight.value) && emit('scrolled-to-end'))
 
 const totalHeight = computed(() => items.value.length * itemHeight.value)
 const startPosition = computed(() => Math.max(0, Math.floor(scrollTop.value / itemHeight.value) - renderAhead))
@@ -38,46 +40,20 @@ const renderedItems = computed(() => {
   return items.value.slice(startPosition.value, startPosition.value + count)
 })
 
-const onScroll = (e: Event) =>
-  requestAnimationFrame(() => {
-    scrollTop.value = (e.target as HTMLElement).scrollTop
-
-    if (!scroller.value) {
-      return
-    }
-
-    emit('scroll', e)
-
-    if (scroller.value.scrollTop + scroller.value.clientHeight + itemHeight.value >= scroller.value.scrollHeight) {
-      emit('scrolled-to-end')
-    }
-  })
-
-const observer = new ResizeObserver(entries => entries.forEach(el => (scrollerHeight.value = el.contentRect.height)))
-
-onMounted(() => {
-  observer.observe(scroller.value!)
-  scrollerHeight.value = scroller.value!.offsetHeight
-})
-
-onBeforeUnmount(() => observer.unobserve(scroller.value!))
-
-const scrollToIndex = (index: number) => {
-  if (!scroller.value) {
-    return
-  }
-
-  // Measured now: a screen just shown again has not reported its height yet.
-  const height = scroller.value.clientHeight
-  const top = index * itemHeight.value - height / 2 + itemHeight.value / 2
-  scroller.value.scrollTo({ top: Math.max(0, top), behavior: 'smooth' })
-}
+const scrollToIndex = (index: number) =>
+  scrollTo(index * itemHeight.value - scrollerHeight.value / 2 + itemHeight.value / 2)
 
 defineExpose({ scrollToIndex })
 </script>
 
 <style lang="postcss" scoped>
-.virtual-scroller {
+/* On a screen, the screen scrolls the list. */
+.virtual-scroller.nested {
+  overflow: visible;
+  mask-image: none;
+}
+
+.virtual-scroller:not(.nested) {
   @supports (scrollbar-gutter: stable) {
     overflow: auto;
     scrollbar-gutter: stable;

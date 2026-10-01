@@ -6,10 +6,10 @@ import { preferenceStore } from '@/stores/preferenceStore'
 import Component from './ReorderBlocksModal.vue'
 
 const blocks = [
-  { id: 'recently-played-songs', label: 'Recently Played' },
-  { id: 'recently-added-albums', label: 'Latest Albums' },
-  { id: 'most-played-albums', label: 'Top Albums' },
-  { id: 'random-songs', label: 'Random Songs' },
+  { id: 'recently-played-songs', label: 'Recently played' },
+  { id: 'recently-added-albums', label: 'Latest albums' },
+  { id: 'most-played-albums', label: 'Top albums' },
+  { id: 'random-songs', label: 'Random songs' },
 ]
 
 const dispatch = (target: EventTarget, type: string, init: Record<string, unknown> = {}) => {
@@ -61,7 +61,7 @@ describe('ReorderBlocksModal', () => {
     const { container } = h.render(Component, { props: { blocks: reordered } })
     const labels = rowIds(container)
 
-    expect(labels).toEqual(['Random Songs', 'Latest Albums', 'Top Albums', 'Recently Played'])
+    expect(labels).toEqual(['Random songs', 'Latest albums', 'Top albums', 'Recently played'])
   })
 
   it('marks the dragged row with the opacity-40 modifier while a drag is in flight', async () => {
@@ -78,7 +78,7 @@ describe('ReorderBlocksModal', () => {
     const { container } = h.render(Component, { props: { blocks } })
     const rows = Array.from(container.querySelectorAll<HTMLElement>('[draggable="true"]'))
 
-    // Source at row 0 (Recently Played), target at row 2 (Top Albums).
+    // Source at row 0 (Recently played), target at row 2 (Top albums).
     stubRect(rows[0], 0)
     stubRect(rows[2], 80)
 
@@ -89,8 +89,8 @@ describe('ReorderBlocksModal', () => {
 
     // After the reorder, the source should sit after Top Albums in the DOM.
     const labels = rowIds(container)
-    const sourceIdx = labels.indexOf('Recently Played')
-    const targetIdx = labels.indexOf('Top Albums')
+    const sourceIdx = labels.indexOf('Recently played')
+    const targetIdx = labels.indexOf('Top albums')
     expect(sourceIdx).toBeGreaterThan(targetIdx)
   })
 
@@ -129,11 +129,11 @@ describe('ReorderBlocksModal', () => {
   it('hides a block when it is unticked, and shows it again', async () => {
     h.render(Component, { props: { blocks } })
 
-    await h.user.click(screen.getByRole('checkbox', { name: 'Show Top Albums' }))
+    await h.user.click(screen.getByRole('checkbox', { name: 'Show Top albums' }))
     expect(preferenceStore.home_blocks_hidden).toEqual(['most-played-albums'])
-    expect(screen.getByRole<HTMLInputElement>('checkbox', { name: 'Show Top Albums' }).checked).toBe(false)
+    expect(screen.getByRole<HTMLInputElement>('checkbox', { name: 'Show Top albums' }).checked).toBe(false)
 
-    await h.user.click(screen.getByRole('checkbox', { name: 'Show Top Albums' }))
+    await h.user.click(screen.getByRole('checkbox', { name: 'Show Top albums' }))
     expect(preferenceStore.home_blocks_hidden).toEqual([])
   })
 

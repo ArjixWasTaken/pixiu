@@ -5,6 +5,7 @@
     class="album-artist-card"
     data-testid="artist-album-card"
     interactive
+    variant="plain"
     tabindex="0"
     @click="open"
     @contextmenu.prevent="onContextMenu"
@@ -13,7 +14,7 @@
     @keydown.enter.self="open"
   >
     <slot name="thumbnail">
-      <Thumbnail v-if="hasThumbnail(entity)" :entity />
+      <Thumbnail :entity />
     </slot>
 
     <footer class="text">
@@ -35,21 +36,15 @@ import { useRouter } from '@/composables/useRouter'
 import Thumbnail from '@/components/ui/album-artist/AlbumOrArtistThumbnail.vue'
 import M3Card from '@/components/m3/M3Card.vue'
 
-const props = withDefaults(
-  defineProps<{ layout?: CardLayout; entity: Artist | Album | Podcast | RadioStation; href?: string }>(),
-  {
-    layout: 'full',
-  },
-)
+const props = withDefaults(defineProps<{ layout?: CardLayout; entity: Artist | Album; href?: string }>(), {
+  layout: 'full',
+})
 
 const emit = defineEmits<{
   (e: 'dblclick'): void
   (e: 'dragstart', event: DragEvent): void
   (e: 'contextmenu', event: MouseEvent): void
 }>()
-
-const hasThumbnail = (entity: Artist | Album | Podcast | RadioStation): entity is Artist | Album =>
-  entity.type !== 'radio-stations' && entity.type !== 'podcasts'
 
 const { layout } = toRefs(props)
 const { go } = useRouter()
@@ -100,6 +95,7 @@ const onContextMenu = (e: MouseEvent) => emit('contextmenu', e)
 .text {
   min-width: 0;
   padding: 0 4px 4px;
+  margin-top: -4px;
 
   :deep(p),
   :deep(a) {

@@ -1,5 +1,11 @@
 <template>
-  <div :draggable class="song-info" data-vue="FooterPlayableInfo" @dragstart="onDragStart">
+  <div
+    :class="{ behind: nowPlaying.open.value }"
+    :draggable
+    class="song-info"
+    data-vue="FooterPlayableInfo"
+    @dragstart="onDragStart"
+  >
     <button
       :aria-label="nowPlaying.open.value ? 'Collapse player' : 'Expand player'"
       :style="{ backgroundImage: `url(${cover}), url(${defaultCover})` }"
@@ -9,7 +15,7 @@
     />
     <div v-if="playable" class="meta">
       <p class="title m3-title-medium" @click="nowPlaying.toggle">{{ playable.title }}</p>
-      <a :href="artistOrPodcastUri" class="artist m3-body-medium">{{ artistOrPodcastName }}</a>
+      <a :href="artistUri" class="artist m3-body-medium">{{ artistName }}</a>
     </div>
     <FavoriteButton v-if="playable" :favorite="playable.favorite" size="md" @toggle="toggleFavorite" />
   </div>
@@ -19,8 +25,7 @@
 import isMobile from 'ismobilejs'
 import type { Ref } from 'vue'
 import { computed, ref } from 'vue'
-import { getPlayableProp, requireInjection, use } from '@/utils/helpers'
-import { isSong } from '@/utils/typeGuards'
+import { requireInjection, use } from '@/utils/helpers'
 import { CurrentStreamableKey } from '@/config/symbols'
 import { playableStore } from '@/stores/playableStore'
 import { useDraggable } from '@/composables/useDragAndDrop'
@@ -37,23 +42,11 @@ const nowPlaying = useNowPlaying()
 
 const playable = requireInjection<Ref<Playable | undefined>>(CurrentStreamableKey, ref())
 
-const cover = computed(() =>
-  playable.value ? getPlayableProp(playable.value, 'album_cover', 'episode_image') : defaultCover,
-)
+const cover = computed(() => (playable.value ? playable.value.album_cover : defaultCover))
 
-const artistOrPodcastUri = computed(() => {
-  if (!playable.value) {
-    return ''
-  }
+const artistUri = computed(() => (playable.value ? url('artists.show', { id: playable.value.artist_id }) : ''))
 
-  return isSong(playable.value)
-    ? url('artists.show', { id: playable.value?.artist_id })
-    : url('podcasts.show', { id: playable.value?.podcast_id })
-})
-
-const artistOrPodcastName = computed(() =>
-  playable.value ? getPlayableProp(playable.value, 'artist_name', 'podcast_title') : '',
-)
+const artistName = computed(() => (playable.value ? playable.value.artist_name : ''))
 
 const draggable = computed(() => Boolean(playable.value) && !isMobile.any)
 
@@ -71,6 +64,11 @@ const toggleFavorite = () => use(playable.value, p => playableStore.toggleFavori
   flex-shrink: 0;
 }
 
+/* The expanded player shows all of this, large: the bar leaves it out meanwhile. */
+.behind > * {
+  visibility: hidden;
+}
+
 .album-thumb {
   width: 56px;
   height: 56px;
@@ -79,6 +77,12 @@ const toggleFavorite = () => use(playable.value, p => playableStore.toggleFavori
   background-size: cover;
   background-position: center;
   cursor: pointer;
+
+  @media (pointer: fine) and (min-width: 769px) {
+    width: 48px;
+    height: 48px;
+    border-radius: 6px;
+  }
 }
 
 .meta {

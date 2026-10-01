@@ -64,7 +64,6 @@
 <script lang="ts" setup>
 import { computed, ref, useTemplateRef, watch } from 'vue'
 import { requireInjection, defineAsyncComponent } from '@/utils/helpers'
-import { isSong } from '@/utils/typeGuards'
 import { CurrentStreamableKey } from '@/config/symbols'
 import { playableStore } from '@/stores/playableStore'
 import { useBranding } from '@/composables/useBranding'
@@ -91,7 +90,7 @@ const { cover: defaultCover } = useBranding()
 const { openContextMenu } = useContextMenu()
 
 const streamable = requireInjection(CurrentStreamableKey, ref())
-const song = computed(() => (streamable.value && isSong(streamable.value) ? streamable.value : null))
+const song = computed(() => (streamable.value ? streamable.value : null))
 const cover = computed(() => song.value?.album_cover || defaultCover)
 
 /** Whether a tab (Up next, Lyrics, About) has taken over the sheet. */

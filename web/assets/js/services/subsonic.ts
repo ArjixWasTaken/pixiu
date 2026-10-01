@@ -165,7 +165,6 @@ const toPlaylist = (playlist: Record<string, any>): Playlist => {
     description: playlist.comment ?? '',
     folder_id: playlist.folderId ?? null,
     is_smart: smart,
-    is_collaborative: false,
     rules: smart ? playlist.rules : [],
     cover: playlist.coverArt ? coverUrl(playlist.coverArt) : null,
     permissions: { edit: !mirror, delete: !mirror },

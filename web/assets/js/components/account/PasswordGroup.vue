@@ -1,9 +1,7 @@
 <template>
   <SettingGroup>
     <template #title>Password</template>
-    <template #subtitle>
-      Changing it signs your other browsers out. Subsonic apps that sign in with your password need the new one.
-    </template>
+    <template #subtitle> Changing it signs out your other browsers, and apps that use your password. </template>
 
     <form class="flex flex-col gap-4" data-testid="password-form" @submit.prevent="handleSubmit">
       <M3TextField

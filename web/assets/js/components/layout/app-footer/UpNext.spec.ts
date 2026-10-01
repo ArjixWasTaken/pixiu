@@ -13,7 +13,7 @@ describe('upNext.vue', () => {
       props: { playable: song },
     })
 
-    screen.getByText('Up Next')
+    screen.getByText('Up next')
     screen.getByText(song.title)
     screen.getByText(song.artist_name)
   })

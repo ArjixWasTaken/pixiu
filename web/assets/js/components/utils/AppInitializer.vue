@@ -22,26 +22,11 @@ const { currentUser } = useAuthorization()
 const { handleHttpError } = useErrorHandler()
 const { unfinishedUploadCount } = useUpload()
 
-/**
- * Request for notification permission if it's not provided and the user is OK with notifications.
- */
-const requestNotificationPermission = async () => {
-  if (
-    preferences.show_now_playing_notification &&
-    window.Notification &&
-    window.Notification.permission !== 'granted'
-  ) {
-    preferences.show_now_playing_notification = (await window.Notification.requestPermission()) === 'denied'
-  }
-}
-
 onMounted(async () => {
   showOverlay({ message: 'Just a little patience…' })
 
   try {
     await commonStore.init()
-
-    await requestNotificationPermission()
 
     window.addEventListener('beforeunload', (e: BeforeUnloadEvent) => {
       if (unfinishedUploadCount.value > 0 || shouldWarnAboutOfflineCaching() || preferences.confirm_before_closing) {
@@ -49,16 +34,6 @@ onMounted(async () => {
         e.returnValue = ''
       }
     })
-
-    const { broadcastSubscriber } = await import('@/services/broadcastSubscriber')
-    broadcastSubscriber.init(currentUser.value.id)
-
-    const { socketService } = await import('@/services/socketService')
-
-    if (await socketService.init()) {
-      const { socketListener } = await import('@/services/socketListener')
-      socketListener.listen()
-    }
 
     emits('success')
   } catch (error: unknown) {

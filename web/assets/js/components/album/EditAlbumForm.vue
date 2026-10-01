@@ -1,41 +1,34 @@
 <template>
   <form class="md:w-[560px]" @submit.prevent="handleSubmit" @keydown.esc="maybeClose">
     <header>
-      <h1>Edit Album</h1>
+      <h1>Edit album</h1>
     </header>
 
-    <main class="space-y-5">
-      <p class="text-sm text-k-fg-70">The files’ tags change along, and the files move to follow the file layout.</p>
-      <FormRow>
-        <template #label>Title</template>
-        <TextInput v-model="data.title" v-koel-focus name="title" required />
-      </FormRow>
-      <div class="grid grid-cols-[1fr_8rem] gap-2">
-        <FormRow>
-          <template #label>Album artist</template>
-          <TextInput v-model="data.artist" name="artist" required />
-        </FormRow>
-        <FormRow>
-          <template #label>Year</template>
-          <TextInput v-model="data.year" max="9999" min="1000" name="year" type="number" />
-        </FormRow>
+    <main class="flex flex-col gap-4 pt-2">
+      <M3TextField v-model="data.title" v-koel-focus label="Title" name="title" required />
+      <div class="grid grid-cols-[1fr_8rem] gap-4">
+        <M3TextField v-model="data.artist" label="Album artist" name="artist" required />
+        <M3TextField v-model="data.year" label="Year" max="9999" min="1000" name="year" type="number" />
       </div>
 
-      <FormRow v-if="data.tracks.length">
-        <template #label>Tracks</template>
-        <ul class="flex flex-col gap-1.5 max-h-72 overflow-y-auto">
-          <li v-for="track in data.tracks" :key="track.id" class="grid grid-cols-[4rem_1fr] gap-2">
-            <TextInput v-model="track.track" :name="`track-${track.id}`" min="1" type="number" />
-            <TextInput v-model="track.title" :name="`title-${track.id}`" required />
+      <section v-if="data.tracks.length" class="flex flex-col gap-2">
+        <h2 class="m3-title-small text-(--schemes-on-surface)">Tracks</h2>
+        <ul class="flex flex-col gap-3 max-h-72 overflow-y-auto pt-2">
+          <li v-for="track in data.tracks" :key="track.id" class="grid grid-cols-[5rem_1fr] gap-2">
+            <M3TextField v-model="track.track" :name="`track-${track.id}`" label="No." min="1" type="number" />
+            <M3TextField v-model="track.title" :name="`title-${track.id}`" label="Title" required />
           </li>
         </ul>
-      </FormRow>
-      <p v-else class="text-k-fg-70">Loading tracks…</p>
+      </section>
+      <p v-else class="m3-body-medium text-(--schemes-on-surface-variant)">Loading tracks…</p>
+      <p class="m3-body-small text-(--schemes-on-surface-variant)">
+        This changes how píxiū lists the album; the files stay as they are.
+      </p>
     </main>
 
     <footer>
-      <Btn :disabled="!loaded" type="submit">Save</Btn>
-      <Btn variant="ghost" @click.prevent="maybeClose">Cancel</Btn>
+      <M3Button variant="text" @click.prevent="maybeClose">Cancel</M3Button>
+      <M3Button :disabled="!loaded" type="submit">Save</M3Button>
     </footer>
   </form>
 </template>
@@ -50,9 +43,8 @@ import { useDialogBox } from '@/composables/useDialogBox'
 import { useErrorHandler } from '@/composables/useErrorHandler'
 import { useForm } from '@/composables/useForm'
 
-import FormRow from '@/components/ui/form/FormRow.vue'
-import Btn from '@/components/ui/form/Btn.vue'
-import TextInput from '@/components/ui/form/TextInput.vue'
+import M3Button from '@/components/m3/M3Button.vue'
+import M3TextField from '@/components/m3/M3TextField.vue'
 
 const props = defineProps<{ album: Album }>()
 const emit = defineEmits<{ (e: 'close'): void }>()

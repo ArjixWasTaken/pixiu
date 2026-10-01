@@ -1,4 +1,3 @@
-import { FontAwesomeIcon, FontAwesomeLayers } from '@fortawesome/vue-fontawesome'
 import { registerHooks } from '@/registerHooks'
 import { Action } from '@/config/hooks'
 import { doAction } from '@/hooks'
@@ -17,8 +16,6 @@ registerHooks()
 
 const app = createApp(App)
   .provide(RouterKey, new Router())
-  .component('Icon', FontAwesomeIcon)
-  .component('IconLayers', FontAwesomeLayers)
   .directive('koel-focus', focus)
   .directive('koel-tooltip', tooltip)
   .directive('koel-hide-broken-icon', hideBrokenIcon)

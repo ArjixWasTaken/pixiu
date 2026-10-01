@@ -2,33 +2,35 @@
 
 exports[`allSongsScreen.vue > renders 1`] = `
 <section data-v-0fb797a2="" data-v-ddbdca5c="" class="max-h-full min-h-full w-full flex flex-col transform-gpu overflow-hidden">
-  <!--v-if-->
-  <header data-v-0623237c="" data-v-ddbdca5c="" data-v-0fb797a2-s="" class="expanded screen-header">
-    <aside data-v-0623237c="" class="thumbnail">
-      <!---->
-    </aside>
-    <main data-v-0623237c="" class="body"><span data-v-0623237c="" class="m3-label-large overline-text">Library</span>
-      <div data-v-0623237c="" class="title-row">
-        <h1 data-v-0623237c="" class="m3-headline-medium name"> All Songs </h1>
-      </div>
-      <!--v-if-->
-      <p data-v-0623237c="" class="meta m3-body-medium"><span data-v-ddbdca5c="">420 songs</span><span data-v-ddbdca5c="">34 hr 17 min</span></p>
-      <div data-v-0623237c="" class="controls">
-        <div data-v-ddbdca5c="" class="controls w-full flex justify-between items-center gap-4">
-          <div data-v-ddbdca5c="" class="relative" data-testid="song-list-controls">
-            <div class="flex gap-2 flex-wrap items-center">
-              <!-- Play in order, or shuffled: the selection when there is one. --><button data-v-bc641a16="" type="button" class="filled s with-icon m3-button m3-state m3-label-large btn-play-all" data-testid="btn-play-all"><span data-v-241cb009="" data-v-bc641a16="" style="font-size: 18px; width: 18px; height: 18px; font-variation-settings: 'FILL' 0, 'wght' 400, 'opsz' 20;" class="material-symbols-outlined m3-icon" aria-hidden="true">play_arrow</span><span data-v-bc641a16="" class="label"> Play </span></button><button data-v-bc641a16="" type="button" class="tonal s with-icon m3-button m3-state m3-label-large btn-shuffle-all" data-testid="btn-shuffle-all"><span data-v-241cb009="" data-v-bc641a16="" style="font-size: 18px; width: 18px; height: 18px; font-variation-settings: 'FILL' 0, 'wght' 400, 'opsz' 20;" class="material-symbols-outlined m3-icon" aria-hidden="true">shuffle</span><span data-v-bc641a16="" class="label"> Shuffle </span></button>
-              <!--v-if-->
-              <!--v-if-->
-              <!--v-if-->
-              <!--v-if-->
-            </div>
-            <!--v-if-->
+  <main data-v-0fb797a2="" class="screen-body flex flex-col flex-1 place-content-start overflow-y-auto">
+    <!-- In the scroller, so the header scrolls away; what must stay in reach is sticky. -->
+    <div data-v-0fb797a2="" class="screen-head">
+      <header data-v-0623237c="" data-v-ddbdca5c="" data-v-0fb797a2-s="" class="expanded screen-header">
+        <aside data-v-0623237c="" class="thumbnail">
+          <!---->
+        </aside>
+        <main data-v-0623237c="" class="body"><span data-v-0623237c="" class="m3-label-large overline-text">Library</span>
+          <div data-v-0623237c="" class="title-row">
+            <h1 data-v-0623237c="" class="m3-headline-medium name"> All songs </h1>
           </div>
-        </div>
-      </div>
-    </main>
-  </header>
-  <main data-v-0fb797a2="" class="screen-body flex flex-col flex-1 place-content-start overflow-y-auto"><br data-v-ddbdca5c="" data-v-0fb797a2-s="" data-testid="song-list" class="screen-bleed"></main>
+          <!--v-if-->
+          <p data-v-0623237c="" class="meta m3-body-medium"><span data-v-ddbdca5c="">420 songs</span><span data-v-ddbdca5c="">34 hr 17 min</span></p>
+          <div data-v-0623237c="" class="controls">
+            <div data-v-ddbdca5c="" class="controls w-full flex justify-between items-center gap-4">
+              <div data-v-ddbdca5c="" class="relative" data-testid="song-list-controls">
+                <div class="flex gap-2 flex-wrap items-center">
+                  <!-- Play in order, or shuffled: the selection when there is one. --><button data-v-bc641a16="" type="button" class="filled s with-icon m3-button m3-state m3-label-large btn-play-all" data-testid="btn-play-all"><span data-v-241cb009="" data-v-bc641a16="" data-icon="play_arrow" style="--m3-icon-size: 18px; font-variation-settings: 'FILL' 0, 'wght' 400, 'opsz' 20;" aria-hidden="true" class="material-symbols-outlined m3-icon"></span><span data-v-bc641a16="" class="label"> Play </span></button><button data-v-bc641a16="" type="button" class="tonal s with-icon m3-button m3-state m3-label-large btn-shuffle-all" data-testid="btn-shuffle-all"><span data-v-241cb009="" data-v-bc641a16="" data-icon="shuffle" style="--m3-icon-size: 18px; font-variation-settings: 'FILL' 0, 'wght' 400, 'opsz' 20;" aria-hidden="true" class="material-symbols-outlined m3-icon"></span><span data-v-bc641a16="" class="label"> Shuffle </span></button>
+                  <!--v-if-->
+                  <!--v-if-->
+                  <!--v-if-->
+                </div>
+                <!--v-if-->
+              </div>
+            </div>
+          </div>
+        </main>
+      </header>
+    </div><br data-v-ddbdca5c="" data-v-0fb797a2-s="" data-testid="song-list" class="screen-bleed">
+  </main>
 </section>
 `;

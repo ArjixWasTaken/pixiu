@@ -72,7 +72,7 @@ describe('playlistFolderContextMenu.vue', () => {
   it('creates a child folder', async () => {
     const { folder } = await renderComponent()
 
-    await h.user.click(screen.getByText('New Folder…'))
+    await h.user.click(screen.getByText('New folder…'))
 
     await assertOpenModal(openModalMock, CreatePlaylistFolderForm, { parent: folder })
   })
@@ -87,7 +87,7 @@ describe('playlistFolderContextMenu.vue', () => {
     const { folder, playlists } = createPlayableFolder()
     await renderComponent(folder)
 
-    await h.user.click(screen.getByText('Play All'))
+    await h.user.click(screen.getByText('Play all'))
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(playlists)
@@ -107,7 +107,7 @@ describe('playlistFolderContextMenu.vue', () => {
     const { folder, playlists } = createPlayableFolder()
     await renderComponent(folder)
 
-    await h.user.click(screen.getByText('Play All'))
+    await h.user.click(screen.getByText('Play all'))
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(playlists)
@@ -128,7 +128,7 @@ describe('playlistFolderContextMenu.vue', () => {
     const { folder, playlists } = createPlayableFolder()
     await renderComponent(folder)
 
-    await h.user.click(screen.getByText('Shuffle All'))
+    await h.user.click(screen.getByText('Shuffle all'))
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(playlists)
@@ -140,8 +140,8 @@ describe('playlistFolderContextMenu.vue', () => {
   it('does not show shuffle option if folder is empty', async () => {
     await renderComponent()
 
-    expect(screen.queryByText('Shuffle All')).toBeNull()
-    expect(screen.queryByText('Play All')).toBeNull()
+    expect(screen.queryByText('Shuffle all')).toBeNull()
+    expect(screen.queryByText('Play all')).toBeNull()
   })
 
   it('warns if attempting to shuffle with no songs in folder', async () => {
@@ -155,7 +155,7 @@ describe('playlistFolderContextMenu.vue', () => {
     const { folder, playlists } = createPlayableFolder()
     await renderComponent(folder)
 
-    await h.user.click(screen.getByText('Shuffle All'))
+    await h.user.click(screen.getByText('Shuffle all'))
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(playlists)

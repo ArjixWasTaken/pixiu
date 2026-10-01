@@ -35,7 +35,7 @@ const value = defineModel<string>()
 <style scoped>
 .m3-segmented {
   display: inline-flex;
-  height: 40px;
+  height: var(--m3-segment-height);
   flex-shrink: 0;
 }
 

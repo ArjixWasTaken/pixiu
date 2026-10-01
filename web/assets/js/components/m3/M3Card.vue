@@ -5,11 +5,19 @@
 </template>
 
 <script lang="ts" setup>
-withDefaults(defineProps<{ variant?: 'filled' | 'elevated' | 'outlined'; interactive?: boolean; tag?: string }>(), {
-  variant: 'filled',
-  interactive: false,
-  tag: 'div',
-})
+withDefaults(
+  defineProps<{
+    /** `plain`: no container at all, only the hover tint (as for covers with a caption). */
+    variant?: 'filled' | 'elevated' | 'outlined' | 'plain'
+    interactive?: boolean
+    tag?: string
+  }>(),
+  {
+    variant: 'filled',
+    interactive: false,
+    tag: 'div',
+  },
+)
 </script>
 
 <style scoped>
@@ -33,10 +41,14 @@ withDefaults(defineProps<{ variant?: 'filled' | 'elevated' | 'outlined'; interac
     border: 1px solid var(--schemes-outline-variant);
   }
 
+  &.plain {
+    background: transparent;
+  }
+
   &.interactive {
     cursor: pointer;
 
-    &:hover {
+    &:not(.plain):hover {
       box-shadow: var(--m3-elevation-1);
     }
 

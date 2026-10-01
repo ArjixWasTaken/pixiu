@@ -6,7 +6,6 @@ import { playlistStore } from '@/stores/playlistStore'
 import { queueStore } from '@/stores/queueStore'
 import { arrayify } from '@/utils/helpers'
 import { playableStore } from '@/stores/playableStore'
-import Btn from '@/components/ui/form/Btn.vue'
 import CreatePlaylistForm from '@/components/playlist/CreatePlaylistForm.vue'
 
 const openModalMock = vi.fn()
@@ -37,11 +36,6 @@ describe('addToMenu.vue', () => {
         playables,
         config: { ...config, ...customConfig },
         showing: true,
-      },
-      global: {
-        stubs: {
-          Btn,
-        },
       },
     })
 
@@ -108,7 +102,7 @@ describe('addToMenu.vue', () => {
   it('creates playlist from selected songs', async () => {
     const { playables } = renderComponent()
 
-    await h.user.click(screen.getByText('New Playlist…'))
+    await h.user.click(screen.getByText('New playlist…'))
 
     await assertOpenModal(openModalMock, CreatePlaylistForm, { folder: null, playables })
   })

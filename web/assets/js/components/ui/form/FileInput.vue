@@ -1,10 +1,10 @@
 <template>
   <label
-    class="inline-flex text-base items-center gap-2 relative cursor-pointer hover:text-k-fg-70 active:text-k-fg-60"
+    class="inline-flex text-base items-center gap-2 relative cursor-pointer hover:text-(--schemes-on-surface-variant) active:text-(--schemes-on-surface-variant)"
   >
     <input v-bind="$attrs" type="file" class="opacity-0 appearance-none absolute inset-0 z-10" />
-    <span class="border border-px border-white/20 px-1.5 py-1 rounded-sm pointer-events-none">
-      <Icon :icon="faPaperclip" fixed-width />
+    <span class="border border-px border-(--schemes-outline-variant) px-1.5 py-1 rounded-sm pointer-events-none">
+      <M3Icon name="attach_file" />
     </span>
     <span class="text-1 pointer-events-none">
       <slot>Select a file…</slot>
@@ -13,7 +13,7 @@
 </template>
 
 <script setup lang="ts">
-import { faPaperclip } from '@fortawesome/free-solid-svg-icons'
+import M3Icon from '@/components/m3/M3Icon.vue'
 
 defineOptions({ inheritAttrs: false })
 </script>

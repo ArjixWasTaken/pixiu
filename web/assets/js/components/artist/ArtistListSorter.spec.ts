@@ -14,14 +14,14 @@ describe('artistListSorter.vue', () => {
       },
     })
 
-    screen.getByTitle('Sorting by Name, ascending')
+    screen.getByTitle('Sorting by name, ascending')
 
     await h.user.click(screen.getByTitle(/^Sorting by/))
-    await h.user.click(screen.getByTitle('Sort by Name'))
+    await h.user.click(screen.getByTitle('Sort by name'))
     expect(emitted().sort[0]).toEqual(['name', 'desc'])
 
     await h.user.click(screen.getByTitle(/^Sorting by/))
-    await h.user.click(screen.getByTitle('Sort by Date Added'))
+    await h.user.click(screen.getByTitle('Sort by date added'))
     expect(emitted().sort[1]).toEqual(['created_at', 'asc'])
   })
 })

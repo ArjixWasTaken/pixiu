@@ -14,22 +14,22 @@ describe('albumListSorter.vue', () => {
       },
     })
 
-    screen.getByTitle('Sorting by Name, ascending')
+    screen.getByTitle('Sorting by name, ascending')
 
     await h.user.click(screen.getByTitle(/^Sorting by/))
-    await h.user.click(screen.getByTitle('Sort by Name'))
+    await h.user.click(screen.getByTitle('Sort by name'))
     expect(emitted().sort[0]).toEqual(['name', 'desc'])
 
     await h.user.click(screen.getByTitle(/^Sorting by/))
-    await h.user.click(screen.getByTitle('Sort by Release Year'))
+    await h.user.click(screen.getByTitle('Sort by release year'))
     expect(emitted().sort[1]).toEqual(['year', 'asc'])
 
     await h.user.click(screen.getByTitle(/^Sorting by/))
-    await h.user.click(screen.getByTitle('Sort by Artist'))
+    await h.user.click(screen.getByTitle('Sort by artist'))
     expect(emitted().sort[2]).toEqual(['artist_name', 'asc'])
 
     await h.user.click(screen.getByTitle(/^Sorting by/))
-    await h.user.click(screen.getByTitle('Sort by Date Added'))
+    await h.user.click(screen.getByTitle('Sort by date added'))
     expect(emitted().sort[3]).toEqual(['created_at', 'asc'])
   })
 })

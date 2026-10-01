@@ -1,19 +1,20 @@
 <template>
   <article
     v-if="!dismissed"
-    class="fixed z-10000 left-4 flex items-center gap-3 max-w-xs py-3 px-4 rounded-xl border border-k-fg-10 bg-k-bg-context-menu text-k-fg shadow-lg cursor-pointer"
+    class="fixed z-10000 left-4 flex items-center gap-3 max-w-xs py-3 px-4 rounded-xl border border-(--schemes-outline-variant) bg-(--schemes-surface-container) text-(--schemes-on-surface) shadow-lg cursor-pointer"
     title="Click to dismiss"
     @click="dismissed = true"
   >
-    <WifiOff :size="18" class="shrink-0 text-k-warning" />
+    <M3Icon :size="18" class="shrink-0 text-(--schemes-tertiary)" name="wifi_off" />
     <span>You're offline.</span>
   </article>
 </template>
 
 <script lang="ts" setup>
-import { WifiOff } from 'lucide-vue-next'
 import { ref, watch } from 'vue'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
+
+import M3Icon from '@/components/m3/M3Icon.vue'
 
 const { online } = useNetworkStatus()
 const dismissed = ref(false)

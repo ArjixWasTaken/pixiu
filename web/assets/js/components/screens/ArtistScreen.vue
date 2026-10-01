@@ -1,5 +1,5 @@
 <template>
-  <ScreenBase :background-image="artist?.image || undefined">
+  <ScreenBase :tint-from="artist?.image">
     <template #header>
       <ScreenHeaderSkeleton v-if="loading && !artist" role="status" aria-busy="true" aria-label="Loading" />
 
@@ -17,15 +17,8 @@
         </template>
 
         <template #controls>
-          <SongListControls
-            v-if="songs.length"
-            :config="songsControls"
-            @filter="applyFilter"
-            @play-all="playAll"
-            @play-selected="playSelected"
-          >
-            <FavoriteButton v-if="artist.favorite" :favorite="artist.favorite" @toggle="toggleFavorite" />
-            <StarRating :rateable="artist" class="px-2" />
+          <SongListControls v-if="songs.length" :config @play-all="playAll" @play-selected="playSelected">
+            <FavoriteButton :favorite="artist.favorite" @toggle="toggleFavorite" />
             <M3IconButton icon="more_vert" label="More actions" @click="requestContextMenu" />
           </SongListControls>
         </template>
@@ -44,9 +37,6 @@
             </li>
             <li v-if="useEncyclopedia" :class="activeTab === 'information' && 'active'">
               <a :href="url('artists.show', { id: artist.id, tab: 'information' })">Information</a>
-            </li>
-            <li v-if="useTicketmaster" :class="activeTab === 'events' && 'active'">
-              <a :href="url('artists.show', { id: artist.id, tab: 'events' })">Events</a>
             </li>
           </ul>
         </nav>
@@ -76,10 +66,6 @@
 
       <div v-if="useEncyclopedia && artist" v-show="activeTab === 'information'" class="info-pane">
         <ArtistInfo :artist mode="full" />
-      </div>
-
-      <div v-if="useTicketmaster && artist" v-show="activeTab === 'events'" class="events-pane">
-        <ArtistEventList :artist />
       </div>
     </ScreenTabs>
   </ScreenBase>
@@ -112,25 +98,21 @@ import GridListView from '@/components/ui/GridListView.vue'
 
 const ArtistInfo = defineAsyncComponent(() => import('@/components/artist/ArtistInfo.vue'))
 const AlbumCard = defineAsyncComponent(() => import('@/components/album/AlbumCard.vue'))
-const ArtistEventList = defineAsyncComponent(() => import('@/components/artist/ArtistEventList.vue'))
 const AlbumCardSkeleton = defineAsyncComponent(() => import('@/components/ui/album-artist/ArtistAlbumCardSkeleton.vue'))
 const FavoriteButton = defineAsyncComponent(() => import('@/components/ui/FavoriteButton.vue'))
-const StarRating = defineAsyncComponent(() => import('@/components/ui/StarRating.vue'))
 const ArtistContextMenu = defineAsyncComponent(() => import('@/components/artist/ArtistContextMenu.vue'))
 
-const validTabs = ['songs', 'albums', 'information', 'events'] as const
+const validTabs = ['songs', 'albums', 'information'] as const
 type Tab = (typeof validTabs)[number]
 
 const { PlayableListControls: SongListControls, config } = usePlayableListControls('Artist')
-const { useLastfm, useMusicBrainz, useTicketmaster } = useThirdPartyServices()
+const { useMusicBrainz } = useThirdPartyServices()
 const { getRouteParam, go, onScreenActivated, onRouteChanged, url, triggerNotFound } = useRouter()
 const { openContextMenu } = useContextMenu()
 const { get: lsGet, set: lsSet } = useLocalStorage()
 
 const activeTab = ref<Tab>('songs')
 
-// Filtering lists songs, so only the Songs tab offers it.
-const songsControls = computed(() => (activeTab.value === 'songs' ? config : { ...config, filter: false }))
 const artist = ref<Artist>()
 const songs = ref<Song[]>([])
 const loading = ref(false)
@@ -146,11 +128,10 @@ const {
   onPressEnter,
   playAll,
   playSelected,
-  applyFilter,
   onSwipe,
 } = usePlayableList(songs, { type: 'Artist' })
 
-const useEncyclopedia = computed(() => useMusicBrainz.value || useLastfm.value)
+const useEncyclopedia = useMusicBrainz
 
 const albumCount = computed(() => {
   const albums = new Set()

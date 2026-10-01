@@ -21,8 +21,8 @@ const emit = defineEmits<{ (e: 'sort', field: AlbumListSortField, order: SortOrd
 const items: { label: string; field: AlbumListSortField }[] = [
   { label: 'Name', field: 'name' },
   { label: 'Artist', field: 'artist_name' },
-  { label: 'Release Year', field: 'year' },
-  { label: 'Date Added', field: 'created_at' },
+  { label: 'Release year', field: 'year' },
+  { label: 'Date added', field: 'created_at' },
   { label: 'Rating', field: 'rating' },
   { label: 'Favorite', field: 'favorite' },
 ]

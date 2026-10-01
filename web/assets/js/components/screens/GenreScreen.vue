@@ -6,7 +6,7 @@
           <span class="font-thin">Genre:</span>
           {{ genre.name }}
         </template>
-        <span v-else class="font-thin italic">No Genre</span>
+        <span v-else class="font-thin italic">No genre</span>
 
         <template #thumbnail>
           <ThumbnailStack :thumbnails />
@@ -45,7 +45,7 @@
 
     <ScreenEmptyState v-if="!songs.length && !loading">
       <template #icon>
-        <GuitarIcon :size="96" />
+        <M3Icon name="category" :size="96" />
       </template>
 
       No songs in this genre.
@@ -55,7 +55,6 @@
 
 <script lang="ts" setup>
 import { computed, onMounted, ref, watch } from 'vue'
-import { GuitarIcon } from 'lucide-vue-next'
 import { pluralize, secondsToHumanReadable } from '@/utils/formatters'
 import { eventBus } from '@/utils/eventBus'
 import { defineAsyncComponent } from '@/utils/helpers'
@@ -75,6 +74,7 @@ import ScreenEmptyState from '@/components/ui/ScreenEmptyState.vue'
 import PlayableListSkeleton from '@/components/playable/playable-list/PlayableListSkeleton.vue'
 import ScreenHeaderSkeleton from '@/components/ui/ScreenHeaderSkeleton.vue'
 import ScreenBase from '@/components/screens/ScreenBase.vue'
+import M3Icon from '@/components/m3/M3Icon.vue'
 
 const ContextMenu = defineAsyncComponent(() => import('@/components/genre/GenreContextMenu.vue'))
 

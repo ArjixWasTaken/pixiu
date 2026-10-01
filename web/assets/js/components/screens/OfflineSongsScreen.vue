@@ -2,7 +2,7 @@
   <ScreenBase>
     <template #header>
       <ScreenHeader :layout="playables.length === 0 ? 'collapsed' : headerLayout">
-        Available Offline
+        Available offline
 
         <template #thumbnail>
           <ThumbnailStack :thumbnails="thumbnails" />
@@ -14,13 +14,7 @@
         </template>
 
         <template #controls>
-          <PlayableListControls
-            v-if="playables.length"
-            :config
-            @filter="applyFilter"
-            @play-all="playAll"
-            @play-selected="playSelected"
-          />
+          <PlayableListControls v-if="playables.length" :config @play-all="playAll" @play-selected="playSelected" />
         </template>
       </ScreenHeader>
     </template>
@@ -35,16 +29,15 @@
 
     <ScreenEmptyState v-else>
       <template #icon>
-        <Icon :icon="faCloudArrowDown" />
+        <M3Icon name="cloud_download" />
       </template>
       No songs available offline.
-      <span class="secondary block"> Right-click a song and select "Make Available Offline" to cache it. </span>
+      <span class="secondary block"> Right-click a song and choose “Make available offline” to keep a copy. </span>
     </ScreenEmptyState>
   </ScreenBase>
 </template>
 
 <script lang="ts" setup>
-import { faCloudArrowDown } from '@fortawesome/free-solid-svg-icons'
 import { computed } from 'vue'
 import { pluralize } from '@/utils/formatters'
 import { playableStore } from '@/stores/playableStore'
@@ -55,6 +48,7 @@ import { usePlayableListControls } from '@/composables/usePlayableListControls'
 import ScreenHeader from '@/components/ui/ScreenHeader.vue'
 import ScreenEmptyState from '@/components/ui/ScreenEmptyState.vue'
 import ScreenBase from '@/components/screens/ScreenBase.vue'
+import M3Icon from '@/components/m3/M3Icon.vue'
 
 const { cachedSongIds } = useOfflinePlayback()
 
@@ -80,7 +74,6 @@ const {
   onPressEnter,
   playAll,
   playSelected,
-  applyFilter,
   onSwipe,
 } = usePlayableList(offlineSongs, { type: 'OfflineSongs' }, { sortable: true })
 

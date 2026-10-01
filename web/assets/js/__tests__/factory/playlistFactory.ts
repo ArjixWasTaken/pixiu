@@ -10,7 +10,6 @@ export default (): Playlist => ({
   name: faker.word.words(2),
   is_smart: false,
   rules: [],
-  is_collaborative: false,
   cover: faker.image.url(),
   permissions: {
     edit: faker.datatype.boolean(),

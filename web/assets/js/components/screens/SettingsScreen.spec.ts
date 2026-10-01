@@ -11,6 +11,7 @@ describe('settingsScreen.vue', () => {
       global: {
         stubs: {
           AccountSettings: h.stub('account-settings'),
+          PreferencesSettings: h.stub('preferences-settings'),
           YouTubeMusicSettings: h.stub('youtube-music-settings'),
           LibrarySettings: h.stub('library-settings'),
           UsersSettings: h.stub('users-settings'),
@@ -24,10 +25,12 @@ describe('settingsScreen.vue', () => {
     render()
 
     expect(screen.getAllByRole('tab').map(tab => tab.textContent?.replace(/\s+/g, ' ').trim())).toEqual([
-      'account_circle Account',
-      'smart_display YouTube Music',
-      'library_music Library',
+      'Account',
+      'Preferences',
+      'YouTube Music',
+      'Library',
     ])
+    expect(screen.queryByText('Server')).toBeNull()
   })
 
   it('shows admins the server tabs too', () => {
@@ -37,5 +40,8 @@ describe('settingsScreen.vue', () => {
     for (const tab of ['users', 'sign-in', 'email']) {
       screen.getByTestId(`settings-tab-${tab}`)
     }
+
+    // After a label of their own.
+    screen.getByText('Server')
   })
 })

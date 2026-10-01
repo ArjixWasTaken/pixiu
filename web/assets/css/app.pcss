@@ -17,32 +17,13 @@
 
 @custom-variant no-hover (@media (hover: none));
 
-/*
-  The default border color has changed to `currentcolor` in Tailwind CSS v4,
-  so we've added these compatibility styles to make sure everything still
-  looks the same as it did with Tailwind CSS v3.
-
-  If we ever want to remove these styles, we need to add an explicit border
-  color utility to any element that depends on these defaults.
-*/
+/* Borders default to the scheme's outline-variant. */
 @layer base {
   *,
   ::after,
   ::before,
   ::backdrop,
   ::file-selector-button {
-    border-color: var(--color-gray-200, currentcolor);
-  }
-}
-
-@utility playable-list-item {
-  @apply border-b border-k-fg-10 max-w-full! h-[64px] flex
-    items-center transition-[background-color] ease-in-out duration-200
-    focus:ring-inset focus:ring-1 focus:ring-k-highlight!
-    focus-within:ring-inset focus-within:ring-1 focus-within:ring-k-highlight!
-    hover:bg-k-fg-5;
-
-  &.selected {
-    @apply bg-k-fg-10;
+    border-color: var(--schemes-outline-variant);
   }
 }

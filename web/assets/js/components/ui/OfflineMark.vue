@@ -1,9 +1,9 @@
 <template>
   <span class="opacity-50!" title="Available offline">
-    <Icon :icon="faCloudArrowDown" />
+    <M3Icon name="cloud_download" />
   </span>
 </template>
 
 <script lang="ts" setup>
-import { faCloudArrowDown } from '@fortawesome/free-solid-svg-icons'
+import M3Icon from '@/components/m3/M3Icon.vue'
 </script>

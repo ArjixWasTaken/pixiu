@@ -11,7 +11,7 @@
       @drop="onDrop"
     >
       <PlaylistSidebarItem :list="{ name: 'Favorites', playables: favorites }" />
-      <PlaylistSidebarItem :list="{ name: 'Recently Played', playables: [] }" />
+      <PlaylistSidebarItem :list="{ name: 'Recently played', playables: [] }" />
       <PlaylistFolderSidebarItem v-for="folder in rootFolders" :key="folder.id" :folder />
       <PlaylistSidebarItem v-for="playlist in orphanPlaylists" :key="playlist.id" :list="playlist" />
     </ul>

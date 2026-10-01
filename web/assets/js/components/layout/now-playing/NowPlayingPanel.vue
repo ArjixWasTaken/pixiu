@@ -37,7 +37,6 @@
 <script lang="ts" setup>
 import { computed, ref } from 'vue'
 import { requireInjection, defineAsyncComponent } from '@/utils/helpers'
-import { isSong } from '@/utils/typeGuards'
 import { CurrentStreamableKey } from '@/config/symbols'
 import { playableStore } from '@/stores/playableStore'
 import { useBranding } from '@/composables/useBranding'
@@ -61,7 +60,7 @@ const { cover: defaultCover } = useBranding()
 const { openContextMenu } = useContextMenu()
 
 const streamable = requireInjection(CurrentStreamableKey, ref())
-const song = computed(() => (streamable.value && isSong(streamable.value) ? streamable.value : null))
+const song = computed(() => (streamable.value ? streamable.value : null))
 
 const tabs: M3Tab[] = [
   { id: 'queue', label: 'Up next' },
@@ -87,13 +86,12 @@ onRouteChanged(() => nowPlaying.close())
 <style scoped>
 .now-playing-panel {
   position: absolute;
-  inset: 76px 0 0 0;
+  inset: 0;
   z-index: 30;
   display: flex;
   gap: 48px;
-  padding: 16px 40px 24px;
+  padding: 24px 40px;
   overflow: hidden;
-  border-radius: 0 0 28px 28px;
   background: var(--schemes-surface);
 }
 

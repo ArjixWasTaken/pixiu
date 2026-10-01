@@ -8,10 +8,10 @@
   >
     <span class="flex items-baseline justify-center gap-3">
       <SoundBars v-if="state.type === 'loading'" />
-      <Icon v-if="state.type === 'error'" :icon="faCircleExclamation" />
-      <Icon v-if="state.type === 'warning'" :icon="faWarning" />
-      <Icon v-if="state.type === 'info'" :icon="faCircleInfo" />
-      <Icon v-if="state.type === 'success'" :icon="faCircleCheck" />
+      <M3Icon v-if="state.type === 'error'" name="error" />
+      <M3Icon v-if="state.type === 'warning'" name="warning" />
+      <M3Icon v-if="state.type === 'info'" name="info" />
+      <M3Icon v-if="state.type === 'success'" name="check_circle" />
 
       <span class="message" v-html="state.message" />
     </span>
@@ -19,8 +19,8 @@
 </template>
 
 <script lang="ts" setup>
-import { faCircleCheck, faCircleExclamation, faCircleInfo, faWarning } from '@fortawesome/free-solid-svg-icons'
 import { defineAsyncComponent, reactive, ref } from 'vue'
+import M3Icon from '@/components/m3/M3Icon.vue'
 
 const SoundBars = defineAsyncComponent(() => import('@/components/ui/SoundBars.vue'))
 

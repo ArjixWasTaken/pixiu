@@ -1,3 +1,0 @@
-// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
-
-exports[`btnGroup.vue > renders 1`] = `<span data-v-c026a629="" class="btn-group inline-flex relative flex-nowrap"><button data-v-b156ac0d="" class="k-btn m3-state m3-label-large" type="button">Green</button><button data-v-b156ac0d="" class="k-btn m3-state m3-label-large" type="button">Orange</button><button data-v-b156ac0d="" class="k-btn m3-state m3-label-large" type="button">Blue</button></span>`;

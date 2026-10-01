@@ -1,27 +1,17 @@
 <template>
-  <form @submit.prevent="handleSubmit" @keydown.esc="maybeClose">
+  <form class="md:w-[480px] min-w-full" @submit.prevent="handleSubmit" @keydown.esc="maybeClose">
     <header>
-      <h1>Edit Artist</h1>
+      <h1>Edit artist</h1>
     </header>
 
-    <main class="space-y-5">
-      <FormRow>
-        <template #label>Name</template>
-        <TextInput
-          v-model="data.name"
-          v-koel-focus
-          name="name"
-          placeholder="Artist name"
-          required
-          title="Artist name"
-        />
-      </FormRow>
+    <main class="flex flex-col gap-4 pt-2">
+      <M3TextField v-model="data.name" v-koel-focus label="Name" name="name" required />
       <ArtworkField v-model="data.image">Pick or paste an image (optional)</ArtworkField>
     </main>
 
     <footer>
-      <Btn type="submit">Save</Btn>
-      <Btn variant="ghost" @click.prevent="maybeClose">Cancel</Btn>
+      <M3Button variant="text" @click.prevent="maybeClose">Cancel</M3Button>
+      <M3Button type="submit">Save</M3Button>
     </footer>
   </form>
 </template>
@@ -36,9 +26,8 @@ import { useMessageToaster } from '@/composables/useMessageToaster'
 import { useDialogBox } from '@/composables/useDialogBox'
 import { useForm } from '@/composables/useForm'
 
-import FormRow from '@/components/ui/form/FormRow.vue'
-import Btn from '@/components/ui/form/Btn.vue'
-import TextInput from '@/components/ui/form/TextInput.vue'
+import M3Button from '@/components/m3/M3Button.vue'
+import M3TextField from '@/components/m3/M3TextField.vue'
 import ArtworkField from '@/components/ui/form/ArtworkField.vue'
 
 const props = defineProps<{ artist: Artist }>()

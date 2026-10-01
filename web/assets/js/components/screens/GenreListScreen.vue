@@ -20,7 +20,7 @@
 
     <ScreenEmptyState v-if="libraryEmpty">
       <template #icon>
-        <GuitarIcon :size="96" />
+        <M3Icon name="category" :size="96" />
       </template>
       No genres found.
       <EmptyLibraryHint />
@@ -28,7 +28,7 @@
 
     <ScreenEmptyState v-else-if="!loading && !genres.length" data-testid="no-genres">
       <template #icon>
-        <GuitarIcon :size="96" />
+        <M3Icon name="category" :size="96" />
       </template>
       No genres yet.
       <span class="block secondary"> Genres come from the songs' tags and MusicBrainz, as albums are looked up. </span>
@@ -47,7 +47,6 @@
 </template>
 
 <script lang="ts" setup>
-import { GuitarIcon } from 'lucide-vue-next'
 import { computed, onMounted, provide, ref } from 'vue'
 import { commonStore } from '@/stores/commonStore'
 import { genreStore } from '@/stores/genreStore'
@@ -65,6 +64,7 @@ import GenreCard from '@/components/genre/GenreCard.vue'
 import ListFilter from '@/components/ui/ListFilter.vue'
 import GenreListSorter from '@/components/genre/GenreListSorter.vue'
 import EmptyLibraryHint from '@/components/ui/EmptyLibraryHint.vue'
+import M3Icon from '@/components/m3/M3Icon.vue'
 
 const { handleHttpError } = useErrorHandler()
 
@@ -80,7 +80,7 @@ const displayedGenres = computed(() => {
   const all = keywords.value ? fuzzy.search(keywords.value) : genres.value
 
   if (preferences.genres_sort_field === 'name') {
-    // if sorted by name, ensure 'No Genre' is always on top
+    // if sorted by name, ensure 'No genre' is always on top
     return orderBy(all, [genre => (genre.name ? 1 : 0), 'name'], ['asc', preferences.genres_sort_order])
   }
 

@@ -6,7 +6,7 @@
     @submit.prevent="handleSubmit"
   >
     <header>
-      <h1>Edit Smart Playlist</h1>
+      <h1>Edit smart playlist</h1>
     </header>
 
     <main>

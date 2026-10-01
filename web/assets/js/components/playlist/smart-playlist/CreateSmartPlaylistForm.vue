@@ -6,7 +6,7 @@
     @submit.prevent="handleSubmit"
   >
     <header>
-      <h1>New Smart Playlist</h1>
+      <h1>New smart playlist</h1>
     </header>
 
     <main>

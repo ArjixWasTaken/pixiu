@@ -17,7 +17,7 @@ that downloads music from YouTube Music into a library it owns.
 
 | | |
 |---|---|
-| **Web player** | Material 3, light and dark schemes, phone layout: library, search, queue synced across devices, likes, ratings, synced lyrics, equalizer, playlists, smart playlists, folders. |
+| **Web player** | Material 3, colored from the cover playing, light and dark; compact with a mouse, touch-sized on phones: library, search, queue synced across devices, likes, ratings, synced lyrics, equalizer, playlists, smart playlists, folders. |
 | **Discover** | Search YouTube Music; download songs or albums. Opus remuxed losslessly, tagged, filed with its cover; `yt-dlp` as fallback. |
 | **Watches** | Playlists (mirrored read-only), liked music, and artists' new releases, synced one-way on a schedule. |
 | **Jobs** | Downloads, syncs and lookups, live. |
@@ -55,11 +55,11 @@ Open <http://localhost:4533>, create the admin account, and use the same credent
 
 - [rustup](https://rustup.rs/) (toolchain pinned in `rust-toolchain.toml`)
 - FFmpeg 3.0–9.0 dev libraries, `clang`, `pkg-config` (Debian: `libavcodec-dev libavformat-dev libavutil-dev libswresample-dev libclang-dev pkg-config`)
-- Node.js ≥ 20.19 and [pnpm](https://pnpm.io/) 11
+- Node.js ≥ 22.12 and [nub](https://nubjs.com/) 0.9 (it uses the `pnpm-lock.yaml`)
 - Optional: Chromium (login), `yt-dlp` with [Deno](https://deno.com/) (download fallback)
 
 ```sh
-(cd web && pnpm install && pnpm build)
+(cd web && nub install && nub run build)
 cargo run --release
 ```
 
@@ -107,8 +107,8 @@ Defaults, then `pixiu.toml` (or `PIXIU_CONFIG`), then `PIXIU_` environment varia
 | `cargo test --workspace` | Unit and end-to-end tests |
 | `cargo test --workspace -- --ignored` | Also Chromium, YouTube Music, MusicBrainz, LRCLIB |
 | `cargo clippy --workspace --all-targets` | Lints |
-| `cd web && pnpm dev` | Player with live reload; proxies `/api` and `/rest` to `PIXIU_URL` (`http://127.0.0.1:4600`) |
-| `pnpm typecheck` / `pnpm check` / `pnpm test` | Player types, lint and format, unit tests |
+| `cd web && nub run dev` | Player with live reload; proxies `/api` and `/rest` to `PIXIU_URL` (`http://127.0.0.1:4600`) |
+| `nub run typecheck` / `nub run check` / `nub run test` | Player types, lint and format, unit tests |
 | `cargo run -p pixiu-db --features cli -- migration generate --name <change>` | New migration after editing `crates/pixiu-db/src/models.rs` (commit `crates/pixiu-db/toasty/`) |
 
 | Crate | |

@@ -38,7 +38,7 @@ const PlaylistContextMenu = defineAsyncComponent(() => import('@/components/play
 
 const { url, isCurrentScreen, getRouteParam } = useRouter()
 const { startDragging } = useDraggable('playlist')
-const { acceptsDrop, resolveDroppedItems } = useDroppable(['playables', 'album', 'artist', 'browser-media'])
+const { acceptsDrop, resolveDroppedItems } = useDroppable(['playables', 'album', 'artist'])
 const { openContextMenu } = useContextMenu()
 
 const draggedPlaylist = inject(DraggedPlaylistKey, ref<Playlist | null>(null))
@@ -51,7 +51,7 @@ const { list } = toRefs(props)
 
 const isPlaylist = (list: PlaylistLike): list is Playlist => 'id' in list
 const isFavoriteList = (list: PlaylistLike): list is FavoriteList => list.name === 'Favorites'
-const isRecentlyPlayedList = (list: PlaylistLike): list is RecentlyPlayedList => list.name === 'Recently Played'
+const isRecentlyPlayedList = (list: PlaylistLike): list is RecentlyPlayedList => list.name === 'Recently played'
 
 const active = computed(() => {
   return (

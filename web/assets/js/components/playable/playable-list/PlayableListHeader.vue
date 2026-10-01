@@ -1,6 +1,8 @@
 <template>
-  <div v-if="config.sortable" class="sort-bar">
-    <M3MenuPopover v-model:open="open" menu-class="sort-menu">
+  <div v-if="showFilter || config.sortable" class="sort-bar" data-testid="list-toolbar">
+    <ListFilter v-if="showFilter" />
+    <span class="flex-1" />
+    <M3MenuPopover v-if="config.sortable" v-model:open="open" menu-class="sort-menu">
       <template #anchor>
         <M3Chip
           :icon="sortOrder === 'asc' ? 'arrow_upward' : 'arrow_downward'"
@@ -36,22 +38,18 @@
 import type { Ref } from 'vue'
 import { computed, ref } from 'vue'
 import { arrayify, requireInjection } from '@/utils/helpers'
-import { PlayableListConfigKey, PlayableListSortFieldKey, PlayableListSortOrderKey } from '@/config/symbols'
-import type { getPlayableCollectionContentType } from '@/utils/typeGuards'
+import {
+  PlayableListConfigKey,
+  PlayableListSortFieldKey,
+  PlayableListSortOrderKey,
+  PlayablesKey,
+} from '@/config/symbols'
 
 import M3Chip from '@/components/m3/M3Chip.vue'
 import M3Icon from '@/components/m3/M3Icon.vue'
 import M3MenuItem from '@/components/m3/M3MenuItem.vue'
 import M3MenuPopover from '@/components/m3/M3MenuPopover.vue'
-
-const props = withDefaults(
-  defineProps<{
-    contentType?: ReturnType<typeof getPlayableCollectionContentType>
-  }>(),
-  {
-    contentType: 'songs',
-  },
-)
+import ListFilter from '@/components/ui/ListFilter.vue'
 
 const emit = defineEmits<{
   (e: 'sort', field: MaybeArray<PlayableListSortField>, order: SortOrder): void
@@ -62,35 +60,28 @@ const [sortField, setSortField] =
 const [sortOrder, setSortOrder] = requireInjection<[Ref<SortOrder>, Closure]>(PlayableListSortOrderKey)
 const [config] = requireInjection<[Partial<PlayableListConfig>]>(PlayableListConfigKey, [{}])
 
+const [allPlayables] = requireInjection<[Ref<Playable[]>]>(PlayablesKey, [ref([])])
+
+const showFilter = computed(() => config.filterable && allPlayables.value.length > 0)
+
 const open = ref(false)
 
-const options = computed<Array<{ label: string; field: MaybeArray<PlayableListSortField> }>>(() => {
-  if (props.contentType === 'episodes') {
-    return [
-      { label: 'Title', field: 'title' },
-      { label: 'Podcast', field: 'podcast_title' },
-      { label: 'Author', field: 'podcast_author' },
-      { label: 'Duration', field: 'length' },
-    ]
-  }
-
-  return [
-    { label: 'Title', field: 'title' },
-    { label: 'Artist', field: 'artist_name' },
-    { label: 'Album', field: 'album_name' },
-    { label: 'Track', field: 'track' },
-    { label: 'Year', field: 'year' },
-    { label: 'Genre', field: 'genre' },
-    { label: 'Duration', field: 'length' },
-    { label: 'Date added', field: 'created_at' },
-  ]
-})
+const options: Array<{ label: string; field: MaybeArray<PlayableListSortField> }> = [
+  { label: 'Title', field: 'title' },
+  { label: 'Artist', field: 'artist_name' },
+  { label: 'Album', field: 'album_name' },
+  { label: 'Track', field: 'track' },
+  { label: 'Year', field: 'year' },
+  { label: 'Genre', field: 'genre' },
+  { label: 'Duration', field: 'length' },
+  { label: 'Date added', field: 'created_at' },
+]
 
 const isCurrent = (field: MaybeArray<PlayableListSortField>) =>
   arrayify(field).join() === arrayify(sortField.value).join()
 
 // Unsorted, or by position: the list's own order (a playlist's, the queue's).
-const currentLabel = computed(() => options.value.find(({ field }) => isCurrent(field))?.label ?? 'Default order')
+const currentLabel = computed(() => options.find(({ field }) => isCurrent(field))?.label ?? 'Default order')
 
 const sort = (field: MaybeArray<PlayableListSortField>) => {
   setSortOrder(isCurrent(field) && sortOrder.value === 'asc' ? 'desc' : 'asc')
@@ -102,10 +93,16 @@ const sort = (field: MaybeArray<PlayableListSortField>) => {
 </script>
 
 <style scoped>
+/* Filter and sort, kept in reach while the list scrolls. */
 .sort-bar {
+  position: sticky;
+  top: var(--sticky-top, 0);
+  z-index: 5;
   display: flex;
-  justify-content: flex-end;
-  padding: 0 24px 4px;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 24px;
+  background: var(--schemes-surface);
 }
 
 :deep(.sort-menu) {

@@ -1,7 +1,7 @@
 <template>
   <form class="md:w-[560px] w-full" @submit.prevent="handleSubmit" @keydown.esc="maybeClose">
     <header>
-      <h1>Edit Playlist</h1>
+      <h1>Edit playlist</h1>
     </header>
 
     <main class="pt-2">

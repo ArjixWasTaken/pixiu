@@ -29,7 +29,7 @@
 
     <ScreenEmptyState v-if="libraryEmpty">
       <template #icon>
-        <Icon :icon="faMicrophoneSlash" />
+        <M3Icon name="mic_off" />
       </template>
       No artists found.
       <EmptyLibraryHint />
@@ -37,7 +37,7 @@
 
     <ScreenEmptyState v-else-if="noFavoriteArtists">
       <template #icon>
-        <Icon :icon="faMicrophoneSlash" />
+        <M3Icon name="mic_off" />
       </template>
       No favorite artists.
     </ScreenEmptyState>
@@ -79,7 +79,6 @@
 </template>
 
 <script lang="ts" setup>
-import { faMicrophoneSlash } from '@fortawesome/free-solid-svg-icons'
 import { computed, nextTick, onMounted, ref, toRef } from 'vue'
 import { artistStore } from '@/stores/artistStore'
 import { commonStore } from '@/stores/commonStore'
@@ -98,6 +97,7 @@ import ScreenBase from '@/components/screens/ScreenBase.vue'
 import ArtistListSorter from '@/components/artist/ArtistListSorter.vue'
 import M3Chip from '@/components/m3/M3Chip.vue'
 import EmptyLibraryHint from '@/components/ui/EmptyLibraryHint.vue'
+import M3Icon from '@/components/m3/M3Icon.vue'
 
 const { isMobile } = useViewport()
 const grid = ref<InstanceType<typeof ArtistGrid>>()

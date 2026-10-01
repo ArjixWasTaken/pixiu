@@ -1,5 +1,4 @@
 import { computed } from 'vue'
-import { commonStore } from '@/stores/commonStore'
 import { acceptsFile } from '@/utils/mediaHelper'
 import type { UploadFile, UploadStatus } from '@/services/uploadService'
 import { uploadService } from '@/services/uploadService'
@@ -16,10 +15,6 @@ export const useUpload = () => {
   const { go, isCurrentScreen } = useRouter()
 
   const { currentUserCan } = usePolicies()
-
-  const mediaPathSetUp = computed(() => {
-    return commonStore.state.storage_driver !== 'local' || commonStore.state.media_path_set
-  })
 
   const allowsUpload = computed(() => currentUserCan.uploadSongs())
 
@@ -65,7 +60,6 @@ export const useUpload = () => {
   }
 
   return {
-    mediaPathSetUp,
     allowsUpload,
     unfinishedUploadCount,
     handleDropEvent,

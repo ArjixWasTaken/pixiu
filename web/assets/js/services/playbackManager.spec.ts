@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vite-plus/test'
 import { createHarness } from '@/__tests__/TestHarness'
 import { playbackService as queuePlayback } from '@/services/QueuePlaybackService'
-import { playbackService as radioPlayback } from '@/services/RadioPlaybackService'
 import { playback, playbackManager } from '@/services/playbackManager'
 
 describe('playbackManager', () => {
@@ -9,31 +8,14 @@ describe('playbackManager', () => {
     beforeEach: () => h.createAudioPlayer(),
   })
 
-  it('uses Queue playback service', () => {
+  it('uses the queue playback service', () => {
     expect(playbackManager.useQueuePlayback()).toBe(queuePlayback)
     expect(playback('current')).toBe(queuePlayback)
   })
 
-  it('uses Radio playback service', () => {
-    expect(playbackManager.useRadioPlayback()).toBe(radioPlayback)
-    expect(playback('current')).toBe(radioPlayback)
-  })
-
-  it('provides shortcuts to switch playback services', () => {
+  it('provides shortcuts to it', () => {
+    expect(playback()).toBe(queuePlayback)
     expect(playback('queue')).toBe(queuePlayback)
-    expect(playback('radio')).toBe(radioPlayback)
-    expect(playback('current')).toBe(radioPlayback)
-  })
-
-  it('deactivates other playback services when switching', () => {
-    playback('queue')
-    const deactivateQueuePlayback = h.mock(queuePlayback, 'deactivate')
-    const deactivateRadioPlayback = h.mock(radioPlayback, 'deactivate')
-
-    playback('radio')
-    expect(deactivateQueuePlayback).toHaveBeenCalled()
-
-    playback('queue')
-    expect(deactivateRadioPlayback).toHaveBeenCalled()
+    expect(playback('current')).toBe(queuePlayback)
   })
 })

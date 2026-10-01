@@ -6,9 +6,7 @@
 import type { KeyFilter } from '@vueuse/core'
 import { onKeyStroke as baseOnKeyStroke } from '@vueuse/core'
 import { eventBus } from '@/utils/eventBus'
-import { socketService } from '@/services/socketService'
 import { volumeManager } from '@/services/volumeManager'
-import { commonStore } from '@/stores/commonStore'
 import { queueStore } from '@/stores/queueStore'
 import { useRouter } from '@/composables/useRouter'
 import { playableStore } from '@/stores/playableStore'
@@ -51,13 +49,10 @@ onKeyStroke('ArrowUp', () => volumeManager.increase())
 onKeyStroke('ArrowDown', () => volumeManager.decrease())
 onKeyStroke('m', () => volumeManager.toggleMute())
 
-onKeyStroke('/', () => commonStore.state.uses_ai && go(isCurrentScreen('AI') ? -1 : url('ai')))
-
 onKeyStroke('l', () => {
   if (!queueStore.current) {
     return
   }
   playableStore.toggleFavorite(queueStore.current)
-  socketService.broadcast('SOCKET_STREAMABLE', queueStore.current)
 })
 </script>

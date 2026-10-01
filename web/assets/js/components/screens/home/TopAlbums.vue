@@ -1,14 +1,13 @@
 <template>
-  <HomeScreenBlock>
-    <template #header>Top Albums</template>
+  <HomeScreenBlock v-if="loading || albums.length">
+    <template #header>Top albums</template>
     <Carousel>
       <template v-if="loading">
         <AlbumCardSkeleton v-for="i in 6" :key="i" />
       </template>
-      <template v-else-if="albums.length">
+      <template v-else>
         <AlbumCard v-for="album in albums" :key="album.id" :album />
       </template>
-      <p v-else class="text-k-fg-50">No albums found.</p>
     </Carousel>
   </HomeScreenBlock>
 </template>

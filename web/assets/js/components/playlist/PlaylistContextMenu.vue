@@ -2,25 +2,18 @@
   <ul role="none">
     <MenuItem @click="play">Play</MenuItem>
     <MenuItem @click="shuffle">Shuffle</MenuItem>
-    <MenuItem @click="addToQueue">Add to Queue</MenuItem>
-    <MenuItem v-if="canShare">
-      Share
-      <template #subMenuItems>
-        <MenuItem v-if="allowEmbedding" @click="showEmbedModal">Embed…</MenuItem>
-        <MenuItem v-if="canShowCollaboration" @click="showCollaborationModal">Collaborate…</MenuItem>
-      </template>
-    </MenuItem>
+    <MenuItem @click="addToQueue">Add to queue</MenuItem>
     <template v-if="allowDownload">
       <Separator />
       <MenuItem @click="download">Download</MenuItem>
     </template>
     <template v-if="canToggleOffline">
       <Separator />
-      <MenuItem @click="toggleOffline">{{ allCached ? 'Remove Offline Versions' : 'Make Available Offline' }}</MenuItem>
+      <MenuItem @click="toggleOffline">{{ allCached ? 'Remove offline copies' : 'Make available offline' }}</MenuItem>
     </template>
     <template v-if="canMoveOutOfFolder">
       <Separator />
-      <MenuItem @click="moveOutOfFolder">Move Out of Folder</MenuItem>
+      <MenuItem @click="moveOutOfFolder">Move out of folder</MenuItem>
     </template>
     <template v-if="canEditPlaylist || canDeletePlaylist">
       <Separator />
@@ -41,7 +34,6 @@ import { useModal } from '@/composables/useModal'
 import { useMessageToaster } from '@/composables/useMessageToaster'
 import { useOfflinePlayback } from '@/composables/useOfflinePlayback'
 import { usePolicies } from '@/composables/usePolicies'
-import { useKoelPlus } from '@/composables/useKoelPlus'
 import { queueStore } from '@/stores/queueStore'
 import { playableStore } from '@/stores/playableStore'
 import { playback } from '@/services/playbackManager'
@@ -58,27 +50,19 @@ const EditPlaylistForm = defineAsyncComponent(() => import('@/components/playlis
 const EditSmartPlaylistForm = defineAsyncComponent(
   () => import('@/components/playlist/smart-playlist/EditSmartPlaylistForm.vue'),
 )
-const PlaylistCollaborationModal = defineAsyncComponent(
-  () => import('@/components/playlist/PlaylistCollaborationModal.vue'),
-)
-const CreateEmbedForm = defineAsyncComponent(() => import('@/components/embed/CreateEmbedForm.vue'))
 
 const { MenuItem, Separator, trigger } = useContextMenu()
 const { openModal } = useModal()
 const { go, url } = useRouter()
 const { toastWarning, toastSuccess } = useMessageToaster()
-const { isPlus } = useKoelPlus()
 const { currentUserCan } = usePolicies()
 const { showConfirmDialog } = useDialogBox()
 
 const allowDownload = toRef(commonStore.state, 'allows_download')
-const allowEmbedding = toRef(commonStore.state, 'allows_embedding')
 
 const canEditPlaylist = computed(() => currentUserCan.editPlaylist(playlist.value))
 const canDeletePlaylist = computed(() => currentUserCan.deletePlaylist(playlist.value))
 const canMoveOutOfFolder = computed(() => playlist.value.folder_id !== null && canEditPlaylist.value)
-const canShowCollaboration = computed(() => isPlus.value && !playlist.value?.is_smart)
-const canShare = computed(() => allowEmbedding.value || canShowCollaboration.value)
 
 const edit = () =>
   trigger(() => {
@@ -137,11 +121,6 @@ const addToQueue = () =>
   })
 
 const moveOutOfFolder = () => trigger(() => playlistFolderStore.movePlaylistToFolder(playlist.value, null))
-
-const showCollaborationModal = () =>
-  trigger(() => openModal<'PLAYLIST_COLLABORATION'>(PlaylistCollaborationModal, { playlist: playlist.value }))
-const showEmbedModal = () =>
-  trigger(() => openModal<'CREATE_EMBED_FORM'>(CreateEmbedForm, { embeddable: playlist.value }))
 
 const { swReady, makePlayablesAvailableOffline, removePlayablesOfflineCache, allPlayablesCached } = useOfflinePlayback()
 const canToggleOffline = computed(() => swReady.value)

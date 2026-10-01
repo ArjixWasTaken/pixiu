@@ -14,13 +14,19 @@
   display: flex;
   flex-direction: column;
   flex: 1;
-  overflow: hidden;
+  /* What sticks under the tabs (a list's toolbar) sticks this far down. */
+  --sticky-top: calc(var(--m3-tab-height) + 1px);
 }
 
+/* The screen scrolls; the tabs stay in reach. */
 header {
+  position: sticky;
+  top: 0;
+  z-index: 6;
   flex-shrink: 0;
   padding: 0 24px;
   border-bottom: 1px solid var(--schemes-outline-variant);
+  background: var(--schemes-surface);
 
   @media (max-width: 768px) {
     padding: 0 4px;
@@ -42,7 +48,7 @@ header {
       display: flex;
       justify-content: center;
       align-items: center;
-      height: 48px;
+      height: var(--m3-tab-height);
       padding: 0 16px;
       color: var(--schemes-on-surface-variant);
       font-size: calc(var(--static-title-small-size) * 1px);
@@ -78,14 +84,12 @@ main {
   display: flex;
   flex-direction: column;
   flex: 1;
-  overflow: auto;
 }
 
 :deep(:is(.songs-pane, .albums-pane)) {
   display: flex;
   flex-direction: column;
   flex: 1;
-  overflow: auto;
 }
 
 :deep(.albums-pane .none) {

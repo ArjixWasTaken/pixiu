@@ -29,7 +29,7 @@ describe('editArtistForm.vue', () => {
 
     // there should be a "remove cover" button, though we're not clicking it
     screen.getByRole('button', { name: 'Remove' })
-    await h.type(screen.getByTitle('Artist name'), 'Dude')
+    await h.type(screen.getByRole('textbox', { name: 'Name' }), 'Dude')
     await h.user.click(screen.getByRole('button', { name: 'Save' }))
 
     expect(updateMock).toHaveBeenCalledWith(artist, {
@@ -41,7 +41,7 @@ describe('editArtistForm.vue', () => {
     const updateMock = h.mock(artistStore, 'update')
     const { artist } = renderComponent(h.factory('artist').make({ image: '' }))
 
-    await h.type(screen.getByTitle('Artist name'), 'Dude')
+    await h.type(screen.getByRole('textbox', { name: 'Name' }), 'Dude')
 
     await h.user.upload(
       screen.getByLabelText('Pick or paste an image (optional)'),
@@ -64,7 +64,7 @@ describe('editArtistForm.vue', () => {
 
     await h.user.click(screen.getByRole('button', { name: 'Remove' }))
 
-    await h.type(screen.getByTitle('Artist name'), 'Dude')
+    await h.type(screen.getByRole('textbox', { name: 'Name' }), 'Dude')
     await h.user.click(screen.getByRole('button', { name: 'Save' }))
 
     expect(updateMock).toHaveBeenCalledWith(artist, {

@@ -1,14 +1,14 @@
 <template>
   <OnClickOutside @trigger="close">
     <div
-      v-if="allowsUpload && mediaPathSetUp"
+      v-if="allowsUpload"
       class="drop-zone w-screen h-screen fixed z-50 top-0 left-0 rounded-3xl bg-black/40 flex items-center justify-center overflow-hidden duration-200"
       @dragleave="close"
       @dragover="onDragOver"
       @drop="onDrop"
     >
       <div class="pointer-events-none flex flex-col items-center justify-center gap-4">
-        <Icon :icon="faUpload" size="6x" />
+        <M3Icon name="upload" :size="96" />
         <h3 class="text-3xl font-extralight">Drop to upload</h3>
       </div>
     </div>
@@ -16,13 +16,13 @@
 </template>
 
 <script lang="ts" setup>
-import { faUpload } from '@fortawesome/free-solid-svg-icons'
 import { OnClickOutside } from '@vueuse/components'
 import { useUpload } from '@/composables/useUpload'
+import M3Icon from '@/components/m3/M3Icon.vue'
 
 const emit = defineEmits<{ (e: 'close'): void }>()
 
-const { allowsUpload, mediaPathSetUp, handleDropEvent } = useUpload()
+const { allowsUpload, handleDropEvent } = useUpload()
 
 const onDragOver = (event: DragEvent) => {
   if (!event.dataTransfer?.types.includes('Files')) {

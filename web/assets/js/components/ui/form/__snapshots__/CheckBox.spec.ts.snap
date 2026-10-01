@@ -1,5 +1,0 @@
-// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
-
-exports[`checkBox.vue > renders checked state 1`] = `<input checked="" class="k-switch" type="checkbox">`;
-
-exports[`checkBox.vue > renders unchecked state 1`] = `<input class="k-switch" type="checkbox">`;

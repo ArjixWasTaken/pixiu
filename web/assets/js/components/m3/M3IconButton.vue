@@ -15,10 +15,9 @@
 </template>
 
 <script lang="ts" setup>
-import { computed } from 'vue'
 import M3Icon from '@/components/m3/M3Icon.vue'
 
-const props = withDefaults(
+withDefaults(
   defineProps<{
     icon?: string
     label?: string
@@ -41,8 +40,6 @@ const props = withDefaults(
     disabled: false,
   },
 )
-
-const iconSize = computed(() => props.iconSize ?? { xs: 20, s: 24, m: 24, l: 32 }[props.size])
 </script>
 
 <style scoped>
@@ -63,21 +60,25 @@ const iconSize = computed(() => props.iconSize ?? { xs: 20, s: 24, m: 24, l: 32 
   &.xs {
     width: 32px;
     height: 32px;
+    --m3-icon-size: 20px;
   }
 
   &.s {
-    width: 40px;
-    height: 40px;
+    width: var(--m3-icon-button);
+    height: var(--m3-icon-button);
+    --m3-icon-size: var(--m3-icon-button-icon);
   }
 
   &.m {
-    width: 56px;
-    height: 56px;
+    width: var(--m3-icon-button-m);
+    height: var(--m3-icon-button-m);
+    --m3-icon-size: 24px;
   }
 
   &.l {
     width: 96px;
     height: 96px;
+    --m3-icon-size: 32px;
   }
 
   &.square {

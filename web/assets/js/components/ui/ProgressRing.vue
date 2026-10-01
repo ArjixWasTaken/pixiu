@@ -7,7 +7,14 @@
     role="progressbar"
     viewBox="0 0 24 24"
   >
-    <circle :stroke-width="thickness" class="stroke-k-fg-20" cx="12" cy="12" fill="none" :r="radius" />
+    <circle
+      :stroke-width="thickness"
+      class="stroke-(--schemes-outline-variant)"
+      cx="12"
+      cy="12"
+      fill="none"
+      :r="radius"
+    />
     <circle
       :r="radius"
       :stroke-dasharray="circumference"

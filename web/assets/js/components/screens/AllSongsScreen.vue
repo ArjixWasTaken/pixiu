@@ -2,7 +2,7 @@
   <ScreenBase>
     <template #header>
       <ScreenHeader :disabled="loading" :layout="songs.length ? headerLayout : 'collapsed'">
-        All Songs
+        All songs
 
         <template #thumbnail>
           <ThumbnailStack :thumbnails />
@@ -34,7 +34,7 @@
       />
       <ScreenEmptyState v-else>
         <template #icon>
-          <Icon :icon="faVolumeOff" />
+          <M3Icon name="volume_off" />
         </template>
         Your library is empty.
       </ScreenEmptyState>
@@ -43,7 +43,6 @@
 </template>
 
 <script lang="ts" setup>
-import { faVolumeOff } from '@fortawesome/free-solid-svg-icons'
 import { computed, onMounted, ref, toRef } from 'vue'
 import { pluralize, secondsToHumanReadable } from '@/utils/formatters'
 import { commonStore } from '@/stores/commonStore'
@@ -60,6 +59,7 @@ import ScreenHeader from '@/components/ui/ScreenHeader.vue'
 import SongListSkeleton from '@/components/playable/playable-list/PlayableListSkeleton.vue'
 import ScreenEmptyState from '@/components/ui/ScreenEmptyState.vue'
 import ScreenBase from '@/components/screens/ScreenBase.vue'
+import M3Icon from '@/components/m3/M3Icon.vue'
 
 const totalSongCount = toRef(commonStore.state, 'song_count')
 const totalDuration = computed(() => secondsToHumanReadable(commonStore.state.song_length))

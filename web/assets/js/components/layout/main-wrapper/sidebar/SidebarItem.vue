@@ -25,6 +25,7 @@
 </template>
 
 <script lang="ts" setup>
+import { onBeforeUnmount } from 'vue'
 import { useRouter } from '@/composables/useRouter'
 import { eventBus } from '@/utils/eventBus'
 import M3Icon from '@/components/m3/M3Icon.vue'
@@ -35,14 +36,14 @@ const props = withDefaults(
     active?: boolean
     icon?: string
     spin?: boolean
+    /** A prop as well as an event, so a click waits for a second one only when something listens. */
+    onDblclick?: () => void
   }>(),
   {
     active: false,
     spin: false,
   },
 )
-
-const emit = defineEmits<{ dblclick: [] }>()
 
 const { go } = useRouter()
 
@@ -57,13 +58,20 @@ const navigate = () => {
 
 const onClick = () => {
   clearTimeout(clickTimer)
-  clickTimer = window.setTimeout(navigate, 150)
+
+  if (props.onDblclick) {
+    clickTimer = window.setTimeout(navigate, 150)
+  } else {
+    navigate()
+  }
 }
 
 const onDblClick = () => {
   clearTimeout(clickTimer)
-  emit('dblclick')
+  props.onDblclick?.()
 }
+
+onBeforeUnmount(() => clearTimeout(clickTimer))
 </script>
 
 <style lang="postcss" scoped>
@@ -74,8 +82,13 @@ const onDblClick = () => {
     display: flex;
     align-items: center;
     gap: 12px;
-    height: 56px;
+    height: var(--m3-nav-item-height);
     padding: 0 24px 0 16px;
+
+    @media (pointer: fine) and (min-width: 769px) {
+      padding: 0 12px;
+      --m3-icon-size: 20px;
+    }
     border-radius: 9999px;
     color: var(--schemes-on-surface-variant);
     text-decoration: none;

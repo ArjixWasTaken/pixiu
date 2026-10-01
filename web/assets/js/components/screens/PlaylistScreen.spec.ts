@@ -41,15 +41,12 @@ describe('playlistScreen.vue', () => {
     }
   }
 
-  it.each<[keyof Events]>([['PLAYLIST_UPDATED'], ['PLAYLIST_COLLABORATOR_REMOVED']])(
-    'refreshes upon %s event trigger',
-    async eventKey => {
-      const { playlist, fetchSongsMock } = await renderComponent()
-      fetchSongsMock.mockResolvedValueOnce(h.factory('song').make(5))
+  it.each<[keyof Events]>([['PLAYLIST_UPDATED']])('refreshes upon %s event trigger', async eventKey => {
+    const { playlist, fetchSongsMock } = await renderComponent()
+    fetchSongsMock.mockResolvedValueOnce(h.factory('song').make(5))
 
-      eventBus.emit(eventKey, playlist)
+    eventBus.emit(eventKey, playlist)
 
-      expect(fetchSongsMock).toHaveBeenCalledWith(playlist, false)
-    },
-  )
+    expect(fetchSongsMock).toHaveBeenCalledWith(playlist, false)
+  })
 })

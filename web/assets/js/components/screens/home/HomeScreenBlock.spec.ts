@@ -9,13 +9,13 @@ describe('HomeScreenBlock', () => {
   it('renders header, actions, and default slots', () => {
     h.render(Component, {
       slots: {
-        header: 'Recently Played',
+        header: 'Recently played',
         actions: '<button data-testid="action">act</button>',
         default: '<p>Song list</p>',
       },
     })
 
-    screen.getByText('Recently Played')
+    screen.getByText('Recently played')
     screen.getByTestId('action')
     screen.getByText('Song list')
   })

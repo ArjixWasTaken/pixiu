@@ -35,17 +35,16 @@
     </span>
     <span class="trailing">
       <span class="time m3-label-medium">{{ fmtLength }}</span>
-      <FavoriteButton :favorite="playable.favorite" @toggle="toggleFavorite" />
-      <M3IconButton :icon-size="20" icon="more_vert" label="More actions" @click.stop="onContextMenu" />
+      <FavoriteButton :class="{ reveal: !playable.favorite }" :favorite="playable.favorite" @toggle="toggleFavorite" />
+      <M3IconButton :icon-size="20" class="reveal" icon="more_vert" label="More actions" @click.stop="onContextMenu" />
     </span>
   </li>
 </template>
 
 <script lang="ts" setup>
 import { computed, toRefs } from 'vue'
-import { defineAsyncComponent, getPlayableProp } from '@/utils/helpers'
+import { defineAsyncComponent } from '@/utils/helpers'
 import { secondsToHis } from '@/utils/formatters'
-import { isSong } from '@/utils/typeGuards'
 import { useDraggable } from '@/composables/useDragAndDrop'
 import { useContextMenu } from '@/composables/useContextMenu'
 import { useOfflinePlayback } from '@/composables/useOfflinePlayback'
@@ -67,11 +66,11 @@ const { startDragging } = useDraggable('playables')
 const { openContextMenu } = useContextMenu()
 const { isCached, isCaching, hasCachingError, getCachingError } = useOfflinePlayback()
 
-const artist = computed(() => getPlayableProp(playable.value, 'artist_name', 'podcast_author') || '')
+const artist = computed(() => playable.value.artist_name || '')
 const playing = computed(() => ['Playing', 'Paused'].includes(playable.value.playback_state!))
-const cachedOffline = computed(() => isSong(playable.value) && isCached(playable.value))
-const cachingOffline = computed(() => isSong(playable.value) && isCaching(playable.value))
-const cachingFailed = computed(() => isSong(playable.value) && hasCachingError(playable.value))
+const cachedOffline = computed(() => isCached(playable.value))
+const cachingOffline = computed(() => isCaching(playable.value))
+const cachingFailed = computed(() => hasCachingError(playable.value))
 const cachingErrorMessage = computed(() => getCachingError(playable.value))
 const fmtLength = secondsToHis(playable.value.length)
 
@@ -98,10 +97,10 @@ const onContextMenu = (event: MouseEvent) => {
 .playable-card {
   display: flex;
   align-items: center;
-  gap: 16px;
-  min-height: 72px;
-  padding: 8px 8px 8px 16px;
-  border-radius: 16px;
+  gap: var(--m3-gutter);
+  min-height: var(--m3-row-height);
+  padding: 4px 8px 4px 12px;
+  border-radius: 12px;
   color: var(--schemes-on-surface);
   cursor: pointer;
   list-style: none;
@@ -121,6 +120,18 @@ const onContextMenu = (event: MouseEvent) => {
   gap: 4px;
   flex-shrink: 0;
   color: var(--schemes-on-surface-variant);
+}
+
+/* With a mouse, the card's actions show when it is pointed at or focused. */
+@media (hover: hover) {
+  .reveal {
+    opacity: 0;
+    transition: opacity 100ms linear;
+
+    .playable-card:is(:hover, :focus-within) & {
+      opacity: 1;
+    }
+  }
 }
 
 .time {

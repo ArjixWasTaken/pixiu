@@ -108,6 +108,8 @@ export default defineConfig({
     server: {
       deps: {
         cacheDir: resolve(projectRoot, 'node_modules/.vitest'),
+        // Its ES modules import one file without an extension, which only a bundler resolves.
+        inline: ['@material/material-color-utilities'],
       },
     },
   },

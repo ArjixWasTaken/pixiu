@@ -2,7 +2,7 @@
   <ScreenBase>
     <template #header>
       <ScreenHeader :layout="playables.length === 0 ? 'collapsed' : headerLayout">
-        Current Queue
+        Queue
 
         <template #thumbnail>
           <ThumbnailStack :thumbnails />
@@ -17,7 +17,6 @@
           <PlayableListControls
             v-if="playables.length"
             :config
-            @filter="applyFilter"
             @clear-queue="clearQueue"
             @play-all="playAll"
             @play-selected="playSelected"
@@ -39,7 +38,7 @@
 
     <ScreenEmptyState v-else>
       <template #icon>
-        <Icon :icon="faCoffee" />
+        <M3Icon name="coffee" />
       </template>
 
       No songs queued.
@@ -52,7 +51,6 @@
 </template>
 
 <script lang="ts" setup>
-import { faCoffee } from '@fortawesome/free-solid-svg-icons'
 import { computed, nextTick, onMounted, ref, toRef } from 'vue'
 import { until } from '@vueuse/core'
 import { pluralize } from '@/utils/formatters'
@@ -66,13 +64,13 @@ import { usePlayableList } from '@/composables/usePlayableList'
 import { usePlayableListControls } from '@/composables/usePlayableListControls'
 import { playback } from '@/services/playbackManager'
 import { requireInjection } from '@/utils/helpers'
-import { isRadioStation } from '@/utils/typeGuards'
 import { CurrentStreamableKey } from '@/config/symbols'
 
 import ScreenHeader from '@/components/ui/ScreenHeader.vue'
 import ScreenEmptyState from '@/components/ui/ScreenEmptyState.vue'
 import ScreenBase from '@/components/screens/ScreenBase.vue'
 import PlayableListSkeleton from '@/components/playable/playable-list/PlayableListSkeleton.vue'
+import M3Icon from '@/components/m3/M3Icon.vue'
 
 const { go, onScreenActivated, url } = useRouter()
 
@@ -86,7 +84,6 @@ const {
   thumbnails,
   selectedPlayables,
   playSelected,
-  applyFilter,
   onSwipe,
 } = usePlayableList(toRef(queueStore.state, 'playables'), { type: 'Queue' }, { reorderable: true, sortable: false })
 
@@ -169,7 +166,7 @@ const currentStreamable = requireInjection(CurrentStreamableKey, ref())
 const revealCurrent = async () => {
   const current = queueStore.current ?? currentStreamable.value
 
-  if (!current || isRadioStation(current)) {
+  if (!current) {
     return
   }
 

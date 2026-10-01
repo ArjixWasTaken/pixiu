@@ -14,16 +14,6 @@ export const usePlayableListControls = (
     },
     clearQueue: screen === 'Queue',
     refresh: screen === 'Playlist',
-    filter: [
-      'Queue',
-      'Artist',
-      'Album',
-      'Favorites',
-      'RecentlyPlayed',
-      'Playlist',
-      'Search.Playables',
-      'OfflineSongs',
-    ].includes(screen),
   }
 
   const config = merge(defaults, typeof configOverrides === 'function' ? configOverrides() : configOverrides)

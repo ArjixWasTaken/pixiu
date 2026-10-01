@@ -1,28 +1,36 @@
 <template>
   <template v-if="!isMobile">
     <nav v-if="expanded" class="drawer" data-testid="sidebar">
-      <header class="flex items-center justify-between pt-3 pr-3 pl-7">
+      <header class="brand">
         <span class="flex items-center gap-2.5">
-          <img alt="" height="32" src="/img/emblem-192.png" width="32" />
+          <img alt="" height="28" src="/img/emblem-192.png" width="28" />
           <span class="m3-title-large text-(--schemes-on-surface)">píxiū</span>
         </span>
         <M3IconButton icon="menu_open" label="Collapse navigation" @click="expanded = false" />
       </header>
+      <SearchForm :autofocus="searchOnOpen" class="search" />
       <SessionExpiredNotice />
       <div class="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
         <SidebarNavigation />
       </div>
+      <footer class="account">
+        <ProfileDropdown :size="28" class="w-full" placement="top-start" with-name />
+      </footer>
     </nav>
 
     <M3NavigationRail
       v-else
       :items="railItems"
       :value="currentRailItem"
-      class="shrink-0"
+      class="rail shrink-0"
       @select="go(url(routeOf($event)))"
     >
       <template #top>
         <M3IconButton icon="menu" label="Open navigation" @click="expanded = true" />
+        <M3IconButton icon="search" label="Search" @click="openSearch" />
+      </template>
+      <template #bottom>
+        <ProfileDropdown :size="32" placement="right-end" />
       </template>
     </M3NavigationRail>
   </template>
@@ -57,7 +65,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, ref, useTemplateRef, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue'
 import type { RouteName } from '@/config/routes'
 import { eventBus } from '@/utils/eventBus'
 import { useLocalStorage } from '@/composables/useLocalStorage'
@@ -67,6 +75,8 @@ import type { M3NavItem } from '@/components/m3/navigation'
 
 import M3IconButton from '@/components/m3/M3IconButton.vue'
 import M3NavigationRail from '@/components/m3/M3NavigationRail.vue'
+import ProfileDropdown from '@/components/layout/main-wrapper/side-sheet/ProfileDropdown.vue'
+import SearchForm from '@/components/ui/SearchForm.vue'
 import SessionExpiredNotice from './SessionExpiredNotice.vue'
 import SidebarNavigation from './SidebarNavigation.vue'
 
@@ -76,6 +86,21 @@ const { isMobile } = useViewport()
 
 const expanded = ref(!lsGet('sidebar-collapsed', false))
 watch(expanded, value => lsSet('sidebar-collapsed', !value))
+
+/** From the rail (its button, or the F key): open the drawer, where the search field is. */
+const searchOnOpen = ref(false)
+
+const openSearch = () => {
+  searchOnOpen.value = true
+  expanded.value = true
+}
+
+const searchFromRail = () => !isMobile.value && !expanded.value && openSearch()
+
+watch(expanded, value => value || (searchOnOpen.value = false))
+
+onMounted(() => eventBus.on('FOCUS_SEARCH_FIELD', searchFromRail))
+onBeforeUnmount(() => eventBus.off('FOCUS_SEARCH_FIELD', searchFromRail))
 
 const rail: Array<M3NavItem & { route: RouteName; screens: ScreenName[] }> = [
   { id: 'Home', label: 'Home', icon: 'home', route: 'home', screens: ['Home'] },
@@ -161,9 +186,29 @@ const onPointerUp = () => {
   position: relative;
   display: flex;
   flex-direction: column;
-  width: 360px;
+  width: var(--m3-nav-width);
   flex-shrink: 0;
   min-height: 0;
+  background: var(--schemes-surface-container-low);
+}
+
+.rail {
+  background: var(--schemes-surface-container-low);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 8px 4px 24px;
+}
+
+.search {
+  margin: 8px 12px;
+}
+
+.account {
+  padding: 8px 12px 12px;
 }
 
 .scrim {

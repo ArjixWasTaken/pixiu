@@ -43,8 +43,6 @@ class TestHarness {
 
       commonStore.state.song_length = 10
       commonStore.state.allows_download = true
-      commonStore.state.allows_embedding = true
-      commonStore.state.uses_i_tunes = true
       commonStore.state.supports_batch_downloading = true
       commonStore.state.supports_transcoding = true
 
@@ -137,9 +135,6 @@ class TestHarness {
               'koel-overflow-fade': {},
               'koel-new-tab': {},
             },
-            components: {
-              Icon: this.stub('Icon'),
-            },
           },
         },
         this.supplyRequiredProvides(options),
@@ -147,35 +142,12 @@ class TestHarness {
     )
   }
 
-  public async withPlusEdition(cb: Closure) {
-    commonStore.state.koel_plus = {
-      active: true,
-      short_key: '****-XXXX',
-      customer_name: 'John Doe',
-      customer_email: 'Koel Plus',
-      product_id: 'koel-plus',
-    }
-
+  public async withCustomBranding(branding: Branding, cb: Closure) {
+    window.KOEL.branding = branding
     await cb()
-
-    commonStore.state.koel_plus = {
-      active: false,
-      short_key: '',
-      customer_name: '',
-      customer_email: '',
-      product_id: '',
-    }
+    this.setDefaultBranding()
 
     return this
-  }
-
-  public async withCustomBranding(branding: Branding, cb: Closure) {
-    // Custom branding implicitly requires Plus edition.
-    return await this.withPlusEdition(async () => {
-      window.KOEL.branding = branding
-      await cb()
-      this.setDefaultBranding()
-    })
   }
 
   public async withDemoMode(cb: Closure) {

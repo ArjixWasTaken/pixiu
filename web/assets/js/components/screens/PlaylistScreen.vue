@@ -1,5 +1,5 @@
 <template>
-  <ScreenBase v-if="playlistId" :background-image="playlist?.cover || thumbnails[0]">
+  <ScreenBase v-if="playlistId" :tint-from="playlist?.cover || thumbnails[0]">
     <template #header>
       <ScreenHeader
         v-if="playlist"
@@ -17,8 +17,7 @@
           </PlaylistThumbnail>
         </template>
 
-        <template v-if="filteredPlayables.length || playlist.is_collaborative" #meta>
-          <CollaboratorsBadge v-if="collaborators.length" :collaborators />
+        <template v-if="filteredPlayables.length" #meta>
           <span>{{ pluralize(filteredPlayables, 'song') }}</span>
           <span>{{ duration }}</span>
         </template>
@@ -54,7 +53,7 @@
 
       <ScreenEmptyState v-else>
         <template #icon>
-          <Icon :icon="faFile" />
+          <M3Icon name="description" />
         </template>
 
         <template v-if="playlist?.is_smart">
@@ -66,7 +65,7 @@
         <template v-else>
           The playlist is currently empty.
           <span class="block secondary">
-            Drag content into its name in the sidebar or use the &quot;Add To…&quot; button to fill it up.
+            Drag content into its name in the sidebar or use the &quot;Add to…&quot; button to fill it up.
           </span>
         </template>
       </ScreenEmptyState>
@@ -75,7 +74,6 @@
 </template>
 
 <script lang="ts" setup>
-import { faFile } from '@fortawesome/free-regular-svg-icons'
 import { differenceBy } from 'lodash-es'
 import { computed, ref, watch } from 'vue'
 import { eventBus } from '@/utils/eventBus'
@@ -86,7 +84,6 @@ import { huntingStore } from '@/stores/huntingStore'
 import { useMessageToaster } from '@/composables/useMessageToaster'
 import { playlistStore } from '@/stores/playlistStore'
 import { playableStore } from '@/stores/playableStore'
-import { playlistCollaborationService } from '@/services/playlistCollaborationService'
 import { defineAsyncComponent } from '@/utils/helpers'
 import { useRouter } from '@/composables/useRouter'
 import { useErrorHandler } from '@/composables/useErrorHandler'
@@ -100,12 +97,12 @@ import { useModal } from '@/composables/useModal'
 import M3IconButton from '@/components/m3/M3IconButton.vue'
 import ScreenHeader from '@/components/ui/ScreenHeader.vue'
 import ScreenEmptyState from '@/components/ui/ScreenEmptyState.vue'
-import CollaboratorsBadge from '@/components/playlist/PlaylistCollaboratorsBadge.vue'
 import PlaylistThumbnail from '@/components/ui/PlaylistThumbnail.vue'
 import ScreenBase from '@/components/screens/ScreenBase.vue'
 import ScreenHeaderSkeleton from '@/components/ui/ScreenHeaderSkeleton.vue'
 import PlayableListSkeleton from '@/components/playable/playable-list/PlayableListSkeleton.vue'
 import MirroredWatchPanel from '@/components/playlist/MirroredWatchPanel.vue'
+import M3Icon from '@/components/m3/M3Icon.vue'
 
 const ContextMenu = defineAsyncComponent(() => import('@/components/playlist/PlaylistContextMenu.vue'))
 const EditPlaylistForm = defineAsyncComponent(() => import('@/components/playlist/EditPlaylistForm.vue'))
@@ -147,7 +144,6 @@ const getState = (id: Playlist['id']) => {
 
 let currentState = blankState()
 const allPlayables = ref<Playable[]>([])
-const collaborators = ref<PlaylistCollaborator[]>([])
 
 const playlistId = ref<Playlist['id']>()
 const playlist = ref<Playlist>()
@@ -238,12 +234,7 @@ const fetchDetails = async (refresh = false) => {
   try {
     loading.value = true
 
-    ;[allPlayables.value, collaborators.value] = await Promise.all([
-      playableStore.fetchForPlaylist(playlist.value!, refresh),
-      playlist.value!.is_collaborative
-        ? playlistCollaborationService.fetchCollaborators(playlist.value!)
-        : Promise.resolve<PlaylistCollaborator[]>([]),
-    ])
+    allPlayables.value = await playableStore.fetchForPlaylist(playlist.value!, refresh)
   } catch (error: unknown) {
     useErrorHandler().handleHttpError(error)
   } finally {
@@ -268,9 +259,6 @@ watch(playlistId, async id => {
 
   context.entity = playlist.value
 
-  // reset this config value to its default to not cause rows to be mal-rendered
-  listConfig.collaborative = false
-
   // Make sure this value isn't shared among different playlists.
   selectedPlayables.value = []
 
@@ -283,7 +271,6 @@ watch(playlistId, async id => {
   fetchMirror()
 
   listConfig.reorderable = currentState.sortField === 'position' && playlist.value.permissions.edit
-  listConfig.collaborative = playlist.value.is_collaborative
   listConfig.hasCustomOrderSort = !playlist.value.is_smart
 
   currentState.sortField ??= playlist.value?.is_smart ? 'title' : 'position'
@@ -309,7 +296,6 @@ eventBus
     }
   })
   .on('PLAYLIST_UPDATED', async ({ id }) => id === playlistId.value && (await fetchDetails()))
-  .on('PLAYLIST_COLLABORATOR_REMOVED', async ({ id }) => id === playlistId.value && (await fetchDetails()))
   .on('PLAYLIST_CONTENT_REMOVED', async ({ id }, removed) => {
     if (id === playlistId.value) {
       allPlayables.value = differenceBy(allPlayables.value, removed, 'id')

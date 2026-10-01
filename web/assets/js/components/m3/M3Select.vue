@@ -46,13 +46,13 @@ const { rootAttrs, inputAttrs } = useSplitAttrs()
   position: relative;
   display: flex;
   align-items: center;
-  min-height: 56px;
+  min-height: var(--m3-field-height);
 }
 
 select {
   flex: 1;
   min-width: 0;
-  height: 56px;
+  height: var(--m3-field-height);
   padding: 0 40px 0 16px;
   appearance: none;
   background: transparent;

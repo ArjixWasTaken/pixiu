@@ -1,9 +1,9 @@
 <template>
   <ul role="none">
-    <MenuItem @click="play">Play All</MenuItem>
-    <MenuItem @click="shuffle">Shuffle All</MenuItem>
+    <MenuItem @click="play">Play all</MenuItem>
+    <MenuItem @click="shuffle">Shuffle all</MenuItem>
     <Separator />
-    <MenuItem @click="toggleFavorite">{{ album.favorite ? 'Undo Favorite' : 'Favorite' }}</MenuItem>
+    <MenuItem @click="toggleFavorite">{{ album.favorite ? 'Remove from favorites' : 'Add to favorites' }}</MenuItem>
     <Separator />
     <li
       tabindex="-1"
@@ -22,11 +22,7 @@
     </template>
     <template v-if="canToggleOffline">
       <Separator />
-      <MenuItem @click="toggleOffline">{{ allCached ? 'Remove Offline Versions' : 'Make Available Offline' }}</MenuItem>
-    </template>
-    <template v-if="allowEmbedding">
-      <Separator />
-      <MenuItem @click="showEmbedModal">Embed…</MenuItem>
+      <MenuItem @click="toggleOffline">{{ allCached ? 'Remove offline copies' : 'Make available offline' }}</MenuItem>
     </template>
     <template v-if="musicBrainzUrl">
       <Separator />
@@ -58,7 +54,6 @@ const props = defineProps<{ album: Album }>()
 const { album } = toRefs(props)
 
 const EditAlbumForm = defineAsyncComponent(() => import('@/components/album/EditAlbumForm.vue'))
-const CreateEmbedForm = defineAsyncComponent(() => import('@/components/embed/CreateEmbedForm.vue'))
 
 const { go, url } = useRouter()
 const { MenuItem, Separator, closeContextMenu, trigger } = useContextMenu()
@@ -66,7 +61,6 @@ const { openModal } = useModal()
 const { currentUserCan } = usePolicies()
 
 const allowDownload = toRef(commonStore.state, 'allows_download')
-const allowEmbedding = toRef(commonStore.state, 'allows_embedding')
 const allowEdit = computed(() => currentUserCan.editAlbum(album.value))
 
 const isStandardAlbum = computed(() => !albumStore.isUnknown(album.value))
@@ -95,7 +89,6 @@ const edit = () => trigger(() => openModal<'EDIT_ALBUM_FORM'>(EditAlbumForm, { a
 const toggleFavorite = () => trigger(() => albumStore.toggleFavorite(album.value))
 const { fromAlbum } = useDownload()
 const download = () => trigger(() => fromAlbum(album.value))
-const showEmbedModal = () => trigger(() => openModal<'CREATE_EMBED_FORM'>(CreateEmbedForm, { embeddable: album.value }))
 
 const { swReady, makePlayablesAvailableOffline, removePlayablesOfflineCache, allPlayablesCached } = useOfflinePlayback()
 const canToggleOffline = computed(() => swReady.value)

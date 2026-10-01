@@ -23,10 +23,6 @@
           <span class="tile"><M3Icon :size="26" name="playlist_add" /></span>
           <span class="m3-label-large">Save to playlist</span>
         </button>
-        <button v-if="canBeShared" type="button" @click.stop="copyUrl">
-          <span class="tile"><M3Icon :size="26" name="share" /></span>
-          <span class="m3-label-large">Share</span>
-        </button>
       </li>
       <template v-if="showPlaylists">
         <MenuItem v-for="p in normalPlaylists" :key="p.id" @click="addToExistingPlaylist(p)">
@@ -52,53 +48,28 @@
       <MenuItem>
         Go to
         <template #subMenuItems>
-          <template v-if="isSong(playables[0])">
-            <MenuItem :title="playables[0].album_name" @click="viewAlbum(playables[0] as Song)">
-              <template #icon>
-                <Icon :icon="faCompactDisc" fixed-width />
-              </template>
-              Album: {{ playables[0].album_name }}
-            </MenuItem>
-            <MenuItem :title="playables[0].artist_name" @click="viewArtist(playables[0] as Song)">
-              <template #icon>
-                <MicVocalIcon :size="16" class="inline-block" />
-              </template>
-              Artist: {{ playables[0].artist_name }}
-            </MenuItem>
-          </template>
-          <template v-else>
-            <MenuItem @click="viewPodcast(playables[0] as Episode)">
-              <template #icon>
-                <Icon :icon="faPodcast" fixed-width />
-              </template>
-              Podcast
-            </MenuItem>
-            <MenuItem @click="viewEpisode(playables[0] as Episode)">
-              <template #icon>
-                <Icon :icon="faHeadphones" fixed-width />
-              </template>
-              Episode
-            </MenuItem>
-            <MenuItem
-              v-if="(playables[0] as Episode).episode_link"
-              @click="visitEpisodeWebpage(playables[0] as Episode)"
-            >
-              <template #icon>
-                <Icon :icon="faExternalLink" fixed-width />
-              </template>
-              Webpage
-            </MenuItem>
-          </template>
+          <MenuItem :title="playables[0].album_name" @click="viewAlbum(playables[0])">
+            <template #icon>
+              <M3Icon name="album" />
+            </template>
+            Album: {{ playables[0].album_name }}
+          </MenuItem>
+          <MenuItem :title="playables[0].artist_name" @click="viewArtist(playables[0])">
+            <template #icon>
+              <M3Icon name="artist" :size="16" class="inline-block" />
+            </template>
+            Artist: {{ playables[0].artist_name }}
+          </MenuItem>
         </template>
       </MenuItem>
     </template>
     <MenuItem>
-      Add To
+      Add to
       <template #subMenuItems>
         <template v-if="queue.length">
-          <MenuItem v-if="currentSong" @click="queueAfterCurrent">After Current</MenuItem>
-          <MenuItem @click="queueToBottom">Bottom of Queue</MenuItem>
-          <MenuItem @click="queueToTop">Top of Queue</MenuItem>
+          <MenuItem v-if="currentSong" @click="queueAfterCurrent">After current song</MenuItem>
+          <MenuItem @click="queueToBottom">Bottom of queue</MenuItem>
+          <MenuItem @click="queueToTop">Top of queue</MenuItem>
         </template>
         <MenuItem v-else @click="queueToBottom">Queue</MenuItem>
         <template v-if="!isFavoritesScreen && !(onlyOneSelected && playables[0].favorite)">
@@ -114,70 +85,45 @@
           </ul>
         </template>
         <Separator />
-        <MenuItem @click="addToNewPlaylist">New Playlist…</MenuItem>
+        <MenuItem @click="addToNewPlaylist">New playlist…</MenuItem>
       </template>
     </MenuItem>
 
-    <template v-if="onlyOneSelected && isSong(playables[0]) && !asSheet">
+    <template v-if="onlyOneSelected && !asSheet">
       <Separator />
       <li
         tabindex="-1"
         class="px-4 py-2 focus:outline-hidden"
         @mouseover="($event.currentTarget as HTMLLIElement).focus()"
       >
-        <StarRating :rateable="playables[0] as Song" @rate="closeContextMenu" />
+        <StarRating :rateable="playables[0]" @rate="closeContextMenu" />
       </li>
       <Separator />
     </template>
 
     <template v-if="isQueueScreen">
       <Separator />
-      <MenuItem @click="removeFromQueue">Remove from Queue</MenuItem>
+      <MenuItem @click="removeFromQueue">Remove from queue</MenuItem>
       <Separator />
     </template>
 
     <template v-if="isFavoritesScreen">
       <Separator />
-      <MenuItem @click="removeFromFavorites">Remove from Favorites</MenuItem>
+      <MenuItem @click="removeFromFavorites">Remove from favorites</MenuItem>
     </template>
 
-    <template v-if="visibilityActions.length">
-      <Separator />
-      <MenuItem v-for="{ label, handler } in visibilityActions" :key="label" @click="handler">
-        {{ label }}
-      </MenuItem>
-    </template>
-
-    <MenuItem v-if="canShare">
-      Share
-      <template #subMenuItems>
-        <MenuItem v-if="canBeShared" @click="copyUrl">
-          <template #icon>
-            <Icon :icon="faLink" fixed-width />
-          </template>
-          Copy URL
-        </MenuItem>
-        <MenuItem v-if="allowEmbedding" @click="showEmbedModal">
-          <template #icon>
-            <Icon :icon="faCode" fixed-width />
-          </template>
-          Embed…
-        </MenuItem>
-      </template>
-    </MenuItem>
-
-    <MenuItem v-if="onlyOneSelected && isSong(playables[0])" @click="openSongInfo">Song Info…</MenuItem>
+    <MenuItem v-if="onlyOneSelected" @click="openSongInfo">Song info…</MenuItem>
     <MenuItem v-if="downloadable" @click="download">Download</MenuItem>
     <MenuItem v-if="canToggleOffline" @click="toggleOffline">
-      {{ allCached ? 'Remove Offline Versions' : 'Make Available Offline' }}
+      {{ allCached ? 'Remove offline copies' : 'Make available offline' }}
     </MenuItem>
 
     <template v-if="canBeRemovedFromPlaylist">
       <Separator />
-      <MenuItem @click="removePlayablesFromPlaylist">Remove from Playlist</MenuItem>
+      <MenuItem @click="removePlayablesFromPlaylist">Remove from playlist</MenuItem>
     </template>
 
-    <template v-if="mirroredWatch && contentType === 'songs'">
+    <template v-if="mirroredWatch">
       <Separator />
       <MenuItem @click="excludeFromWatch">Exclude from “{{ mirroredWatch.name }}”</MenuItem>
     </template>
@@ -190,21 +136,10 @@
 </template>
 
 <script lang="ts" setup>
-import {
-  faCode,
-  faCompactDisc,
-  faExternalLink,
-  faHeadphones,
-  faLink,
-  faPodcast,
-} from '@fortawesome/free-solid-svg-icons'
-import { MicVocalIcon } from 'lucide-vue-next'
 import { computed, ref, toRef, toRefs } from 'vue'
 import { defineAsyncComponent } from '@/utils/helpers'
 import { pluralize, secondsToHis } from '@/utils/formatters'
 import { eventBus } from '@/utils/eventBus'
-import { copyText } from '@/utils/helpers'
-import { getPlayableCollectionContentType, isSong } from '@/utils/typeGuards'
 import { commonStore } from '@/stores/commonStore'
 import { playlistStore } from '@/stores/playlistStore'
 import { queueStore } from '@/stores/queueStore'
@@ -216,10 +151,8 @@ import { useDialogBox } from '@/composables/useDialogBox'
 import { usePlaylistContentManagement } from '@/composables/usePlaylistContentManagement'
 import { useThirdPartyServices } from '@/composables/useThirdPartyServices'
 import { usePlayableMenuMethods } from '@/composables/usePlayableMenuMethods'
-import { usePolicies } from '@/composables/usePolicies'
 import { useContextMenu } from '@/composables/useContextMenu'
 import { useModal } from '@/composables/useModal'
-import { useKoelPlus } from '@/composables/useKoelPlus'
 import { useOfflinePlayback } from '@/composables/useOfflinePlayback'
 import { playback } from '@/services/playbackManager'
 import { huntingStore } from '@/stores/huntingStore'
@@ -235,16 +168,14 @@ import StarRating from '@/components/ui/StarRating.vue'
 const props = defineProps<{ playables: Playable[] }>()
 const { playables } = toRefs(props)
 
-const { toastSuccess, toastError, toastWarning } = useMessageToaster()
+const { toastSuccess, toastError } = useMessageToaster()
 const { showConfirmDialog } = useDialogBox()
 const { go, getRouteParam, isCurrentScreen, url } = useRouter()
 const SongInfo = defineAsyncComponent(() => import('@/components/playable/SongInfo.vue'))
-const CreateEmbedForm = defineAsyncComponent(() => import('@/components/embed/CreateEmbedForm.vue'))
 
 const { MenuItem, Separator, closeContextMenu, trigger } = useContextMenu()
 const { openModal } = useModal()
 const { removeFromPlaylist } = usePlaylistContentManagement()
-const { isPlus } = useKoelPlus()
 
 const {
   queueAfterCurrent,
@@ -271,17 +202,13 @@ const downloadable = computed(() => {
 const queue = toRef(queueStore.state, 'playables')
 const currentSong = computed(() => queueStore.current)
 
-const { currentUserCan } = usePolicies()
-
-const contentType = computed(() => getPlayableCollectionContentType(playables.value))
-const allowEdit = computed(() => contentType.value === 'songs' && currentUserCan.editSong(playables.value as Song[]))
 const onlyOneSelected = computed(() => playables.value.length === 1)
 
 // On phones, a single song gets the design's sheet: a header, quick actions and its rating.
 const { isMobile } = useViewport()
 const { cover: defaultCover } = useBranding()
 const showPlaylists = ref(false)
-const sheetSong = computed(() => (onlyOneSelected.value && isSong(playables.value[0]) ? playables.value[0] : null))
+const sheetSong = computed(() => (onlyOneSelected.value ? playables.value[0] : null))
 const asSheet = computed(() => isMobile.value && Boolean(sheetSong.value))
 const sheetSubtitle = computed(() =>
   sheetSong.value ? `${sheetSong.value.artist_name} · ${secondsToHis(sheetSong.value.length)}` : '',
@@ -291,7 +218,7 @@ const toggleSheetFavorite = () => sheetSong.value && playableStore.toggleFavorit
 const { useMusicBrainz } = useThirdPartyServices()
 
 const musicBrainzUrl = computed(() => {
-  if (!useMusicBrainz.value || !onlyOneSelected.value || !isSong(playables.value[0])) {
+  if (!useMusicBrainz.value || !onlyOneSelected.value) {
     return null
   }
 
@@ -308,72 +235,6 @@ const firstSongPlaying = computed(() =>
 const normalPlaylists = computed(() =>
   playlists.value.filter(({ is_smart, permissions }) => !is_smart && permissions.edit),
 )
-const canBeShared = computed(() => !isPlus.value || (isSong(playables.value[0]) && playables.value[0].is_public))
-const allowEmbedding = toRef(commonStore.state, 'allows_embedding')
-const canShare = computed(() => onlyOneSelected.value && (canBeShared.value || allowEmbedding.value))
-
-const makePublic = () =>
-  trigger(async () => {
-    if (contentType.value !== 'songs') {
-      throw new Error('Only songs can be marked as public or private')
-    }
-
-    await playableStore.publicizeSongs(playables.value as Song[])
-    toastSuccess(`Unmarked ${pluralize(playables.value, 'song')} as private.`)
-  })
-
-const makePrivate = () =>
-  trigger(async () => {
-    if (contentType.value !== 'songs') {
-      throw new Error('Only songs can be marked as public or private')
-    }
-
-    const privatizedIds = await playableStore.privatizeSongs(playables.value as Song[])
-
-    if (!privatizedIds.length) {
-      toastError('Songs cannot be marked as private if they’re part of a collaborative playlist.')
-      return
-    }
-
-    if (privatizedIds.length < playables.value.length) {
-      toastWarning('Some songs cannot be marked as private as they’re part of a collaborative playlist.')
-      return
-    }
-
-    toastSuccess(`Marked ${pluralize(playables.value, 'song')} as private.`)
-  })
-
-const visibilityActions = computed(() => {
-  if (contentType.value !== 'songs' || !allowEdit.value) {
-    return []
-  }
-
-  if (!isPlus.value) {
-    return []
-  }
-
-  const visibilities = Array.from(
-    new Set((playables.value as Song[]).map(song => (song.is_public ? 'public' : 'private'))),
-  )
-
-  if (visibilities.length === 2) {
-    return [
-      {
-        label: 'Unmark as Private',
-        handler: makePublic,
-      },
-      {
-        label: 'Mark as Private',
-        handler: makePrivate,
-      },
-    ]
-  }
-
-  return visibilities[0] === 'public'
-    ? [{ label: 'Mark as Private', handler: makePrivate }]
-    : [{ label: 'Unmark as Private', handler: makePublic }]
-})
-
 const canBeRemovedFromPlaylist = computed(() => {
   if (!isCurrentScreen('Playlist')) {
     return false
@@ -428,14 +289,11 @@ const excludeFromWatch = () =>
 
 const viewAlbum = (song: Song) => trigger(() => go(url('albums.show', { id: song.album_id })))
 const viewArtist = (song: Song) => trigger(() => go(url('artists.show', { id: song.artist_id })))
-const viewPodcast = (episode: Episode) => trigger(() => go(url('podcasts.show', { id: episode.podcast_id })))
-const viewEpisode = (episode: Episode) => trigger(() => go(url('episodes.show', { id: episode.id })))
-const visitEpisodeWebpage = (episode: Episode) => trigger(() => window.open(episode.episode_link!, '_blank'))
 const { fromPlayables } = useDownload()
 const download = () => trigger(() => fromPlayables(playables.value))
 
 const { swReady, makeAvailableOffline, removeOfflineCache, isCached } = useOfflinePlayback()
-const canToggleOffline = computed(() => contentType.value === 'songs' && swReady.value)
+const canToggleOffline = computed(() => swReady.value)
 const allCached = computed(() => playables.value.every(p => isCached(p)))
 
 const toggleOffline = () =>
@@ -463,15 +321,6 @@ const removePlayablesFromPlaylist = () =>
 
     await removeFromPlaylist(playlist, playables.value)
   })
-
-const copyUrl = () =>
-  trigger(async () => {
-    await copyText(playableStore.getShareableUrl(playables.value[0]))
-    toastSuccess('URL copied to clipboard.')
-  })
-
-const showEmbedModal = () =>
-  trigger(() => openModal<'CREATE_EMBED_FORM'>(CreateEmbedForm, { embeddable: playables.value[0] }))
 </script>
 
 <style scoped>

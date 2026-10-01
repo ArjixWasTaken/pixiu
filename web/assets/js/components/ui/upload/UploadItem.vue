@@ -1,6 +1,9 @@
 <template>
   <article class="upload-item relative">
-    <div :class="cssClass" class="h-full w-full min-h-[32px] bg-k-fg-5 relative rounded-lg overflow-hidden">
+    <div
+      :class="cssClass"
+      class="h-full w-full min-h-[32px] bg-(--schemes-surface-container-high) relative rounded-lg overflow-hidden"
+    >
       <div class="absolute z-1 h-full w-full flex items-center">
         <ProgressRing
           v-if="showsProgressRing"
@@ -22,34 +25,28 @@
           class="name min-w-0 flex-1 overflow-hidden whitespace-nowrap px-4 [mask-image:linear-gradient(to_right,black_calc(100%-3rem),transparent)]"
           >{{ file.name }}</span
         >
-        <span v-if="showsReasonInRow" class="min-w-0 truncate px-4 text-k-fg-50" data-testid="upload-item-reason">
+        <span
+          v-if="showsReasonInRow"
+          class="min-w-0 truncate px-4 text-(--schemes-on-surface-variant)"
+          data-testid="upload-item-reason"
+        >
           {{ file.message }}
         </span>
-        <span v-if="file.status === 'Retrying'" class="shrink-0 px-3 text-k-fg-50" data-testid="upload-item-state">
+        <span
+          v-if="file.status === 'Retrying'"
+          class="shrink-0 px-3 text-(--schemes-on-surface-variant)"
+          data-testid="upload-item-state"
+        >
           Retrying&hellip;
         </span>
-        <Btn variant="ghost" v-if="canAbort" class="px-3!" icon-only title="Abort" unrounded @click="abort">
-          <Icon :icon="faXmark" />
-        </Btn>
-        <Btn v-if="canRetry" class="h-full px-4!" icon-only title="Retry" unrounded variant="success" @click="retry">
-          <Icon :icon="faRotateBack" />
-        </Btn>
-        <Btn
-          v-if="canRemove"
-          class="h-full px-4!"
-          icon-only
-          title="Remove"
-          unrounded
-          variant="destructive"
-          @click="remove"
-        >
-          <Icon :icon="faTrashCan" />
-        </Btn>
-        <span v-if="file.status === 'Uploaded'" class="px-3 text-k-success" title="Uploaded">
-          <Icon :icon="faCircleCheck" />
+        <M3IconButton v-if="canAbort" icon="close" label="Abort" @click="abort" />
+        <M3IconButton v-if="canRetry" icon="refresh" label="Retry" @click="retry" />
+        <M3IconButton v-if="canRemove" icon="delete" label="Remove" @click="remove" />
+        <span v-if="file.status === 'Uploaded'" class="px-3 text-(--schemes-tertiary)" title="Uploaded">
+          <M3Icon name="check_circle" />
         </span>
-        <span v-if="isProcessing" class="px-3 text-k-fg-50" title="Processing">
-          <Icon :icon="faSpinner" spin />
+        <span v-if="isProcessing" class="px-3 text-(--schemes-on-surface-variant)" title="Processing">
+          <M3Icon name="progress_activity" class="animate-spin" />
         </span>
       </div>
     </div>
@@ -57,26 +54,17 @@
 </template>
 
 <script lang="ts" setup>
-import {
-  faCircleCheck,
-  faExclamationTriangle,
-  faInfoCircle,
-  faRotateBack,
-  faSpinner,
-  faTrashCan,
-  faXmark,
-} from '@fortawesome/free-solid-svg-icons'
-import { computed, defineAsyncComponent, toRefs } from 'vue'
+import { computed, toRefs } from 'vue'
 import { useDialogBox } from '@/composables/useDialogBox'
 import type { UploadFile } from '@/services/uploadService'
 import { uploadService } from '@/services/uploadService'
 import { useRouter } from '@/composables/useRouter'
 
 import ProgressRing from '@/components/ui/ProgressRing.vue'
+import M3Icon from '@/components/m3/M3Icon.vue'
+import M3IconButton from '@/components/m3/M3IconButton.vue'
 
 const props = defineProps<{ file: UploadFile }>()
-
-const Btn = defineAsyncComponent(() => import('@/components/ui/form/Btn.vue'))
 
 const { file } = toRefs(props)
 const { url } = useRouter()
@@ -115,13 +103,14 @@ const abort = async () => {
 
 <style lang="postcss" scoped>
 @reference '@css/app.pcss';
+/* Progress runs along the foot of the row, clear of its text. */
 article > div::before {
   width: v-bind(progressBarWidth);
   content: '';
-  @apply absolute h-full top-0 left-0 z-0 duration-200 ease-out bg-k-highlight;
+  @apply absolute h-[3px] bottom-0 left-0 z-0 transition-[width] duration-200 ease-out bg-(--schemes-primary);
 }
 
 .uploaded:hover {
-  @apply bg-k-fg-10;
+  @apply bg-(--schemes-surface-container-highest);
 }
 </style>

@@ -41,17 +41,15 @@
           <ul class="flex flex-col gap-2">
             <li v-for="(reason, index) in info.kept" :key="index" class="flex items-center gap-3">
               <span class="flex-1">{{ reason.why }}</span>
-              <Btn
-                v-if="reason.excludable_from"
-                size="small"
-                variant="ghost"
-                @click.prevent="exclude(reason.excludable_from)"
-              >
+              <M3Button v-if="reason.excludable_from" variant="text" @click.prevent="exclude(reason.excludable_from)">
                 Exclude
-              </Btn>
+              </M3Button>
             </li>
           </ul>
-          <p v-if="info.kept.some(reason => reason.excludable_from)" class="text-xs text-k-fg-50 mt-2">
+          <p
+            v-if="info.kept.some(reason => reason.excludable_from)"
+            class="text-xs text-(--schemes-on-surface-variant) mt-2"
+          >
             Excluding a song from a watched playlist takes it out of the mirror; the watch won’t fetch it again.
           </p>
         </section>
@@ -59,7 +57,7 @@
     </main>
 
     <footer>
-      <Btn @click.prevent="close">Close</Btn>
+      <M3Button @click.prevent="close">Close</M3Button>
     </footer>
   </div>
 </template>
@@ -74,7 +72,7 @@ import { useBranding } from '@/composables/useBranding'
 import { useMessageToaster } from '@/composables/useMessageToaster'
 import { useErrorHandler } from '@/composables/useErrorHandler'
 
-import Btn from '@/components/ui/form/Btn.vue'
+import M3Button from '@/components/m3/M3Button.vue'
 import M3ProgressIndicator from '@/components/m3/M3ProgressIndicator.vue'
 
 const props = defineProps<{ song: Song }>()
@@ -126,6 +124,6 @@ onMounted(fetchInfo)
 @reference '@css/app.pcss';
 
 dt {
-  @apply text-k-fg-70;
+  @apply text-(--schemes-on-surface-variant);
 }
 </style>

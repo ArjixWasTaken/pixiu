@@ -4,7 +4,6 @@ import { assertOpenModal } from '@/__tests__/assertions'
 import factory from '@/__tests__/factory'
 import { MessageToasterStub } from '@/__tests__/stubs'
 import { screen, waitFor } from '@testing-library/vue'
-import { commonStore } from '@/stores/commonStore'
 import { queueStore } from '@/stores/queueStore'
 import { playableStore } from '@/stores/playableStore'
 import { userStore } from '@/stores/userStore'
@@ -13,8 +12,6 @@ import Router from '@/router'
 import { playlistStore } from '@/stores/playlistStore'
 import EditPlaylistForm from '@/components/playlist/EditPlaylistForm.vue'
 import EditSmartPlaylistForm from '@/components/playlist/smart-playlist/EditSmartPlaylistForm.vue'
-import PlaylistCollaborationModal from '@/components/playlist/PlaylistCollaborationModal.vue'
-import CreateEmbedForm from '@/components/embed/CreateEmbedForm.vue'
 
 const openModalMock = vi.fn()
 
@@ -190,7 +187,7 @@ describe('playlistContextMenu.vue', () => {
     const toastMock = h.mock(MessageToasterStub.value, 'success')
     const { playlist } = await renderComponent(h.factory('playlist').make())
 
-    await h.user.click(screen.getByText('Add to Queue'))
+    await h.user.click(screen.getByText('Add to queue'))
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(playlist)
@@ -205,28 +202,5 @@ describe('playlistContextMenu.vue', () => {
 
     expect(screen.queryByText('Edit…')).toBeNull()
     expect(screen.queryByText('Delete')).toBeNull()
-  })
-
-  it('opens collaboration form', async () =>
-    await h.withPlusEdition(async () => {
-      const { playlist } = await renderComponent(h.factory('playlist').make())
-
-      await h.user.click(screen.getByText('Collaborate…'))
-
-      await assertOpenModal(openModalMock, PlaylistCollaborationModal, { playlist })
-    }))
-
-  it('requests the embed form', async () => {
-    const { playlist } = await renderComponent(h.factory('playlist').make())
-    await h.user.click(screen.getByText('Embed…'))
-
-    await assertOpenModal(openModalMock, CreateEmbedForm, { embeddable: playlist })
-  })
-
-  it('does not have an option to embed when embedding is disabled', async () => {
-    commonStore.state.allows_embedding = false
-    await renderComponent(h.factory('playlist').make())
-
-    expect(screen.queryByText('Embed…')).toBeNull()
   })
 })

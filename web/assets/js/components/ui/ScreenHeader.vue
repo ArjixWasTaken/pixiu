@@ -131,11 +131,11 @@ const titleClass = computed(() => {
 }
 
 .thumbnail {
-  width: 180px;
-  height: 180px;
+  width: var(--m3-header-cover);
+  height: var(--m3-header-cover);
   flex-shrink: 0;
   overflow: hidden;
-  border-radius: 28px;
+  border-radius: 16px;
   box-shadow: var(--m3-elevation-1);
 
   .round & {

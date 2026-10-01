@@ -1,29 +1,27 @@
 <template>
-  <HomeScreenBlock>
-    <template #header>Random Songs</template>
+  <HomeScreenBlock v-if="loading || playables.length">
+    <template #header>Random songs</template>
     <template #actions>
-      <Btn v-if="playables.length" size="small" variant="ghost" rounded :disabled="refreshing" @click.prevent="refresh">
-        <Icon :icon="faRotateRight" :class="{ 'animate-spin': refreshing }" />
-        <span class="sr-only">Refresh</span>
-      </Btn>
+      <M3IconButton v-if="playables.length" :disabled="refreshing" label="Refresh" @click.prevent="refresh">
+        <M3Icon :class="{ 'animate-spin': refreshing }" name="refresh" />
+      </M3IconButton>
     </template>
     <PlayableCardGridSkeleton v-if="loading" class="-mx-6" role="status" aria-busy="true" aria-label="Loading" />
     <template v-else>
-      <PlayableCardGrid v-if="playables.length" :aria-busy="refreshing" class="-mx-6" :playables />
-      <p v-else>No songs available.</p>
+      <PlayableCardGrid :aria-busy="refreshing" class="-mx-6" :playables />
     </template>
   </HomeScreenBlock>
 </template>
 
 <script lang="ts" setup>
-import { faRotateRight } from '@fortawesome/free-solid-svg-icons'
 import { ref, toRef, toRefs } from 'vue'
 import { overviewStore } from '@/stores/overviewStore'
 
-import Btn from '@/components/ui/form/Btn.vue'
+import M3IconButton from '@/components/m3/M3IconButton.vue'
 import HomeScreenBlock from '@/components/screens/home/HomeScreenBlock.vue'
 import PlayableCardGrid from '@/components/screens/home/PlayableCardGrid.vue'
 import PlayableCardGridSkeleton from '@/components/screens/home/PlayableCardGridSkeleton.vue'
+import M3Icon from '@/components/m3/M3Icon.vue'
 
 const props = withDefaults(defineProps<{ loading?: boolean }>(), { loading: false })
 const { loading } = toRefs(props)

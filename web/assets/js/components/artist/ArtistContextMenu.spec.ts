@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from 'vite-plus/test'
 import { screen } from '@testing-library/vue'
 import { shallowRef } from 'vue'
 import { createHarness } from '@/__tests__/TestHarness'
-import { assertOpenModal } from '@/__tests__/assertions'
 import factory from '@/__tests__/factory'
 import { ContextMenuKey } from '@/config/symbols'
 import { downloadService } from '@/services/downloadService'
@@ -10,7 +9,6 @@ import { playbackService } from '@/services/QueuePlaybackService'
 import { artistStore } from '@/stores/artistStore'
 import { commonStore } from '@/stores/commonStore'
 import { playableStore } from '@/stores/playableStore'
-import CreateEmbedForm from '@/components/embed/CreateEmbedForm.vue'
 
 const openModalMock = vi.fn()
 
@@ -56,7 +54,7 @@ describe('artistContextMenu.vue', () => {
     const playMock = h.mock(playbackService, 'queueAndPlay')
 
     const { artist } = await renderComponent()
-    await screen.getByText('Play All').click()
+    await screen.getByText('Play all').click()
     await h.tick()
 
     expect(fetchMock).toHaveBeenCalledWith(artist)
@@ -71,7 +69,7 @@ describe('artistContextMenu.vue', () => {
     const playMock = h.mock(playbackService, 'queueAndPlay')
 
     const { artist } = await renderComponent()
-    await screen.getByText('Shuffle All').click()
+    await screen.getByText('Shuffle all').click()
     await h.tick()
 
     expect(fetchMock).toHaveBeenCalledWith(artist)
@@ -103,20 +101,6 @@ describe('artistContextMenu.vue', () => {
   it('does not have an option to download Various Artist', async () => {
     await renderComponent(factory('artist').state('various').make())
     expect(screen.queryByText('Download')).toBeNull()
-  })
-
-  it('requests the embed form', async () => {
-    const { artist } = await renderComponent()
-    await h.user.click(screen.getByText('Embed…'))
-
-    await assertOpenModal(openModalMock, CreateEmbedForm, { embeddable: artist })
-  })
-
-  it('does not have an option to embed when embedding is disabled', async () => {
-    commonStore.state.allows_embedding = false
-    await renderComponent()
-
-    expect(screen.queryByText('Embed…')).toBeNull()
   })
 
   it('links to MusicBrainz', async () => {

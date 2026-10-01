@@ -23,8 +23,7 @@
     <MiniPlayer v-if="isMobile" />
 
     <div v-else class="wrapper">
-      <RadioStationInfo v-if="isRadio" />
-      <SongInfo v-else />
+      <SongInfo />
       <PlaybackControls />
       <ExtraControls />
     </div>
@@ -42,7 +41,6 @@ import { useThrottleFn, watchThrottled } from '@vueuse/core'
 import { computed, nextTick, ref, watch } from 'vue'
 import { useFullscreen } from '@vueuse/core'
 import { eventBus } from '@/utils/eventBus'
-import { isEpisode, isRadioStation, isSong } from '@/utils/typeGuards'
 import { isAudioContextSupported } from '@/utils/supports'
 import { defineAsyncComponent, requireInjection } from '@/utils/helpers'
 import { logger } from '@/utils/logger'
@@ -55,7 +53,6 @@ import { playback } from '@/services/playbackManager'
 import { useContextMenu } from '@/composables/useContextMenu'
 import { useViewport } from '@/composables/useViewport'
 import { volumeManager } from '@/services/volumeManager'
-import { socketService } from '@/services/socketService'
 
 import ExtraControls from '@/components/layout/app-footer/FooterExtraControls.vue'
 import PlaybackControls from '@/components/layout/app-footer/FooterPlaybackControls.vue'
@@ -63,10 +60,8 @@ import MiniPlayer from '@/components/layout/app-footer/MiniPlayer.vue'
 import NowPlayingSheet from '@/components/layout/now-playing/NowPlayingSheet.vue'
 
 const SongInfo = defineAsyncComponent(() => import('@/components/layout/app-footer/FooterPlayableInfo.vue'))
-const RadioStationInfo = defineAsyncComponent(() => import('@/components/layout/app-footer/FooterRadioStationInfo.vue'))
 const UpNext = defineAsyncComponent(() => import('@/components/layout/app-footer/UpNext.vue'))
 const PlayableContextMenu = defineAsyncComponent(() => import('@/components/playable/PlayableContextMenu.vue'))
-const RadioStationContextMenu = defineAsyncComponent(() => import('@/components/radio/RadioStationContextMenu.vue'))
 
 const currentStreamable = requireInjection(CurrentStreamableKey, ref())
 const { isMobile } = useViewport()
@@ -80,22 +75,13 @@ const { isFullscreen, toggle: toggleFullscreen } = useFullscreen(root)
 const { openContextMenu } = useContextMenu()
 
 const showingUpNext = computed(() => nextPlayable.value && isFullscreen.value)
-const isRadio = computed(() => currentStreamable.value && isRadioStation(currentStreamable.value))
 
 const requestContextMenu = (event: MouseEvent) => {
   if (document.fullscreenElement || !currentStreamable.value) {
     return
   }
 
-  if (isRadio.value) {
-    openContextMenu<'RADIO_STATION'>(RadioStationContextMenu, event, {
-      station: currentStreamable.value as RadioStation,
-    })
-  } else {
-    openContextMenu<'PLAYABLES'>(PlayableContextMenu, event, {
-      playables: [currentStreamable.value as Playable],
-    })
-  }
+  openContextMenu<'PLAYABLES'>(PlayableContextMenu, event, { playables: [currentStreamable.value] })
 }
 
 watch(currentStreamable, async streamable => {
@@ -103,9 +89,7 @@ watch(currentStreamable, async streamable => {
     return
   }
 
-  if (isSong(streamable)) {
-    artist.value = await artistStore.resolve(streamable.artist_id)
-  }
+  artist.value = await artistStore.resolve(streamable.artist_id)
 })
 
 const { cover: defaultCover } = useBranding()
@@ -116,22 +100,11 @@ const stage = computed(() => {
   if (!streamable) {
     return null
   }
-  if (isSong(streamable)) {
-    return {
-      cover: streamable.album_cover || defaultCover,
-      title: streamable.title,
-      subtitle: [streamable.artist_name, streamable.album_name].filter(Boolean).join(' · '),
-    }
+  return {
+    cover: streamable.album_cover || defaultCover,
+    title: streamable.title,
+    subtitle: [streamable.artist_name, streamable.album_name].filter(Boolean).join(' · '),
   }
-  if (isEpisode(streamable)) {
-    return {
-      cover: streamable.episode_image || defaultCover,
-      title: streamable.title,
-      subtitle: streamable.podcast_title,
-    }
-  }
-  const station = streamable as RadioStation
-  return { cover: station.logo || defaultCover, title: station.name, subtitle: 'Radio' }
 })
 
 const appBackgroundImage = computed(() => {
@@ -139,16 +112,7 @@ const appBackgroundImage = computed(() => {
     return 'none'
   }
 
-  let src: string | null = null
-
-  if (isSong(currentStreamable.value)) {
-    src = artist.value?.image ?? currentStreamable.value.album_cover
-  } else if (isEpisode(currentStreamable.value)) {
-    src = currentStreamable.value.episode_image
-  } else if (isRadio.value) {
-    src = (currentStreamable.value as RadioStation).logo
-  }
-
+  const src = artist.value?.image ?? currentStreamable.value.album_cover
   return src ? `url(${src})` : 'none'
 })
 
@@ -161,7 +125,6 @@ const initPlaybackRelatedServices = async () => {
     return
   }
 
-  // Defaults to the queue playback over radio playback.
   const playbackService = playback()
 
   // If audio context is supported, initialize the audio service which handles audio processing (equalizer, etc.)
@@ -183,15 +146,8 @@ watch(
   { immediate: true },
 )
 
-// Volume changes come often: save and broadcast them at most once a second.
-watchThrottled(
-  volumeManager.volume,
-  volume => {
-    preferenceStore.volume = volume
-    socketService.broadcast('SOCKET_VOLUME_CHANGED', volume)
-  },
-  { throttle: 1_000 },
-)
+// Volume changes come often: save them at most once a second.
+watchThrottled(volumeManager.volume, volume => (preferenceStore.volume = volume), { throttle: 1_000 })
 
 const setupControlHidingTimer = () => {
   hideControlsTimeout = window.setTimeout(() => root.value?.classList.add('hide-controls'), 5000)
@@ -240,10 +196,9 @@ footer {
   flex-shrink: 0;
 
   &:not(.mobile) {
-    margin: 12px;
-    min-height: 88px;
-    border-radius: 28px;
-    background: var(--schemes-surface-container-high);
+    min-height: var(--m3-player-height);
+    border-top: 1px solid var(--schemes-outline-variant);
+    background: var(--schemes-surface-container);
   }
 
   &.mobile {
@@ -254,8 +209,12 @@ footer {
     display: flex;
     align-items: center;
     gap: 16px;
-    min-height: 88px;
+    min-height: var(--m3-player-height);
     padding: 12px 16px;
+
+    @media (pointer: fine) and (min-width: 769px) {
+      padding: 8px 12px;
+    }
   }
 
   .fullscreen-backdrop {

@@ -21,7 +21,7 @@ describe('createSmartPlaylistForm', () => {
   it('opens on the Details tab', () => {
     renderComponent()
 
-    screen.getByText('New Smart Playlist')
+    screen.getByText('New smart playlist')
     expect(screen.getByRole('tab', { name: 'Details' }).getAttribute('aria-selected')).toBe('true')
     screen.getByRole('textbox', { name: 'Name' })
     screen.getByRole('textbox', { name: 'Description' })

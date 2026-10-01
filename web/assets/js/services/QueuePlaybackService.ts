@@ -6,16 +6,11 @@ import { preferenceStore as preferences } from '@/stores/preferenceStore'
 import { queueStore } from '@/stores/queueStore'
 import { recentlyPlayedStore } from '@/stores/recentlyPlayedStore'
 import { playableStore } from '@/stores/playableStore'
-import { userStore } from '@/stores/userStore'
 import { logger } from '@/utils/logger'
-import { isEpisode, isSong } from '@/utils/typeGuards'
-import { arrayify, getPlayableProp } from '@/utils/helpers'
-import { eventBus } from '@/utils/eventBus'
+import { arrayify } from '@/utils/helpers'
 import { isAudioContextSupported } from '@/utils/supports'
 import { audioService } from '@/services/audioService'
 import { subsonic } from '@/services/subsonic'
-import { socketService } from '@/services/socketService'
-import { useEpisodeProgressTracking } from '@/composables/useEpisodeProgressTracking'
 import { BasePlaybackService } from '@/services/BasePlaybackService'
 import { crossfadeService } from '@/services/crossfadeService'
 import { encyclopediaService } from '@/services/encyclopediaService'
@@ -26,11 +21,6 @@ import { useBranding } from '@/composables/useBranding'
  * The number of seconds before the current playable ends to start preloading the next one.
  */
 const PRELOAD_BUFFER = 30
-
-// Both Last.fm and ListenBrainz consider a track listened to once it has been played for half its
-// length or four minutes, whichever comes first. Tracks shorter than 30 seconds never count.
-const SCROBBLE_AFTER_SECONDS = 240
-const MIN_SCROBBLE_LENGTH = 30
 
 export class QueuePlaybackService extends BasePlaybackService {
   private repeatModes: RepeatMode[] = ['NO_REPEAT', 'REPEAT_ALL', 'REPEAT_ONE']
@@ -65,7 +55,7 @@ export class QueuePlaybackService extends BasePlaybackService {
     playableStore.registerPlay(playable)
     playable.play_count_registered = true
 
-    if (isSong(playable) && !playable.album_cover) {
+    if (!playable.album_cover) {
       encyclopediaService.fetchForAlbum({ id: playable.album_id } as Album).catch(logger.error)
     }
   }
@@ -94,14 +84,10 @@ export class QueuePlaybackService extends BasePlaybackService {
       this.cancelCrossfade()
     }
 
-    if (isEpisode(playable)) {
-      useEpisodeProgressTracking().trackEpisode(playable)
-    }
-
     queueStore.queueIfNotQueued(playable, 'after-current')
 
     // If for any reason (most likely a bug), the requested playable has been deleted, attempt the next item in the queue.
-    if (isSong(playable) && playable.deleted) {
+    if (playable.deleted) {
       logger.warn('Attempted to play a deleted playable', playable)
 
       if (this.next && this.next.id !== playable.id) {
@@ -159,15 +145,11 @@ export class QueuePlaybackService extends BasePlaybackService {
   }
 
   public showNotification(playable: Playable) {
-    if (!isSong(playable) && !isEpisode(playable)) {
-      throw new Error('Invalid playable type.')
-    }
-
-    if (preferences.show_now_playing_notification) {
+    if (preferences.show_now_playing_notification && window.Notification?.permission === 'granted') {
       try {
         const notification = new window.Notification(`♫ ${playable.title}`, {
-          icon: getPlayableProp(playable, 'album_cover', 'episode_image'),
-          body: isSong(playable) ? `${playable.album_name} – ${playable.artist_name}` : playable.title,
+          icon: playable.album_cover,
+          body: `${playable.album_name} – ${playable.artist_name}`,
         })
 
         notification.onclick = () => window.focus()
@@ -184,12 +166,12 @@ export class QueuePlaybackService extends BasePlaybackService {
       return
     }
 
-    const cover = getPlayableProp(playable, 'album_cover', 'episode_image') || useBranding().cover
+    const cover = playable.album_cover || useBranding().cover
 
     navigator.mediaSession.metadata = new MediaMetadata({
       title: playable.title,
-      artist: getPlayableProp(playable, 'artist_name', 'podcast_author'),
-      album: getPlayableProp(playable, 'album_name', 'podcast_title'),
+      artist: playable.artist_name,
+      album: playable.album_name,
       artwork: [48, 64, 96, 128, 192, 256, 384, 512].map(d => ({
         src: cover,
         sizes: `${d}x${d}`,
@@ -205,7 +187,6 @@ export class QueuePlaybackService extends BasePlaybackService {
     this.upNext.value = null
 
     this.recordStartTime(playable)
-    socketService.broadcast('SOCKET_STREAMABLE', playable)
 
     queueStore.savePlaybackStatus(playable, 0)
     subsonic.scrobble(playable.id, false).catch(error => logger.error(error))
@@ -277,8 +258,6 @@ export class QueuePlaybackService extends BasePlaybackService {
     queueStore.current && (queueStore.current.playback_state = 'Stopped')
 
     navigator.mediaSession && (navigator.mediaSession.playbackState = 'none')
-
-    socketService.broadcast('SOCKET_PLAYBACK_STOPPED')
   }
 
   public async pause() {
@@ -289,8 +268,6 @@ export class QueuePlaybackService extends BasePlaybackService {
     navigator.mediaSession && (navigator.mediaSession.playbackState = 'paused')
     // The tab names the song only while it plays.
     document.title = useBranding().name
-
-    socketService.broadcast('SOCKET_STREAMABLE', queueStore.current)
   }
 
   public async resume() {
@@ -315,8 +292,6 @@ export class QueuePlaybackService extends BasePlaybackService {
     queueStore.current!.playback_state = 'Playing'
     navigator.mediaSession && (navigator.mediaSession.playbackState = 'playing')
     document.title = `${playable.title} ♫ ${useBranding().name}`
-
-    socketService.broadcast('SOCKET_STREAMABLE', playable)
   }
 
   public async toggle() {
@@ -354,7 +329,7 @@ export class QueuePlaybackService extends BasePlaybackService {
 
   private async setNowPlayingMeta(playable: Playable) {
     document.title = `${playable.title} ♫ ${useBranding().name}`
-    this.media.setAttribute('title', isSong(playable) ? `${playable.artist_name} - ${playable.title}` : playable.title)
+    this.media.setAttribute('title', `${playable.artist_name} - ${playable.title}`)
 
     if (isAudioContextSupported) {
       await audioService.context.resume()
@@ -363,35 +338,8 @@ export class QueuePlaybackService extends BasePlaybackService {
 
   // Record the UNIX timestamp the playable starts playing, for scrobbling purpose
   private recordStartTime(song: Playable) {
-    if (!isSong(song)) {
-      return
-    }
-
     song.play_start_time = Math.floor(Date.now() / 1000)
     song.play_count_registered = false
-    song.scrobble_registered = false
-  }
-
-  private get scrobblingEnabled() {
-    const { preferences } = userStore.current
-
-    return (
-      (commonStore.state.uses_last_fm && Boolean(preferences.lastfm_session_key)) ||
-      Boolean(preferences.listenbrainz_token)
-    )
-  }
-
-  private scrobbleIfEligible(playable: Playable, currentTime: number, duration: number) {
-    if (playable.scrobble_registered || !isSong(playable) || !this.scrobblingEnabled) {
-      return
-    }
-
-    if (duration < MIN_SCROBBLE_LENGTH || currentTime < Math.min(duration / 2, SCROBBLE_AFTER_SECONDS)) {
-      return
-    }
-
-    playable.scrobble_registered = true
-    playableStore.scrobble(playable)
   }
 
   public forward(seconds: number): void {
@@ -429,16 +377,9 @@ export class QueuePlaybackService extends BasePlaybackService {
       this.registerPlay(currentPlayable)
     }
 
-    this.scrobbleIfEligible(currentPlayable, media.currentTime, media.duration)
-
     if (Math.ceil(media.currentTime) % 5 === 0) {
       // every 5 seconds, we save the current playback position to the server
       queueStore.savePlaybackStatus(currentPlayable, Math.ceil(media.currentTime))
-
-      // if the current item is an episode, we emit an event to update the progress on the client side as well
-      if (isEpisode(currentPlayable)) {
-        eventBus.emit('EPISODE_PROGRESS_UPDATED', currentPlayable, Math.ceil(media.currentTime))
-      }
     }
 
     const nextPlayable = queueStore.next

@@ -18,27 +18,14 @@ describe('screenBase', () => {
     screen.getByText('Screen Content')
   })
 
-  it('renders cover background when backgroundImage is provided', () => {
-    h.render(Component, {
-      props: {
-        backgroundImage: 'https://example.com/cover.jpg',
-      },
+  it('scrolls the header with the content', () => {
+    const { container } = h.render(Component, {
       slots: {
-        default: 'Content',
+        header: 'Screen Header',
+        default: 'Screen Content',
       },
     })
 
-    const bg = screen.getByTestId('cover-bg')
-    expect(bg.style.backgroundImage).toContain('https://example.com/cover.jpg')
-  })
-
-  it('does not render cover background when backgroundImage is not provided', () => {
-    h.render(Component, {
-      slots: {
-        default: 'Content',
-      },
-    })
-
-    expect(screen.queryByTestId('cover-bg')).toBeNull()
+    expect(container.querySelector('.screen-body')!.textContent).toContain('Screen Header')
   })
 })

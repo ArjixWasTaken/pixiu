@@ -78,10 +78,10 @@ describe('playableListItem.vue', () => {
 
     screen.getByText('Test Song')
     screen.getByText('Test Artist · Test Album')
-    screen.getByRole('button', { name: 'Undo Favorite' })
+    screen.getByRole('button', { name: 'Remove from favorites' })
   })
 
-  it('says when a song was played on Recently Played', () => {
+  it('says when a song was played on Recently played', () => {
     const song = h.factory('song').make({
       album_name: 'Test Album',
       artist_name: 'Test Artist',
@@ -107,6 +107,21 @@ describe('playableListItem.vue', () => {
     screen.getByText('Test Artist · Test Album')
   })
 
+  it('shows the track number in place of the cover in an album', () => {
+    const playable = h.factory('song').make({ track: 7, album_name: 'Groovy', favorite: false })
+    renderComponent(playable, false, { type: 'Album' })
+
+    screen.getByText('7')
+    expect(screen.queryByAltText('Cover image')).toBeNull()
+    expect(screen.queryByText(/Groovy/)).toBeNull()
+  })
+
+  it('shows the cover elsewhere', () => {
+    renderComponent(h.factory('song').make({ track: 7, album_cover: 'http://test/cover.jpg' }))
+
+    screen.getByAltText('Cover image')
+  })
+
   it('emits play event on double click', async () => {
     const { emitted } = renderComponent()
     await h.user.dblClick(screen.getByTestId('song-item'))
@@ -128,7 +143,7 @@ describe('playableListItem.vue', () => {
     const toggleFavoriteMock = h.mock(playableStore, 'toggleFavorite')
     const { row } = renderComponent()
 
-    await h.user.click(screen.getByRole('button', { name: 'Favorite' }))
+    await h.user.click(screen.getByRole('button', { name: 'Add to favorites' }))
 
     expect(toggleFavoriteMock).toHaveBeenCalledWith(row.playable)
   })

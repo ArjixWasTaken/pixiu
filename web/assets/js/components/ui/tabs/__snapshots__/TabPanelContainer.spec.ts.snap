@@ -1,3 +1,0 @@
-// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
-
-exports[`tabPanelContainer.vue > renders 1`] = `<div data-v-80d459e5="" class="scrolls p-6">Content</div>`;
