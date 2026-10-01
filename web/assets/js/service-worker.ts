@@ -1,165 +1,61 @@
 /// <reference lib="webworker" />
 
-declare const self: ServiceWorkerGlobalScope
-
-const AUDIO_CACHE_NAME = 'koel-audio-v1'
-const STATIC_CACHE_NAME = 'koel-static-v1'
-
 /**
- * Normalize a play URL to a stable cache key by stripping the auth token query param.
- * e.g. "https://example.com/play/abc123?t=token" -> "https://example.com/play/abc123"
- *      "https://example.com/play/abc123/1?t=token" -> "https://example.com/play/abc123/1"
+ * píxiū's service worker (built by vite-plugin-pwa, on Workbox). It keeps:
+ * - the player itself, precached at each build, so it opens without the server;
+ * - what the player asks for at start-up, network first, so it starts with
+ *   the last of it when the server can't be reached;
+ * - the songs made available offline, on the player's request (see
+ *   useOfflinePlayback), answering the audio element from them, seeking
+ *   (Range requests) included.
  */
-const normalizeCacheKey = (url: string): string => {
-  const u = new URL(url)
-  u.searchParams.delete('t')
-  return u.toString()
+
+import { cleanupOutdatedCaches, createHandlerBoundToURL, precacheAndRoute } from 'workbox-precaching'
+import { NavigationRoute, registerRoute } from 'workbox-routing'
+import { NetworkFirst } from 'workbox-strategies'
+import { createPartialResponse } from 'workbox-range-requests'
+import { isStreamUrl, streamCacheKey } from '@/utils/streamCache'
+
+declare const self: ServiceWorkerGlobalScope & {
+  __WB_MANIFEST: Array<{ url: string; revision: string | null }>
 }
 
-/**
- * Check if a request URL is a play (audio streaming) URL.
- */
-const isPlayUrl = (url: string): boolean => {
-  try {
-    const u = new URL(url)
-    // matches /play/{id} and /play/{id}/1 (mobile transcoding)
-    return /\/play\/[^/]+(\/1)?$/.test(u.pathname)
-  } catch {
-    return false
-  }
-}
+const AUDIO_CACHE_NAME = 'pixiu-audio-v1'
+const START_UP_CACHE_NAME = 'pixiu-start-up-v1'
 
-/**
- * Check if a request URL is a static asset (JS, CSS, images, fonts).
- */
-const isStaticAsset = (url: string): boolean => {
-  try {
-    const u = new URL(url)
-    if (u.protocol !== 'http:' && u.protocol !== 'https:') return false
-    return /\.(js|css|png|jpg|jpeg|svg|gif|ico|woff2?|ttf|eot|otf)(\?.*)?$/.test(u.pathname)
-  } catch {
-    return false
-  }
-}
+// ---- The player ----
 
-// ---- Fetch handler ----
+// eslint-disable-next-line no-underscore-dangle -- Workbox's injection point, named so.
+precacheAndRoute(self.__WB_MANIFEST)
+cleanupOutdatedCaches()
 
-self.addEventListener('fetch', (event: FetchEvent) => {
-  const { request } = event
+// Every address the player routes itself opens the player; the APIs are the server's.
+registerRoute(new NavigationRoute(createHandlerBoundToURL('index.html'), { denylist: [/^\/(api|rest)(\/|$)/] }))
 
-  if (isPlayUrl(request.url)) {
-    event.respondWith(handlePlayRequest(request))
-    return
-  }
+// ---- Start-up ----
 
-  if (isStaticAsset(request.url)) {
-    event.respondWith(handleStaticAsset(request))
-    return
-  }
-})
+const isStartUp = (url: URL) => /^\/(api\/(bootstrap|playlists)|rest\/getPlayQueue(\.view)?)$/.test(url.pathname)
 
-/**
- * For audio play requests: serve from cache if available, otherwise fetch from network.
- * Audio is cached under a normalized key (without auth token).
- * Supports HTTP Range requests for seeking in cached audio.
- */
-const handlePlayRequest = async (request: Request): Promise<Response> => {
-  const cache = await caches.open(AUDIO_CACHE_NAME)
-  const cacheKey = normalizeCacheKey(request.url)
-  const cached = await cache.match(cacheKey)
+registerRoute(
+  ({ url, request }) => request.method === 'GET' && url.origin === self.location.origin && isStartUp(url),
+  new NetworkFirst({ cacheName: START_UP_CACHE_NAME, networkTimeoutSeconds: 5 }),
+)
 
-  if (cached) {
-    return handleRangeRequest(request, cached)
-  }
+// ---- Songs made available offline ----
 
-  // Not cached — fetch from network and let it stream through.
-  // We do NOT cache on-the-fly here; caching is done proactively via the CACHE_AUDIO message.
-  return fetch(request)
-}
+registerRoute(
+  ({ url }) => url.origin === self.location.origin && isStreamUrl(url),
+  async ({ request }) => {
+    const cached = await (await caches.open(AUDIO_CACHE_NAME)).match(streamCacheKey(request.url))
 
-/**
- * Handle Range requests for cached audio to enable seeking.
- * The browser sends Range headers when the user seeks in the audio player.
- */
-const handleRangeRequest = async (request: Request, cached: Response): Promise<Response> => {
-  const rangeHeader = request.headers.get('Range')
-
-  if (!rangeHeader) {
-    return cached
-  }
-
-  const blob = await cached.blob()
-  const totalSize = blob.size
-  const match = rangeHeader.match(/bytes=(\d+)-(\d*)/)
-
-  if (!match) {
-    return cached
-  }
-
-  const start = Number(match[1])
-  const end = match[2] ? Number(match[2]) : totalSize - 1
-  const sliced = blob.slice(start, end + 1)
-
-  return new Response(sliced, {
-    status: 206,
-    statusText: 'Partial Content',
-    headers: {
-      'Content-Type': cached.headers.get('Content-Type') || 'audio/mpeg',
-      'Content-Length': String(sliced.size),
-      'Content-Range': `bytes ${start}-${end}/${totalSize}`,
-      'Accept-Ranges': 'bytes',
-    },
-  })
-}
-
-/**
- * Static assets: network-first for JS (to pick up new deploys), cache-first for images/fonts.
- */
-const handleStaticAsset = async (request: Request): Promise<Response> => {
-  const url = new URL(request.url)
-  const isJS = /\.js(\?.*)?$/.test(url.pathname)
-
-  return isJS ? handleJsAsset(request) : handleOtherStaticAsset(request)
-}
-
-/**
- * JS assets: network-first strategy. Try to fetch from network, falling back to cache.
- */
-const handleJsAsset = async (request: Request): Promise<Response> => {
-  try {
-    const response = await fetch(request)
-    if (response.ok) {
-      const cache = await caches.open(STATIC_CACHE_NAME)
-      cache.put(request, response.clone())
+    if (!cached) {
+      // Not kept: it streams from the server as usual.
+      return fetch(request)
     }
-    return response
-  } catch {
-    const cached = await caches.open(STATIC_CACHE_NAME).then(c => c.match(request))
-    return cached || new Response('Service Unavailable', { status: 503 })
-  }
-}
 
-/**
- * Non-JS static assets (images, fonts, CSS): cache-first strategy.
- */
-const handleOtherStaticAsset = async (request: Request): Promise<Response> => {
-  const cache = await caches.open(STATIC_CACHE_NAME)
-  const cached = await cache.match(request)
-
-  if (cached) {
-    return cached
-  }
-
-  const response = await fetch(request)
-
-  if (response.ok) {
-    cache.put(request, response.clone())
-  }
-
-  return response
-}
-
-// ---- Message handler for proactive audio caching ----
+    return request.headers.has('range') ? createPartialResponse(request, cached) : cached
+  },
+)
 
 export interface CacheAudioMessage {
   type: 'CACHE_AUDIO'
@@ -178,35 +74,14 @@ export interface GetCacheStatusMessage {
   sourceUrls: string[]
 }
 
-type SWMessage = CacheAudioMessage | DeleteAudioCacheMessage | GetCacheStatusMessage
+type Message = CacheAudioMessage | DeleteAudioCacheMessage | GetCacheStatusMessage | { type: 'SKIP_WAITING' }
 
-self.addEventListener('message', (event: ExtendableMessageEvent) => {
-  const data = event.data as SWMessage
-
-  switch (data.type) {
-    case 'CACHE_AUDIO':
-      event.waitUntil(cacheAudio(data, event.source as Client))
-      break
-
-    case 'DELETE_AUDIO_CACHE':
-      event.waitUntil(deleteAudioCache(data, event.source as Client))
-      break
-
-    case 'GET_CACHE_STATUS':
-      event.waitUntil(getCacheStatus(data, event.source as Client))
-      break
-  }
-})
-
-const cacheAudio = async (data: CacheAudioMessage, client: Client) => {
-  const { songId, sourceUrl } = data
-  const cacheKey = normalizeCacheKey(sourceUrl)
+/** Fetches a song whole and keeps it, telling the player how far along it is. */
+const cacheAudio = async ({ songId, sourceUrl }: CacheAudioMessage, client: Client) => {
   const cache = await caches.open(AUDIO_CACHE_NAME)
+  const key = streamCacheKey(sourceUrl)
 
-  // Check if already cached
-  const existing = await cache.match(cacheKey)
-
-  if (existing) {
+  if (await cache.match(key)) {
     client.postMessage({ type: 'CACHE_AUDIO_COMPLETE', songId })
     return
   }
@@ -214,18 +89,13 @@ const cacheAudio = async (data: CacheAudioMessage, client: Client) => {
   try {
     const response = await fetch(sourceUrl)
 
-    if (!response.ok) {
+    if (!response.ok || !response.body) {
       throw new Error(`HTTP ${response.status}`)
     }
 
-    // Clone the response so we can read it for progress and also cache it
-    const contentLength = Number(response.headers.get('Content-Length') || 0)
-    const reader = response.body?.getReader()
-
-    if (!reader) {
-      throw new Error('ReadableStream not supported')
-    }
-
+    const type = response.headers.get('Content-Type') || 'audio/mpeg'
+    const total = Number(response.headers.get('Content-Length') || 0)
+    const reader = response.body.getReader()
     const chunks: BlobPart[] = []
     let received = 0
 
@@ -239,29 +109,19 @@ const cacheAudio = async (data: CacheAudioMessage, client: Client) => {
       chunks.push(value)
       received += value.length
 
-      if (contentLength > 0) {
-        client.postMessage({
-          type: 'CACHE_AUDIO_PROGRESS',
-          songId,
-          progress: received / contentLength,
-          received,
-          total: contentLength,
-        })
+      if (total > 0) {
+        client.postMessage({ type: 'CACHE_AUDIO_PROGRESS', songId, progress: received / total, received, total })
       }
     }
 
-    // Reconstruct the response and cache it under the normalized key
-    const blob = new Blob(chunks, { type: response.headers.get('Content-Type') || 'audio/mpeg' })
-    const cachedResponse = new Response(blob, {
-      status: response.status,
-      statusText: response.statusText,
-      headers: {
-        'Content-Type': response.headers.get('Content-Type') || 'audio/mpeg',
-        'Content-Length': String(blob.size),
-      },
-    })
+    const blob = new Blob(chunks, { type })
+    await cache.put(
+      key,
+      new Response(blob, {
+        headers: { 'Content-Type': type, 'Content-Length': String(blob.size), 'Accept-Ranges': 'bytes' },
+      }),
+    )
 
-    await cache.put(cacheKey, cachedResponse)
     client.postMessage({ type: 'CACHE_AUDIO_COMPLETE', songId })
   } catch (error) {
     client.postMessage({
@@ -272,46 +132,45 @@ const cacheAudio = async (data: CacheAudioMessage, client: Client) => {
   }
 }
 
-const deleteAudioCache = async (data: DeleteAudioCacheMessage, client: Client) => {
-  const { songId, sourceUrl } = data
-  const cacheKey = normalizeCacheKey(sourceUrl)
-  const cache = await caches.open(AUDIO_CACHE_NAME)
-  const deleted = await cache.delete(cacheKey)
-
+const deleteAudioCache = async ({ songId, sourceUrl }: DeleteAudioCacheMessage, client: Client) => {
+  const deleted = await (await caches.open(AUDIO_CACHE_NAME)).delete(streamCacheKey(sourceUrl))
   client.postMessage({ type: 'DELETE_AUDIO_CACHE_COMPLETE', songId, deleted })
 }
 
-const getCacheStatus = async (data: GetCacheStatusMessage, client: Client) => {
+const getCacheStatus = async ({ sourceUrls }: GetCacheStatusMessage, client: Client) => {
   const cache = await caches.open(AUDIO_CACHE_NAME)
   const statuses: Record<string, boolean> = {}
 
-  for (const url of data.sourceUrls) {
-    const cacheKey = normalizeCacheKey(url)
-    const match = await cache.match(cacheKey)
-    statuses[url] = Boolean(match)
+  for (const url of sourceUrls) {
+    statuses[url] = Boolean(await cache.match(streamCacheKey(url)))
   }
 
   client.postMessage({ type: 'CACHE_STATUS', statuses })
 }
 
-// ---- Lifecycle ----
+self.addEventListener('message', (event: ExtendableMessageEvent) => {
+  const data = event.data as Message
+  const client = event.source as Client
 
-self.addEventListener('install', () => {
-  self.skipWaiting()
+  switch (data.type) {
+    case 'CACHE_AUDIO':
+      event.waitUntil(cacheAudio(data, client))
+      break
+
+    case 'DELETE_AUDIO_CACHE':
+      event.waitUntil(deleteAudioCache(data, client))
+      break
+
+    case 'GET_CACHE_STATUS':
+      event.waitUntil(getCacheStatus(data, client))
+      break
+
+    // A newer version waits until the user reloads into it (UpdateNotification).
+    case 'SKIP_WAITING':
+      self.skipWaiting()
+      break
+  }
 })
 
-self.addEventListener('activate', (event: ExtendableEvent) => {
-  // Clean up old caches from the previous Workbox-based SW
-  event.waitUntil(
-    caches
-      .keys()
-      .then(names =>
-        Promise.all(
-          names
-            .filter(name => name !== AUDIO_CACHE_NAME && name !== STATIC_CACHE_NAME)
-            .map(name => caches.delete(name)),
-        ),
-      )
-      .then(() => self.clients.claim()),
-  )
-})
+// The first version takes the open player over at once: songs can be made available offline right away.
+self.addEventListener('activate', (event: ExtendableEvent) => event.waitUntil(self.clients.claim()))

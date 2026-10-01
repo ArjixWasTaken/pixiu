@@ -2,7 +2,8 @@ import { computed, ref, toRaw } from 'vue'
 import { usePlayableStore } from '@/stores/playableStore'
 import { offlineManifest } from '@/services/offlineManifest'
 import type { OfflineManifestEntry } from '@/services/offlineManifest'
-import { http } from '@/services/http'
+import { isNotFound, subsonic } from '@/services/subsonic'
+import { streamSongId } from '@/utils/streamCache'
 import { eventBus } from '@/utils/eventBus'
 import { logger } from '@/utils/logger'
 
@@ -96,9 +97,18 @@ const loadManifest = async () => {
  */
 const syncWithServer = async (entries: OfflineManifestEntry[]) => {
   try {
-    const cachedIds = entries.map(e => e.playable.id)
-    const freshPlayables = await http.silently.post<Playable[]>('songs/by-ids', { ids: cachedIds })
-    const freshIds = new Set(freshPlayables.map(p => p.id))
+    // Each song asked for again: one gone from the server (Subsonic's "not found") lets go of its copy.
+    const results = await Promise.allSettled(entries.map(({ playable }) => subsonic.song(playable.id)))
+    const freshPlayables: Playable[] = []
+    const goneIds = new Set<Playable['id']>()
+
+    results.forEach((result, index) => {
+      if (result.status === 'fulfilled') {
+        freshPlayables.push(result.value)
+      } else if (isNotFound(result.reason)) {
+        goneIds.add(entries[index].playable.id)
+      }
+    })
 
     // Update existing entries with fresh data
     for (const playable of freshPlayables) {
@@ -110,7 +120,7 @@ const syncWithServer = async (entries: OfflineManifestEntry[]) => {
     const sw = getSW()
 
     for (const entry of entries) {
-      if (!freshIds.has(entry.playable.id)) {
+      if (goneIds.has(entry.playable.id)) {
         cachedSongIds.value.delete(entry.playable.id)
         offlineManifest.remove(entry.playable.id)
 
@@ -124,7 +134,7 @@ const syncWithServer = async (entries: OfflineManifestEntry[]) => {
       }
     }
 
-    manifestEntries.value = manifestEntries.value.filter(e => freshIds.has(e.playable.id))
+    manifestEntries.value = manifestEntries.value.filter(e => !goneIds.has(e.playable.id))
   } catch (e) {
     logger.warn('Failed to sync offline cache with server:', e)
   }
@@ -180,7 +190,7 @@ const setupMessageListener = () => {
 
         for (const [url, isCachedUrl] of Object.entries(statuses)) {
           if (isCachedUrl) {
-            const songId = extractSongIdFromUrl(url)
+            const songId = streamSongId(url)
             if (songId) {
               cachedSongIds.value.add(songId)
             }
@@ -233,11 +243,6 @@ const setupSongDeletionListener = () => {
 }
 
 let listenerSetup = false
-
-const extractSongIdFromUrl = (url: string): Song['id'] | null => {
-  const match = url.match(/\/play\/([^/?]+)/)
-  return match?.[1] || null
-}
 
 export const shouldWarnUponWindowUnload = () => cachingProgress.value.size > 0
 
