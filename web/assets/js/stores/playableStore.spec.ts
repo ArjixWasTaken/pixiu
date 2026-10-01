@@ -1,6 +1,5 @@
 import { reactive } from 'vue'
 import { describe, expect, it } from 'vite-plus/test'
-import isMobile from 'ismobilejs'
 import { createHarness } from '@/__tests__/TestHarness'
 import { queryClient } from '@/services/queryClient'
 import { http } from '@/services/http'
@@ -9,18 +8,11 @@ import { usePlayableStore } from '@/stores/playableStore'
 import { useAlbumStore } from '@/stores/albumStore'
 import { useArtistStore } from '@/stores/artistStore'
 import { useOverviewStore } from '@/stores/overviewStore'
-import { usePreferenceStore } from '@/stores/preferenceStore'
 import { usePlaylistStore } from '@/stores/playlistStore'
 import { subsonic } from '@/services/subsonic'
 
 describe('playableStore', () => {
-  const h = createHarness({
-    afterEach: () => {
-      isMobile.any = false
-      usePreferenceStore().transcode_on_mobile = false
-      usePlaylistStore().state.playlists = []
-    },
-  })
+  const h = createHarness()
 
   it('counts a play, and notes when it was', async () => {
     const scrobble = h.mock(subsonic, 'scrobble').mockResolvedValue({})

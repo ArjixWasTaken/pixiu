@@ -125,7 +125,7 @@ Defaults, then `pixiu.toml` (or `PIXIU_CONFIG`), then `PIXIU_` environment varia
 | `pixiu-media` | Remuxing and transcoding (FFmpeg) |
 | `pixiu-subsonic` | OpenSubsonic API (`/rest`) |
 | `pixiu-treasury` | The shared store, ingest, edits, uploads |
-| `web/` | Web player (Vue, TypeScript, Vite+, Material 3) |
+| `web/` | Web player (Vue, TypeScript, Vite+, Material 3); vue-router, Pinia, TanStack Query and Virtual, Reka UI, Workbox |
 
 ## Credits
 
