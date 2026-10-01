@@ -1,5 +1,5 @@
 <template>
-  <ScreenBase v-if="playlistId">
+  <ScreenBase v-if="playlistId" :tint-from="playlist?.cover || thumbnails[0]">
     <template #header>
       <ScreenHeader
         v-if="playlist"

@@ -1,5 +1,5 @@
 <template>
-  <ScreenBase>
+  <ScreenBase :tint-from="album?.cover">
     <template #header>
       <ScreenHeaderSkeleton v-if="loading && !album" role="status" aria-busy="true" aria-label="Loading" />
 

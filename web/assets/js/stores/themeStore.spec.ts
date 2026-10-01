@@ -69,10 +69,17 @@ describe('themeStore', () => {
   it('falls back to the default scheme for unknown ids', () => {
     themeStore.setTheme('classic')
 
-    expect(preferenceStore.state.theme).toBe('orange')
+    expect(preferenceStore.state.theme).toBe('cover')
   })
 
-  it('gets the default theme', () => {
-    expect(themeStore.getDefaultTheme().id).toEqual('orange')
+  it('follows the cover by default', () => {
+    expect(themeStore.getDefaultTheme().id).toEqual('cover')
+  })
+
+  it('stands the cover scheme on Orange', () => {
+    themeStore.setTheme('cover')
+
+    expect(document.documentElement.getAttribute('data-mode')).toBe('orange-dt')
+    expect(themeStore.followsCover).toBe(true)
   })
 })

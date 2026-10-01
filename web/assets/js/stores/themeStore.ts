@@ -9,6 +9,8 @@ const systemPrefersDark = () => typeof window.matchMedia === 'function' && windo
 export const themeStore = {
   state: reactive({
     themes,
+    /** Whether the dark variant shows, as `applyMode` last set it. */
+    dark: true,
   }),
 
   init() {
@@ -57,10 +59,13 @@ export const themeStore = {
   /**
    * Selects the scheme's tokens: `data-mode="<scheme>-dt|-lt"` on the root,
    * except for Baseline, whose tokens hang off `data-theme="dark|light"`.
+   * The cover's scheme stands on Orange's.
    */
   applyMode() {
     const root = document.documentElement
-    const scheme = this.getCurrentTheme().id
+    const current = this.getCurrentTheme().id
+    const scheme = current === 'cover' ? 'orange' : current
+    this.state.dark = this.darkMode
 
     if (scheme === 'baseline') {
       root.removeAttribute('data-mode')
@@ -81,7 +86,12 @@ export const themeStore = {
   },
 
   getDefaultTheme() {
-    return this.getThemeById('orange')!
+    return this.getThemeById('cover')!
+  },
+
+  /** Whether the colors come from the cover playing. */
+  get followsCover() {
+    return this.getCurrentTheme().id === 'cover'
   },
 
   getCurrentTheme() {

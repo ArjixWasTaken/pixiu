@@ -2,7 +2,7 @@
   <section class="max-h-full min-h-full w-full flex flex-col transform-gpu overflow-hidden">
     <main class="screen-body flex flex-col flex-1 place-content-start overflow-y-auto">
       <!-- In the scroller, so the header scrolls away; what must stay in reach is sticky. -->
-      <div v-if="$slots.header" class="screen-head">
+      <div v-if="$slots.header" :class="{ tinted: tint }" class="screen-head">
         <slot name="header" />
       </div>
       <HookSlot :context="{ screen: getCurrentScreen() }" name="screen.top" />
@@ -12,11 +12,23 @@
 </template>
 
 <script lang="ts" setup>
+import { toRef } from 'vue'
 import { useRouter } from '@/composables/useRouter'
+import { useCoverTint } from '@/composables/useCoverTheme'
 
 import HookSlot from '@/components/utils/HookSlot.vue'
 
+const props = withDefaults(
+  defineProps<{
+    /** A cover whose color tints the header softly (an album's, an artist's). */
+    tintFrom?: string | null
+  }>(),
+  { tintFrom: null },
+)
+
 const { getCurrentScreen } = useRouter()
+
+const tint = useCoverTint(toRef(props, 'tintFrom'))
 </script>
 
 <style lang="postcss" scoped>
@@ -39,6 +51,11 @@ main {
   .screen-head {
     flex-shrink: 0;
     margin: 0 calc(-1 * var(--screen-pad-x));
+
+    &.tinted {
+      background: linear-gradient(to bottom, color-mix(in srgb, v-bind(tint) 24%, transparent), transparent);
+      transition: background 400ms linear;
+    }
   }
 
   /* Lists and grids that run to the edges of the screen. */

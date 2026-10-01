@@ -29,7 +29,7 @@ export const defaultPreferences: UserPreferences = {
   transcode_on_mobile: false,
   transcode_quality: 128,
   lyrics_zoom_level: 1,
-  theme: 'orange',
+  theme: 'cover',
   dark_mode: true,
   active_extra_panel_tab: null,
   detect_duplicate_uploads: true,
