@@ -17,7 +17,7 @@ that downloads music from YouTube Music into a library it owns.
 
 | | |
 |---|---|
-| **Web player** | Material 3, light and dark schemes, phone layout: library, search, queue synced across devices, likes, ratings, synced lyrics, equalizer, playlists, smart playlists, folders. |
+| **Web player** | Material 3, colored from the cover playing, light and dark; compact with a mouse, touch-sized on phones: library, search, queue synced across devices, likes, ratings, synced lyrics, equalizer, playlists, smart playlists, folders. |
 | **Discover** | Search YouTube Music; download songs or albums. Opus remuxed losslessly, tagged, filed with its cover; `yt-dlp` as fallback. |
 | **Watches** | Playlists (mirrored read-only), liked music, and artists' new releases, synced one-way on a schedule. |
 | **Jobs** | Downloads, syncs and lookups, live. |
