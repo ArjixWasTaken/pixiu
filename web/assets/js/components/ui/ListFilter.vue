@@ -11,7 +11,11 @@
         type="search"
         @blur="inputting = false"
         @focus="inputting = true"
+        @keydown.esc="clear"
       />
+      <button v-if="keywords" aria-label="Clear the filter" class="clear" type="button" @click="clear">
+        <M3Icon :size="18" name="close" />
+      </button>
     </form>
   </OnClickOutside>
 </template>
@@ -34,6 +38,12 @@ const keywords = requireInjection(FilterKeywordsKey, ref(''))
 const showingInput = computed(() => inputting.value || keywords.value.trim())
 
 const maybeHideInput = () => {
+  inputting.value = false
+}
+
+/** Shows everything again. */
+const clear = () => {
+  keywords.value = ''
   inputting.value = false
 }
 
@@ -64,6 +74,16 @@ const showInput = () => {
     border: 0;
     outline: 0;
     color: inherit;
+
+    &::-webkit-search-cancel-button {
+      display: none;
+    }
+  }
+
+  .clear {
+    display: flex;
+    margin-right: -4px;
+    color: var(--schemes-on-surface-variant);
   }
 }
 </style>

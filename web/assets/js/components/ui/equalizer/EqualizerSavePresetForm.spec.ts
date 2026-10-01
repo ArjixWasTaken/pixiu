@@ -53,7 +53,7 @@ describe('equalizerSavePresetForm.vue', () => {
     await fireEvent.update(input, 'Custom')
     await fireEvent.click(screen.getByText('Cancel'))
 
-    expect(mockShowConfirmDialog).toHaveBeenCalledWith('Discard preset name?')
+    expect(mockShowConfirmDialog).toHaveBeenCalledWith('Discard the preset’s name?', { action: 'Discard' })
     expect(emitted().cancel).toHaveLength(1)
   })
 

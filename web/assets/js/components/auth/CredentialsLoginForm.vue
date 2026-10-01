@@ -53,7 +53,7 @@
       {{ problem || notice }}
     </p>
 
-    <M3Button class="w-full" data-testid="submit" type="submit">{{ claiming ? 'Create account' : 'Log in' }}</M3Button>
+    <M3Button class="w-full" data-testid="submit" type="submit">{{ claiming ? 'Create account' : 'Sign in' }}</M3Button>
     <SsoButton v-if="sso && !claiming" :href="authService.ssoStartUrl()" :name="sso.name" />
 
     <div v-if="!claiming && (passwordReset || registration)" class="flex flex-wrap justify-center gap-2">
@@ -129,13 +129,12 @@ const { data, handleSubmit } = useForm<{ username: string; password: string; con
     failed.value = true
     logger.error(error)
 
-    // Say what is wrong: a claim's problem, or why an account whose
-    // password is right cannot sign in (awaiting approval, turned off).
-    // A wrong password just shakes.
+    // Say what is wrong, in words as well as the shake (a screen reader hears
+    // the alert): the server's reason (a wrong password, an account awaiting
+    // approval or turned off, a claim's problem).
     const body = isHttpError(error) ? getHttpErrorBody(error) : undefined
-    if (props.claiming || body?.code) {
-      problem.value = body?.message ?? (error instanceof Error ? error.message : 'That did not work.')
-    }
+    problem.value =
+      body?.message ?? (error instanceof Error && error.message ? error.message : 'Signing in didn’t work.')
 
     clearErrorResetTimer()
     errorResetTimer = window.setTimeout(() => {

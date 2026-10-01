@@ -92,11 +92,12 @@ const destroy = () =>
   trigger(async () => {
     if (
       await showConfirmDialog(
-        `Delete the playlist folder "${folder.value.name}"? Its playlists and subfolders will be kept.`,
+        `Delete the playlist folder “${folder.value.name}”? Its playlists and subfolders will be kept.`,
+        { action: 'Delete' },
       )
     ) {
       await playlistFolderStore.delete(folder.value)
-      toastSuccess(`Playlist folder "${folder.value.name}" deleted.`)
+      toastSuccess(`Playlist folder “${folder.value.name}” deleted.`)
     }
   })
 </script>

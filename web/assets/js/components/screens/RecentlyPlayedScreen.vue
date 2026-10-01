@@ -9,7 +9,7 @@
         </template>
 
         <template v-if="playables.length" #meta>
-          <span>{{ pluralize(playables, 'song') }}</span>
+          <span>{{ songCount }}</span>
           <span>{{ duration }}</span>
         </template>
 
@@ -41,7 +41,6 @@
 
 <script lang="ts" setup>
 import { ref, toRef } from 'vue'
-import { pluralize } from '@/utils/formatters'
 import { useRecentlyPlayedStore } from '@/stores/recentlyPlayedStore'
 import { useRouter } from '@/composables/useRouter'
 import { usePlayableList } from '@/composables/usePlayableList'
@@ -69,6 +68,7 @@ const {
   playAll,
   playSelected,
   onSwipe,
+  songCount,
 } = usePlayableList(recentlyPlayedSongs, { type: 'RecentlyPlayed' }, { sortable: false })
 
 const { PlayableListControls, config } = usePlayableListControls('RecentlyPlayed')

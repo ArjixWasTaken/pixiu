@@ -26,6 +26,8 @@
       <EmptyLibraryHint />
     </ScreenEmptyState>
 
+    <LoadFailedState v-else-if="loadFailed" what="genres" @retry="fetchGenres" />
+
     <ScreenEmptyState v-else-if="!loading && !genres.length" data-testid="no-genres">
       <template #icon>
         <M3Icon name="category" :size="96" />
@@ -54,11 +56,13 @@ import { useErrorHandler } from '@/composables/useErrorHandler'
 import { usePreferenceStore } from '@/stores/preferenceStore'
 import { useFuzzySearch } from '@/composables/useFuzzySearch'
 import { FilterKeywordsKey } from '@/config/symbols'
+import { logger } from '@/utils/logger'
 import { orderBy } from 'lodash-es'
 
 import ScreenHeader from '@/components/ui/ScreenHeader.vue'
 import GenreCardSkeleton from '@/components/genre/GenreCardSkeleton.vue'
 import ScreenEmptyState from '@/components/ui/ScreenEmptyState.vue'
+import LoadFailedState from '@/components/ui/LoadFailedState.vue'
 import ScreenBase from '@/components/screens/ScreenBase.vue'
 import GenreCard from '@/components/genre/GenreCard.vue'
 import ListFilter from '@/components/ui/ListFilter.vue'
@@ -75,6 +79,7 @@ const { handleHttpError } = useErrorHandler()
 const genres = ref<Genre[]>([])
 const keywords = ref('')
 const loading = ref(false)
+const loadFailed = ref(false)
 
 const fuzzy = useFuzzySearch<Genre>(genres, ['name'])
 
@@ -100,9 +105,16 @@ const fetchGenres = async () => {
 
   try {
     loading.value = true
+    loadFailed.value = false
     genres.value = await genreStore.fetchAll()
   } catch (error: unknown) {
-    handleHttpError(error)
+    if (genres.value.length) {
+      handleHttpError(error)
+    } else {
+      // With nothing to show, the screen says it couldn't load.
+      loadFailed.value = true
+      logger.error(error)
+    }
   } finally {
     loading.value = false
   }

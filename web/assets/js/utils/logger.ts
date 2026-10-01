@@ -1,5 +1,5 @@
 /* eslint-disable no-console */
-const prefix = `[koel]`
+const prefix = '[píxiū]'
 
 export const logger = {
   warn: (m: any, ...args: any[]) => import.meta.env.DEV && console.warn(prefix, m, ...args),

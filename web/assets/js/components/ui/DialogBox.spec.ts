@@ -38,7 +38,7 @@ describe('dialogBox', () => {
   it('makes a bare question the headline, and focuses Cancel', async () => {
     const box = renderComponent()
 
-    box().confirm('Discard 1 file?')
+    box().confirm('Discard 1 file?', { action: 'Discard' })
 
     await screen.findByRole('alertdialog', { name: 'Discard 1 file?' })
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Cancel' })))
@@ -47,11 +47,11 @@ describe('dialogBox', () => {
   it('answers false on Cancel, and on Escape', async () => {
     const box = renderComponent()
 
-    let answered = box().confirm('Delete the playlist?')
+    let answered = box().confirm('Delete the playlist?', { action: 'Delete' })
     await h.user.click(await screen.findByRole('button', { name: 'Cancel' }))
     expect(await answered).toBe(false)
 
-    answered = box().confirm('Delete the playlist?')
+    answered = box().confirm('Delete the playlist?', { action: 'Delete' })
     await screen.findByRole('alertdialog')
     await h.user.keyboard('{Escape}')
     expect(await answered).toBe(false)
@@ -61,7 +61,7 @@ describe('dialogBox', () => {
     const box = renderComponent()
     let answered: Promise<boolean> | undefined
     const form = document.createElement('form')
-    form.addEventListener('keydown', () => (answered ??= box().confirm('Discard all changes?')))
+    form.addEventListener('keydown', () => (answered ??= box().confirm('Discard all changes?', { action: 'Discard' })))
     document.body.append(form)
     const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
 
@@ -71,16 +71,16 @@ describe('dialogBox', () => {
     await h.tick()
     document.dispatchEvent(escape)
 
-    await h.user.click(await screen.findByRole('button', { name: 'OK' }))
+    await h.user.click(await screen.findByRole('button', { name: 'Discard' }))
     expect(await answered).toBe(true)
     form.remove()
   })
 
-  it('answers true on OK', async () => {
+  it('answers true on its action, which the button names', async () => {
     const box = renderComponent()
 
-    const answered = box().confirm('Delete the playlist?')
-    await h.user.click(await screen.findByRole('button', { name: 'OK' }))
+    const answered = box().confirm('Delete the playlist?', { action: 'Delete' })
+    await h.user.click(await screen.findByRole('button', { name: 'Delete' }))
 
     expect(await answered).toBe(true)
   })

@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from 'vite-plus/test'
 import { waitFor } from '@testing-library/vue'
 import { defineComponent } from 'vue'
 import { createHarness } from '@/__tests__/TestHarness'
+import { MessageToasterStub } from '@/__tests__/stubs'
 import { queryClient } from '@/services/queryClient'
+import { logger } from '@/utils/logger'
 import type { ListPage } from './useListPages'
 import { dropFromListPages, useListPages } from './useListPages'
 
@@ -43,6 +45,22 @@ describe('useListPages', () => {
     list.items.value = [item('b')]
 
     expect(list.items.value.map(({ id }) => id)).toEqual(['b'])
+  })
+
+  it('says it couldn’t load when nothing came, and loads on a retry', async () => {
+    const toastError = h.mock(MessageToasterStub.value, 'error')
+    h.mock(logger, 'error')
+    fetchPage.mockRejectedValueOnce(new Error('offline'))
+    const list = mount()
+
+    await waitFor(() => expect(list.loadFailed.value).toBe(true))
+    // The screen says it; a toast would say it twice.
+    expect(toastError).not.toHaveBeenCalled()
+
+    await list.refetch()
+
+    expect(list.loadFailed.value).toBe(false)
+    expect(list.items.value.map(({ id }) => id)).toEqual(['a', 'b'])
   })
 
   it('drops items from every list kept under a key', () => {

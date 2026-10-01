@@ -37,7 +37,7 @@ describe('addAccountForm.vue', () => {
     await h.user.type(screen.getByRole('textbox', { name: 'Username' }), 'dave')
     await h.user.click(screen.getByRole('button', { name: 'Cancel' }))
 
-    expect(confirm).toHaveBeenCalledWith('Discard this account?')
+    expect(confirm).toHaveBeenCalledWith('Discard this account?', { action: 'Discard' })
     expect(emitted().cancel).toBeUndefined()
   })
 })

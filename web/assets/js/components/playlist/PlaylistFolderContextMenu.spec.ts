@@ -64,7 +64,8 @@ describe('playlistFolderContextMenu.vue', () => {
     await h.user.click(screen.getByText('Delete'))
 
     expect(confirmMock).toHaveBeenCalledWith(
-      `Delete the playlist folder "${folder.name}"? Its playlists and subfolders will be kept.`,
+      `Delete the playlist folder “${folder.name}”? Its playlists and subfolders will be kept.`,
+      { action: 'Delete' },
     )
     expect(deleteMock).toHaveBeenCalledWith(folder)
   })

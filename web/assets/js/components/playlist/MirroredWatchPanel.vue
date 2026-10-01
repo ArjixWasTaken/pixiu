@@ -1,12 +1,19 @@
 <template>
   <M3Card class="flex flex-col gap-3 p-4 mt-3 mb-2" variant="outlined">
     <p class="m3-body-medium">
-      Mirrors the watched YouTube Music {{ mirror.watch.kind === 'liked_music' ? 'liked music' : 'playlist' }}
-      <a :href="mirror.watch.link" class="text-(--schemes-primary)" rel="noopener" target="_blank"
-        >“{{ mirror.watch.name }}”</a
-      >, read-only.
+      <template v-if="mirror.watch.kind === 'liked_music'">
+        Mirrors your
+        <a :href="mirror.watch.link" class="text-(--schemes-primary)" rel="noopener" target="_blank">liked music</a>
+        on YouTube Music, read-only.
+      </template>
+      <template v-else>
+        Mirrors the YouTube Music playlist
+        <a :href="mirror.watch.link" class="text-(--schemes-primary)" rel="noopener" target="_blank"
+          >“{{ mirror.watch.name }}”</a
+        >, read-only.
+      </template>
       <template v-if="mirror.watch.last_synced_at">Synced {{ timeAgo(mirror.watch.last_synced_at) }}.</template>
-      Exclude songs you don’t want from their context menu.
+      Exclude songs you don’t want from their menu.
     </p>
 
     <div v-if="mirror.coming.length || mirror.excluded.length" class="flex flex-wrap gap-2">

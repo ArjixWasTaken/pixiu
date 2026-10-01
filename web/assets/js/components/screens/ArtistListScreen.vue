@@ -35,6 +35,8 @@
       <EmptyLibraryHint />
     </ScreenEmptyState>
 
+    <LoadFailedState v-else-if="loadFailed" what="artists" @retry="refetch" />
+
     <ScreenEmptyState v-else-if="noFavoriteArtists">
       <template #icon>
         <M3Icon name="mic_off" />
@@ -54,13 +56,13 @@
       </div>
       <div
         v-else-if="showSkeletons"
-        class="grid gap-5 p-6"
-        :style="{ gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }"
+        :style="{ gridTemplateColumns: `repeat(auto-fill, minmax(${isMobile ? 140 : 180}px, 1fr))` }"
+        class="screen-bleed virtual-card-grid grid"
         role="status"
         aria-busy="true"
         aria-label="Loading"
       >
-        <ArtistCardSkeleton v-for="i in 10" :key="i" />
+        <ArtistCardSkeleton v-for="i in 10" :key="i" round />
       </div>
       <div class="screen-bleed flex-1 flex flex-col min-h-0" v-else>
         <ArtistTable
@@ -93,6 +95,7 @@ import ArtistTableRowSkeleton from '@/components/artist/ArtistTableRowSkeleton.v
 import ScreenHeader from '@/components/ui/ScreenHeader.vue'
 import ViewModeSwitch from '@/components/ui/ViewModeSwitch.vue'
 import ScreenEmptyState from '@/components/ui/ScreenEmptyState.vue'
+import LoadFailedState from '@/components/ui/LoadFailedState.vue'
 import ScreenBase from '@/components/screens/ScreenBase.vue'
 import ArtistListSorter from '@/components/artist/ArtistListSorter.vue'
 import M3Chip from '@/components/m3/M3Chip.vue'
@@ -113,6 +116,8 @@ const {
   isFetching: loading,
   hasNextPage: moreArtistsAvailable,
   fetchMore: fetchArtists,
+  loadFailed,
+  refetch,
 } = useListPages(
   () => [
     'artists',

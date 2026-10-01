@@ -29,10 +29,35 @@
       <RatingItem :rateable="sheetSong!" />
     </template>
 
-    <template v-if="onlyOneSelected">
-      <MenuItem @click="doPlayback">{{ firstSongPlaying ? 'Pause' : 'Play' }}</MenuItem>
+    <MenuItem v-if="onlyOneSelected" @click="doPlayback">{{ firstSongPlaying ? 'Pause' : 'Play' }}</MenuItem>
+    <!-- On a sheet, its tile does it. -->
+    <MenuItem v-if="canPlayNext && !asSheet" @click="queueAfterCurrent">Play next</MenuItem>
+    <MenuItem v-if="!isQueueScreen" @click="queueToBottom">Add to queue</MenuItem>
+    <!-- On a sheet, its tile and its heart do it. -->
+    <MenuItem v-if="!asSheet">
+      Add to
+      <template #subMenuItems>
+        <MenuItem v-if="!isFavoritesScreen && !(onlyOneSelected && playables[0].favorite)" @click="addToFavorites">
+          Favorites
+        </MenuItem>
+        <ul v-if="normalPlaylists.length" class="scroll-mask-y relative max-h-48 overflow-y-auto" role="none">
+          <MenuItem v-for="p in normalPlaylists" :key="p.id" @click="addToExistingPlaylist(p)">
+            {{ p.name }}
+          </MenuItem>
+        </ul>
+        <Separator />
+        <MenuItem @click="addToNewPlaylist">New playlist…</MenuItem>
+      </template>
+    </MenuItem>
+
+    <template v-if="onlyOneSelected && !asSheet">
       <Separator />
-      <MenuItem>
+      <RatingItem :rateable="playables[0]" />
+    </template>
+
+    <template v-if="hasDetails">
+      <Separator />
+      <MenuItem v-if="onlyOneSelected">
         Go to
         <template #subMenuItems>
           <MenuItem :title="playables[0].album_name" @click="viewAlbum(playables[0])">
@@ -49,69 +74,20 @@
           </MenuItem>
         </template>
       </MenuItem>
-    </template>
-    <MenuItem>
-      Add to
-      <template #subMenuItems>
-        <template v-if="queue.length">
-          <MenuItem v-if="currentSong" @click="queueAfterCurrent">After current song</MenuItem>
-          <MenuItem @click="queueToBottom">Bottom of queue</MenuItem>
-          <MenuItem @click="queueToTop">Top of queue</MenuItem>
-        </template>
-        <MenuItem v-else @click="queueToBottom">Queue</MenuItem>
-        <template v-if="!isFavoritesScreen && !(onlyOneSelected && playables[0].favorite)">
-          <Separator />
-          <MenuItem @click="addToFavorites">Favorites</MenuItem>
-        </template>
-        <Separator v-if="normalPlaylists.length" />
-        <template class="block">
-          <ul v-if="normalPlaylists.length" class="scroll-mask-y relative max-h-48 overflow-y-auto" role="none">
-            <MenuItem v-for="p in normalPlaylists" :key="p.id" @click="addToExistingPlaylist(p)">
-              {{ p.name }}
-            </MenuItem>
-          </ul>
-        </template>
-        <Separator />
-        <MenuItem @click="addToNewPlaylist">New playlist…</MenuItem>
-      </template>
-    </MenuItem>
-
-    <template v-if="onlyOneSelected && !asSheet">
-      <Separator />
-      <RatingItem :rateable="playables[0]" />
-      <Separator />
+      <MenuItem v-if="onlyOneSelected" @click="openSongInfo">Song info…</MenuItem>
+      <MenuItem v-if="musicBrainzUrl" @click="viewOnMusicBrainz">View on MusicBrainz</MenuItem>
+      <MenuItem v-if="downloadable" @click="download">Download</MenuItem>
+      <MenuItem v-if="canToggleOffline" @click="toggleOffline">
+        {{ allCached ? 'Remove offline copies' : 'Make available offline' }}
+      </MenuItem>
     </template>
 
-    <template v-if="isQueueScreen">
+    <template v-if="hasRemovals">
       <Separator />
-      <MenuItem @click="removeFromQueue">Remove from queue</MenuItem>
-      <Separator />
-    </template>
-
-    <template v-if="isFavoritesScreen">
-      <Separator />
-      <MenuItem @click="removeFromFavorites">Remove from favorites</MenuItem>
-    </template>
-
-    <MenuItem v-if="onlyOneSelected" @click="openSongInfo">Song info…</MenuItem>
-    <MenuItem v-if="downloadable" @click="download">Download</MenuItem>
-    <MenuItem v-if="canToggleOffline" @click="toggleOffline">
-      {{ allCached ? 'Remove offline copies' : 'Make available offline' }}
-    </MenuItem>
-
-    <template v-if="canBeRemovedFromPlaylist">
-      <Separator />
-      <MenuItem @click="removePlayablesFromPlaylist">Remove from playlist</MenuItem>
-    </template>
-
-    <template v-if="mirroredWatch">
-      <Separator />
-      <MenuItem @click="excludeFromWatch">Exclude from “{{ mirroredWatch.name }}”</MenuItem>
-    </template>
-
-    <template v-if="musicBrainzUrl">
-      <Separator />
-      <MenuItem @click="viewOnMusicBrainz">View on MusicBrainz</MenuItem>
+      <MenuItem v-if="isQueueScreen" @click="removeFromQueue">Remove from queue</MenuItem>
+      <MenuItem v-if="isFavoritesScreen" @click="removeFromFavorites">Remove from favorites</MenuItem>
+      <MenuItem v-if="canBeRemovedFromPlaylist" @click="removePlayablesFromPlaylist">Remove from playlist</MenuItem>
+      <MenuItem v-if="mirroredWatch" @click="excludeFromWatch">Exclude from “{{ mirroredWatch.name }}”</MenuItem>
     </template>
   </ul>
 </template>
@@ -172,7 +148,6 @@ const { removeFromPlaylist } = usePlaylistContentManagement()
 const {
   queueAfterCurrent,
   queueToBottom,
-  queueToTop,
   addToFavorites,
   addToExistingPlaylist,
   removeFromFavorites,
@@ -289,6 +264,15 @@ const download = () => trigger(() => fromPlayables(playables.value))
 const { swReady, makeAvailableOffline, removeOfflineCache, isCached } = useOfflinePlayback()
 const canToggleOffline = computed(() => swReady.value)
 const allCached = computed(() => playables.value.every(p => isCached(p)))
+
+// Each group shows, with its separator, only when it has something in it.
+const hasDetails = computed(
+  () => onlyOneSelected.value || Boolean(musicBrainzUrl.value) || downloadable.value || canToggleOffline.value,
+)
+const hasRemovals = computed(
+  () =>
+    isQueueScreen.value || isFavoritesScreen.value || canBeRemovedFromPlaylist.value || Boolean(mirroredWatch.value),
+)
 
 const toggleOffline = () =>
   trigger(() => {

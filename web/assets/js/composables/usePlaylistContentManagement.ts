@@ -7,7 +7,7 @@ export const usePlaylistContentManagement = () => {
   const { handleHttpError } = useErrorHandler('dialog')
   const { toastSuccess } = useMessageToaster()
 
-  const inflect = (playables: Playable[]) => (playables.length === 1 ? 'Song' : 'Songs')
+  const songs = (playables: Playable[]) => (playables.length === 1 ? '1 song' : `${playables.length} songs`)
 
   const addToPlaylist = async (playlist: Playlist, playables: Playable[]) => {
     if (playlist.is_smart || playables.length === 0) {
@@ -17,7 +17,7 @@ export const usePlaylistContentManagement = () => {
     try {
       await usePlaylistStore().addContent(playlist, playables)
       eventBus.emit('PLAYLIST_UPDATED', playlist)
-      toastSuccess(`${inflect(playables)} added into "${playlist.name}."`)
+      toastSuccess(`Added ${songs(playables)} to “${playlist.name}”.`)
     } catch (error: unknown) {
       handleHttpError(error)
     }
@@ -31,7 +31,7 @@ export const usePlaylistContentManagement = () => {
     try {
       await usePlaylistStore().removeContent(playlist, playables)
       eventBus.emit('PLAYLIST_CONTENT_REMOVED', { playlist, playables })
-      toastSuccess(`${inflect(playables)} removed from "${playlist.name}."`)
+      toastSuccess(`Removed ${songs(playables)} from “${playlist.name}”.`)
     } catch (error: unknown) {
       handleHttpError(error)
     }

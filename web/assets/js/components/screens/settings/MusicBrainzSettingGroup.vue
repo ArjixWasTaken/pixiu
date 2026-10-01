@@ -5,11 +5,15 @@
       píxiū looks every new album up on MusicBrainz, fixing its tags and finding its cover and lyrics.
     </template>
 
-    <p v-if="unlooked" class="m3-body-large">{{ pluralize(unlooked, 'album') }} were never looked up.</p>
+    <p v-if="unlooked" class="m3-body-large">
+      {{ pluralize(unlooked, 'album') }} {{ unlooked === 1 ? 'was' : 'were' }} never looked up.
+    </p>
     <p v-else class="m3-body-large text-(--schemes-on-surface-variant)">Every album has been looked up.</p>
 
     <template v-if="unlooked" #footer>
-      <M3Button variant="tonal" @click.prevent="lookUpAll">Look them up</M3Button>
+      <M3Button variant="tonal" @click.prevent="lookUpAll">{{
+        unlooked === 1 ? 'Look it up' : 'Look them up'
+      }}</M3Button>
     </template>
   </SettingGroup>
 </template>

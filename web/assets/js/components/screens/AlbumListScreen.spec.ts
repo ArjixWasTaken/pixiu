@@ -5,6 +5,7 @@ import { setViewport } from '@/composables/useViewport'
 import { useAlbumStore } from '@/stores/albumStore'
 import { useCommonStore } from '@/stores/commonStore'
 import { usePreferenceStore } from '@/stores/preferenceStore'
+import { logger } from '@/utils/logger'
 import Component from './AlbumListScreen.vue'
 
 const albumGridStub = {
@@ -59,6 +60,22 @@ describe('albumListScreen.vue', () => {
     await renderComponent()
 
     await waitFor(() => screen.getByTestId('screen-empty-state'))
+  })
+
+  it('says when the albums couldn’t load, and tries again', async () => {
+    h.mock(logger, 'error')
+    const paginateMock = h.mock(useAlbumStore(), 'paginate').mockRejectedValueOnce(new Error('offline'))
+    paginateMock.mockResolvedValueOnce({
+      items: useAlbumStore().syncWithVault(h.factory('album').make(3)),
+      nextCursor: null,
+    })
+    h.render(Component, { global: { stubs: { AlbumGrid: albumGridStub, AlbumTable: albumTableStub } } })
+
+    await screen.findByText(/Couldn’t load the albums\./)
+
+    await h.user.click(screen.getByRole('button', { name: 'Try again' }))
+
+    await waitFor(() => expect(screen.getAllByTestId('album-card')).toHaveLength(3))
   })
 
   it('renders the table when the view mode is table', async () => {

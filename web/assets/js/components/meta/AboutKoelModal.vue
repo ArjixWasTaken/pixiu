@@ -6,12 +6,13 @@
     tabindex="0"
     @keydown.esc="close"
   >
-    <main class="p-6">
-      <div class="mb-4">
-        <img alt="Logo" class="inline-block" :src="logo" width="128" />
-      </div>
+    <!-- The dialog's header: room above the logo, as any dialog's title has. -->
+    <header class="justify-center">
+      <img :src="logo" alt="Logo" class="inline-block" width="128" />
+    </header>
 
-      <div class="current-version">{{ appName }} {{ currentVersion }}</div>
+    <main>
+      <div class="current-version m3-title-medium text-(--schemes-on-surface)">{{ appName }} {{ currentVersion }}</div>
 
       <p>
         A music server that downloads from YouTube Music, with a library for each of its users.
@@ -44,7 +45,10 @@ p {
   @apply mx-0 my-3;
 }
 
+/* A link, and it looks like one. */
 a {
-  @apply text-(--schemes-on-surface) hover:text-(--schemes-primary);
+  color: var(--schemes-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 </style>

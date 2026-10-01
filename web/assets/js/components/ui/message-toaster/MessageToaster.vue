@@ -40,15 +40,19 @@ defineExpose({ info, success, warning, error })
 </script>
 
 <style>
-/* Snackbars at the bottom left, above the player and over dialogs. (Reka UI renders the list; scoped styles can't reach it.) */
+/* Snackbars at the bottom, centered over the page (not over the sidebar), above the player and over dialogs.
+   (Reka UI renders the list; scoped styles can't reach it.) */
 .message-toaster {
   position: fixed;
-  left: 24px;
-  bottom: 124px;
+  left: 50%;
+  bottom: 96px;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: min(560px, calc(100vw - 48px));
   z-index: 1003;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
   gap: 8px;
   margin: 0;
   padding: 0;
@@ -59,6 +63,10 @@ defineExpose({ info, success, warning, error })
     left: 8px;
     right: 8px;
     bottom: 176px;
+    transform: none;
+    width: auto;
+    max-width: none;
+    align-items: stretch;
   }
 }
 </style>

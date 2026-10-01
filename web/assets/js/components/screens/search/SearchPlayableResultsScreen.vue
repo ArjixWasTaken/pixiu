@@ -9,7 +9,7 @@
         </template>
 
         <template v-if="playables.length" #meta>
-          <span>{{ pluralize(playables, 'song') }}</span>
+          <span>{{ songCount }}</span>
           <span>{{ duration }}</span>
         </template>
 
@@ -30,7 +30,6 @@ import { useSearchStore } from '@/stores/searchStore'
 import { usePlayableList } from '@/composables/usePlayableList'
 import { usePlayableListControls } from '@/composables/usePlayableListControls'
 import { useRouter } from '@/composables/useRouter'
-import { pluralize } from '@/utils/formatters'
 
 import ScreenHeader from '@/components/ui/ScreenHeader.vue'
 import PlayableListSkeleton from '@/components/playable/playable-list/PlayableListSkeleton.vue'
@@ -53,6 +52,7 @@ const {
   playAll,
   playSelected,
   onSwipe,
+  songCount,
 } = usePlayableList(toRef(searchStore.state, 'playables'), { type: 'Search.Playables' })
 
 const { PlayableListControls, config } = usePlayableListControls('Search.Playables')

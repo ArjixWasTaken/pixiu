@@ -6,7 +6,7 @@
     <Separator />
     <MenuItem @click="toggleFavorite">{{ album.favorite ? 'Remove from favorites' : 'Add to favorites' }}</MenuItem>
     <RatingItem :rateable="album" />
-    <Separator />
+    <Separator v-if="hasMore" />
     <MenuItem v-if="allowEdit" @click="edit">Edit…</MenuItem>
     <MenuItem v-if="isStandardAlbum && allowDownload" @click="download">Download</MenuItem>
     <MenuItem v-if="canToggleOffline" @click="toggleOffline">
@@ -85,6 +85,15 @@ const canToggleOffline = computed(() => swReady.value)
 const albumSongs = ref<Playable[]>([])
 const allCached = computed(() => allPlayablesCached(albumSongs.value))
 
+/** Whether the last group (editing, copies, MusicBrainz) has anything in it. */
+const hasMore = computed(
+  () =>
+    allowEdit.value ||
+    (isStandardAlbum.value && allowDownload.value) ||
+    canToggleOffline.value ||
+    Boolean(musicBrainzUrl.value),
+)
+
 const toggleOffline = () =>
   trigger(async () => {
     const { toastSuccess } = useMessageToaster()
@@ -92,7 +101,7 @@ const toggleOffline = () =>
 
     if (allCached.value) {
       removePlayablesOfflineCache(albumSongs.value)
-      toastSuccess(`Removed offline versions for "${album.value.name}".`)
+      toastSuccess(`Removed offline versions for “${album.value.name}”.`)
     } else {
       makePlayablesAvailableOffline(albumSongs.value)
       toastSuccess(`Making ${pluralize(albumSongs.value, 'song')} available offline…`)

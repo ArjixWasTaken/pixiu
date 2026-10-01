@@ -9,7 +9,7 @@
         </template>
 
         <template v-if="playables.length" #meta>
-          <span>{{ pluralize(playables, 'song') }}</span>
+          <span>{{ songCount }}</span>
           <span>{{ duration }}</span>
         </template>
 
@@ -39,7 +39,6 @@
 
 <script lang="ts" setup>
 import { computed } from 'vue'
-import { pluralize } from '@/utils/formatters'
 import { usePlayableStore } from '@/stores/playableStore'
 import { useOfflinePlayback } from '@/composables/useOfflinePlayback'
 import { usePlayableList } from '@/composables/usePlayableList'
@@ -77,6 +76,7 @@ const {
   playAll,
   playSelected,
   onSwipe,
+  songCount,
 } = usePlayableList(offlineSongs, { type: 'OfflineSongs' }, { sortable: true })
 
 const { PlayableListControls, config } = usePlayableListControls('OfflineSongs')

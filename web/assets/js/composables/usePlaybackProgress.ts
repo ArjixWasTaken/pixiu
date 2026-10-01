@@ -21,9 +21,24 @@ export const usePlaybackProgress = () => {
   const seeking = ref(false)
 
   const update = () => {
+    if (seeking.value) {
+      return
+    }
+
+    const pendingStart = playback('current')?.pendingStart ?? null
+
+    if (pendingStart !== null) {
+      // A song restored from the saved queue, not started yet: where it starts, and its own length.
+      currentTime.value = pendingStart
+      duration.value = useQueueStore().current?.length ?? 0
+      buffered.value = 0
+      loading.value = false
+      return
+    }
+
     const media = activeMedia()
 
-    if (!media || seeking.value) {
+    if (!media) {
       return
     }
 
@@ -36,7 +51,8 @@ export const usePlaybackProgress = () => {
   const seek = (seconds: number) => {
     const service = playback('current')
 
-    if (!service?.media?.duration) {
+    // Before a restored song starts, a seek sets where it starts.
+    if (!service || (service.pendingStart === null && !service.media?.duration)) {
       return
     }
 

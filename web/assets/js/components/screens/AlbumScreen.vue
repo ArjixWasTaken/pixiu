@@ -16,7 +16,7 @@
           </a>
           <span v-else class="text-(--schemes-on-surface)">{{ album.artist_name }}</span>
           <span v-if="album.year">{{ album.year }}</span>
-          <span>{{ pluralize(songs, 'song') }}</span>
+          <span>{{ songCount }}</span>
           <span>{{ duration }}</span>
         </template>
 
@@ -61,7 +61,7 @@
           <GridListView v-if="otherAlbums.length" class="scroll-mask-y">
             <AlbumCard v-for="otherAlbum in otherAlbums" :key="otherAlbum.id" :album="otherAlbum" />
           </GridListView>
-          <p v-else class="p-6 text-(--schemes-on-surface-variant)">
+          <p v-else class="py-6 px-(--screen-pad-x) text-(--schemes-on-surface-variant)">
             No other albums by {{ album.artist_name }} found in the library.
           </p>
         </template>
@@ -88,7 +88,6 @@
 <script lang="ts" setup>
 import { computed, defineAsyncComponent, ref, watch } from 'vue'
 import { eventBus } from '@/utils/eventBus'
-import { pluralize } from '@/utils/formatters'
 import { useAlbumStore } from '@/stores/albumStore'
 import { useArtistStore } from '@/stores/artistStore'
 import { usePlayableStore } from '@/stores/playableStore'
@@ -152,6 +151,7 @@ const {
   playAll,
   playSelected,
   onSwipe,
+  songCount,
 } = usePlayableList(songs, { type: 'Album' })
 
 const useEncyclopedia = useMusicBrainz

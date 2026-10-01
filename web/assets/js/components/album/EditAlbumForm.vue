@@ -77,7 +77,7 @@ const { data, handleSubmit } = useForm<AlbumUpdateData>({
 })
 
 const maybeClose = async () => {
-  if (JSON.stringify(data) === original || (await showConfirmDialog('Discard all changes?'))) {
+  if (JSON.stringify(data) === original || (await showConfirmDialog('Discard all changes?', { action: 'Discard' }))) {
     close()
   }
 }

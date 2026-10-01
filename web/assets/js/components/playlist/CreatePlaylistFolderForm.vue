@@ -44,12 +44,12 @@ const { data, isPristine, handleSubmit } = useForm<Pick<PlaylistFolder, 'name'>>
     props.parent ? await playlistFolderStore.store(name, props.parent) : await playlistFolderStore.store(name),
   onSuccess: (folder: PlaylistFolder) => {
     close()
-    toastSuccess(`Playlist folder "${folder.name}" created.`)
+    toastSuccess(`Playlist folder “${folder.name}” created.`)
   },
 })
 
 const maybeClose = async () => {
-  if (isPristine() || (await showConfirmDialog('Discard all changes?'))) {
+  if (isPristine() || (await showConfirmDialog('Discard all changes?', { action: 'Discard' }))) {
     close()
   }
 }

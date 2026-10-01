@@ -3,6 +3,7 @@ import { keepPreviousData, useInfiniteQuery } from '@tanstack/vue-query'
 import type { MaybeRefOrGetter } from 'vue'
 import { computed, toValue, watch } from 'vue'
 import { queryClient } from '@/services/queryClient'
+import { logger } from '@/utils/logger'
 import { useErrorHandler } from '@/composables/useErrorHandler'
 
 /** A page of a long list, and where the next one starts (`null`: there is none). */
@@ -55,9 +56,6 @@ export const useListPages = <T extends { id: string }>(
     placeholderData: keepPrevious ? keepPreviousData : undefined,
   })
 
-  const { handleHttpError } = useErrorHandler()
-  watch(query.error, error => error && handleHttpError(error))
-
   /**
    * What came so far, page after page. Set to fewer (some were deleted, say),
    * it keeps those only.
@@ -73,6 +71,13 @@ export const useListPages = <T extends { id: string }>(
     },
   })
 
+  /** Whether the list couldn't load, with nothing to show: the screen says so, and offers to try again. */
+  const loadFailed = computed(() => query.isError.value && !query.isFetching.value && items.value.length === 0)
+
+  // Only a later page failing needs a toast; with nothing to show, the screen tells it (`loadFailed`).
+  const { handleHttpError } = useErrorHandler()
+  watch(query.error, error => error && (items.value.length ? handleHttpError(error) : logger.error(error)))
+
   /** The next page, unless it's on its way or there is none. */
   const fetchMore = async () => {
     if (query.hasNextPage.value && !query.isFetchingNextPage.value) {
@@ -80,5 +85,5 @@ export const useListPages = <T extends { id: string }>(
     }
   }
 
-  return { ...query, items, fetchMore }
+  return { ...query, items, loadFailed, fetchMore }
 }

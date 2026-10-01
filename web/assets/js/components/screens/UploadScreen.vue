@@ -145,6 +145,12 @@ const changed = async () => {
   await huntingStore.refresh()
 }
 
+/** Reviewed (accepted or discarded): the uploads that brought them have done their part. */
+const reviewed = async () => {
+  uploadService.removeUploaded()
+  await changed()
+}
+
 const accept = async (batch: OfferingBatch) => {
   try {
     const { failures } = await huntingService.acceptBatch(batch.batch)
@@ -155,20 +161,20 @@ const accept = async (batch: OfferingBatch) => {
       toastSuccess('Accepted. The new songs are in your library and being looked up on MusicBrainz.')
     }
 
-    await changed()
+    await reviewed()
   } catch (error: unknown) {
     handleHttpError(error)
   }
 }
 
 const discard = async (batch: OfferingBatch) => {
-  if (!(await showConfirmDialog(`Discard ${pluralize(batch.files, 'file')}?`))) {
+  if (!(await showConfirmDialog(`Discard ${pluralize(batch.files, 'file')}?`, { action: 'Discard' }))) {
     return
   }
 
   try {
     await huntingService.discardBatch(batch.batch)
-    await changed()
+    await reviewed()
   } catch (error: unknown) {
     handleHttpError(error)
   }

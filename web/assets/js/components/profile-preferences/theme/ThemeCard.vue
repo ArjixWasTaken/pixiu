@@ -3,7 +3,7 @@
     :aria-pressed="isCurrentTheme"
     :class="{ current: isCurrentTheme }"
     :title="isCurrentTheme ? `${theme.name} (current scheme)` : `Use the ${theme.name} scheme`"
-    class="theme flex items-center gap-3 w-full p-3"
+    class="theme flex items-center gap-3 w-full h-full p-3 text-left"
     data-testid="theme-card"
     interactive
     tag="button"

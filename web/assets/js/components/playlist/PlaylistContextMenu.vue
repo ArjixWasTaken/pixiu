@@ -82,9 +82,9 @@ const edit = () =>
 
 const destroy = () =>
   trigger(async () => {
-    if (await showConfirmDialog(`Delete the playlist "${playlist.value.name}"?`)) {
+    if (await showConfirmDialog(`Delete the playlist “${playlist.value.name}”?`, { action: 'Delete' })) {
       await playlistStore.delete(playlist.value)
-      toastSuccess(`Playlist "${playlist.value.name}" deleted.`)
+      toastSuccess(`Playlist “${playlist.value.name}” deleted.`)
       eventBus.emit('PLAYLIST_DELETED', playlist.value)
     }
   })
@@ -145,7 +145,7 @@ const toggleOffline = () =>
 
     if (allCached.value) {
       removePlayablesOfflineCache(playlistSongs.value)
-      toastSuccess(`Removed offline versions for "${playlist.value.name}".`)
+      toastSuccess(`Removed offline versions for “${playlist.value.name}”.`)
     } else {
       makePlayablesAvailableOffline(playlistSongs.value)
       toastSuccess(`Making ${pluralize(playlistSongs.value, 'song')} available offline…`)

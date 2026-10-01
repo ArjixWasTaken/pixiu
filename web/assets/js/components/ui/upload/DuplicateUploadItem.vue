@@ -36,7 +36,7 @@ const { showConfirmDialog } = useDialogBox()
 const keep = () => uploadService.keepDuplicate(props.upload.id)
 
 const confirmDiscard = async () => {
-  if (await showConfirmDialog('Discard this duplicate upload?')) {
+  if (await showConfirmDialog('Discard this duplicate upload?', { action: 'Discard' })) {
     uploadService.discardDuplicate(props.upload.id)
   }
 }

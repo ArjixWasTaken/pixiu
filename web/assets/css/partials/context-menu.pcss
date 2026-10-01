@@ -26,7 +26,8 @@
   li {
     @apply relative whitespace-nowrap cursor-pointer;
 
-    min-height: 48px;
+    /* 48px for a finger, 32px with a mouse: the same as every other menu. */
+    min-height: var(--m3-menu-item-height);
     padding: 0 12px;
     display: flex;
     align-items: center;

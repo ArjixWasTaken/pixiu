@@ -109,6 +109,7 @@ const toggleStatus = async (account: ManagedAccount) => {
     turningOff &&
     !(await showConfirmDialog(
       `Turn ${account.username}’s account off? They are signed out everywhere; their library stays.`,
+      { action: 'Turn off' },
     ))
   ) {
     return
@@ -130,7 +131,11 @@ const approve = (account: ManagedAccount) =>
   })
 
 const deny = async (account: ManagedAccount) => {
-  if (!(await showConfirmDialog(`Deny ${account.username}’s request? They get a short note, and the request goes.`))) {
+  if (
+    !(await showConfirmDialog(`Deny ${account.username}’s request? They get a short note, and the request goes.`, {
+      action: 'Deny',
+    }))
+  ) {
     return
   }
 
@@ -158,7 +163,10 @@ const remove = async (account: ManagedAccount) => {
     ? ` This frees ${formatBytes(account.exclusive_bytes)}; files other libraries play stay.`
     : ''
   if (
-    !(await showConfirmDialog(`Delete ${account.username}’s account and library for good?${freed}`, 'Delete account'))
+    !(await showConfirmDialog(`Delete ${account.username}’s account and library for good?${freed}`, {
+      title: 'Delete account',
+      action: 'Delete',
+    }))
   ) {
     return
   }

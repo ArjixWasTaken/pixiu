@@ -22,6 +22,7 @@
     </template>
 
     <SongListSkeleton v-if="showSkeletons" class="screen-bleed" role="status" aria-busy="true" aria-label="Loading" />
+    <LoadFailedState v-else-if="loadFailed" what="songs" @retry="refetch" />
     <template v-else>
       <SongList
         v-if="songs?.length > 0"
@@ -58,6 +59,7 @@ import { playback } from '@/services/playbackManager'
 import ScreenHeader from '@/components/ui/ScreenHeader.vue'
 import SongListSkeleton from '@/components/playable/playable-list/PlayableListSkeleton.vue'
 import ScreenEmptyState from '@/components/ui/ScreenEmptyState.vue'
+import LoadFailedState from '@/components/ui/LoadFailedState.vue'
 import ScreenBase from '@/components/screens/ScreenBase.vue'
 import M3Icon from '@/components/m3/M3Icon.vue'
 
@@ -75,6 +77,8 @@ const {
   items: allSongs,
   isFetching: loading,
   fetchMore: fetchSongs,
+  loadFailed,
+  refetch,
 } = useListPages(
   () => ['songs', { sort: sortField.value, order: sortOrder.value }],
   cursor => playableStore.paginateSongs({ sort: sortField.value, order: sortOrder.value, cursor }),

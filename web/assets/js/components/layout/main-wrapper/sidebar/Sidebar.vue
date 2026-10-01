@@ -74,6 +74,8 @@ import { useViewport } from '@/composables/useViewport'
 import { useBackToClose } from '@/composables/useBackToClose'
 import { requireInjection } from '@/utils/helpers'
 import { ModalKey } from '@/config/symbols'
+import { useHuntingStore } from '@/stores/huntingStore'
+import { usePolicies } from '@/composables/usePolicies'
 import type { M3NavItem } from '@/components/m3/navigation'
 
 import M3IconButton from '@/components/m3/M3IconButton.vue'
@@ -85,6 +87,8 @@ import SidebarNavigation from './SidebarNavigation.vue'
 
 const { onRouteChanged, isCurrentScreen, go, url } = useRouter()
 const { isMobile } = useViewport()
+const huntingStore = useHuntingStore()
+const { currentUserCan } = usePolicies()
 
 const collapsed = useUserStorage('sidebar-collapsed', false)
 const expanded = computed({ get: () => !collapsed.value, set: value => (collapsed.value = !value) })
@@ -104,17 +108,69 @@ watch(expanded, value => value || (searchOnOpen.value = false))
 onMounted(() => eventBus.on('FOCUS_SEARCH_FIELD', searchFromRail))
 onBeforeUnmount(() => eventBus.off('FOCUS_SEARCH_FIELD', searchFromRail))
 
-const rail: Array<M3NavItem & { route: RouteName; screens: ScreenName[] }> = [
+type RailItem = M3NavItem & {
+  route: RouteName
+  screens: ScreenName[]
+  /** What the drawer's item shows beside it (failed jobs, uploads to review…). */
+  count?: () => number
+  visible?: () => boolean
+}
+
+// Every place the drawer leads to, but its playlists (Open navigation lists those).
+const rail: RailItem[] = [
   { id: 'Home', label: 'Home', icon: 'home', route: 'home', screens: ['Home'] },
   { id: 'Songs', label: 'Songs', icon: 'music_note', route: 'songs.index', screens: ['Songs'] },
   { id: 'Albums', label: 'Albums', icon: 'album', route: 'albums.index', screens: ['Albums', 'Album'] },
   { id: 'Artists', label: 'Artists', icon: 'artist', route: 'artists.index', screens: ['Artists', 'Artist'] },
+  { id: 'Genres', label: 'Genres', icon: 'category', route: 'genres.index', screens: ['Genres', 'Genre'] },
   { id: 'Favorites', label: 'Favorites', icon: 'favorite', route: 'favorites', screens: ['Favorites'] },
+  { id: 'Recent', label: 'Recent', icon: 'history', route: 'recently-played', screens: ['RecentlyPlayed'] },
   { id: 'Hunt', label: 'Discover', icon: 'travel_explore', route: 'hunt', screens: ['Hunt'] },
-  { id: 'Settings', label: 'Settings', icon: 'settings', route: 'settings', screens: ['Settings'] },
+  { id: 'Watches', label: 'Watches', icon: 'visibility', route: 'watches', screens: ['Watches'] },
+  {
+    id: 'Jobs',
+    label: 'Jobs',
+    icon: 'checklist',
+    route: 'jobs',
+    screens: ['Jobs'],
+    count: () => huntingStore.state.jobs.failed,
+  },
+  {
+    id: 'Uploads',
+    label: 'Uploads',
+    icon: 'upload',
+    route: 'upload',
+    screens: ['Upload'],
+    count: () => huntingStore.state.offerings,
+    visible: () => currentUserCan.uploadSongs(),
+  },
+  {
+    id: 'Orphans',
+    label: 'Orphans',
+    icon: 'cleaning_services',
+    route: 'orphans',
+    screens: ['Orphans'],
+    count: () => huntingStore.state.orphans,
+  },
+  {
+    id: 'Settings',
+    label: 'Settings',
+    icon: 'settings',
+    route: 'settings',
+    screens: ['Settings'],
+    count: () => huntingStore.state.registrations,
+  },
 ]
 
-const railItems = computed(() => rail.map(item => ({ ...item, href: url(item.route) })))
+const railItems = computed(() =>
+  rail
+    .filter(item => item.visible?.() ?? true)
+    .map(({ count, visible: _visible, ...item }) => ({
+      ...item,
+      href: url(item.route),
+      badge: count?.() || undefined,
+    })),
+)
 const currentRailItem = computed(() => rail.find(item => isCurrentScreen(...item.screens))?.id)
 const routeOf = (item: M3NavItem) => rail.find(({ id }) => id === item.id)!.route
 

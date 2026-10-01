@@ -361,4 +361,9 @@ export const uploadService = {
   removeFailed() {
     this.state.files = this.state.files.filter(({ status }) => status !== 'Errored' && status !== 'Canceled')
   },
+
+  /** Forgets the files that are up: they wait for review, where they're listed again. */
+  removeUploaded() {
+    this.state.files = this.state.files.filter(({ status }) => status !== 'Uploaded')
+  },
 }

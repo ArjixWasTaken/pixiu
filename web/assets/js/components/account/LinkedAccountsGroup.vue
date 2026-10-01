@@ -68,7 +68,11 @@ const link = async () => {
 }
 
 const unlink = async (account: LinkedAccount) => {
-  if (!(await showConfirmDialog(`Unlink your ${account.provider} account? You sign in with your password then.`))) {
+  if (
+    !(await showConfirmDialog(`Unlink your ${account.provider} account? You sign in with your password then.`, {
+      action: 'Unlink',
+    }))
+  ) {
     return
   }
 

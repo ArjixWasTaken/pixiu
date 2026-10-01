@@ -14,7 +14,7 @@
           · {{ job.state === 'done' ? 'finished' : 'queued' }} {{ timeAgo(job.finished_at ?? job.created_at) }}
         </p>
         <p v-if="job.state === 'paused'" class="m3-body-small text-(--schemes-tertiary)">
-          {{ job.error ?? 'Paused until you log in to YouTube Music' }}
+          {{ job.error ?? 'Paused until you sign in to YouTube Music' }}
         </p>
         <!-- What went wrong: two lines, the rest when asked for (a phone can't hover for a tooltip). -->
         <template v-else-if="job.error && job.state === 'failed'">

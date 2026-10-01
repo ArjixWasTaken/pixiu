@@ -78,7 +78,7 @@ const allTabs: SettingsTab[] = [
     icon: 'login',
     component: SignInSettings,
     group: 'Server',
-    columns: true,
+    // One column: a short card beside a long one left a hole.
     visible: () => currentUserCan.manageUsers(),
   },
   {

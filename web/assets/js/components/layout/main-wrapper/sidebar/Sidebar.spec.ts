@@ -26,11 +26,13 @@ describe('sidebar.vue on desktop', () => {
     h.render(Component)
 
     await h.user.click(screen.getByRole('button', { name: 'Collapse navigation' }))
-    expect(screen.queryByText('Genres')).toBeNull()
+    expect(screen.queryByTestId('sidebar')).toBeNull()
+    // The rail lists every destination.
+    screen.getByText('Genres')
     screen.getByText('Discover')
 
     await h.user.click(screen.getByRole('button', { name: 'Open navigation' }))
-    screen.getByText('Genres')
+    screen.getByTestId('sidebar')
   })
 })
 

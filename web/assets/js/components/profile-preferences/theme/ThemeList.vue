@@ -1,6 +1,6 @@
 <template>
   <ul class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-    <li v-for="theme in themes" :key="theme.id">
+    <li v-for="theme in themes" :key="theme.id" class="flex">
       <ThemeCard :key="theme.id" :theme />
     </li>
   </ul>

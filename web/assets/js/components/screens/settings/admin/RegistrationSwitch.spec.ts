@@ -14,12 +14,13 @@ describe('registrationSwitch.vue', () => {
     expect(screen.queryByText(/Needs email/)).toBeNull()
   })
 
-  it('waits for email', () => {
+  it('waits for email, showing what is saved', () => {
     h.render(Component, { props: { open: true, mailReady: false } })
 
     const box = screen.getByRole<HTMLInputElement>('checkbox')
     expect(box.disabled).toBe(true)
-    expect(box.checked).toBe(false)
-    screen.getByText(/Needs email/)
+    // Saved as open: setting up email opens it, so it shows ticked.
+    expect(box.checked).toBe(true)
+    screen.getByText(/Needs email.*It opens once email works/)
   })
 })
