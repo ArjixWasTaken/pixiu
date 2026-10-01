@@ -24,19 +24,8 @@ export const artistTableColumnConfig = {
 
 export const playableListColumnConfig = {
   storageKey: 'playable-list-columns',
-  validColumns: [
-    'track',
-    'genre',
-    'year',
-    'title',
-    'artist',
-    'album',
-    'duration',
-    'play_count',
-    'rating',
-    'favorite',
-  ] as const,
-  defaultColumns: ['track', 'title', 'artist', 'album', 'duration', 'favorite'] as const,
+  validColumns: ['track', 'genre', 'year', 'title', 'artist', 'album', 'duration', 'play_count', 'rating'] as const,
+  defaultColumns: ['track', 'title', 'artist', 'album', 'duration'] as const,
   alwaysVisible: ['title'] as const,
   responsive: true,
 } satisfies {

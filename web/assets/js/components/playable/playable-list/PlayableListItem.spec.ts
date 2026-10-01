@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from 'vite-plus/test'
 import { screen } from '@testing-library/vue'
-import { usePlayableStore } from '@/stores/playableStore'
 import { createHarness } from '@/__tests__/TestHarness'
 
 const isCachedMock = vi.fn().mockReturnValue(false)
 const isCachingMock = vi.fn().mockReturnValue(false)
 const hasCachingErrorMock = vi.fn().mockReturnValue(false)
 const getCachingErrorMock = vi.fn().mockReturnValue(undefined)
+const makeAvailableOfflineMock = vi.fn()
 
 vi.mock('@/composables/useOfflinePlayback', () => ({
   useOfflinePlayback: () => ({
@@ -14,6 +14,11 @@ vi.mock('@/composables/useOfflinePlayback', () => ({
     isCaching: isCachingMock,
     hasCachingError: hasCachingErrorMock,
     getCachingError: getCachingErrorMock,
+    getCachingProgress: () => 0,
+    makeAvailableOffline: makeAvailableOfflineMock,
+    removeOfflineCache: vi.fn(),
+    // A service worker runs.
+    swReady: true,
   }),
 }))
 
@@ -32,6 +37,7 @@ describe('playableListItem.vue', () => {
       hasCachingErrorMock.mockReturnValue(false)
       getCachingErrorMock.mockClear()
       getCachingErrorMock.mockReturnValue(undefined)
+      makeAvailableOfflineMock.mockClear()
     },
   })
 
@@ -78,7 +84,7 @@ describe('playableListItem.vue', () => {
 
     screen.getByText('Test Song')
     screen.getByText('Test Artist · Test Album')
-    screen.getByRole('button', { name: 'Remove from favorites' })
+    screen.getByRole('button', { name: 'Make available offline' })
   })
 
   it('says when a song was played on Recently played', () => {
@@ -139,33 +145,18 @@ describe('playableListItem.vue', () => {
     expect(getByText('Disc 2')).toBeTruthy()
   })
 
-  it('toggles favorite state when the Favorite button is clicked', async () => {
-    const toggleFavoriteMock = h.mock(usePlayableStore(), 'toggleFavorite')
+  it('makes the song available offline from its button', async () => {
     const { row } = renderComponent()
 
-    await h.user.click(screen.getByRole('button', { name: 'Add to favorites' }))
+    await h.user.click(screen.getByRole('button', { name: 'Make available offline' }))
 
-    expect(toggleFavoriteMock).toHaveBeenCalledWith(row.playable)
+    expect(makeAvailableOfflineMock).toHaveBeenCalledWith(row.playable)
   })
 
-  it('shows spinner when caching offline', () => {
-    isCachingMock.mockReturnValue(true)
-    renderComponent()
-    screen.getByTitle('Caching for offline playback')
-  })
-
-  it('shows spinner instead of offline mark when caching', () => {
-    isCachingMock.mockReturnValue(true)
+  it('shows a song kept offline as such', () => {
     isCachedMock.mockReturnValue(true)
     renderComponent()
-    screen.getByTitle('Caching for offline playback')
-    expect(screen.queryByTitle('Available offline')).toBeNull()
-  })
 
-  it('shows error icon when caching fails', () => {
-    hasCachingErrorMock.mockReturnValue(true)
-    getCachingErrorMock.mockReturnValue('Network error')
-    renderComponent()
-    screen.getByTitle('Error: Network error')
+    screen.getByRole('button', { name: 'Remove offline copy' })
   })
 })
