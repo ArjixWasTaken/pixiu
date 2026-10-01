@@ -13,6 +13,7 @@
 
       <span class="content">
         <span class="title m3-body-large truncate">{{ playable.title }}</span>
+        <span v-if="item.selected" class="sr-only">Selected</span>
         <span class="supporting m3-body-medium">
           <span class="supporting-text">{{ supporting }}</span>
           <!-- Phones show the length here; it never gives way to the rest. -->

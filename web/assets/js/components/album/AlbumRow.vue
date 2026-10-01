@@ -1,23 +1,28 @@
 <template>
   <article
-    class="album-row group h-(--m3-row-height) pl-5 flex items-center border-b border-(--schemes-outline-variant) hover:bg-(--schemes-surface-container-high) transition-colors"
+    class="album-row list-table-row group h-(--m3-row-height) border-b border-(--schemes-outline-variant) hover:bg-(--schemes-surface-container-high) transition-colors"
     data-testid="album-row"
     :draggable="true"
     @contextmenu.prevent="onContextMenu"
     @dblclick.prevent.stop="goToAlbum"
     @dragstart="onDragStart"
   >
-    <span class="name flex gap-3 items-center min-w-0">
-      <span class="size-[48px] flex-none">
+    <span class="name">
+      <span class="size-(--m3-row-cover) flex-none">
         <AlbumOrArtistThumbnail :entity="album" size="sm" />
       </span>
-      <a :href="url('albums.show', { id: album.id })" class="truncate">{{ album.name }}</a>
+      <a :href="url('albums.show', { id: album.id })" :title="album.name" class="truncate">{{ album.name }}</a>
     </span>
-    <span v-if="shouldShowColumn('artist')" class="artist truncate">
-      <a v-if="artistStore.isStandard(album.artist_id)" :href="url('artists.show', { id: album.artist_id })">
+    <span v-if="shouldShowColumn('artist')" class="artist">
+      <a
+        v-if="artistStore.isStandard(album.artist_id)"
+        :href="url('artists.show', { id: album.artist_id })"
+        :title="album.artist_name"
+        class="truncate"
+      >
         {{ album.artist_name }}
       </a>
-      <template v-else>{{ album.artist_name }}</template>
+      <span v-else :title="album.artist_name" class="truncate">{{ album.artist_name }}</span>
     </span>
     <span v-if="shouldShowColumn('time')" class="time text-(--schemes-on-surface-variant) tabular-nums">
       {{ formatLength(album.length) }}
@@ -75,38 +80,3 @@ const goToAlbum = () => go(url('albums.show', { id: props.album.id }))
 
 const onDragStart = (event: DragEvent) => startDragging(event, props.album)
 </script>
-
-<style lang="postcss" scoped>
-@reference '@css/app.pcss';
-.album-row > span {
-  @apply text-left p-2 align-middle truncate;
-
-  &.name {
-    @apply flex-1 min-w-0 flex items-center;
-  }
-
-  &.artist {
-    @apply basis-48;
-  }
-
-  &.time {
-    @apply basis-24;
-  }
-
-  &.year {
-    @apply basis-24;
-  }
-
-  &.rating {
-    @apply basis-32 flex items-center;
-  }
-
-  &.favorite {
-    @apply basis-16 text-center;
-  }
-
-  &.extra {
-    @apply basis-12 text-center;
-  }
-}
-</style>

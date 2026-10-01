@@ -1,7 +1,7 @@
 <template>
   <M3IconButton
     :icon="mode === 'REPEAT_ONE' ? 'repeat_one' : 'repeat'"
-    :label="`Change repeat mode (current: ${readableMode})`"
+    :label="`Repeat: ${readableMode}`"
     :selected="mode !== 'NO_REPEAT'"
     data-testid="repeat-mode-switch"
     @click.prevent="changeMode"
@@ -19,12 +19,8 @@ const preferenceStore = usePreferenceStore()
 
 const mode = toRef(preferenceStore.state, 'repeat_mode')
 
-const readableMode = computed(() =>
-  mode.value
-    .split('_')
-    .map(part => part[0].toUpperCase() + part.substring(1).toLowerCase())
-    .join(' '),
-)
+/** What a press on it changes: the label says where it is now. */
+const readableMode = computed(() => ({ NO_REPEAT: 'off', REPEAT_ALL: 'all', REPEAT_ONE: 'one' })[mode.value])
 
 const changeMode = () => playback().rotateRepeatMode()
 </script>

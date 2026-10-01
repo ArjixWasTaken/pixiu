@@ -129,7 +129,8 @@ const {
       sort: preferences.artists_sort_field,
       order: preferences.artists_sort_order,
     }),
-  { enabled: () => !libraryEmpty.value },
+  // Re-sorting keeps the grid (and the focus on the sort button) until the new order comes.
+  { enabled: () => !libraryEmpty.value, keepPrevious: true },
 )
 
 const displayedArtists = computed(() =>

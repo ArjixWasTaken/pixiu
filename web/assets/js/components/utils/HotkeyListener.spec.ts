@@ -58,3 +58,58 @@ describe('hotkeyListener.vue', () => {
     expect(rewindMock).toHaveBeenCalledWith(10)
   })
 })
+
+describe('hotkeyListener.vue, where keys belong elsewhere', () => {
+  const h = createHarness({
+    beforeEach: () => {
+      forwardMock.mockClear()
+      rewindMock.mockClear()
+    },
+  })
+
+  const pressOn = (target: Element, key: string, init: KeyboardEventInit = {}) =>
+    target.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, ...init }))
+
+  it('leaves menus, dialogs, sliders and song rows their keys', () => {
+    h.render(Component)
+
+    const menu = document.createElement('div')
+    menu.setAttribute('role', 'menu')
+    const item = document.createElement('li')
+    item.setAttribute('role', 'menuitem')
+    menu.appendChild(item)
+
+    const dialog = document.createElement('div')
+    dialog.setAttribute('role', 'dialog')
+    const text = document.createElement('p')
+    dialog.appendChild(text)
+
+    const slider = document.createElement('input')
+    slider.type = 'range'
+
+    const row = document.createElement('article')
+    row.className = 'song-item'
+
+    document.body.append(menu, dialog, slider, row)
+
+    pressOn(item, 'ArrowRight')
+    pressOn(text, 'ArrowLeft')
+    pressOn(slider, 'ArrowRight')
+    pressOn(row, 'ArrowLeft')
+
+    expect(forwardMock).not.toHaveBeenCalled()
+    expect(rewindMock).not.toHaveBeenCalled()
+
+    menu.remove()
+    dialog.remove()
+    slider.remove()
+    row.remove()
+  })
+
+  it('leaves Shift+arrows to selections', () => {
+    h.render(Component)
+    pressOn(document.body, 'ArrowRight', { shiftKey: true })
+
+    expect(forwardMock).not.toHaveBeenCalled()
+  })
+})

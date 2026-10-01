@@ -7,7 +7,7 @@
     @dragstart="onDragStart"
   >
     <button
-      :aria-label="nowPlaying.open.value ? 'Collapse player' : 'Expand player'"
+      :aria-label="nowPlaying.open.value ? 'Hide what’s playing' : 'Show what’s playing'"
       :style="{ backgroundImage: `url(${cover}), url(${defaultCover})` }"
       class="album-thumb"
       type="button"

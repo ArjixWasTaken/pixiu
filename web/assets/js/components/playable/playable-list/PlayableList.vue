@@ -3,9 +3,7 @@
     ref="wrapper"
     class="playable-list-wrap relative flex flex-col flex-1 py-0"
     data-testid="song-list"
-    @keydown.delete.prevent.stop="handleDelete"
-    @keydown.enter.prevent.stop="handleEnter"
-    @keydown.a.prevent="selectAllWithKeyboard"
+    @keydown="onKeydown"
   >
     <PlayableListHeader v-if="config.hasHeader" @sort="sort" />
 
@@ -161,6 +159,30 @@ const handleDelete = () => {
 const handleEnter = (event: KeyboardEvent) => {
   emit('press:enter', event) // eslint-disable-line vue/custom-event-name-casing
   clearSelection()
+}
+
+/**
+ * Enter, Delete and Ctrl/Cmd+A act on the songs, when a song has focus: a
+ * field or button in the list (the filter, the sort menu, a row's buttons)
+ * keeps its keys ("a" types an "a", Enter opens a menu).
+ */
+const onKeydown = (event: KeyboardEvent) => {
+  if (!(event.target instanceof Element) || !event.target.matches('.song-item')) {
+    return
+  }
+
+  if (event.key === 'Enter') {
+    event.preventDefault()
+    event.stopPropagation()
+    handleEnter(event)
+  } else if (event.key === 'Delete' || event.key === 'Backspace') {
+    event.preventDefault()
+    event.stopPropagation()
+    handleDelete()
+  } else if (event.key.toLowerCase() === 'a' && (event.ctrlKey || event.metaKey)) {
+    event.preventDefault()
+    selectAllWithKeyboard(event)
+  }
 }
 
 const onDragStart = async (row: PlayableRow, event: DragEvent) => {

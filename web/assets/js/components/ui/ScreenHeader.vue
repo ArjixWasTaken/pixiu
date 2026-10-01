@@ -1,10 +1,10 @@
 <template>
   <header :class="[layout, { disabled, round: isArtist }]" class="screen-header">
-    <aside v-if="$slots.thumbnail && layout === 'expanded'" class="thumbnail">
+    <div v-if="$slots.thumbnail && layout === 'expanded'" class="thumbnail">
       <slot name="thumbnail" />
-    </aside>
+    </div>
 
-    <main class="body">
+    <div class="body">
       <span v-if="layout === 'expanded' && label" class="m3-label-large overline-text">{{ label }}</span>
       <div class="title-row">
         <h1 :class="titleClass" class="name">
@@ -21,7 +21,7 @@
       <div v-if="$slots.controls" class="controls">
         <slot name="controls" />
       </div>
-    </main>
+    </div>
   </header>
 </template>
 

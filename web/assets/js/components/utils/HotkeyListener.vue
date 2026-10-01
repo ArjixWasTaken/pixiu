@@ -17,19 +17,44 @@ const playableStore = usePlayableStore()
 
 const { isCurrentScreen, go, url } = useRouter()
 
+/**
+ * Where keys belong to what has focus: fields and buttons, and widgets that
+ * move with the arrow keys or act on Space and letters (menus, tabs, sliders,
+ * radio groups, dialogs, song rows).
+ */
+const TAKES_KEYS = [
+  'input',
+  'select',
+  'textarea',
+  'button',
+  'a[href]',
+  '[contenteditable]',
+  '[role="button"]',
+  '[role="checkbox"]',
+  '[role="slider"]',
+  '[role="tab"]',
+  '[role="radio"]',
+  '[role^="menuitem"]',
+  '[role="option"]',
+  '.song-item',
+].join(', ')
+
+const WIDGETS = 'dialog, [role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"], [role="radiogroup"]'
+
 const onKeyStroke = (key: KeyFilter, callback: (e: KeyboardEvent) => void) => {
   baseOnKeyStroke(key, e => {
-    if (e.altKey || e.ctrlKey || e.metaKey) {
+    // Shift+arrows extend selections; other modifiers belong to the browser.
+    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || e.defaultPrevented) {
       return
     }
 
-    const el = e.target as HTMLElement
+    const el = e.target
 
-    if (
-      el.isContentEditable ||
-      el.matches('input, select, textarea, button, [role="button"], [role="checkbox"]') ||
-      el.closest('dialog')
-    ) {
+    if (el instanceof Element && (el.matches(TAKES_KEYS) || el.closest(WIDGETS))) {
+      return
+    }
+
+    if (el instanceof HTMLElement && el.isContentEditable) {
       return
     }
 

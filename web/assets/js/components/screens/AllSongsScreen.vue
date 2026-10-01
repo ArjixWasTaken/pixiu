@@ -78,6 +78,8 @@ const {
 } = useListPages(
   () => ['songs', { sort: sortField.value, order: sortOrder.value }],
   cursor => playableStore.paginateSongs({ sort: sortField.value, order: sortOrder.value, cursor }),
+  // Re-sorting keeps the list (and the focus in its header) until the new order comes.
+  { keepPrevious: true },
 )
 const totalDuration = computed(() => secondsToHumanReadable(commonStore.state.song_length))
 

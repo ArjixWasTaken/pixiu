@@ -6,10 +6,10 @@ exports[`allSongsScreen.vue > renders 1`] = `
     <!-- In the scroller, so the header scrolls away; what must stay in reach is sticky. -->
     <div data-v-0fb797a2="" class="screen-head">
       <header data-v-0623237c="" data-v-ddbdca5c="" data-v-0fb797a2-s="" class="expanded screen-header">
-        <aside data-v-0623237c="" class="thumbnail">
+        <div data-v-0623237c="" class="thumbnail">
           <article data-v-b4b26fc4="" data-v-ddbdca5c="" class="tiles thumbnail-stack flex-1 aspect-square overflow-hidden grid bg-cover bg-no-repeat" style="background-image: url(&quot;/assets/img/covers/default.svg&quot;);"><span data-v-b4b26fc4="" class="block w-full h-full bg-cover bg-no-repeat" data-testid="thumbnail"></span><span data-v-b4b26fc4="" class="block w-full h-full bg-cover bg-no-repeat" data-testid="thumbnail"></span><span data-v-b4b26fc4="" class="block w-full h-full bg-cover bg-no-repeat" data-testid="thumbnail"></span><span data-v-b4b26fc4="" class="block w-full h-full bg-cover bg-no-repeat" data-testid="thumbnail"></span></article>
-        </aside>
-        <main data-v-0623237c="" class="body"><span data-v-0623237c="" class="m3-label-large overline-text">Library</span>
+        </div>
+        <div data-v-0623237c="" class="body"><span data-v-0623237c="" class="m3-label-large overline-text">Library</span>
           <div data-v-0623237c="" class="title-row">
             <h1 data-v-0623237c="" class="m3-headline-medium name"> All songs </h1>
           </div>
@@ -27,7 +27,7 @@ exports[`allSongsScreen.vue > renders 1`] = `
               </div>
             </div>
           </div>
-        </main>
+        </div>
       </header>
     </div><br data-v-ddbdca5c="" data-v-0fb797a2-s="" data-testid="song-list" class="screen-bleed">
   </main>

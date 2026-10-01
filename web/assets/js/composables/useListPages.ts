@@ -1,5 +1,5 @@
 import type { InfiniteData } from '@tanstack/vue-query'
-import { useInfiniteQuery } from '@tanstack/vue-query'
+import { keepPreviousData, useInfiniteQuery } from '@tanstack/vue-query'
 import type { MaybeRefOrGetter } from 'vue'
 import { computed, toValue, watch } from 'vue'
 import { queryClient } from '@/services/queryClient'
@@ -32,7 +32,17 @@ export const dropFromListPages = (key: readonly unknown[], ids: Iterable<string>
 export const useListPages = <T extends { id: string }>(
   key: MaybeRefOrGetter<readonly unknown[]>,
   fetchPage: (cursor: string) => Promise<ListPage<T>>,
-  { enabled = true }: { enabled?: MaybeRefOrGetter<boolean> } = {},
+  {
+    enabled = true,
+    keepPrevious = false,
+  }: {
+    enabled?: MaybeRefOrGetter<boolean>
+    /**
+     * Whether the list shows what it had while another key (a new sort) loads,
+     * rather than nothing: for one list in another order, not for another list.
+     */
+    keepPrevious?: boolean
+  } = {},
 ) => {
   const queryKey = computed(() => toValue(key))
 
@@ -42,6 +52,7 @@ export const useListPages = <T extends { id: string }>(
     initialPageParam: '',
     getNextPageParam: page => page.nextCursor ?? undefined,
     enabled: computed(() => toValue(enabled)),
+    placeholderData: keepPrevious ? keepPreviousData : undefined,
   })
 
   const { handleHttpError } = useErrorHandler()

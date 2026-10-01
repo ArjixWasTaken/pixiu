@@ -12,10 +12,11 @@
 
     <main class="space-y-1">
       <p class="hint m3-body-medium">
-        Drag to reorder; untick to hide. Blocks with nothing to show stay hidden until they have something.
+        Drag or use the arrows to reorder; untick to hide. Sections with nothing to show stay hidden until they have
+        something.
       </p>
       <div
-        v-for="block in orderedBlocks"
+        v-for="(block, index) in orderedBlocks"
         :key="block.id"
         :draggable="true"
         class="group flex transition-all items-center gap-2 pr-3 py-2 rounded-sm bg-(--schemes-surface-container) hover:bg-(--schemes-surface-container-high) hover:pl-3 cursor-grab active:cursor-grabbing active:text-(--schemes-primary) select-none"
@@ -27,6 +28,20 @@
       >
         <M3Icon name="drag_indicator" class="w-4 h-4 text-(--schemes-on-surface-variant)" />
         <span class="flex-1">{{ block.label }}</span>
+        <M3IconButton
+          :disabled="index === 0"
+          :icon-size="20"
+          :label="`Move ${block.label} up`"
+          icon="arrow_upward"
+          @click="move(block.id, -1)"
+        />
+        <M3IconButton
+          :disabled="index === orderedBlocks.length - 1"
+          :icon-size="20"
+          :label="`Move ${block.label} down`"
+          icon="arrow_downward"
+          @click="move(block.id, 1)"
+        />
         <M3Checkbox
           :aria-label="`Show ${block.label}`"
           :model-value="!hidden.includes(block.id)"
@@ -48,6 +63,7 @@ import { usePreferenceStore } from '@/stores/preferenceStore'
 import M3Button from '@/components/m3/M3Button.vue'
 import M3Checkbox from '@/components/m3/M3Checkbox.vue'
 import M3Icon from '@/components/m3/M3Icon.vue'
+import M3IconButton from '@/components/m3/M3IconButton.vue'
 
 const preferenceStore = usePreferenceStore()
 
@@ -98,16 +114,34 @@ const onDragOver = (target: BlockSummary, event: DragEvent) => {
   }
 }
 
+const saveOrder = () => {
+  if (!isEqual(orderIds.value, preferenceStore.home_blocks_order ?? [])) {
+    preferenceStore.home_blocks_order = [...orderIds.value]
+  }
+}
+
 const onDragEnd = () => {
   if (draggedId.value === null) {
     return
   }
 
-  if (!isEqual(orderIds.value, preferenceStore.home_blocks_order ?? [])) {
-    preferenceStore.home_blocks_order = [...orderIds.value]
+  saveOrder()
+  draggedId.value = null
+}
+
+/** One place up (-1) or down (1): the way to reorder without dragging. */
+const move = (id: string, by: -1 | 1) => {
+  const from = orderIds.value.indexOf(id)
+  const to = from + by
+
+  if (from === -1 || to < 0 || to >= orderIds.value.length) {
+    return
   }
 
-  draggedId.value = null
+  const next = [...orderIds.value]
+  next.splice(to, 0, next.splice(from, 1)[0])
+  orderIds.value = next
+  saveOrder()
 }
 
 const hidden = computed(() => preferenceStore.home_blocks_hidden ?? [])

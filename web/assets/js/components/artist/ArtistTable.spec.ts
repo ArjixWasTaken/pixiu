@@ -26,20 +26,20 @@ describe('artistTable.vue', () => {
   it('renders a sort-by-name header', () => {
     renderWithArtists(3)
 
-    screen.getByTitle('Sort by name')
+    screen.getByRole('button', { name: 'Name, sorted ascending' })
   })
 
   it('emits sort with toggled order when a header is clicked', async () => {
     const { emitted } = renderWithArtists(0)
 
-    await h.user.click(screen.getByTitle('Sort by name'))
+    await h.user.click(screen.getByRole('button', { name: 'Name, sorted ascending' }))
 
     expect(emitted('sort')?.[0]).toEqual(['name', 'desc'])
   })
 
-  it('shows a more-actions button in the header action menu', () => {
+  it('offers to choose the columns', () => {
     renderWithArtists(0)
 
-    screen.getByRole('button', { name: 'Sort' })
+    screen.getByRole('button', { name: 'Columns' })
   })
 })
