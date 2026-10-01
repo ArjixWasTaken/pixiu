@@ -1,28 +1,29 @@
 import type { SongUpdateResult } from '@/stores/playableStore'
 
-export interface Events {
-  LOG_OUT: () => void
-  NEW_VERSION_DEPLOYED: () => void
-  TOGGLE_SIDEBAR: () => void
-  FOCUS_SEARCH_FIELD: () => void
-  SEARCH_KEYWORDS_CHANGED: (keywords: string) => void
+/** Each event and what it carries (`undefined`: nothing). */
+export type Events = {
+  LOG_OUT: undefined
+  NEW_VERSION_DEPLOYED: undefined
+  TOGGLE_SIDEBAR: undefined
+  FOCUS_SEARCH_FIELD: undefined
+  SEARCH_KEYWORDS_CHANGED: string
 
-  FULLSCREEN_TOGGLE: () => void
-  PLAYBACK_STARTED: (playable: Playable) => void
-  UP_NEXT: (playable: Playable | null) => void
+  FULLSCREEN_TOGGLE: undefined
+  PLAYBACK_STARTED: Playable
+  UP_NEXT: Playable | null
 
-  PLAYLIST_DELETED: (playlist: Playlist) => void
-  PLAYLIST_CONTENT_REMOVED: (playlist: Playlist, playables: Playable[]) => void
-  PLAYLIST_UPDATED: (playlist: Playlist) => void
+  PLAYLIST_DELETED: Playlist
+  PLAYLIST_CONTENT_REMOVED: { playlist: Playlist; playables: Playable[] }
+  PLAYLIST_UPDATED: Playlist
 
-  SONGS_UPDATED: (result: SongUpdateResult) => void
-  SONGS_DELETED: (songs: Song[]) => void
-  SONG_UPLOADED: (song: Song) => void
+  SONGS_UPDATED: SongUpdateResult
+  SONGS_DELETED: Song[]
+  SONG_UPLOADED: Song
   /** The job board changed on the server. */
-  HUNT_JOBS_CHANGED: () => void
+  HUNT_JOBS_CHANGED: undefined
   /** Uploaded files wait for review. */
-  OFFERINGS_UPLOADED: () => void
+  OFFERINGS_UPLOADED: undefined
   /** Songs were excluded from a watched playlist, or let back in. */
-  WATCH_EXCLUSIONS_CHANGED: () => void
-  DOWNLOAD_ARCHIVE_SAVED: () => void
+  WATCH_EXCLUSIONS_CHANGED: undefined
+  DOWNLOAD_ARCHIVE_SAVED: undefined
 }

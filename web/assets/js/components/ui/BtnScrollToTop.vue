@@ -14,26 +14,20 @@
 </template>
 
 <script lang="ts" setup>
-import { onMounted, ref } from 'vue'
-import { $ } from '@/utils/$'
+import { useScroll } from '@vueuse/core'
+import { computed, onMounted, shallowRef, useTemplateRef } from 'vue'
 import M3Icon from '@/components/m3/M3Icon.vue'
 
-const el = ref<HTMLElement>()
-const showing = ref(false)
+const el = useTemplateRef('el')
 
-const scrollToTop = () => {
-  if (!el.value?.parentElement) {
-    return
-  }
+/** The screen it sits on scrolls; it watches that. */
+const scroller = shallowRef<HTMLElement | null>(null)
+onMounted(() => (scroller.value = el.value?.closest<HTMLElement>('.screen-body') ?? null))
 
-  $.scrollTo(el.value.parentElement, 0, 500, () => (showing.value = false))
-}
+const { y } = useScroll(scroller)
+const showing = computed(() => y.value > 64)
 
-onMounted(() => {
-  el.value?.parentElement?.addEventListener('scroll', event => {
-    showing.value = (event.target as HTMLElement).scrollTop > 64
-  })
-})
+const scrollToTop = () => scroller.value?.scrollTo({ top: 0, behavior: 'smooth' })
 </script>
 
 <style lang="postcss" scoped>

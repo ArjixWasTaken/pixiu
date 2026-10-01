@@ -54,6 +54,6 @@ describe('usePlaylistContentManagement', () => {
     await removeFromPlaylist(playlist, songs)
 
     expect(playlistStore.removeContent).toHaveBeenCalledWith(playlist, songs)
-    expect(emitMock).toHaveBeenCalledWith('PLAYLIST_CONTENT_REMOVED', playlist, songs)
+    expect(emitMock).toHaveBeenCalledWith('PLAYLIST_CONTENT_REMOVED', { playlist, playables: songs })
   })
 })

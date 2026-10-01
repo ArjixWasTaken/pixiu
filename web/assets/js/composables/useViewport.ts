@@ -1,42 +1,34 @@
-import { readonly, ref } from 'vue'
+import { useMediaQuery } from '@vueuse/core'
+import { computed, ref } from 'vue'
 
-/** The design's breakpoints: phones up to 768px wide, wide song grids from 1360px. */
-const MOBILE = '(max-width: 768px)'
-const WIDE = '(min-width: 1360px)'
-
-const isMobile = ref(false)
-const isWide = ref(false)
-let listening = false
-
-const listen = () => {
-  if (listening || typeof window === 'undefined' || !window.matchMedia) {
-    return
-  }
-
-  listening = true
-
-  for (const [query, target] of [
-    [MOBILE, isMobile],
-    [WIDE, isWide],
-  ] as const) {
-    const list = window.matchMedia(query)
-    target.value = list.matches
-    list.addEventListener?.('change', event => (target.value = event.matches))
-  }
+/**
+ * The design's breakpoints: phones up to 768px wide, wide song grids from
+ * 1360px; and touch, for a finger rather than a mouse (no dragging, tap to
+ * select, transcoding for phone networks).
+ */
+const media = {
+  mobile: useMediaQuery('(max-width: 768px)'),
+  wide: useMediaQuery('(min-width: 1360px)'),
+  touch: useMediaQuery('(pointer: coarse)'),
 }
 
-export const useViewport = () => {
-  listen()
+type Viewport = Record<keyof typeof media, boolean>
 
-  return {
-    isMobile: readonly(isMobile),
-    isWide: readonly(isWide),
-  }
-}
+const pretend = ref<Partial<Viewport>>({})
 
-/** For specs: pretend to be on a phone or a desktop. */
-export const setViewport = ({ mobile, wide = false }: { mobile: boolean; wide?: boolean }) => {
-  listen()
-  isMobile.value = mobile
-  isWide.value = wide
-}
+const isMobile = computed(() => pretend.value.mobile ?? media.mobile.value)
+const isWide = computed(() => pretend.value.wide ?? media.wide.value)
+const isTouch = computed(() => pretend.value.touch ?? media.touch.value)
+
+export const useViewport = () => ({ isMobile, isWide, isTouch })
+
+/** For specs: pretend to be on a phone or a desktop, and to have a mouse unless told otherwise. */
+export const setViewport = ({
+  mobile,
+  wide = false,
+  touch = false,
+}: {
+  mobile: boolean
+  wide?: boolean
+  touch?: boolean
+}) => (pretend.value = { mobile, wide, touch })

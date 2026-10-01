@@ -28,8 +28,6 @@
 <script lang="ts" setup>
 import type { Component } from 'vue'
 import { computed, watch } from 'vue'
-import { Filter } from '@/config/hooks'
-import { applyFilters } from '@/hooks'
 import { moveTabToHash, useHash } from '@/composables/useHash'
 import { usePolicies } from '@/composables/usePolicies'
 import { useRouter } from '@/composables/useRouter'
@@ -63,7 +61,7 @@ export interface SettingsTab {
 const { currentUserCan } = usePolicies()
 const { getRouteParam, onScreenActivated } = useRouter()
 
-const allTabs = applyFilters<SettingsTab[]>(Filter.SETTINGS_TABS, [
+const allTabs: SettingsTab[] = [
   { id: 'account', label: 'Account', icon: 'account_circle', component: AccountSettings, columns: true },
   { id: 'preferences', label: 'Preferences', icon: 'tune', component: PreferencesSettings, columns: true },
   { id: 'youtube-music', label: 'YouTube Music', icon: 'smart_display', component: YouTubeMusicSettings },
@@ -94,7 +92,7 @@ const allTabs = applyFilters<SettingsTab[]>(Filter.SETTINGS_TABS, [
     columns: true,
     visible: () => currentUserCan.manageUsers(),
   },
-])
+]
 
 const tabs = computed(() => allTabs.filter(tab => tab.visible?.() ?? true))
 

@@ -1,7 +1,7 @@
 <template>
   <M3Card
     :class="layout"
-    :draggable="!isMobile.any"
+    :draggable="!isTouch"
     class="album-artist-card"
     data-testid="artist-album-card"
     interactive
@@ -29,12 +29,14 @@
 </template>
 
 <script lang="ts" setup>
-import isMobile from 'ismobilejs'
+import { useViewport } from '@/composables/useViewport'
 import { toRefs } from 'vue'
 import { useRouter } from '@/composables/useRouter'
 
 import Thumbnail from '@/components/ui/album-artist/AlbumOrArtistThumbnail.vue'
 import M3Card from '@/components/m3/M3Card.vue'
+
+const { isTouch } = useViewport()
 
 const props = withDefaults(defineProps<{ layout?: CardLayout; entity: Artist | Album; href?: string }>(), {
   layout: 'full',

@@ -3,17 +3,6 @@ import { screen } from '@testing-library/vue'
 import { createHarness } from '@/__tests__/TestHarness'
 import Component from './EqualizerBands.vue'
 
-vi.mock('nouislider', () => ({
-  default: {
-    create: vi.fn((el: any) => {
-      el.noUiSlider = {
-        on: vi.fn(),
-        set: vi.fn(),
-      }
-    }),
-  },
-}))
-
 vi.mock('@/services/audioService', () => ({
   audioService: {
     bands: [],

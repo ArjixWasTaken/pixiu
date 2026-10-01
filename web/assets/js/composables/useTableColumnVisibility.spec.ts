@@ -1,16 +1,5 @@
-import { describe, expect, it, vi } from 'vite-plus/test'
+import { describe, expect, it } from 'vite-plus/test'
 import { createHarness } from '@/__tests__/TestHarness'
-
-vi.mock('@/composables/useLocalStorage', () => {
-  const store = new Map<string, unknown>()
-  return {
-    useLocalStorage: () => ({
-      get: <T>(key: string, fallback: T) => (store.has(key) ? (store.get(key) as T) : fallback),
-      set: (key: string, value: unknown) => store.set(key, value),
-      remove: (key: string) => store.delete(key),
-    }),
-  }
-})
 
 import { useTableColumnVisibility } from './useTableColumnVisibility'
 

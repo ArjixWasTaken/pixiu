@@ -31,19 +31,12 @@
       <JobsScreen v-if="screen === 'Jobs'" />
       <OrphansScreen v-if="screen === 'Orphans'" />
       <NotFoundScreen v-if="screen === '404'" />
-
-      <template v-for="(component, name) in addedScreens" :key="name">
-        <component :is="component" v-if="screen === name" />
-      </template>
     </div>
   </section>
 </template>
 
 <script lang="ts" setup>
 import { onMounted, reactive, ref } from 'vue'
-import type { Component } from 'vue'
-import { Filter } from '@/config/hooks'
-import { applyFilters } from '@/hooks'
 import { defineAsyncComponent } from '@/utils/helpers'
 import { useRouter } from '@/composables/useRouter'
 import { useViewport } from '@/composables/useViewport'
@@ -76,8 +69,6 @@ const WatchesScreen = defineAsyncComponent(() => import('@/components/screens/hu
 const JobsScreen = defineAsyncComponent(() => import('@/components/screens/hunting/JobsScreen.vue'))
 const OrphansScreen = defineAsyncComponent(() => import('@/components/screens/hunting/OrphansScreen.vue'))
 const UploadScreen = defineAsyncComponent(() => import('@/components/screens/UploadScreen.vue'))
-
-const addedScreens = applyFilters<Partial<Record<ScreenName, Component>>>(Filter.SCREENS, {})
 
 const { isMobile } = useViewport()
 const { onRouteChanged, getCurrentScreen } = useRouter()

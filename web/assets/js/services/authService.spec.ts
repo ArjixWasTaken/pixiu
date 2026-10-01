@@ -1,10 +1,25 @@
 import { describe, expect, it } from 'vite-plus/test'
+import { customStorageEventName } from '@vueuse/core'
+import { nextTick } from 'vue'
 import { createHarness } from '@/__tests__/TestHarness'
 import { authService } from '@/services/authService'
 import { http } from '@/services/http'
-import { useLocalStorage } from '@/composables/useLocalStorage'
 
 const originalLocation = window.location
+
+/** Reads what's stored, as JSON. */
+const lsGet = (key: string) => JSON.parse(localStorage.getItem(key) ?? 'null')
+
+/** Stores a value as another part of the page would: VueUse tells the service with its storage event. */
+const lsSet = async (key: string, value: unknown) => {
+  const newValue = value === null ? null : JSON.stringify(value)
+  newValue === null ? localStorage.removeItem(key) : localStorage.setItem(key, newValue)
+  window.dispatchEvent(
+    new CustomEvent(customStorageEventName, { detail: { key, oldValue: null, newValue, storageArea: localStorage } }),
+  )
+  // VueUse holds its own writes until the next tick after taking a value in.
+  await nextTick()
+}
 
 describe('authService', () => {
   const h = createHarness({
@@ -16,25 +31,23 @@ describe('authService', () => {
         writable: true,
       })
     },
-    afterEach: () => {
+    afterEach: async () => {
       // @ts-ignore
       window.location = originalLocation
-      useLocalStorage(false).remove('redirect')
+      await lsSet('redirect', null)
     },
   })
 
-  const { get: lsGet, set: lsSet } = useLocalStorage(false)
-
-  it('gets the token', () => {
-    lsSet('api-token', 'foo')
+  it('gets the token', async () => {
+    await lsSet('api-token', 'foo')
     expect(authService.getApiToken()).toBe('foo')
   })
 
   it.each([
     ['foo', true],
     [null, false],
-  ])('checks if the token exists', (token, exists) => {
-    lsSet('api-token', token)
+  ])('checks if the token exists', async (token, exists) => {
+    await lsSet('api-token', token)
     expect(authService.hasApiToken()).toBe(exists)
   })
 
@@ -43,8 +56,8 @@ describe('authService', () => {
     expect(lsGet('api-token')).toBe('foo')
   })
 
-  it('destroys the token', () => {
-    lsSet('api-token', 'foo')
+  it('destroys the token', async () => {
+    await lsSet('api-token', 'foo')
     authService.destroy()
     expect(lsGet('api-token')).toBeNull()
   })
@@ -61,7 +74,7 @@ describe('authService', () => {
 
   it('redirects after login', async () => {
     const redirectMock = h.mock(authService, 'maybeRedirect')
-    lsSet('redirect', 'http://localhost:3000/foo/bar')
+    await lsSet('redirect', 'http://localhost:3000/foo/bar')
 
     h.mock(http, 'post').mockResolvedValue({
       'audio-token': 'foo',
@@ -84,14 +97,14 @@ describe('authService', () => {
     expect(lsGet('redirect')).toBe('http://localhost:3000/foo/bar')
   })
 
-  it('checks if redirect url exists', () => {
-    lsSet('redirect', 'http://localhost:3000/foo/bar')
+  it('checks if redirect url exists', async () => {
+    await lsSet('redirect', 'http://localhost:3000/foo/bar')
     expect(authService.hasRedirect()).toBe(true)
   })
 
-  it('redirects to the stored URL', () => {
+  it('redirects to the stored URL', async () => {
     const assignMock = h.mock(location, 'assign')
-    lsSet('redirect', 'http://localhost:3000/foo/bar')
+    await lsSet('redirect', 'http://localhost:3000/foo/bar')
 
     authService.maybeRedirect()
 

@@ -30,7 +30,7 @@ export const usePlaylistContentManagement = () => {
 
     try {
       await playlistStore.removeContent(playlist, playables)
-      eventBus.emit('PLAYLIST_CONTENT_REMOVED', playlist, playables)
+      eventBus.emit('PLAYLIST_CONTENT_REMOVED', { playlist, playables })
       toastSuccess(`${inflect(playables)} removed from "${playlist.name}."`)
     } catch (error: unknown) {
       handleHttpError(error)

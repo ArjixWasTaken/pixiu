@@ -22,7 +22,7 @@
 </template>
 
 <script lang="ts" setup>
-import isMobile from 'ismobilejs'
+import { useViewport } from '@/composables/useViewport'
 import type { Ref } from 'vue'
 import { computed, ref } from 'vue'
 import { requireInjection, use } from '@/utils/helpers'
@@ -34,6 +34,8 @@ import { useBranding } from '@/composables/useBranding'
 import { useNowPlaying } from '@/composables/useNowPlaying'
 
 import FavoriteButton from '@/components/ui/FavoriteButton.vue'
+
+const { isTouch } = useViewport()
 
 const { startDragging } = useDraggable('playables')
 const { url } = useRouter()
@@ -48,7 +50,7 @@ const artistUri = computed(() => (playable.value ? url('artists.show', { id: pla
 
 const artistName = computed(() => (playable.value ? playable.value.artist_name : ''))
 
-const draggable = computed(() => Boolean(playable.value) && !isMobile.any)
+const draggable = computed(() => Boolean(playable.value) && !isTouch.value)
 
 const onDragStart = (event: DragEvent) => use(playable.value, p => startDragging(event, [p]))
 const toggleFavorite = () => use(playable.value, p => playableStore.toggleFavorite(p))

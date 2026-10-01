@@ -1,4 +1,4 @@
-import isMobile from 'ismobilejs'
+import { useViewport } from '@/composables/useViewport'
 import { reactive } from 'vue'
 import { http } from '@/services/http'
 import { subsonic } from '@/services/subsonic'
@@ -11,6 +11,8 @@ import { themeStore } from '@/stores/themeStore'
 import { userStore } from '@/stores/userStore'
 import { huntingStore } from '@/stores/huntingStore'
 import type { HuntingSummary } from '@/services/huntingService'
+
+const { isTouch } = useViewport()
 
 const initialState = {
   allows_download: false,
@@ -58,7 +60,7 @@ export const commonStore = {
     Object.assign(this.state, bootstrap, { playlists, queue_state: queueState })
 
     // Only enable transcoding on mobile
-    this.state.supports_transcoding = this.state.supports_transcoding && isMobile.any
+    this.state.supports_transcoding = this.state.supports_transcoding && isTouch.value
 
     userStore.init(this.state.current_user)
     preferenceStore.init(this.state.current_user.preferences)

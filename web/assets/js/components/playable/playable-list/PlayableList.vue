@@ -20,7 +20,7 @@
         :key="item.playable.id"
         :item="item"
         :show-disc="showDiscLabel(item.playable)"
-        :draggable="!isMobile.any"
+        :draggable="!isTouch"
         @click="onClick(item, $event)"
         @dragleave="onDragLeave"
         @dragstart="onDragStart(item, $event)"
@@ -36,8 +36,8 @@
 </template>
 
 <script lang="ts" setup>
-import { useThrottleFn } from '@vueuse/core'
-import isMobile from 'ismobilejs'
+import { useEventListener, useSwipe, useThrottleFn } from '@vueuse/core'
+import { useViewport } from '@/composables/useViewport'
 import type { Ref } from 'vue'
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { defineAsyncComponent, requireInjection } from '@/utils/helpers'
@@ -46,7 +46,6 @@ import { queueStore } from '@/stores/queueStore'
 import { useDraggable, useDroppable } from '@/composables/useDragAndDrop'
 import { useListSelection } from '@/composables/useListSelection'
 import { playback } from '@/services/playbackManager'
-import { useSwipeDirection } from '@/composables/useSwipeDirection'
 import { useContextMenu } from '@/composables/useContextMenu'
 import { useSizeVariable } from '@/composables/useSizeVariable'
 
@@ -61,6 +60,8 @@ import {
 import PlayableListItem from '@/components/playable/playable-list/PlayableListItem.vue'
 import VirtualScroller from '@/components/ui/VirtualScroller.vue'
 import PlayableListHeader from '@/components/playable/playable-list/PlayableListHeader.vue'
+
+const { isTouch } = useViewport()
 
 const emit = defineEmits<{
   (e: 'press:enter', event: KeyboardEvent): void
@@ -87,9 +88,20 @@ const wrapper = ref<HTMLElement>()
 const virtualScroller = ref<InstanceType<typeof VirtualScroller>>()
 const sortFields = ref<PlayableListSortField[]>([])
 
-useSwipeDirection(
-  () => wrapper.value,
-  direction => emit('swipe', direction),
+// A swipe or a wheel turn up or down, for the screen to fold its header.
+useSwipe(wrapper, {
+  threshold: 30,
+  onSwipeEnd: (_, direction) => (direction === 'up' || direction === 'down') && emit('swipe', direction),
+})
+
+useEventListener(
+  wrapper,
+  'wheel',
+  useThrottleFn(
+    (event: WheelEvent) => Math.abs(event.deltaY) >= 5 && emit('swipe', event.deltaY > 0 ? 'down' : 'up'),
+    50,
+  ),
+  { passive: true },
 )
 
 const rows = computed(() => {
@@ -233,7 +245,7 @@ const onDragEnd = () => {
 
 const onClick = (row: PlayableRow, event: MouseEvent) => {
   // If we're on a touch device, or if Ctrl/Cmd key is pressed, just toggle selection.
-  if (isMobile.any) {
+  if (isTouch.value) {
     toggleSelected(row)
     return
   }

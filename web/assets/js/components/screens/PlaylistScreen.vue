@@ -90,7 +90,7 @@ import { useErrorHandler } from '@/composables/useErrorHandler'
 import { usePlaylistContentManagement } from '@/composables/usePlaylistContentManagement'
 import { usePlayableList } from '@/composables/usePlayableList'
 import { usePlayableListControls } from '@/composables/usePlayableListControls'
-import { useLocalStorage } from '@/composables/useLocalStorage'
+import { useUserStorage } from '@/composables/useUserStorage'
 import { useContextMenu } from '@/composables/useContextMenu'
 import { useModal } from '@/composables/useModal'
 
@@ -122,15 +122,18 @@ interface PlaylistScreenState {
 const { triggerNotFound, getRouteParam, onScreenActivated, go, url } = useRouter()
 const { openContextMenu } = useContextMenu()
 const { openModal } = useModal()
-const { get: lsGet, set: lsSet } = useLocalStorage()
+/** Each playlist's own sort, by its id. */
+const playlistSorts = useUserStorage<
+  Record<Playlist['id'], { field: MaybeArray<PlayableListSortField> | null; order: SortOrder }>
+>('playlist-sorts', {})
 
 const states = new Map<Playlist['id'], PlaylistScreenState>()
 
 const blankState = (id?: Playlist['id']): PlaylistScreenState => {
   return {
     filterKeywords: '',
-    sortField: id ? (lsGet<PlayableListSortField>(`playlist-${id}-sort-field`) ?? null) : null,
-    sortOrder: id ? lsGet<SortOrder>(`playlist-${id}-sort-order`, 'asc')! : 'asc',
+    sortField: (id && playlistSorts.value[id]?.field) || null,
+    sortOrder: (id && playlistSorts.value[id]?.order) || 'asc',
   }
 }
 
@@ -183,8 +186,7 @@ const sort = (field: MaybeArray<PlayableListSortField> | null, order: SortOrder)
   currentState.sortOrder = order
 
   if (playlistId.value) {
-    lsSet(`playlist-${playlistId.value}-sort-field`, field)
-    lsSet(`playlist-${playlistId.value}-sort-order`, order)
+    playlistSorts.value = { ...playlistSorts.value, [playlistId.value]: { field, order } }
   }
 
   // We always call the base sort function, which will handle the actual sorting logic.
@@ -288,20 +290,19 @@ const requestContextMenu = (event: MouseEvent) =>
 
 const { toastSuccess } = useMessageToaster()
 
-eventBus
-  .on('WATCH_EXCLUSIONS_CHANGED', async () => {
-    if (mirror.value) {
-      await fetchDetails(true)
-      fetchMirror()
-    }
-  })
-  .on('PLAYLIST_UPDATED', async ({ id }) => id === playlistId.value && (await fetchDetails()))
-  .on('PLAYLIST_CONTENT_REMOVED', async ({ id }, removed) => {
-    if (id === playlistId.value) {
-      allPlayables.value = differenceBy(allPlayables.value, removed, 'id')
-    }
-  })
-  .on('PLAYLIST_DELETED', async ({ id }) => id === playlistId.value && go(url('home')))
+eventBus.on('WATCH_EXCLUSIONS_CHANGED', async () => {
+  if (mirror.value) {
+    await fetchDetails(true)
+    fetchMirror()
+  }
+})
+eventBus.on('PLAYLIST_UPDATED', async ({ id }) => id === playlistId.value && (await fetchDetails()))
+eventBus.on('PLAYLIST_CONTENT_REMOVED', async ({ playlist: { id }, playables: removed }) => {
+  if (id === playlistId.value) {
+    allPlayables.value = differenceBy(allPlayables.value, removed, 'id')
+  }
+})
+eventBus.on('PLAYLIST_DELETED', async ({ id }) => id === playlistId.value && go(url('home')))
 </script>
 
 <style lang="postcss" scoped>

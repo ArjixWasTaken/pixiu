@@ -5,7 +5,7 @@ import { eventBus } from './eventBus'
 describe('eventBus', () => {
   createHarness({
     beforeEach: () => {
-      eventBus.removeAllListeners()
+      eventBus.all.clear()
     },
   })
 
@@ -36,12 +36,8 @@ describe('eventBus', () => {
   it('removes listeners', () => {
     const callback = vi.fn()
     eventBus.on('LOG_OUT', callback)
-    eventBus.removeAllListeners('LOG_OUT')
+    eventBus.off('LOG_OUT', callback)
     eventBus.emit('LOG_OUT')
     expect(callback).not.toHaveBeenCalled()
-  })
-
-  it('supports high max listener count', () => {
-    expect(eventBus.getMaxListeners()).toBe(100)
   })
 })

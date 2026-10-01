@@ -82,7 +82,7 @@ import { playableStore } from '@/stores/playableStore'
 import { useErrorHandler } from '@/composables/useErrorHandler'
 import { usePlayableList } from '@/composables/usePlayableList'
 import { usePlayableListControls } from '@/composables/usePlayableListControls'
-import { useLocalStorage } from '@/composables/useLocalStorage'
+import { useUserStorage } from '@/composables/useUserStorage'
 import { useThirdPartyServices } from '@/composables/useThirdPartyServices'
 import { useRouter } from '@/composables/useRouter'
 import { useContextMenu } from '@/composables/useContextMenu'
@@ -110,7 +110,8 @@ const { PlayableListControls: SongListControls, config } = usePlayableListContro
 const { useMusicBrainz } = useThirdPartyServices()
 const { getRouteParam, go, onScreenActivated, onRouteChanged, url, triggerNotFound } = useRouter()
 const { openContextMenu } = useContextMenu()
-const { get: lsGet, set: lsSet } = useLocalStorage()
+const sortField = useUserStorage<MaybeArray<PlayableListSortField>>('artist-sort-field', 'track')
+const sortOrder = useUserStorage<SortOrder>('artist-sort-order', 'asc')
 
 const activeTab = useHashTab(validTabs, 'songs')
 
@@ -170,9 +171,7 @@ const fetchScreenData = async () => {
 
     context.entity = artist.value
 
-    const restoredField = lsGet<PlayableListSortField>('artist-sort-field', 'track')!
-    const restoredOrder = lsGet<SortOrder>('artist-sort-order', 'asc')!
-    sort(restoredField, restoredOrder)
+    sort(sortField.value, sortOrder.value)
   } catch (error: unknown) {
     if ((error as any)?.status === 404) {
       triggerNotFound()
@@ -208,8 +207,8 @@ const fetchAlbums = async () => {
 watch([activeTab, artist], ([tab]) => tab === 'albums' && fetchAlbums())
 
 const onSort = (field: MaybeArray<PlayableListSortField>, order: SortOrder) => {
-  lsSet('artist-sort-field', field)
-  lsSet('artist-sort-order', order)
+  sortField.value = field
+  sortOrder.value = order
 }
 
 onScreenActivated('Artist', () => fetchScreenData())

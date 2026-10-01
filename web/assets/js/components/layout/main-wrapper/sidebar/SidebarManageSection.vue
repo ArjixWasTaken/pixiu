@@ -28,8 +28,6 @@ import { useRouter } from '@/composables/useRouter'
 import { usePolicies } from '@/composables/usePolicies'
 import { uploadService } from '@/services/uploadService'
 import { huntingStore } from '@/stores/huntingStore'
-import { Filter } from '@/config/hooks'
-import { applyFilters } from '@/hooks'
 
 import SidebarSection from '@/components/layout/main-wrapper/sidebar/SidebarSection.vue'
 import SidebarSectionHeader from '@/components/layout/main-wrapper/sidebar/SidebarSectionHeader.vue'
@@ -49,59 +47,57 @@ export interface ManageSidebarItem {
 const { url, isCurrentScreen } = useRouter()
 const { currentUserCan } = usePolicies()
 
-const items = computed(() =>
-  applyFilters<ManageSidebarItem[]>(Filter.MANAGE_SIDEBAR_ITEMS, [
-    {
-      label: 'Discover',
-      icon: 'travel_explore',
-      route: 'hunt',
-      screens: ['Hunt'],
-      visible: () => true,
-    },
-    {
-      label: 'Watches',
-      icon: 'visibility',
-      route: 'watches',
-      screens: ['Watches'],
-      visible: () => true,
-    },
-    {
-      label: 'Jobs',
-      icon: 'checklist',
-      route: 'jobs',
-      screens: ['Jobs'],
-      visible: () => true,
-      badge: () => (huntingStore.state.jobs.failed ? String(huntingStore.state.jobs.failed) : null),
-      isBusy: () => huntingStore.state.jobs.running > 0,
-    },
-    {
-      label: 'Uploads',
-      icon: 'upload',
-      route: 'upload',
-      screens: ['Upload'],
-      visible: () => currentUserCan.uploadSongs(),
-      badge: () => (huntingStore.state.offerings ? String(huntingStore.state.offerings) : null),
-      isBusy: () => uploadService.getUnfinishedFiles().length > 0,
-    },
-    {
-      label: 'Orphans',
-      icon: 'cleaning_services',
-      route: 'orphans',
-      screens: ['Orphans'],
-      visible: () => true,
-      badge: () => (huntingStore.state.orphans ? String(huntingStore.state.orphans) : null),
-    },
-    {
-      label: 'Settings',
-      icon: 'settings',
-      route: 'settings',
-      screens: ['Settings'],
-      // Everyone has their account and library settings there.
-      visible: () => true,
-      badge: () => (huntingStore.state.registrations ? String(huntingStore.state.registrations) : null),
-    },
-  ]),
-)
+const items = computed<ManageSidebarItem[]>(() => [
+  {
+    label: 'Discover',
+    icon: 'travel_explore',
+    route: 'hunt',
+    screens: ['Hunt'],
+    visible: () => true,
+  },
+  {
+    label: 'Watches',
+    icon: 'visibility',
+    route: 'watches',
+    screens: ['Watches'],
+    visible: () => true,
+  },
+  {
+    label: 'Jobs',
+    icon: 'checklist',
+    route: 'jobs',
+    screens: ['Jobs'],
+    visible: () => true,
+    badge: () => (huntingStore.state.jobs.failed ? String(huntingStore.state.jobs.failed) : null),
+    isBusy: () => huntingStore.state.jobs.running > 0,
+  },
+  {
+    label: 'Uploads',
+    icon: 'upload',
+    route: 'upload',
+    screens: ['Upload'],
+    visible: () => currentUserCan.uploadSongs(),
+    badge: () => (huntingStore.state.offerings ? String(huntingStore.state.offerings) : null),
+    isBusy: () => uploadService.getUnfinishedFiles().length > 0,
+  },
+  {
+    label: 'Orphans',
+    icon: 'cleaning_services',
+    route: 'orphans',
+    screens: ['Orphans'],
+    visible: () => true,
+    badge: () => (huntingStore.state.orphans ? String(huntingStore.state.orphans) : null),
+  },
+  {
+    label: 'Settings',
+    icon: 'settings',
+    route: 'settings',
+    screens: ['Settings'],
+    // Everyone has their account and library settings there.
+    visible: () => true,
+    badge: () => (huntingStore.state.registrations ? String(huntingStore.state.registrations) : null),
+  },
+])
 
 const visibleItems = computed(() =>
   items.value

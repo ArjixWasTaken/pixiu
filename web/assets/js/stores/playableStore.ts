@@ -1,4 +1,4 @@
-import isMobile from 'ismobilejs'
+import { useViewport } from '@/composables/useViewport'
 import { differenceBy, orderBy, unionBy, uniqBy } from 'lodash-es'
 import { Reactive, reactive, watch } from 'vue'
 import { arrayify, moveItemsInList, use } from '@/utils/helpers'
@@ -14,6 +14,8 @@ import { albumStore } from '@/stores/albumStore'
 import { artistStore } from '@/stores/artistStore'
 import { overviewStore } from '@/stores/overviewStore'
 import { playlistStore } from '@/stores/playlistStore'
+
+const { isTouch } = useViewport()
 
 export interface SongUpdateData {
   title?: string
@@ -171,7 +173,7 @@ export const playableStore = {
   },
 
   getSourceUrl: (playable: Playable) => {
-    return isMobile.any && preferenceStore.transcode_on_mobile
+    return isTouch.value && preferenceStore.transcode_on_mobile
       ? subsonic.streamUrl(playable.id, preferenceStore.transcode_quality)
       : subsonic.streamUrl(playable.id)
   },

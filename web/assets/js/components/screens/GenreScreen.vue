@@ -65,7 +65,7 @@ import { useRouter } from '@/composables/useRouter'
 import { useErrorHandler } from '@/composables/useErrorHandler'
 import { usePlayableList } from '@/composables/usePlayableList'
 import { usePlayableListControls } from '@/composables/usePlayableListControls'
-import { useLocalStorage } from '@/composables/useLocalStorage'
+import { useUserStorage } from '@/composables/useUserStorage'
 import { useContextMenu } from '@/composables/useContextMenu'
 
 import M3IconButton from '@/components/m3/M3IconButton.vue'
@@ -95,10 +95,9 @@ const {
 const { PlayableListControls: SongListControls, config } = usePlayableListControls('Genre')
 const { getRouteParam, isCurrentScreen, go, onRouteChanged, url } = useRouter()
 const { openContextMenu } = useContextMenu()
-const { get: lsGet, set: lsSet } = useLocalStorage()
 
-let sortField: MaybeArray<PlayableListSortField> = lsGet<PlayableListSortField>('genre-sort-field', 'title')!
-let sortOrder: SortOrder = lsGet<SortOrder>('genre-sort-order', 'asc')!
+const sortField = useUserStorage<MaybeArray<PlayableListSortField>>('genre-sort-field', 'title')
+const sortOrder = useUserStorage<SortOrder>('genre-sort-order', 'asc')
 
 const id = ref<Genre['id'] | null>(null)
 const genre = ref<Genre | null>(null)
@@ -122,8 +121,8 @@ const fetch = async () => {
     ;[genre.value, fetched] = await Promise.all([
       genreStore.fetchOne(id.value!),
       playableStore.paginateSongsByGenre(id.value!, {
-        sort: sortField,
-        order: sortOrder,
+        sort: sortField.value,
+        order: sortOrder.value,
         cursor: cursor.value,
       }),
     ])
@@ -148,11 +147,8 @@ const refresh = async () => {
 const fetchWithSort = async (field: MaybeArray<PlayableListSortField>, order: SortOrder) => {
   cursor.value = ''
   songs.value = []
-  sortField = field
-  sortOrder = order
-
-  lsSet('genre-sort-field', field)
-  lsSet('genre-sort-order', order)
+  sortField.value = field
+  sortOrder.value = order
 
   await fetch()
 }
@@ -185,7 +181,7 @@ const requestContextMenu = (event: MouseEvent) =>
   })
 
 onMounted(() => {
-  composableSort(sortField, sortOrder)
+  composableSort(sortField.value, sortOrder.value)
 
   if (isCurrentScreen('Genre')) {
     id.value = getIdFromRoute()

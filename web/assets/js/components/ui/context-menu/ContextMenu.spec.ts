@@ -4,15 +4,11 @@ import { waitFor } from '@testing-library/vue'
 import { createHarness } from '@/__tests__/TestHarness'
 import { shallowRef } from 'vue'
 import { ContextMenuKey } from '@/config/symbols'
+import { setViewport } from '@/composables/useViewport'
 import { logger } from '@/utils/logger'
 import Component from './ContextMenu.vue'
 
 // On a desktop: phones show menus as bottom sheets, unplaced.
-vi.mock('@/composables/useViewport', async () => {
-  const { ref } = await import('vue')
-  return { useViewport: () => ({ isMobile: ref(false), isWide: ref(false) }) }
-})
-
 // Placement runs as usual; the spec looks at how it was asked for.
 vi.mock('@floating-ui/dom', async importOriginal => {
   const original = await importOriginal<typeof import('@floating-ui/dom')>()
@@ -20,7 +16,9 @@ vi.mock('@floating-ui/dom', async importOriginal => {
 })
 
 describe('contextMenu', () => {
-  const h = createHarness()
+  const h = createHarness({
+    beforeEach: () => setViewport({ mobile: false }),
+  })
 
   const provide = (options: ReturnType<typeof shallowRef>) => ({
     global: {

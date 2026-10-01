@@ -8,7 +8,6 @@
     <label
       v-for="star in 5"
       :key="star"
-      v-koel-tooltip
       :title="titleFor(star)"
       :class="{ lit: (hover || currentRating) >= star }"
       class="star cursor-pointer transition-[color] duration-150"

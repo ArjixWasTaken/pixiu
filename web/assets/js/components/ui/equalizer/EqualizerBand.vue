@@ -1,15 +1,24 @@
 <template>
   <article class="flex flex-col items-center min-w-[24px]">
-    <span ref="sliderEl" class="slider h-[100px]" />
-    <label class="mt-2 mb-0 text-left text-sm text-(--schemes-on-surface)">
+    <input
+      :id
+      ref="input"
+      v-model.number="value"
+      :max="MAX"
+      :min="MIN"
+      class="slider"
+      step="0.1"
+      type="range"
+      @change="emit('commit')"
+    />
+    <label :for="id" class="mt-2 mb-0 text-left text-sm text-(--schemes-on-surface)">
       <slot />
     </label>
   </article>
 </template>
 
 <script lang="ts" setup>
-import { computed, onMounted, ref } from 'vue'
-import noUiSlider from 'nouislider'
+import { computed, useId, useTemplateRef } from 'vue'
 
 const props = withDefaults(
   defineProps<{
@@ -24,147 +33,89 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: number): void
-  (e: 'commit')
+  (e: 'commit'): void
 }>()
 
-const sliderEl = ref<EqualizerBandElement>()
+const MIN = -20
+const MAX = 20
+/** The handle's diameter, as styled below. */
+const HANDLE = 13
+
+const id = useId()
+const input = useTemplateRef('input')
 
 const value = computed({
   get: () => props.modelValue,
   set: value => emit('update:modelValue', value),
 })
 
-/**
- * Since watching the value and updating the slider UI proves to be not performant,
- * we defined an explicit method to update the UI and expose it so that the
- * parent component (Equalizer) can call it when resetting the preset.
- */
-const updateSliderValue = (val: number) => {
-  sliderEl.value?.noUiSlider.set(val)
-  value.value = val
+/** Sets the band from outside, as when a preset loads. */
+const updateSliderValue = (val: number) => (value.value = val)
+
+/** Where the handle's center is on the page, for the curve drawn through the bands. */
+const handleCenter = () => {
+  const rect = input.value!.getBoundingClientRect()
+  const fraction = (value.value - MIN) / (MAX - MIN)
+
+  return {
+    x: rect.left + rect.width / 2,
+    y: rect.top + HANDLE / 2 + (1 - fraction) * (rect.height - HANDLE),
+  }
 }
 
-onMounted(() => {
-  noUiSlider.create(sliderEl.value!, {
-    connect: [false, true],
-    // the first element is the preamp. The rest are gains.
-    start: value.value,
-    range: { min: -20, max: 20 },
-    orientation: 'vertical',
-    direction: 'rtl',
-  })
-
-  sliderEl.value!.noUiSlider.on('slide', (values, handle) => {
-    emit('update:modelValue', Number.parseFloat(values[handle]))
-  })
-
-  sliderEl.value!.noUiSlider.on('change', () => emit('commit'))
-})
-
-defineExpose({
-  updateSliderValue,
-})
+defineExpose({ updateSliderValue, handleCenter })
 </script>
 
-<style lang="postcss">
-/* overriding the global noUi import, don't scope */
-/* also, don't use Tailwind here as it will mess things up */
-/* and wrap the styles in a class to ensure cascading for built assets */
-article {
-  .noUi {
-    &-connect {
-      background: none;
-      box-shadow: none;
+<style scoped>
+/* Vertical, top is +20: a thin line with a round handle, the curve drawn through the handles. */
+.slider {
+  writing-mode: vertical-lr;
+  direction: rtl;
+  appearance: none;
+  width: 16px;
+  height: 100px;
+  margin: 0;
+  background: linear-gradient(
+      to bottom,
+      transparent,
+      color-mix(in srgb, var(--schemes-on-surface) 15%, transparent) 15%,
+      color-mix(in srgb, var(--schemes-on-surface) 15%, transparent) 85%,
+      transparent
+    )
+    center / 1px 100% no-repeat;
+  cursor: ns-resize;
 
-      &::after {
-        content: ' ';
-        position: absolute;
-        width: 1px;
-        height: 100%;
-        top: 0;
-        left: 50%;
-        transform: translateX(-50%);
-      }
-    }
-
-    &-touch-area {
-      cursor: ns-resize;
-    }
-
-    &-target {
-      background: transparent;
-      border-radius: 0;
-      border: 0;
-      box-shadow: none;
-      width: 16px;
-
-      &::after {
-        content: ' ';
-        position: absolute;
-        width: 1px;
-        height: 100%;
-        background: linear-gradient(
-          to bottom,
-          transparent,
-          color-mix(in srgb, var(--schemes-on-surface) 15%, transparent) 15%,
-          color-mix(in srgb, var(--schemes-on-surface) 15%, transparent) 85%,
-          transparent
-        );
-        top: 0;
-        left: 50%;
-        transform: translateX(-50%);
-      }
-    }
-
-    &-handle {
-      border: 0;
-      border-radius: 0;
-      box-shadow: none;
-      cursor: pointer;
-
-      &::before,
-      &::after {
-        display: none;
-      }
-    }
-
-    &-vertical {
-      .noUi-handle {
-        --eq-handle-size: 13px;
-        --eq-hit-size: 28px;
-        width: var(--eq-handle-size);
-        height: var(--eq-handle-size);
-        border-radius: 9999px;
-        position: relative;
-        /* noUi-origin sits at right:0 (x=16), not center — offset to track center */
-        left: -8px;
-        top: 0;
-        transform: translate(-50%, -50%);
-
-        &::after {
-          content: '';
-          position: absolute;
-          left: 50%;
-          top: 50%;
-          width: var(--eq-hit-size);
-          height: var(--eq-hit-size);
-          transform: translate(-50%, -50%);
-          pointer-events: auto;
-        }
-      }
-    }
+  &::-webkit-slider-runnable-track {
+    background: transparent;
   }
 
-  .noUi-handle {
-    border: 0;
-    border-radius: 0;
-    box-shadow: none;
-    cursor: pointer;
+  &::-moz-range-track {
+    background: transparent;
+  }
 
-    &::before,
-    &::after {
-      display: none;
-    }
+  &::-webkit-slider-thumb {
+    appearance: none;
+    width: 13px;
+    height: 13px;
+    border: 0;
+    border-radius: 9999px;
+    background: var(--schemes-primary);
+    cursor: pointer;
+  }
+
+  &::-moz-range-thumb {
+    width: 13px;
+    height: 13px;
+    border: 0;
+    border-radius: 9999px;
+    background: var(--schemes-primary);
+    cursor: pointer;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--schemes-secondary);
+    outline-offset: 2px;
+    border-radius: 8px;
   }
 }
 </style>

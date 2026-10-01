@@ -6,17 +6,6 @@ import { preferenceStore } from '@/stores/preferenceStore'
 import { audioService } from '@/services/audioService'
 import Component from './Equalizer.vue'
 
-vi.mock('nouislider', () => ({
-  default: {
-    create: vi.fn((el: any) => {
-      el.noUiSlider = {
-        on: vi.fn(),
-        set: vi.fn(),
-      }
-    }),
-  },
-}))
-
 vi.mock('@/services/audioService', () => ({
   audioService: {
     bands: Array.from({ length: 10 }, (_, index) => ({

@@ -1,4 +1,3 @@
-import isMobile from 'ismobilejs'
 import type { RenderOptions } from '@testing-library/vue'
 import { cleanup, createEvent, fireEvent, render } from '@testing-library/vue'
 import userEvent from '@testing-library/user-event'
@@ -17,6 +16,10 @@ import { noop } from '@/utils/helpers'
 import { deepMerge, setPropIfNotExists } from '@/__tests__/utils'
 import { eventBus } from '@/utils/eventBus'
 import { cache } from '@/services/cache'
+import { setViewport } from '@/composables/useViewport'
+
+// Specs see a phone-sized, wide window with a mouse unless they say otherwise.
+setViewport({ mobile: true, wide: true })
 
 class TestHarness {
   public router: Router
@@ -54,13 +57,13 @@ class TestHarness {
   public afterEach(cb?: Closure) {
     afterEach(() => {
       document.body.innerHTML = ''
-      isMobile.any = false
+      setViewport({ mobile: true, wide: true })
       commonStore.state.song_length = 10
       cache.clear()
       cleanup()
       this.restoreAllMocks()
       globalThis.fetch = this.realFetch
-      eventBus.removeAllListeners()
+      eventBus.all.clear()
       cb?.()
     })
   }
@@ -130,7 +133,6 @@ class TestHarness {
           global: {
             directives: {
               'koel-focus': {},
-              'koel-tooltip': {},
               'koel-hide-broken-icon': {},
               'koel-overflow-fade': {},
               'koel-new-tab': {},

@@ -103,10 +103,9 @@ const openReorderModal = () =>
     blocks: orderedBlocks.value.map(({ id, label }) => ({ id, label })),
   })
 
-eventBus
-  .on('SONGS_DELETED', () => overviewStore.fetch())
-  .on('SONGS_UPDATED', () => overviewStore.fetch())
-  .on('SONG_UPLOADED', () => overviewStore.fetch())
+eventBus.on('SONGS_DELETED', () => overviewStore.fetch())
+eventBus.on('SONGS_UPDATED', () => overviewStore.fetch())
+eventBus.on('SONG_UPLOADED', () => overviewStore.fetch())
 
 useRouter().onScreenActivated('Home', async () => {
   if (!initialized) {

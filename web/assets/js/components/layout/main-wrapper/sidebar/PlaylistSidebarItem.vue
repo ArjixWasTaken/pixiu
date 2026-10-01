@@ -3,7 +3,7 @@
     :class="{ droppable }"
     :href="href"
     class="playlist select-none"
-    :draggable="!isMobile.any"
+    :draggable="!isTouch"
     :active
     :icon
     @dblclick="onDblClick"
@@ -18,7 +18,7 @@
 </template>
 
 <script lang="ts" setup>
-import isMobile from 'ismobilejs'
+import { useViewport } from '@/composables/useViewport'
 import { computed, inject, ref, toRefs } from 'vue'
 import { defineAsyncComponent } from '@/utils/helpers'
 import { playableStore } from '@/stores/playableStore'
@@ -31,6 +31,8 @@ import { playback } from '@/services/playbackManager'
 import { DraggedPlaylistKey } from '@/config/symbols'
 
 import SidebarItem from '@/components/layout/main-wrapper/sidebar/SidebarItem.vue'
+
+const { isTouch } = useViewport()
 
 const props = defineProps<{ list: PlaylistLike }>()
 

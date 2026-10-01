@@ -84,7 +84,7 @@ import { playableStore } from '@/stores/playableStore'
 import { useErrorHandler } from '@/composables/useErrorHandler'
 import { usePlayableList } from '@/composables/usePlayableList'
 import { usePlayableListControls } from '@/composables/usePlayableListControls'
-import { useLocalStorage } from '@/composables/useLocalStorage'
+import { useUserStorage } from '@/composables/useUserStorage'
 import { useRouter } from '@/composables/useRouter'
 import { useThirdPartyServices } from '@/composables/useThirdPartyServices'
 import { useContextMenu } from '@/composables/useContextMenu'
@@ -111,7 +111,8 @@ const FavoriteButton = defineAsyncComponent(() => import('@/components/ui/Favori
 
 const { getRouteParam, go, onScreenActivated, onRouteChanged, url, triggerNotFound } = useRouter()
 const { PlayableListControls: SongListControls, config } = usePlayableListControls('Album')
-const { get: lsGet, set: lsSet } = useLocalStorage()
+const sortField = useUserStorage<MaybeArray<PlayableListSortField>>('album-sort-field', 'track')
+const sortOrder = useUserStorage<SortOrder>('album-sort-order', 'asc')
 const { useMusicBrainz } = useThirdPartyServices()
 const { openContextMenu } = useContextMenu()
 
@@ -180,9 +181,7 @@ const fetchScreenData = async () => {
 
     context.entity = album.value
 
-    const restoredField = lsGet<PlayableListSortField>('album-sort-field', 'track')!
-    const restoredOrder = lsGet<SortOrder>('album-sort-order', 'asc')!
-    sort(restoredField, restoredOrder)
+    sort(sortField.value, sortOrder.value)
   } catch (error: unknown) {
     if ((error as any)?.status === 404) {
       triggerNotFound()
@@ -218,8 +217,8 @@ const fetchOtherAlbums = async () => {
 watch([activeTab, album], ([tab]) => tab === 'other-albums' && fetchOtherAlbums())
 
 const onSort = (field: MaybeArray<PlayableListSortField>, order: SortOrder) => {
-  lsSet('album-sort-field', field)
-  lsSet('album-sort-order', order)
+  sortField.value = field
+  sortOrder.value = order
 }
 
 onScreenActivated('Album', () => fetchScreenData())

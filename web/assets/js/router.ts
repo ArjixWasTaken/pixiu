@@ -2,8 +2,6 @@ import type { Ref } from 'vue'
 import { ref, watch } from 'vue'
 import type { RouteName } from '@/config/routes'
 import { routes as builtInRoutes } from '@/config/routes'
-import { Filter } from '@/config/hooks'
-import { applyFilters } from '@/hooks'
 import { forceReloadWindow } from '@/utils/helpers'
 import { basePath, toClientPath, usesCleanUrls } from '@/utils/clientUrl'
 
@@ -29,7 +27,7 @@ export interface Route {
 
 let cachedRoutes: Route[] | null = null
 
-const routes = () => (cachedRoutes ??= applyFilters<Route[]>(Filter.ROUTES, [...builtInRoutes]))
+const routes = () => (cachedRoutes ??= [...builtInRoutes])
 
 const currentClientPath = () =>
   usesCleanUrls() ? toClientPath(`${location.pathname}${location.search}`) : location.hash

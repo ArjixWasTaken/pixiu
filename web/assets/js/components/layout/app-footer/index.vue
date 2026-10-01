@@ -173,9 +173,8 @@ watch(isFullscreen, fullscreen => {
 })
 
 // The browser may refuse (no user gesture, a policy): nothing to do then.
-eventBus
-  .on('FULLSCREEN_TOGGLE', () => toggleFullscreen().catch(logger.warn))
-  .on('UP_NEXT', next => (nextPlayable.value = next))
+eventBus.on('FULLSCREEN_TOGGLE', () => toggleFullscreen().catch(logger.warn))
+eventBus.on('UP_NEXT', next => (nextPlayable.value = next))
 </script>
 
 <style lang="postcss" scoped>
