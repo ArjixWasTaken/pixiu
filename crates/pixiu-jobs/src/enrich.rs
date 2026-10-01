@@ -591,6 +591,83 @@ pub async fn repair_album_artists(db: &mut Db, jobs: &Jobs) -> Result<usize, toa
     Ok(queued)
 }
 
+/// The setting that records [`repair_genre_names`] ran.
+const REPAIRED_GENRE_NAMES: &str = "repair.genre-names";
+
+/// A genre as píxiū named MusicBrainz's genres before
+/// [`pixiu_enrich::genre_name`]: every word capitalized, "R&B"-like words in
+/// capitals ("Drum And Bass", "J-pop", "Edm").
+fn genre_name_before(name: &str) -> String {
+    name.split(' ')
+        .map(|word| {
+            if word.contains('&') {
+                return word.to_uppercase();
+            }
+            let mut chars = word.chars();
+            chars.next().map_or_else(String::new, |first| {
+                first.to_uppercase().chain(chars).collect()
+            })
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// How `genre` reads now, when the old naming of MusicBrainz's genres made
+/// it; a genre the files or an admin named is left alone.
+fn renamed_genre(genre: &str) -> Option<String> {
+    let lower = genre.to_lowercase();
+    if genre_name_before(&lower) != genre {
+        return None;
+    }
+    let name = pixiu_enrich::genre_name(&lower);
+    (name != genre).then_some(name)
+}
+
+/// Once per server: names the genres taken from MusicBrainz as it does now
+/// ("Drum and Bass", "J-Pop", "EDM"). Returns how many albums and songs
+/// changed.
+///
+/// # Errors
+///
+/// Fails on database errors.
+pub async fn repair_genre_names(db: &mut Db) -> Result<usize, toasty::Error> {
+    if Setting::filter_by_key(REPAIRED_GENRE_NAMES)
+        .first()
+        .exec(&mut *db)
+        .await?
+        .is_some()
+    {
+        return Ok(0);
+    }
+    let mut renamed = 0;
+    for mut album in Album::all().exec(&mut *db).await? {
+        if let Some(genre) = album.genre.as_deref().and_then(renamed_genre) {
+            toasty::update!(album { genre: Some(genre) })
+                .exec(&mut *db)
+                .await?;
+            renamed += 1;
+        }
+    }
+    for mut track in Track::all().exec(&mut *db).await? {
+        if let Some(genre) = track.genre.as_deref().and_then(renamed_genre) {
+            toasty::update!(track { genre: Some(genre) })
+                .exec(&mut *db)
+                .await?;
+            renamed += 1;
+        }
+    }
+    toasty::create!(Setting {
+        key: REPAIRED_GENRE_NAMES,
+        value: now().to_string(),
+    })
+    .exec(&mut *db)
+    .await?;
+    if renamed > 0 {
+        tracing::info!(renamed, "renamed genres taken from MusicBrainz");
+    }
+    Ok(renamed)
+}
+
 const BACKFILLED_GENRES: &str = "backfill.genres";
 
 /// Once per server: takes the genres of the releases albums were matched to

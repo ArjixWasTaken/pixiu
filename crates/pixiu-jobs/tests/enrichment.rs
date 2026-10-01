@@ -685,3 +685,39 @@ async fn albums_under_a_shared_credit_are_repaired_once() {
     let path = &tracks(&mut hoard.db, hoard.album_id).await[0].path;
     assert!(path.starts_with(".store/audio/"), "{path}");
 }
+
+#[tokio::test]
+async fn genres_named_the_old_way_are_renamed_once() {
+    let mut hoard = hoard().await;
+    let before = tracks(&mut hoard.db, hoard.album_id).await;
+    let mut album = Album::get_by_id(&mut hoard.db, &hoard.album_id)
+        .await
+        .unwrap();
+    toasty::update!(album {
+        genre: Some("Drum And Bass".to_owned())
+    })
+    .exec(&mut hoard.db)
+    .await
+    .unwrap();
+    // One genre the old naming made, one the files named.
+    for (track, genre) in before.iter().zip(["J-pop", "UKG"]) {
+        let mut track = Track::get_by_id(&mut hoard.db, &track.id).await.unwrap();
+        toasty::update!(track {
+            genre: Some(genre.to_owned())
+        })
+        .exec(&mut hoard.db)
+        .await
+        .unwrap();
+    }
+
+    assert_eq!(enrich::repair_genre_names(&mut hoard.db).await.unwrap(), 2);
+    let album = Album::get_by_id(&mut hoard.db, &hoard.album_id)
+        .await
+        .unwrap();
+    assert_eq!(album.genre.as_deref(), Some("Drum and Bass"));
+    let after = tracks(&mut hoard.db, hoard.album_id).await;
+    assert_eq!(after[0].genre.as_deref(), Some("J-Pop"));
+    assert_eq!(after[1].genre.as_deref(), Some("UKG"));
+    // It runs once per hoard.
+    assert_eq!(enrich::repair_genre_names(&mut hoard.db).await.unwrap(), 0);
+}

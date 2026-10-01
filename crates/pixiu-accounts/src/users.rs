@@ -13,7 +13,16 @@ use pixiu_db::{ApiKey, Db, Role, User, UserStatus, now, owned::as_u64, toasty};
 pub const MIN_PASSWORD_LEN: usize = 8;
 
 /// The API keys the web player signs in with, which a new password revokes.
+/// They are named "Web session", or "Web session: Firefox on Linux" when the
+/// browser says what it is.
 pub const WEB_SESSION: &str = "Web session";
+
+/// Whether an API key is one of the web player's sessions.
+#[must_use]
+pub fn is_web_session(name: &str) -> bool {
+    name.strip_prefix(WEB_SESSION)
+        .is_some_and(|rest| rest.is_empty() || rest.starts_with(": "))
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum AccountError {
@@ -316,7 +325,7 @@ pub async fn set_password(
     .exec(&mut tx)
     .await?;
     for key in ApiKey::filter_by_user_id(user.id).exec(&mut tx).await? {
-        if key.name == WEB_SESSION && Some(key.id) != keep {
+        if is_web_session(&key.name) && Some(key.id) != keep {
             key.delete().exec(&mut tx).await?;
         }
     }

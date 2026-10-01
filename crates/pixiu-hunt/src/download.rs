@@ -147,8 +147,8 @@ pub(crate) async fn yt_dlp(
     let output = output.map_err(|error| HuntError::YtDlp(format!("cannot run yt-dlp: {error}")))?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        let last_line = stderr.lines().last().unwrap_or("no output").to_owned();
-        return Err(HuntError::YtDlp(last_line));
+        let last_line = stderr.lines().last().unwrap_or("no output");
+        return Err(HuntError::YtDlp(plain_reason(last_line)));
     }
 
     let mut entries = tokio::fs::read_dir(dir).await?;
@@ -162,6 +162,49 @@ pub(crate) async fn yt_dlp(
         }
     }
     Err(HuntError::YtDlp("yt-dlp wrote no file".to_owned()))
+}
+
+/// yt-dlp's last word, for people: without its `ERROR: [youtube] <id>:`
+/// prefix and its hints for the command line.
+fn plain_reason(line: &str) -> String {
+    let mut reason = line.trim().trim_start_matches("ERROR:").trim_start();
+    // `[youtube] dQw4w9WgXcQ: …`
+    if let Some(rest) = reason.strip_prefix('[')
+        && let Some((_, rest)) = rest.split_once("] ")
+    {
+        reason = rest.split_once(": ").map_or(rest, |(_, rest)| rest);
+    }
+    let reason = reason
+        .split_once(" Use --")
+        .map_or(reason, |(reason, _)| reason)
+        .trim_end_matches(',')
+        .trim();
+    if reason.is_empty() {
+        line.trim().to_owned()
+    } else {
+        reason.to_owned()
+    }
+}
+
+#[cfg(test)]
+mod plain_reason_tests {
+    use super::plain_reason;
+
+    #[test]
+    fn yt_dlp_s_reasons_lose_their_prefix_and_hints() {
+        assert_eq!(
+            plain_reason(
+                "ERROR: [youtube] _QfPliSW83A: Requested format is not available. \
+                 Use --list-formats for a list of available formats"
+            ),
+            "Requested format is not available."
+        );
+        assert_eq!(
+            plain_reason("ERROR: unable to download video data: HTTP Error 403: Forbidden"),
+            "unable to download video data: HTTP Error 403: Forbidden"
+        );
+        assert_eq!(plain_reason("no output"), "no output");
+    }
 }
 
 /// Converts a `Cookie` header into the Netscape cookie file `yt-dlp` reads.
