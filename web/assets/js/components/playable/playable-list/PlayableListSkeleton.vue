@@ -60,7 +60,7 @@ const titleWidths = [42, 64, 36, 55, 48, 70, 40]
   margin-right: 88px;
   border-radius: 5px;
 
-  @media (max-width: 768px) {
+  @media (max-width: 768px), (max-height: 500px) and (pointer: coarse) {
     display: none;
   }
 }

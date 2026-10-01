@@ -9,7 +9,7 @@
   >
     <img alt="Thumbnail" :src="image" class="w-full aspect-square object-cover" loading="lazy" />
     <span class="hidden">{{ buttonLabel }}</span>
-    <span class="absolute top-0 left-0 w-full h-full group-hover:bg-black/40 no-hover:bg-black/40 z-10" />
+    <span class="absolute top-0 left-0 w-full h-full group-hover:bg-black/40 z-10" />
     <PlayIcon :size />
   </button>
 </template>

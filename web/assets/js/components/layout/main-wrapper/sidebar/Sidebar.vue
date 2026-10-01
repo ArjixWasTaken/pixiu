@@ -71,6 +71,9 @@ import { eventBus } from '@/utils/eventBus'
 import { useUserStorage } from '@/composables/useUserStorage'
 import { useRouter } from '@/composables/useRouter'
 import { useViewport } from '@/composables/useViewport'
+import { useBackToClose } from '@/composables/useBackToClose'
+import { requireInjection } from '@/utils/helpers'
+import { ModalKey } from '@/config/symbols'
 import type { M3NavItem } from '@/components/m3/navigation'
 
 import M3IconButton from '@/components/m3/M3IconButton.vue'
@@ -117,6 +120,15 @@ const routeOf = (item: M3NavItem) => rail.find(({ id }) => id === item.id)!.rout
 
 const mobileShowing = ref(false)
 const close = () => (mobileShowing.value = false)
+
+useBackToClose(mobileShowing, close)
+
+// A dialog opened from the drawer (a new playlist, say) takes the screen: the drawer goes.
+const modal = requireInjection(ModalKey)
+watch(
+  () => modal.value.component,
+  component => component && close(),
+)
 
 onRouteChanged(close)
 

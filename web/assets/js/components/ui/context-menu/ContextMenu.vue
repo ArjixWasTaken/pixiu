@@ -25,6 +25,7 @@ import { computed, provide, toRefs, watch } from 'vue'
 import { requireInjection } from '@/utils/helpers'
 import { ContextMenuKey, ContextMenuOpenerKey } from '@/config/symbols'
 import { useViewport } from '@/composables/useViewport'
+import { useBackToClose } from '@/composables/useBackToClose'
 
 /**
  * The one context menu, opened where it was asked for (`useContextMenu`).
@@ -50,6 +51,12 @@ const pointer = computed(() => {
 })
 
 const close = () => (options.value = { component: null, position: { top: 0, left: 0 } })
+
+// On a phone, the menu is a sheet: Back puts it away.
+useBackToClose(
+  computed(() => open.value && isMobile.value),
+  close,
+)
 
 /** Focus goes back where it was when the menu opened (the row, the ⋮ button). */
 let focusedBefore: HTMLElement | null = null

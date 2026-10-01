@@ -2,12 +2,19 @@ import { useMediaQuery } from '@vueuse/core'
 import { computed, ref } from 'vue'
 
 /**
- * The design's breakpoints: phones up to 768px wide, wide song grids from
- * 1360px; and touch, for a finger rather than a mouse (no dragging, tap to
- * select, transcoding for phone networks).
+ * Phones: up to 768px wide, or held sideways (short, and touched). Stylesheets
+ * use the same condition (`@media (max-width: 768px), (max-height: 500px) and
+ * (pointer: coarse)`), so a phone in landscape keeps the phone's layout.
+ */
+export const PHONE_QUERY = '(max-width: 768px), (max-height: 500px) and (pointer: coarse)'
+
+/**
+ * The design's breakpoints: phones (see above), wide song grids from 1360px;
+ * and touch, for a finger rather than a mouse (no dragging, tap to play,
+ * transcoding for phone networks).
  */
 const media = {
-  mobile: useMediaQuery('(max-width: 768px)'),
+  mobile: useMediaQuery(PHONE_QUERY),
   wide: useMediaQuery('(min-width: 1360px)'),
   touch: useMediaQuery('(pointer: coarse)'),
 }

@@ -6,13 +6,13 @@
 
         <template #controls>
           <div class="flex gap-2 items-center">
+            <ListFilter />
+
             <GenreListSorter
               :field="preferences.genres_sort_field"
               :order="preferences.genres_sort_order"
               @sort="sort"
             />
-
-            <ListFilter />
           </div>
         </template>
       </ScreenHeader>
@@ -126,5 +126,10 @@ onMounted(async () => {
 .genre-list {
   content-visibility: auto;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+
+  /* Two to a row on a phone, not one long column. */
+  @media (max-width: 768px), (max-height: 500px) and (pointer: coarse) {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  }
 }
 </style>

@@ -1,17 +1,18 @@
 <template>
   <M3Card class="account" data-testid="account-row" variant="outlined">
     <div class="flex items-center gap-4">
-      <M3Avatar :name="account.username" :size="40" />
+      <M3Avatar :name="name" :size="40" />
       <div class="flex-1 min-w-0">
         <div class="flex flex-wrap items-center gap-1.5">
-          <span class="m3-title-medium truncate">{{ account.username }}</span>
+          <span class="m3-title-medium truncate">{{ name }}</span>
           <span v-if="isYou" class="pill m3-label-small">You</span>
           <span v-if="account.role === 'admin'" class="pill m3-label-small">Admin</span>
           <span v-if="account.status !== 'active'" class="pill warn m3-label-small">{{ statusLabel }}</span>
           <span v-if="account.password_change_required" class="pill m3-label-small">Temporary password</span>
           <span v-if="account.sso" class="pill m3-label-small" title="Signs in with single sign-on too">SSO</span>
         </div>
-        <p class="m3-body-medium text-(--schemes-on-surface-variant) truncate">{{ details }}</p>
+        <!-- Wraps rather than cut: on a phone, everything after the email would go. -->
+        <p class="m3-body-medium text-(--schemes-on-surface-variant) details">{{ details }}</p>
       </div>
 
       <M3MenuPopover v-model:open="menuOpen" :min-width="240">
@@ -129,9 +130,13 @@ const youtubeLabel = computed(
     })[props.account.youtube_music],
 )
 
+/** What the player calls them, as the sidebar does; the username shows under it. */
+const name = computed(() => props.account.display_name || props.account.username)
+
 const details = computed(() =>
   [
-    props.account.email,
+    name.value === props.account.username ? null : props.account.username,
+    props.account.email !== props.account.username ? props.account.email : null,
     `${pluralize(props.account.songs, 'song')} · ${formatBytes(props.account.bytes)}`,
     props.account.last_seen ? `seen ${timeAgo(props.account.last_seen)}` : 'never signed in',
     youtubeLabel.value,
@@ -160,6 +165,10 @@ const { data, handleSubmit } = useForm<{ password: string }>({
 <style scoped>
 .account {
   padding: 16px;
+}
+
+.details {
+  overflow-wrap: anywhere;
 }
 
 .pill {

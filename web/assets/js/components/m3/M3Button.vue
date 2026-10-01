@@ -67,8 +67,10 @@ withDefaults(
     background: var(--schemes-primary);
     color: var(--schemes-on-primary);
 
-    &:hover {
-      box-shadow: var(--m3-elevation-1);
+    @media (hover: hover) {
+      &:hover {
+        box-shadow: var(--m3-elevation-1);
+      }
     }
   }
 
@@ -76,8 +78,10 @@ withDefaults(
     background: var(--schemes-secondary-container);
     color: var(--schemes-on-secondary-container);
 
-    &:hover {
-      box-shadow: var(--m3-elevation-1);
+    @media (hover: hover) {
+      &:hover {
+        box-shadow: var(--m3-elevation-1);
+      }
     }
   }
 
@@ -86,8 +90,10 @@ withDefaults(
     color: var(--schemes-primary);
     box-shadow: var(--m3-elevation-1);
 
-    &:hover {
-      box-shadow: var(--m3-elevation-2);
+    @media (hover: hover) {
+      &:hover {
+        box-shadow: var(--m3-elevation-2);
+      }
     }
   }
 

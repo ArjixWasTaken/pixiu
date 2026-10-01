@@ -1,27 +1,18 @@
 <template>
   <ul role="none">
     <template v-if="asSheet">
-      <li class="sheet-header" role="none" tabindex="-1">
-        <span
-          :style="{ backgroundImage: `url(${sheetSong!.album_cover}), url(${defaultCover})` }"
-          class="sheet-cover"
-        />
-        <span class="flex-1 min-w-0">
-          <span class="m3-title-medium block truncate">{{ sheetSong!.title }}</span>
-          <span class="m3-body-medium block truncate text-(--schemes-on-surface-variant)">{{ sheetSubtitle }}</span>
-        </span>
+      <SheetHeader :cover="sheetSong!.album_cover" :subtitle="sheetSubtitle" :title="sheetSong!.title">
         <FavoriteButton :favorite="sheetSong!.favorite" size="md" @toggle="toggleSheetFavorite" />
-        <M3IconButton icon="close" label="Close" @click.stop="closeContextMenu" />
-      </li>
-      <li class="separator" role="separator" />
+      </SheetHeader>
       <li class="sheet-tiles" tabindex="-1">
-        <button type="button" @click.stop="queueAfterCurrent">
+        <!-- Not for the song playing: it can't come after itself. -->
+        <button v-if="canPlayNext" type="button" @click.stop="queueAfterCurrent">
           <span class="tile"><M3Icon :size="26" name="queue_play_next" /></span>
           <span class="m3-label-large">Play next</span>
         </button>
         <button type="button" @click.stop="showPlaylists = !showPlaylists">
           <span class="tile"><M3Icon :size="26" name="playlist_add" /></span>
-          <span class="m3-label-large">Save to playlist</span>
+          <span class="m3-label-large">Add to playlist</span>
         </button>
       </li>
       <template v-if="showPlaylists">
@@ -35,11 +26,7 @@
         </MenuItem>
         <Separator />
       </template>
-      <li class="sheet-rating" tabindex="-1">
-        <M3Icon class="text-(--schemes-on-surface-variant)" name="star" />
-        <span class="flex-1">Rating</span>
-        <StarRating :rateable="sheetSong!" @rate="closeContextMenu" />
-      </li>
+      <RatingItem :rateable="sheetSong!" />
     </template>
 
     <template v-if="onlyOneSelected">
@@ -91,13 +78,7 @@
 
     <template v-if="onlyOneSelected && !asSheet">
       <Separator />
-      <li
-        tabindex="-1"
-        class="px-4 py-2 focus:outline-hidden"
-        @mouseover="($event.currentTarget as HTMLLIElement).focus()"
-      >
-        <StarRating :rateable="playables[0]" @rate="closeContextMenu" />
-      </li>
+      <RatingItem :rateable="playables[0]" />
       <Separator />
     </template>
 
@@ -157,12 +138,11 @@ import { useOfflinePlayback } from '@/composables/useOfflinePlayback'
 import { playback } from '@/services/playbackManager'
 import { useHuntingStore } from '@/stores/huntingStore'
 import { useViewport } from '@/composables/useViewport'
-import { useBranding } from '@/composables/useBranding'
 
 import FavoriteButton from '@/components/ui/FavoriteButton.vue'
 import M3Icon from '@/components/m3/M3Icon.vue'
-import M3IconButton from '@/components/m3/M3IconButton.vue'
-import StarRating from '@/components/ui/StarRating.vue'
+import RatingItem from '@/components/ui/context-menu/RatingItem.vue'
+import SheetHeader from '@/components/ui/context-menu/SheetHeader.vue'
 
 const commonStore = useCommonStore()
 const playlistStore = usePlaylistStore()
@@ -170,7 +150,14 @@ const queueStore = useQueueStore()
 const playableStore = usePlayableStore()
 const huntingStore = useHuntingStore()
 
-const props = defineProps<{ playables: Playable[] }>()
+const props = withDefaults(
+  defineProps<{
+    playables: Playable[]
+    /** Opened from the queue itself (Up next): its songs can come out of it. */
+    fromQueue?: boolean
+  }>(),
+  { fromQueue: false },
+)
 const { playables } = toRefs(props)
 
 const { toastSuccess, toastError } = useMessageToaster()
@@ -211,9 +198,11 @@ const onlyOneSelected = computed(() => playables.value.length === 1)
 
 // On phones, a single song gets the design's sheet: a header, quick actions and its rating.
 const { isMobile } = useViewport()
-const { cover: defaultCover } = useBranding()
 const showPlaylists = ref(false)
 const sheetSong = computed(() => (onlyOneSelected.value ? playables.value[0] : null))
+
+/** "Play next" needs something playing, other than the song itself. */
+const canPlayNext = computed(() => Boolean(currentSong.value) && currentSong.value?.id !== sheetSong.value?.id)
 const asSheet = computed(() => isMobile.value && Boolean(sheetSong.value))
 const sheetSubtitle = computed(() =>
   sheetSong.value ? `${sheetSong.value.artist_name} · ${secondsToHis(sheetSong.value.length)}` : '',
@@ -248,7 +237,7 @@ const canBeRemovedFromPlaylist = computed(() => {
   return playlist && !playlist.is_smart && playlist.permissions.edit
 })
 
-const isQueueScreen = computed(() => isCurrentScreen('Queue'))
+const isQueueScreen = computed(() => props.fromQueue || isCurrentScreen('Queue'))
 const isFavoritesScreen = computed(() => isCurrentScreen('Favorites'))
 
 const doPlayback = () =>
@@ -329,34 +318,19 @@ const removePlayablesFromPlaylist = () =>
 </script>
 
 <style scoped>
-.sheet-header {
-  gap: 12px !important;
-  padding: 0 8px 12px 20px !important;
-  cursor: default !important;
-
-  &:hover {
-    background: transparent !important;
-  }
-}
-
-.sheet-cover {
-  width: 48px;
-  height: 48px;
-  flex-shrink: 0;
-  border-radius: 8px;
-  background-size: cover;
-  background-position: center;
-}
-
 .sheet-tiles {
   display: grid !important;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  /* The tiles there are share the row. */
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
   gap: 12px !important;
   padding: 16px 16px 12px !important;
   cursor: default !important;
 
-  &:hover {
-    background: transparent !important;
+  @media (hover: hover) {
+    &:hover {
+      background: transparent !important;
+    }
   }
 
   button {
@@ -376,14 +350,6 @@ const removePlayablesFromPlaylist = () =>
     border-radius: 16px;
     background: var(--schemes-secondary-container);
     color: var(--schemes-on-secondary-container);
-  }
-}
-
-.sheet-rating {
-  cursor: default !important;
-
-  &:hover {
-    background: transparent !important;
   }
 }
 </style>

@@ -78,7 +78,7 @@ const onContextMenu = (e: MouseEvent) => emit('contextmenu', e)
     outline: 2px solid var(--schemes-secondary);
   }
 
-  @media (max-width: 768px) {
+  @media (max-width: 768px), (max-height: 500px) and (pointer: coarse) {
     padding: 0;
   }
 

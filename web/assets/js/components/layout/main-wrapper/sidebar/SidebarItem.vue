@@ -93,8 +93,10 @@ onBeforeUnmount(() => clearTimeout(clickTimer))
     color: var(--schemes-on-surface-variant);
     text-decoration: none;
 
-    &:hover {
-      color: var(--schemes-on-surface);
+    @media (hover: hover) {
+      &:hover {
+        color: var(--schemes-on-surface);
+      }
     }
   }
 

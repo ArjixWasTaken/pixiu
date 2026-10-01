@@ -6,7 +6,8 @@ const isHTMLElement = (el: Element): el is HTMLElement => el instanceof HTMLElem
 /**
  * What scrolls a virtual list (its element is the `list` template ref). On a
  * screen, the screen does (`.screen-body`), so the screen's header scrolls away
- * above it; anywhere else, the list scrolls itself.
+ * above it; so does a pane that scrolls its lists (`[data-scrolls-lists]`, as
+ * the now playing panes); anywhere else, the list scrolls itself.
  */
 export const useScrollContainer = () => {
   const list = useTemplateRef<HTMLElement>('list')
@@ -44,7 +45,8 @@ export const useScrollContainer = () => {
   }
 
   onMounted(() => {
-    scroller.value = list.value!.parentElement?.closest<HTMLElement>('.screen-body') ?? list.value!
+    scroller.value =
+      list.value!.parentElement?.closest<HTMLElement>('.screen-body, [data-scrolls-lists]') ?? list.value!
     nested.value = scroller.value !== list.value
     collectScreenParts()
     measure()

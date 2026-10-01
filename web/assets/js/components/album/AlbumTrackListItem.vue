@@ -50,8 +50,10 @@ const play = () => matchedSong.value && playback().play(matchedSong.value)
   &.available {
     @apply cursor-pointer text-(--schemes-on-surface);
 
-    &:hover {
-      @apply text-(--schemes-primary);
+    @media (hover: hover) {
+      &:hover {
+        @apply text-(--schemes-primary);
+      }
     }
   }
 }

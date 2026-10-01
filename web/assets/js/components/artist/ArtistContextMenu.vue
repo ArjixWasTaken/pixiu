@@ -1,26 +1,16 @@
 <template>
   <ul role="none">
+    <SheetHeader :cover="artist.image" :title="artist.name" round />
     <MenuItem @click="play">Play all</MenuItem>
     <MenuItem @click="shuffle">Shuffle all</MenuItem>
     <Separator />
     <MenuItem @click="toggleFavorite">{{ artist.favorite ? 'Remove from favorites' : 'Add to favorites' }}</MenuItem>
-    <Separator />
-    <li
-      tabindex="-1"
-      class="px-4 py-2 focus:outline-hidden"
-      @mouseover="($event.currentTarget as HTMLLIElement).focus()"
-    >
-      <StarRating :rateable="artist" @rate="closeContextMenu" />
-    </li>
-    <Separator />
-    <MenuItem v-if="allowEdit" @click="requestEditForm">Edit…</MenuItem>
-    <template v-if="isStandardArtist && allowDownload">
+    <RatingItem :rateable="artist" />
+    <template v-if="allowEdit || (isStandardArtist && allowDownload) || musicBrainzUrl">
       <Separator />
-      <MenuItem @click="download">Download</MenuItem>
-    </template>
-    <template v-if="musicBrainzUrl">
-      <Separator />
-      <MenuItem @click="viewOnMusicBrainz">View on MusicBrainz</MenuItem>
+      <MenuItem v-if="allowEdit" @click="requestEditForm">Edit…</MenuItem>
+      <MenuItem v-if="isStandardArtist && allowDownload" @click="download">Download</MenuItem>
+      <MenuItem v-if="musicBrainzUrl" @click="viewOnMusicBrainz">View on MusicBrainz</MenuItem>
     </template>
   </ul>
 </template>
@@ -38,7 +28,8 @@ import { useRouter } from '@/composables/useRouter'
 import { playback } from '@/services/playbackManager'
 import { useThirdPartyServices } from '@/composables/useThirdPartyServices'
 
-import StarRating from '@/components/ui/StarRating.vue'
+import RatingItem from '@/components/ui/context-menu/RatingItem.vue'
+import SheetHeader from '@/components/ui/context-menu/SheetHeader.vue'
 
 const artistStore = useArtistStore()
 const commonStore = useCommonStore()
@@ -50,7 +41,7 @@ const { artist } = toRefs(props)
 const EditArtistForm = defineAsyncComponent(() => import('@/components/artist/EditArtistForm.vue'))
 
 const { go, url } = useRouter()
-const { MenuItem, Separator, closeContextMenu, trigger } = useContextMenu()
+const { MenuItem, Separator, trigger } = useContextMenu()
 const { openModal } = useModal()
 
 const allowDownload = toRef(commonStore.state, 'allows_download')

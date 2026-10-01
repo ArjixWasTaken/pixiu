@@ -31,6 +31,8 @@ import {
   AlertDialogTitle,
 } from 'reka-ui'
 import { computed, onBeforeUnmount, ref } from 'vue'
+import { useViewport } from '@/composables/useViewport'
+import { useBackToClose } from '@/composables/useBackToClose'
 
 import M3Button from '@/components/m3/M3Button.vue'
 import M3Icon from '@/components/m3/M3Icon.vue'
@@ -63,6 +65,13 @@ const body = computed(() => (!title.value && type.value === 'confirm' ? '' : mes
 
 let resolveAnswer: ((ok: boolean) => void) | null = null
 let frame = 0
+
+// On a phone, Back is Cancel.
+const { isMobile } = useViewport()
+useBackToClose(
+  computed(() => open.value && isMobile.value),
+  () => answer(false),
+)
 
 const answer = (ok: boolean) => {
   cancelAnimationFrame(frame)

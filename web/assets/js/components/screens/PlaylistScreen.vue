@@ -63,9 +63,11 @@
           </p>
         </template>
         <template v-else>
-          The playlist is currently empty.
+          The playlist is empty.
           <span class="block secondary">
-            Drag content into its name in the sidebar or use the &quot;Add to…&quot; button to fill it up.
+            Add songs with “Add to” in a song’s menu{{
+              isTouch ? '' : ', or drag them onto the playlist in the sidebar'
+            }}.
           </span>
         </template>
       </ScreenEmptyState>
@@ -93,6 +95,7 @@ import { usePlayableListControls } from '@/composables/usePlayableListControls'
 import { useUserStorage } from '@/composables/useUserStorage'
 import { useContextMenu } from '@/composables/useContextMenu'
 import { useModal } from '@/composables/useModal'
+import { useViewport } from '@/composables/useViewport'
 
 import M3IconButton from '@/components/m3/M3IconButton.vue'
 import ScreenHeader from '@/components/ui/ScreenHeader.vue'
@@ -104,6 +107,7 @@ import PlayableListSkeleton from '@/components/playable/playable-list/PlayableLi
 import MirroredWatchPanel from '@/components/playlist/MirroredWatchPanel.vue'
 import M3Icon from '@/components/m3/M3Icon.vue'
 
+const { isTouch } = useViewport()
 const huntingStore = useHuntingStore()
 const playlistStore = usePlaylistStore()
 const playableStore = usePlayableStore()

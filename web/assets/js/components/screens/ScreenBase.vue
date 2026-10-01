@@ -58,7 +58,7 @@ main {
   position: relative;
   padding: 0 var(--screen-pad-x) var(--screen-pad-bottom);
 
-  @media (max-width: 768px) {
+  @media (max-width: 768px), (max-height: 500px) and (pointer: coarse) {
     --screen-pad-x: 16px;
     --screen-pad-bottom: 16px;
   }

@@ -9,7 +9,8 @@ exports[`allSongsScreen.vue > renders 1`] = `
         <div data-v-0623237c="" class="thumbnail">
           <article data-v-b4b26fc4="" data-v-ddbdca5c="" class="tiles thumbnail-stack flex-1 aspect-square overflow-hidden grid bg-cover bg-no-repeat" style="background-image: url(&quot;/assets/img/covers/default.svg&quot;);"><span data-v-b4b26fc4="" class="block w-full h-full bg-cover bg-no-repeat" data-testid="thumbnail"></span><span data-v-b4b26fc4="" class="block w-full h-full bg-cover bg-no-repeat" data-testid="thumbnail"></span><span data-v-b4b26fc4="" class="block w-full h-full bg-cover bg-no-repeat" data-testid="thumbnail"></span><span data-v-b4b26fc4="" class="block w-full h-full bg-cover bg-no-repeat" data-testid="thumbnail"></span></article>
         </div>
-        <div data-v-0623237c="" class="body"><span data-v-0623237c="" class="m3-label-large overline-text">Library</span>
+        <div data-v-0623237c="" class="body">
+          <!-- Its line is kept without a label, so every header puts its title in the same place. --><span data-v-0623237c="" aria-hidden="false" class="m3-label-large overline-text">Library</span>
           <div data-v-0623237c="" class="title-row">
             <h1 data-v-0623237c="" class="m3-headline-medium name"> All songs </h1>
           </div>

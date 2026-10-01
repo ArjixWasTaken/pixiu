@@ -22,6 +22,8 @@ import { useMutationObserver } from '@vueuse/core'
 import { computed, ref, shallowRef, watch } from 'vue'
 import { requireInjection } from '@/utils/helpers'
 import { ModalKey } from '@/config/symbols'
+import { useViewport } from '@/composables/useViewport'
+import { useBackToClose } from '@/composables/useBackToClose'
 
 /**
  * The one modal dialog, showing what `useModal` opened. Reka UI runs it: focus
@@ -39,6 +41,17 @@ const close = () => {
     component: null,
   }
 }
+
+const { isMobile } = useViewport()
+
+// On a phone, Back is Escape: a form with changes asks first, anything else closes.
+useBackToClose(
+  computed(() => open.value && isMobile.value),
+  () => {
+    const target = content.value?.querySelector('form') ?? content.value
+    target?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+  },
+)
 
 /**
  * Escape, or a press outside, closes what only shows something (song info,
@@ -84,11 +97,34 @@ useMutationObserver(content, nameByHeading, { childList: true, subtree: true, ch
   color: var(--schemes-on-surface-variant);
   box-shadow: var(--m3-elevation-3);
 
-  @media (max-width: 768px) {
-    min-width: 100vw;
-    max-width: 100vw;
-    max-height: 100dvh;
+  /* On a phone, a full-screen dialog: what it says scrolls, its buttons stay at the bottom. */
+  @media (max-width: 768px), (max-height: 500px) and (pointer: coarse) {
+    inset: 0;
+    transform: none;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    max-width: none;
+    max-height: none;
     border-radius: 0;
+    background: var(--schemes-surface-container-low);
+
+    :deep(> :not(.sr-only)) {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-height: 0;
+      width: 100% !important;
+
+      > main {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        /* Room for the first field's label, which sits on its top edge. */
+        padding-top: 12px;
+      }
+    }
   }
 
   &:focus-visible,

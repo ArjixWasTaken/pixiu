@@ -14,9 +14,9 @@
       </button>
       <button
         v-else
-        :style="{ width: `${size}px`, height: `${size}px` }"
+        :style="{ width: `${Math.max(size, 40)}px`, height: `${Math.max(size, 40)}px` }"
         aria-label="Account"
-        class="rounded-full cursor-pointer overflow-hidden block"
+        class="rounded-full cursor-pointer grid place-items-center shrink-0"
         data-testid="profile-dropdown-trigger"
         type="button"
       >

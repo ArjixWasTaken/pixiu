@@ -24,7 +24,7 @@
         <div class="tabs">
           <M3Tabs v-model="nowPlaying.tab.value" :tabs secondary />
         </div>
-        <div class="pane-body">
+        <div class="pane-body" data-scrolls-lists>
           <NowPlayingQueue v-if="nowPlaying.tab.value === 'queue'" />
           <NowPlayingLyrics v-else-if="nowPlaying.tab.value === 'lyrics'" :song />
           <NowPlayingAbout v-else :song />

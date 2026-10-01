@@ -20,7 +20,13 @@
       </header>
 
       <div v-if="!pane" class="player">
-        <div class="stage">
+        <div
+          class="stage"
+          @pointercancel="onPointerUp"
+          @pointerdown="onPointerDown"
+          @pointermove="onPointerMove"
+          @pointerup="onPointerUp"
+        >
           <div :style="{ backgroundImage: `url(${cover}), url(${defaultCover})` }" class="art" />
         </div>
         <div class="flex flex-col gap-3 shrink-0">
@@ -52,7 +58,7 @@
         <M3Tabs :model-value="pane ? nowPlaying.tab.value : ''" :tabs secondary @update:model-value="choose" />
       </div>
 
-      <div v-if="pane" class="pane-body">
+      <div v-if="pane" class="pane-body" data-scrolls-lists>
         <NowPlayingQueue v-if="nowPlaying.tab.value === 'queue'" />
         <NowPlayingLyrics v-else-if="nowPlaying.tab.value === 'lyrics'" :song />
         <NowPlayingAbout v-else :song />
@@ -71,6 +77,7 @@ import { useContextMenu } from '@/composables/useContextMenu'
 import { useNowPlaying } from '@/composables/useNowPlaying'
 import type { NowPlayingTab } from '@/composables/useNowPlaying'
 import { useRouter } from '@/composables/useRouter'
+import { useBackToClose } from '@/composables/useBackToClose'
 import type { M3Tab } from '@/components/m3/M3Tabs.vue'
 
 import AudioPlayer from '@/components/layout/app-footer/AudioPlayer.vue'
@@ -120,6 +127,9 @@ const choose = (tab: string | undefined) => {
 
 watch(nowPlaying.open, open => open || (pane.value = false))
 onRouteChanged(() => nowPlaying.close())
+
+// Back puts the sheet away (or the tab over it first), as on any phone app.
+useBackToClose(nowPlaying.open, () => (pane.value ? (pane.value = false) : nowPlaying.close()))
 
 const toggleFavorite = () => song.value && playableStore.toggleFavorite(song.value)
 

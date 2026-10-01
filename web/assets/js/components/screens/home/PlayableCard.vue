@@ -117,7 +117,7 @@ const onContextMenu = (event: MouseEvent) => {
   text-align: right;
   font-variant-numeric: tabular-nums;
 
-  @media (max-width: 768px) {
+  @media (max-width: 768px), (max-height: 500px) and (pointer: coarse) {
     display: none;
   }
 }

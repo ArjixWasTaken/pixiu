@@ -23,7 +23,7 @@
         @dragleave="onDragLeave"
         @dragstart="onDragStart(item, $event)"
         @play="onPlay(item.playable)"
-        @contextmenu.prevent="onContextMenu(item, $event)"
+        @contextmenu.prevent="isTouch || onContextMenu(item, $event)"
         @request-context-menu="onContextMenu(item, $event)"
         @dragover.prevent="onDragOver"
         @drop.prevent="onDrop(item, $event)"
@@ -269,9 +269,9 @@ const onDragEnd = () => {
 }
 
 const onClick = (row: PlayableRow, event: MouseEvent) => {
-  // If we're on a touch device, or if Ctrl/Cmd key is pressed, just toggle selection.
+  // A finger plays what it taps; its long press (or ⋮) opens the song's menu.
   if (isTouch.value) {
-    toggleSelected(row)
+    onPlay(row.playable)
     return
   }
 
@@ -292,6 +292,12 @@ const onClick = (row: PlayableRow, event: MouseEvent) => {
 }
 
 const onContextMenu = async (row: PlayableRow, event: MouseEvent) => {
+  // On a phone, the menu is for the song it was opened on; nothing gets selected.
+  if (isTouch.value) {
+    openContextMenu<'PLAYABLES'>(PlayableContextMenu, event, { playables: [row.playable] })
+    return
+  }
+
   if (!isSelected(row)) {
     clearSelection()
     toggleSelected(row)

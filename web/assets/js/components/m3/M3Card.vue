@@ -48,12 +48,16 @@ withDefaults(
   &.interactive {
     cursor: pointer;
 
-    &:not(.plain):hover {
-      box-shadow: var(--m3-elevation-1);
+    @media (hover: hover) {
+      &:not(.plain):hover {
+        box-shadow: var(--m3-elevation-1);
+      }
     }
 
-    &.elevated:hover {
-      box-shadow: var(--m3-elevation-2);
+    @media (hover: hover) {
+      &.elevated:hover {
+        box-shadow: var(--m3-elevation-2);
+      }
     }
   }
 }

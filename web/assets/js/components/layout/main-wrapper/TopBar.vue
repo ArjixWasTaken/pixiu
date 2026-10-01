@@ -51,7 +51,7 @@ const openDrawer = () => eventBus.emit('TOGGLE_SIDEBAR')
   flex: 1;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 768px), (max-height: 500px) and (pointer: coarse) {
   .top-bar {
     gap: 4px;
     padding: 4px 8px 4px 4px;
@@ -61,7 +61,8 @@ const openDrawer = () => eventBus.emit('TOGGLE_SIDEBAR')
     max-width: none;
   }
 
-  .spacer {
+  /* Beside the search field, nothing to fill; without it (Discover), the avatar still goes right. */
+  .search + .spacer {
     display: none;
   }
 }

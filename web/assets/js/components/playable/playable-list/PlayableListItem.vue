@@ -3,6 +3,7 @@
     <h4 v-if="showDisc && playable.disc" class="disc m3-title-small">Disc {{ playable.disc }}</h4>
 
     <article
+      ref="article"
       :class="{ playing, selected: item.selected }"
       class="song-item m3-state"
       data-testid="song-item"
@@ -17,7 +18,7 @@
         <span class="supporting m3-body-medium">
           <span class="supporting-text">{{ supporting }}</span>
           <!-- Phones show the length here; it never gives way to the rest. -->
-          <span v-if="isMobile" class="supporting-length">{{ supporting ? ' · ' : '' }}{{ fmtLength }}</span>
+          <span v-if="isMobile" class="supporting-length">{{ supporting ? '\u00a0· ' : '' }}{{ fmtLength }}</span>
         </span>
       </span>
 
@@ -40,7 +41,8 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, toRefs } from 'vue'
+import { onLongPress, useEventListener } from '@vueuse/core'
+import { computed, toRefs, useTemplateRef } from 'vue'
 import { requireInjection } from '@/utils/helpers'
 import { secondsToHis, timeAgo } from '@/utils/formatters'
 import { useTableColumnVisibility } from '@/composables/useTableColumnVisibility'
@@ -82,7 +84,7 @@ const fmtLength = secondsToHis(playable.value.length)
 const artist = computed(() => playable.value.artist_name)
 const album = computed(() => playable.value.album_name)
 
-const { isMobile } = useViewport()
+const { isMobile, isTouch } = useViewport()
 
 /** In an album, the cover is the album's: rows show their track number instead. */
 const inAlbum = computed(() => context.type === 'Album')
@@ -100,6 +102,38 @@ const supporting = computed(() =>
 )
 
 const play = () => emit('play', playable.value)
+
+const article = useTemplateRef('article')
+
+// On a phone, a long press opens the song's menu, as ⋮ does (Android would show
+// its own menu; iOS nothing); the tap that ends it plays nothing.
+let longPressed = false
+
+onLongPress(
+  article,
+  event => {
+    if (!isTouch.value) {
+      return
+    }
+
+    longPressed = true
+    emit('request-context-menu', event as MouseEvent)
+  },
+  { delay: 500, distanceThreshold: 10 },
+)
+
+useEventListener(
+  article,
+  'click',
+  (event: MouseEvent) => {
+    if (longPressed) {
+      longPressed = false
+      event.stopImmediatePropagation()
+      event.preventDefault()
+    }
+  },
+  { capture: true },
+)
 </script>
 
 <style lang="postcss" scoped>
@@ -209,7 +243,7 @@ const play = () => emit('play', playable.value)
   text-align: right;
   font-variant-numeric: tabular-nums;
 
-  @media (max-width: 768px) {
+  @media (max-width: 768px), (max-height: 500px) and (pointer: coarse) {
     display: none;
   }
 }
@@ -217,8 +251,16 @@ const play = () => emit('play', playable.value)
 .rating {
   margin-right: 8px;
 
-  @media (max-width: 768px) {
+  @media (max-width: 768px), (max-height: 500px) and (pointer: coarse) {
     display: none;
+  }
+}
+
+/* A long press opens the song's menu, not the browser's text selection. */
+@media (hover: none) {
+  .song-item {
+    -webkit-touch-callout: none;
+    user-select: none;
   }
 }
 

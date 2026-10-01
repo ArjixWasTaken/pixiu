@@ -112,8 +112,26 @@ textarea {
   padding: 0;
   resize: vertical;
 
+  /* A finger can't drag the corner: the field grows as it's typed in instead (field-sizing). */
+  @media (pointer: coarse) {
+    resize: none;
+    field-sizing: content;
+    min-height: 3lh;
+  }
+
   &::placeholder {
     color: var(--schemes-on-surface-variant);
+  }
+
+  /* Numbers are typed, not stepped: no spin buttons. */
+  &[type='number'] {
+    appearance: textfield;
+
+    &::-webkit-inner-spin-button,
+    &::-webkit-outer-spin-button {
+      appearance: none;
+      margin: 0;
+    }
   }
 }
 

@@ -120,64 +120,15 @@ describe('playlistContextMenu.vue', () => {
     })
   })
 
-  it('warns if attempting to play an empty playlist', async () => {
-    h.createAudioPlayer()
+  it('offers nothing to play in an empty playlist', async () => {
+    h.mock(usePlayableStore(), 'fetchForPlaylist').mockResolvedValue([])
 
-    const fetchMock = h.mock(usePlayableStore(), 'fetchForPlaylist').mockResolvedValue([])
-    const queueMock = h.mock(playbackService, 'queueAndPlay')
-    const goMock = h.mock(Router, 'go')
-    const warnMock = h.mock(MessageToasterStub.value, 'warning')
+    await renderComponent(h.factory('playlist').make())
 
-    const { playlist } = await renderComponent(h.factory('playlist').make())
-
-    await h.user.click(screen.getByText('Play'))
-
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith(playlist)
-      expect(queueMock).not.toHaveBeenCalled()
-      expect(goMock).not.toHaveBeenCalled()
-      expect(warnMock).toHaveBeenCalledWith('The playlist is empty.')
-    })
+    await waitFor(() => expect(screen.queryByText('Play')).toBeNull())
+    expect(screen.queryByText('Shuffle')).toBeNull()
+    expect(screen.queryByText('Add to queue')).toBeNull()
   })
-
-  it('shuffles', async () => {
-    h.createAudioPlayer()
-
-    const songs = h.factory('song').make(3)
-    const fetchMock = h.mock(usePlayableStore(), 'fetchForPlaylist').mockResolvedValue(songs)
-    const queueMock = h.mock(playbackService, 'queueAndPlay')
-    const goMock = h.mock(Router, 'go')
-    const { playlist } = await renderComponent(h.factory('playlist').make())
-
-    await h.user.click(screen.getByText('Shuffle'))
-
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith(playlist)
-      expect(queueMock).toHaveBeenCalledWith(songs, true)
-      expect(goMock).toHaveBeenCalledWith('/queue')
-    })
-  })
-
-  it('warns if attempting to shuffle an empty playlist', async () => {
-    h.createAudioPlayer()
-
-    const fetchMock = h.mock(usePlayableStore(), 'fetchForPlaylist').mockResolvedValue([])
-    const queueMock = h.mock(playbackService, 'queueAndPlay')
-    const goMock = h.mock(Router, 'go')
-    const warnMock = h.mock(MessageToasterStub.value, 'warning')
-
-    const { playlist } = await renderComponent(h.factory('playlist').make())
-
-    await h.user.click(screen.getByText('Shuffle'))
-
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith(playlist)
-      expect(queueMock).not.toHaveBeenCalled()
-      expect(goMock).not.toHaveBeenCalled()
-      expect(warnMock).toHaveBeenCalledWith('The playlist is empty.')
-    })
-  })
-
   it('queues', async () => {
     h.createAudioPlayer()
 

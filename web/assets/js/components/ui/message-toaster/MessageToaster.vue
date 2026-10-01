@@ -55,7 +55,7 @@ defineExpose({ info, success, warning, error })
   list-style: none;
   outline: none;
 
-  @media (max-width: 768px) {
+  @media (max-width: 768px), (max-height: 500px) and (pointer: coarse) {
     left: 8px;
     right: 8px;
     bottom: 176px;

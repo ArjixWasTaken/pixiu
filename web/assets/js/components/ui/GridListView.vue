@@ -37,7 +37,7 @@ defineExpose({
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   content-visibility: auto;
 
-  @media (max-width: 768px) {
+  @media (max-width: 768px), (max-height: 500px) and (pointer: coarse) {
     gap: 12px;
     padding: 12px 16px 16px;
     grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));

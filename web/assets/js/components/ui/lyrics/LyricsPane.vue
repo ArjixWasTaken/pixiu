@@ -1,20 +1,21 @@
 <template>
-  <div v-if="hasLyrics" class="group relative h-full">
-    <LrcLyricsPane v-if="isLrc" :font-size="fontSize" :lyrics="lrcLyrics" class="absolute inset-0 px-4 py-3" />
-
-    <div
-      v-else
-      class="lyrics absolute inset-0 px-4 py-3 overflow-y-auto scroll-mask-y whitespace-pre-wrap leading-relaxed text-(--schemes-on-surface)"
-      data-testid="plain-text-lyrics"
-    >
-      {{ plainTextLyrics }}
+  <div v-if="hasLyrics" class="flex flex-col h-full">
+    <!-- Above the lyrics, never over them. -->
+    <div class="flex justify-end px-2 pt-1 shrink-0">
+      <Magnifier @in="zoomIn" @out="zoomOut" />
     </div>
 
-    <Magnifier
-      class="absolute top-4 right-4 opacity-0 group-hover:opacity-50 hover:opacity-100! transition-opacity no-hover:opacity-100!"
-      @in="zoomIn"
-      @out="zoomOut"
-    />
+    <div class="relative flex-1 min-h-0">
+      <LrcLyricsPane v-if="isLrc" :font-size="fontSize" :lyrics="lrcLyrics" class="absolute inset-0 px-4 py-3" />
+
+      <div
+        v-else
+        class="lyrics absolute inset-0 px-4 py-3 overflow-y-auto scroll-mask-y whitespace-pre-wrap leading-relaxed text-(--schemes-on-surface)"
+        data-testid="plain-text-lyrics"
+      >
+        {{ plainTextLyrics }}
+      </div>
+    </div>
   </div>
   <p v-else class="m3-body-large px-4 py-3 text-(--schemes-on-surface-variant)">
     <template v-if="userCanUpdateLyrics">
