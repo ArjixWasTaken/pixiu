@@ -30,13 +30,13 @@
         <nav>
           <ul>
             <li :class="activeTab === 'songs' && 'active'">
-              <a :href="url('artists.show', { id: artist.id, tab: 'songs' })">Songs</a>
+              <a href="#songs" @click.prevent="activeTab = 'songs'">Songs</a>
             </li>
             <li :class="activeTab === 'albums' && 'active'">
-              <a :href="url('artists.show', { id: artist.id, tab: 'albums' })">Albums</a>
+              <a href="#albums" @click.prevent="activeTab = 'albums'">Albums</a>
             </li>
             <li v-if="useEncyclopedia" :class="activeTab === 'information' && 'active'">
-              <a :href="url('artists.show', { id: artist.id, tab: 'information' })">Information</a>
+              <a href="#information" @click.prevent="activeTab = 'information'">Information</a>
             </li>
           </ul>
         </nav>
@@ -72,7 +72,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { defineAsyncComponent } from '@/utils/helpers'
 import { eventBus } from '@/utils/eventBus'
 import { pluralize } from '@/utils/formatters'
@@ -86,6 +86,7 @@ import { useLocalStorage } from '@/composables/useLocalStorage'
 import { useThirdPartyServices } from '@/composables/useThirdPartyServices'
 import { useRouter } from '@/composables/useRouter'
 import { useContextMenu } from '@/composables/useContextMenu'
+import { moveTabToHash, useHashTab } from '@/composables/useHash'
 
 import M3IconButton from '@/components/m3/M3IconButton.vue'
 import ScreenHeader from '@/components/ui/ScreenHeader.vue'
@@ -111,7 +112,7 @@ const { getRouteParam, go, onScreenActivated, onRouteChanged, url, triggerNotFou
 const { openContextMenu } = useContextMenu()
 const { get: lsGet, set: lsSet } = useLocalStorage()
 
-const activeTab = ref<Tab>('songs')
+const activeTab = useHashTab(validTabs, 'songs')
 
 const artist = ref<Artist>()
 const songs = ref<Song[]>([])
@@ -147,9 +148,16 @@ const fetchScreenData = async () => {
   }
 
   const id = getRouteParam('id')
-  const tabParam = getRouteParam<Tab>('tab') || 'songs'
-  activeTab.value = validTabs.includes(tabParam) ? tabParam : 'songs'
 
+  // Links from before the tab lived in the hash: `/artists/ar-1/albums`.
+  const legacyTab = getRouteParam<Tab>('tab')
+
+  if (legacyTab && validTabs.includes(legacyTab)) {
+    moveTabToHash(legacyTab)
+    activeTab.value = legacyTab
+  }
+
+  albums.value = undefined
   loading.value = true
 
   try {
@@ -158,10 +166,6 @@ const fetchScreenData = async () => {
     if (!artist.value) {
       triggerNotFound()
       return
-    }
-
-    if (activeTab.value === 'albums') {
-      albums.value = await albumStore.fetchForArtist(artist.value)
     }
 
     context.entity = artist.value
@@ -180,6 +184,28 @@ const fetchScreenData = async () => {
     loading.value = false
   }
 }
+
+/** The artist's albums, the first time their tab shows. */
+const fetchAlbums = async () => {
+  const shown = artist.value
+
+  if (!shown || albums.value) {
+    return
+  }
+
+  try {
+    const found = await albumStore.fetchForArtist(shown)
+
+    // Another artist may have opened meanwhile.
+    if (artist.value === shown) {
+      albums.value = found
+    }
+  } catch (error: unknown) {
+    useErrorHandler('dialog').handleHttpError(error)
+  }
+}
+
+watch([activeTab, artist], ([tab]) => tab === 'albums' && fetchAlbums())
 
 const onSort = (field: MaybeArray<PlayableListSortField>, order: SortOrder) => {
   lsSet('artist-sort-field', field)

@@ -188,18 +188,16 @@ pub(crate) async fn callback(
         (Intent::Login, Err(error)) => format!("/?sso_error={}", why(&error)),
         (Intent::Link(user_id), Ok(identity)) => {
             match identities::link(&mut db, user_id, &identity).await {
-                Ok(_) => "/settings?tab=account&linked=1".to_owned(),
-                Err(AccountError::IdentityTaken) => {
-                    "/settings?tab=account&link_error=taken".to_owned()
-                }
+                Ok(_) => "/settings?linked=1#account".to_owned(),
+                Err(AccountError::IdentityTaken) => "/settings?link_error=taken#account".to_owned(),
                 Err(error) => {
                     tracing::error!(%error, "cannot link an account");
-                    "/settings?tab=account&link_error=failed".to_owned()
+                    "/settings?link_error=failed#account".to_owned()
                 }
             }
         }
         (Intent::Link(_), Err(error)) => {
-            format!("/settings?tab=account&link_error={}", why(&error))
+            format!("/settings?link_error={}#account", why(&error))
         }
     };
     redirect(&location, clear)

@@ -35,13 +35,13 @@
         <nav>
           <ul>
             <li :class="activeTab === 'songs' && 'active'">
-              <a :href="url('albums.show', { id: album.id, tab: 'songs' })">Songs</a>
+              <a href="#songs" @click.prevent="activeTab = 'songs'">Songs</a>
             </li>
             <li :class="activeTab === 'other-albums' && 'active'">
-              <a :href="url('albums.show', { id: album.id, tab: 'other-albums' })">Other albums</a>
+              <a href="#other-albums" @click.prevent="activeTab = 'other-albums'">Other albums</a>
             </li>
             <li v-if="useEncyclopedia" :class="activeTab === 'information' && 'active'">
-              <a :href="url('albums.show', { id: album.id, tab: 'information' })">Information</a>
+              <a href="#information" @click.prevent="activeTab = 'information'">Information</a>
             </li>
           </ul>
         </nav>
@@ -75,7 +75,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, defineAsyncComponent, ref } from 'vue'
+import { computed, defineAsyncComponent, ref, watch } from 'vue'
 import { eventBus } from '@/utils/eventBus'
 import { pluralize } from '@/utils/formatters'
 import { albumStore } from '@/stores/albumStore'
@@ -88,6 +88,7 @@ import { useLocalStorage } from '@/composables/useLocalStorage'
 import { useRouter } from '@/composables/useRouter'
 import { useThirdPartyServices } from '@/composables/useThirdPartyServices'
 import { useContextMenu } from '@/composables/useContextMenu'
+import { moveTabToHash, useHashTab } from '@/composables/useHash'
 
 import M3IconButton from '@/components/m3/M3IconButton.vue'
 import ScreenHeader from '@/components/ui/ScreenHeader.vue'
@@ -114,7 +115,7 @@ const { get: lsGet, set: lsSet } = useLocalStorage()
 const { useMusicBrainz } = useThirdPartyServices()
 const { openContextMenu } = useContextMenu()
 
-const activeTab = ref<Tab>('songs')
+const activeTab = useHashTab(validTabs, 'songs')
 
 const album = ref<Album | undefined>()
 const songs = ref<Song[]>([])
@@ -153,8 +154,14 @@ const fetchScreenData = async () => {
   }
 
   const id = getRouteParam('id')
-  const tabParam = getRouteParam<Tab>('tab') || 'songs'
-  activeTab.value = validTabs.includes(tabParam) ? tabParam : 'songs'
+
+  // Links from before the tab lived in the hash: `/albums/al-1/other-albums`.
+  const legacyTab = getRouteParam<Tab>('tab')
+
+  if (legacyTab && validTabs.includes(legacyTab)) {
+    moveTabToHash(legacyTab)
+    activeTab.value = legacyTab
+  }
 
   album.value = undefined
   info.value = undefined
@@ -169,11 +176,6 @@ const fetchScreenData = async () => {
       // If the album does not exist, redirect to the album list.
       triggerNotFound()
       return
-    }
-
-    if (activeTab.value === 'other-albums') {
-      const albums = await albumStore.fetchForArtist(album.value.artist_id)
-      otherAlbums.value = albums.filter(({ id }) => id !== album.value!.id)
     }
 
     context.entity = album.value
@@ -192,6 +194,28 @@ const fetchScreenData = async () => {
     loading.value = false
   }
 }
+
+/** The artist's other albums, the first time their tab shows. */
+const fetchOtherAlbums = async () => {
+  const shown = album.value
+
+  if (!shown || otherAlbums.value) {
+    return
+  }
+
+  try {
+    const albums = await albumStore.fetchForArtist(shown.artist_id)
+
+    // Another album may have opened meanwhile.
+    if (album.value === shown) {
+      otherAlbums.value = albums.filter(({ id }) => id !== shown.id)
+    }
+  } catch (error: unknown) {
+    useErrorHandler('dialog').handleHttpError(error)
+  }
+}
+
+watch([activeTab, album], ([tab]) => tab === 'other-albums' && fetchOtherAlbums())
 
 const onSort = (field: MaybeArray<PlayableListSortField>, order: SortOrder) => {
   lsSet('album-sort-field', field)

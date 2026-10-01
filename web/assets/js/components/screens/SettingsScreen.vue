@@ -27,9 +27,10 @@
 
 <script lang="ts" setup>
 import type { Component } from 'vue'
-import { computed, ref, watch } from 'vue'
+import { computed, watch } from 'vue'
 import { Filter } from '@/config/hooks'
 import { applyFilters } from '@/hooks'
+import { moveTabToHash, useHash } from '@/composables/useHash'
 import { usePolicies } from '@/composables/usePolicies'
 import { useRouter } from '@/composables/useRouter'
 
@@ -68,7 +69,7 @@ const allTabs = applyFilters<SettingsTab[]>(Filter.SETTINGS_TABS, [
   { id: 'youtube-music', label: 'YouTube Music', icon: 'smart_display', component: YouTubeMusicSettings },
   { id: 'library', label: 'Library', icon: 'library_music', component: LibrarySettings },
   {
-    id: 'users',
+    id: 'admin-users',
     label: 'Users',
     icon: 'group',
     component: UsersSettings,
@@ -76,7 +77,7 @@ const allTabs = applyFilters<SettingsTab[]>(Filter.SETTINGS_TABS, [
     visible: () => currentUserCan.manageUsers(),
   },
   {
-    id: 'sign-in',
+    id: 'admin-sign-in',
     label: 'Sign-in',
     icon: 'login',
     component: SignInSettings,
@@ -85,7 +86,7 @@ const allTabs = applyFilters<SettingsTab[]>(Filter.SETTINGS_TABS, [
     visible: () => currentUserCan.manageUsers(),
   },
   {
-    id: 'email',
+    id: 'admin-email',
     label: 'Email',
     icon: 'mail',
     component: EmailSettings,
@@ -97,18 +98,23 @@ const allTabs = applyFilters<SettingsTab[]>(Filter.SETTINGS_TABS, [
 
 const tabs = computed(() => allTabs.filter(tab => tab.visible?.() ?? true))
 
-/** The tab `?tab=` names, if the user sees it. */
-const requestedTab = () => {
-  const wanted = getRouteParam('tab')
-  return tabs.value.some(tab => tab.id === wanted) ? wanted : undefined
-}
+const hash = useHash()
 
-const currentTabId = ref(requestedTab() ?? tabs.value[0]?.id)
+/** The tab the URL's hash names (`#admin-users`), if the user sees it; else the first. */
+const currentTabId = computed({
+  get: () => (tabs.value.some(tab => tab.id === hash.value) ? hash.value : tabs.value[0]?.id),
+  set: id => (hash.value = id ?? ''),
+})
+
+/** Links from before the tab lived in the hash: `?tab=users`. */
+const legacyTabIds: Record<string, string> = { users: 'admin-users', 'sign-in': 'admin-sign-in', email: 'admin-email' }
 
 onScreenActivated('Settings', () => {
-  const wanted = requestedTab()
-  if (wanted) {
-    currentTabId.value = wanted
+  const legacy = getRouteParam('tab')
+
+  if (legacy) {
+    moveTabToHash(legacy, legacyTabIds[legacy] ?? legacy)
+    hash.value = legacyTabIds[legacy] ?? legacy
   }
 })
 
@@ -116,12 +122,6 @@ onScreenActivated('Settings', () => {
 watch(currentTabId, () =>
   document.querySelector('[data-vue="SettingsScreen"]')?.closest('.screen-body')?.scrollTo?.({ top: 0 }),
 )
-
-watch(tabs, visible => {
-  if (!visible.some(tab => tab.id === currentTabId.value)) {
-    currentTabId.value = visible[0]?.id
-  }
-})
 </script>
 
 <style scoped>

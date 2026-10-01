@@ -104,7 +104,7 @@ const reportLinking = () => {
   }
 
   // Said once: a reload should not say it again.
-  history.replaceState(history.state, '', `${location.pathname}?tab=account`)
+  history.replaceState(history.state, '', `${location.pathname}${location.hash}`)
 }
 
 onMounted(async () => {
