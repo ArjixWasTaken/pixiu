@@ -19,7 +19,7 @@
 <script lang="ts" setup>
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import { useResizeObserver } from '@vueuse/core'
-import { computed, nextTick, onMounted, ref, toRefs, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, toRefs, watch } from 'vue'
 import { useScrollContainer } from '@/composables/useScrollContainer'
 
 /**
@@ -121,17 +121,24 @@ onMounted(measure)
 watch(minItemWidth, () => measure())
 
 // Cards are as tall as they are wide (their covers are square): as the grid's width
-// changes, a row's height is read again off the rows rendered.
+// changes, a row's height is read again off the rows rendered. On the next frame:
+// resizing the grid within the observer's own round is a loop.
+let frame = 0
+onBeforeUnmount(() => cancelAnimationFrame(frame))
+
 useResizeObserver(gridContainer, () => {
-  const rendered = endRow.value - startRow.value
-  const grid = gridContainer.value
+  cancelAnimationFrame(frame)
+  frame = requestAnimationFrame(() => {
+    const rendered = endRow.value - startRow.value
+    const grid = gridContainer.value
 
-  if (!grid || rendered < 1) {
-    return
-  }
+    if (!grid || rendered < 1) {
+      return
+    }
 
-  const height = (grid.offsetHeight - measuredPaddingY.value - (rendered - 1) * measuredRowGap.value) / rendered
-  height > 0 && (measuredItemHeight.value = height)
+    const height = (grid.offsetHeight - measuredPaddingY.value - (rendered - 1) * measuredRowGap.value) / rendered
+    height > 0 && Math.abs(height - measuredItemHeight.value) > 0.5 && (measuredItemHeight.value = height)
+  })
 })
 
 watch(

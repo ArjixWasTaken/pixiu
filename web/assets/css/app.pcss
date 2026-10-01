@@ -25,4 +25,10 @@
   ::file-selector-button {
     border-color: var(--schemes-outline-variant);
   }
+
+  /* A cover still loading (or broken) shows its placeholder, not its alt text
+     squeezed into a thumbnail; screen readers still read the alt text. */
+  img {
+    color: transparent;
+  }
 }

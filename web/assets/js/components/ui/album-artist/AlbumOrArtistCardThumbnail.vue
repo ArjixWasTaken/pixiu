@@ -20,6 +20,7 @@ import { useRouter } from '@/composables/useRouter'
 import { useMessageToaster } from '@/composables/useMessageToaster'
 import { playback } from '@/services/playbackManager'
 import { useBranding } from '@/composables/useBranding'
+import { coverOfSize } from '@/services/subsonic'
 
 import M3IconButton from '@/components/m3/M3IconButton.vue'
 
@@ -40,8 +41,9 @@ const { cover: defaultCover } = useBranding()
 
 const forAlbum = computed(() => entity.value.type === 'albums')
 
-const image = computed(() =>
-  forAlbum.value ? (entity.value as Album).cover || defaultCover : (entity.value as Artist).image || defaultCover,
+const image = computed(
+  () =>
+    coverOfSize(forAlbum.value ? (entity.value as Album).cover : (entity.value as Artist).image, 400) || defaultCover,
 )
 
 const playLabel = computed(() =>

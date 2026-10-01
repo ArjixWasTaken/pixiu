@@ -23,6 +23,7 @@ import { useRouter } from '@/composables/useRouter'
 import { useMessageToaster } from '@/composables/useMessageToaster'
 import { playback } from '@/services/playbackManager'
 import { useBranding } from '@/composables/useBranding'
+import { coverOfSize } from '@/services/subsonic'
 
 import PlayIcon from '@/components/ui/PlayIcon.vue'
 
@@ -40,7 +41,9 @@ const forAlbum = computed(() => entity.value.type === 'albums')
 const sortFields = computed(() => (forAlbum.value ? ['disc', 'track'] : ['album_id', 'disc', 'track']))
 
 const image = computed(() => {
-  return forAlbum.value ? (entity.value as Album).cover || defaultCover : (entity.value as Artist).image || defaultCover
+  return (
+    coverOfSize(forAlbum.value ? (entity.value as Album).cover : (entity.value as Artist).image, 256) || defaultCover
+  )
 })
 
 const buttonLabel = computed(() =>

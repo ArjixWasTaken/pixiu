@@ -34,6 +34,7 @@ import { playback } from '@/services/playbackManager'
 import { useBranding } from '@/composables/useBranding'
 import { useNowPlaying } from '@/composables/useNowPlaying'
 import { usePlaybackProgress } from '@/composables/usePlaybackProgress'
+import { coverOfSize } from '@/services/subsonic'
 
 import FavoriteButton from '@/components/ui/FavoriteButton.vue'
 import M3IconButton from '@/components/m3/M3IconButton.vue'
@@ -46,7 +47,7 @@ const { cover: defaultCover } = useBranding()
 const nowPlaying = useNowPlaying()
 const { percent } = usePlaybackProgress()
 
-const cover = computed(() => (playable.value ? playable.value.album_cover : defaultCover))
+const cover = computed(() => (playable.value ? coverOfSize(playable.value.album_cover, 128) : defaultCover))
 const artist = computed(() => (playable.value ? playable.value.artist_name : ''))
 
 const toggleFavorite = () => use(playable.value, p => playableStore.toggleFavorite(p))

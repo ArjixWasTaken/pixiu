@@ -160,7 +160,13 @@ export const usePlayableList = (
 
     const sortFields = collectSortFields()
 
-    return sortFields ? orderBy(filtered, sortFields, sortOrder.value) : filtered
+    // Text sorts as people read it: "Absolute" before "ACID", not after "ANTHEM".
+    const byField = (field: string) => (playable: Playable) => {
+      const value = (playable as any)[field]
+      return typeof value === 'string' ? value.toLocaleLowerCase() : value
+    }
+
+    return sortFields ? orderBy(filtered, sortFields.map(byField), sortOrder.value) : filtered
   })
 
   const onPressEnter = async (event: KeyboardEvent) => {

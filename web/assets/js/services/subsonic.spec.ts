@@ -1,9 +1,23 @@
 import { describe, expect, it } from 'vite-plus/test'
 import { createHarness } from '@/__tests__/TestHarness'
-import { isNotFound, subsonic, SubsonicError } from '@/services/subsonic'
+import { coverOfSize, isNotFound, subsonic, SubsonicError } from '@/services/subsonic'
 
 describe('subsonic', () => {
   const h = createHarness()
+
+  it('asks for covers at the size they are shown', () => {
+    const cover = 'https://music.example/rest/getCoverArt?apiKey=k&v=1.16.1&id=al-3'
+    const sized = new URL(coverOfSize(cover, 128))
+
+    expect(sized.searchParams.get('size')).toBe('128')
+    expect(sized.searchParams.get('id')).toBe('al-3')
+    expect(new URL(coverOfSize(`${cover}&size=300`, 64)).searchParams.getAll('size')).toEqual(['64'])
+    // Images from elsewhere stay as they are.
+    expect(coverOfSize('https://lh3.googleusercontent.com/cover.jpg', 128)).toBe(
+      'https://lh3.googleusercontent.com/cover.jpg',
+    )
+    expect(coverOfSize(null, 128)).toBe('')
+  })
 
   it('maps a Subsonic song onto koel’s', () => {
     const song = subsonic.toSong({

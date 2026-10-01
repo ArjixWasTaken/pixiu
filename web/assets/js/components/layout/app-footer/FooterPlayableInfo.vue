@@ -32,6 +32,7 @@ import { useDraggable } from '@/composables/useDragAndDrop'
 import { useRouter } from '@/composables/useRouter'
 import { useBranding } from '@/composables/useBranding'
 import { useNowPlaying } from '@/composables/useNowPlaying'
+import { coverOfSize } from '@/services/subsonic'
 
 import FavoriteButton from '@/components/ui/FavoriteButton.vue'
 
@@ -46,7 +47,7 @@ const nowPlaying = useNowPlaying()
 
 const playable = requireInjection<Ref<Playable | undefined>>(CurrentStreamableKey, ref())
 
-const cover = computed(() => (playable.value ? playable.value.album_cover : defaultCover))
+const cover = computed(() => (playable.value ? coverOfSize(playable.value.album_cover, 128) : defaultCover))
 
 const artistUri = computed(() => (playable.value ? url('artists.show', { id: playable.value.artist_id }) : ''))
 

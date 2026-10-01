@@ -29,6 +29,7 @@
 <script lang="ts" setup>
 import { computed, toRefs } from 'vue'
 import { useBranding } from '@/composables/useBranding'
+import { coverOfSize } from '@/services/subsonic'
 
 import M3Icon from '@/components/m3/M3Icon.vue'
 
@@ -46,7 +47,7 @@ const { playable } = toRefs(props)
 
 const { cover: defaultCover } = useBranding()
 
-const src = computed(() => playable.value.album_cover)
+const src = computed(() => coverOfSize(playable.value.album_cover, 128))
 const current = computed(() => ['Playing', 'Paused'].includes(playable.value.playback_state!))
 
 const title = computed(() => {

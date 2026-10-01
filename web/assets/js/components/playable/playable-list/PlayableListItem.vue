@@ -13,7 +13,11 @@
 
       <span class="content">
         <span class="title m3-body-large truncate">{{ playable.title }}</span>
-        <span class="supporting m3-body-medium">{{ supporting }}</span>
+        <span class="supporting m3-body-medium">
+          <span class="supporting-text">{{ supporting }}</span>
+          <!-- Phones show the length here; it never gives way to the rest. -->
+          <span v-if="isMobile" class="supporting-length">{{ supporting ? ' · ' : '' }}{{ fmtLength }}</span>
+        </span>
       </span>
 
       <span class="trailing">
@@ -87,13 +91,9 @@ const played = computed(() =>
   context.type === 'RecentlyPlayed' && playable.value.played_at ? `played ${timeAgo(playable.value.played_at)}` : null,
 )
 
-/** "Artist · album" on wide screens; phones show the length instead of the album. */
+/** "Artist · album" on wide screens; phones show the length (after this) instead of the album. */
 const supporting = computed(() =>
-  [
-    artist.value,
-    isMobile.value ? fmtLength : shouldShowColumn('album') && !inAlbum.value ? album.value : null,
-    played.value,
-  ]
+  [artist.value, !isMobile.value && shouldShowColumn('album') && !inAlbum.value ? album.value : null, played.value]
     .filter(Boolean)
     .join(' · '),
 )
@@ -113,9 +113,11 @@ const play = () => emit('play', playable.value)
 .song-item {
   display: flex;
   align-items: center;
-  gap: var(--m3-gutter);
+  gap: 16px;
   height: var(--m3-row-height);
-  padding: 0 8px 0 var(--m3-gutter);
+  /* The cover lines up with the screen's content (the row's background reaches
+     a little past it, into the screen's padding). */
+  padding: 0 8px 0 calc(var(--screen-pad-x, 24px) - 12px);
   border-radius: 12px;
   color: var(--schemes-on-surface);
   outline: none;
@@ -123,6 +125,10 @@ const play = () => emit('play', playable.value)
   &.selected {
     background: var(--schemes-secondary-container);
     color: var(--schemes-on-secondary-container);
+
+    .title {
+      color: var(--schemes-on-surface);
+    }
   }
 
   &.playing .title {
@@ -168,14 +174,24 @@ const play = () => emit('play', playable.value)
 }
 
 .supporting {
+  display: flex;
+  min-width: 0;
   color: var(--schemes-on-surface-variant);
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
 
   .selected & {
     color: inherit;
   }
+}
+
+.supporting-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.supporting-length {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
 }
 
 .trailing {
