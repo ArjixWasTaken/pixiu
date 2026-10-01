@@ -11,7 +11,7 @@
       :class="{ active: isCurrentField(item.field) }"
       :label="item.label"
       :selected="isCurrentField(item.field)"
-      :title="`Sort by ${item.label}`"
+      :title="`Sort by ${item.label.toLowerCase()}`"
       tag="div"
       @click="sort(item.field)"
     >
@@ -65,7 +65,7 @@ const sort = (field: T) => {
 const isCurrentField = (field: T) => field === currentField.value
 
 const title = computed(
-  () => `Sorting by ${currentLabel.value}, ${currentOrder.value === 'asc' ? 'ascending' : 'descending'}`,
+  () => `Sorting by ${currentLabel.value.toLowerCase()}, ${currentOrder.value === 'asc' ? 'ascending' : 'descending'}`,
 )
 </script>
 

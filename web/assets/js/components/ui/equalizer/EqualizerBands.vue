@@ -1,5 +1,5 @@
 <template>
-  <div class="t-4 b-5 x-4 p-4 flex gap-1 rounded-md bg-black/20">
+  <div class="t-4 b-5 x-4 p-4 flex gap-1 rounded-md bg-(--schemes-surface-container-highest)">
     <EqualizerBand
       ref="preampBandEl"
       v-model="preampGain"
@@ -11,9 +11,9 @@
     </EqualizerBand>
 
     <span class="text-sm h-[100px] w-[20px] flex flex-col justify-between items-center opacity-50">
-      <span class="leading-none text-k-fg">+20</span>
-      <span class="leading-none text-k-fg">0</span>
-      <span class="leading-none text-k-fg">-20</span>
+      <span class="leading-none text-(--schemes-on-surface)">+20</span>
+      <span class="leading-none text-(--schemes-on-surface)">0</span>
+      <span class="leading-none text-(--schemes-on-surface)">-20</span>
     </span>
 
     <div ref="filterBandsEl" class="relative flex-1 flex justify-between">
@@ -153,8 +153,8 @@ defineExpose({ loadPreset, getPreamp })
   background: linear-gradient(
     to right,
     transparent,
-    color-mix(in srgb, var(--color-fg) 10%, transparent) 5%,
-    color-mix(in srgb, var(--color-fg) 10%, transparent) 95%,
+    color-mix(in srgb, var(--schemes-on-surface) 10%, transparent) 5%,
+    color-mix(in srgb, var(--schemes-on-surface) 10%, transparent) 95%,
     transparent
   );
 }

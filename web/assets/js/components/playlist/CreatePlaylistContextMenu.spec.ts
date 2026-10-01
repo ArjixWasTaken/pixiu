@@ -21,23 +21,23 @@ describe('createPlaylistContextMenu.vue', () => {
     beforeEach: () => openModalMock.mockClear(),
   })
 
-  it('opens CreatePlaylistForm when clicking New Playlist', async () => {
+  it('opens CreatePlaylistForm when clicking New playlist', async () => {
     h.render(Component)
-    await h.user.click(screen.getByText('New Playlist…'))
+    await h.user.click(screen.getByText('New playlist…'))
 
     await assertOpenModal(openModalMock, CreatePlaylistForm, { folder: null, playables: [] })
   })
 
-  it('opens CreateSmartPlaylistForm when clicking New Smart Playlist', async () => {
+  it('opens CreateSmartPlaylistForm when clicking New smart playlist', async () => {
     h.render(Component)
-    await h.user.click(screen.getByText('New Smart Playlist…'))
+    await h.user.click(screen.getByText('New smart playlist…'))
 
     await assertOpenModal(openModalMock, CreateSmartPlaylistForm, { folder: null })
   })
 
-  it('opens CreatePlaylistFolderForm when clicking New Folder', async () => {
+  it('opens CreatePlaylistFolderForm when clicking New folder', async () => {
     h.render(Component)
-    await h.user.click(screen.getByText('New Folder…'))
+    await h.user.click(screen.getByText('New folder…'))
 
     await assertOpenModal(openModalMock, CreatePlaylistFolderForm, { parent: null })
   })

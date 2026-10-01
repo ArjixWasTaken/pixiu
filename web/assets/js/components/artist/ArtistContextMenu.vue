@@ -1,9 +1,9 @@
 <template>
   <ul role="none">
-    <MenuItem @click="play">Play All</MenuItem>
-    <MenuItem @click="shuffle">Shuffle All</MenuItem>
+    <MenuItem @click="play">Play all</MenuItem>
+    <MenuItem @click="shuffle">Shuffle all</MenuItem>
     <Separator />
-    <MenuItem @click="toggleFavorite">{{ artist.favorite ? 'Undo Favorite' : 'Favorite' }}</MenuItem>
+    <MenuItem @click="toggleFavorite">{{ artist.favorite ? 'Remove from favorites' : 'Add to favorites' }}</MenuItem>
     <Separator />
     <li
       tabindex="-1"

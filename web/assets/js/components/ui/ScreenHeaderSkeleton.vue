@@ -1,6 +1,6 @@
 <template>
   <header
-    class="skeleton screen-header expanded gap-4 min-h-0 md:min-h-full flex items-end shrink-0 relative content-stretch p-6 border-b border-b-k-fg-5"
+    class="skeleton screen-header expanded gap-4 min-h-0 md:min-h-full flex items-end shrink-0 relative content-stretch p-6 border-b border-b-(--schemes-outline-variant)"
   >
     <aside class="hidden md:block w-[192px] aspect-square rounded-lg pulse" />
 

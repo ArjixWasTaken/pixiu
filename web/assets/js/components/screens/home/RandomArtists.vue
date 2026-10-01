@@ -1,11 +1,10 @@
 <template>
   <HomeScreenBlock>
-    <template #header>Random Artists</template>
+    <template #header>Random artists</template>
     <template #actions>
-      <Btn v-if="artists.length" size="small" variant="ghost" rounded :disabled="refreshing" @click.prevent="refresh">
-        <Icon :icon="faRotateRight" :class="{ 'animate-spin': refreshing }" />
-        <span class="sr-only">Refresh</span>
-      </Btn>
+      <M3IconButton v-if="artists.length" :disabled="refreshing" label="Refresh" @click.prevent="refresh">
+        <M3Icon :class="{ 'animate-spin': refreshing }" name="refresh" />
+      </M3IconButton>
     </template>
     <Carousel>
       <template v-if="loading">
@@ -14,22 +13,22 @@
       <template v-else-if="artists.length">
         <ArtistCard v-for="artist in artists" :key="artist.id" :artist />
       </template>
-      <p v-else class="text-k-fg-50">No artists yet.</p>
+      <p v-else class="text-(--schemes-on-surface-variant)">No artists yet.</p>
     </Carousel>
   </HomeScreenBlock>
 </template>
 
 <script lang="ts" setup>
-import { faRotateRight } from '@fortawesome/free-solid-svg-icons'
 import { ref, toRef, toRefs } from 'vue'
 import { overviewStore } from '@/stores/overviewStore'
 import { useErrorHandler } from '@/composables/useErrorHandler'
 
 import ArtistCard from '@/components/artist/ArtistCard.vue'
 import ArtistCardSkeleton from '@/components/ui/album-artist/ArtistAlbumCardSkeleton.vue'
-import Btn from '@/components/ui/form/Btn.vue'
+import M3IconButton from '@/components/m3/M3IconButton.vue'
 import Carousel from '@/components/ui/Carousel.vue'
 import HomeScreenBlock from '@/components/screens/home/HomeScreenBlock.vue'
+import M3Icon from '@/components/m3/M3Icon.vue'
 
 const props = withDefaults(defineProps<{ loading?: boolean }>(), { loading: false })
 const { loading } = toRefs(props)

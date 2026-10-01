@@ -1,12 +1,12 @@
 <template>
   <article>
-    <h3 class="text-2xl mb-3">Track Listing</h3>
+    <h3 class="text-2xl mb-3">Tracks</h3>
 
     <ul>
       <li
         v-for="(track, index) in tracks"
         :key="index"
-        class="flex p-2 before:w-7 before:text-k-fg-50"
+        class="flex p-2 before:w-7 before:text-(--schemes-on-surface-variant)"
         data-testid="album-track-item"
       >
         <TrackListItem :album :track />

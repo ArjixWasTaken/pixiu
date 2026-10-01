@@ -53,7 +53,7 @@
 
       <ScreenEmptyState v-else>
         <template #icon>
-          <Icon :icon="faFile" />
+          <M3Icon name="description" />
         </template>
 
         <template v-if="playlist?.is_smart">
@@ -65,7 +65,7 @@
         <template v-else>
           The playlist is currently empty.
           <span class="block secondary">
-            Drag content into its name in the sidebar or use the &quot;Add To…&quot; button to fill it up.
+            Drag content into its name in the sidebar or use the &quot;Add to…&quot; button to fill it up.
           </span>
         </template>
       </ScreenEmptyState>
@@ -74,7 +74,6 @@
 </template>
 
 <script lang="ts" setup>
-import { faFile } from '@fortawesome/free-regular-svg-icons'
 import { differenceBy } from 'lodash-es'
 import { computed, ref, watch } from 'vue'
 import { eventBus } from '@/utils/eventBus'
@@ -103,6 +102,7 @@ import ScreenBase from '@/components/screens/ScreenBase.vue'
 import ScreenHeaderSkeleton from '@/components/ui/ScreenHeaderSkeleton.vue'
 import PlayableListSkeleton from '@/components/playable/playable-list/PlayableListSkeleton.vue'
 import MirroredWatchPanel from '@/components/playlist/MirroredWatchPanel.vue'
+import M3Icon from '@/components/m3/M3Icon.vue'
 
 const ContextMenu = defineAsyncComponent(() => import('@/components/playlist/PlaylistContextMenu.vue'))
 const EditPlaylistForm = defineAsyncComponent(() => import('@/components/playlist/EditPlaylistForm.vue'))

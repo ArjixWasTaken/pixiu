@@ -29,7 +29,7 @@
 
     <ScreenEmptyState v-if="libraryEmpty">
       <template #icon>
-        <Icon :icon="faCompactDisc" />
+        <M3Icon name="album" />
       </template>
       No albums found.
       <EmptyLibraryHint />
@@ -37,7 +37,7 @@
 
     <ScreenEmptyState v-else-if="noFavoriteAlbums">
       <template #icon>
-        <Icon :icon="faCompactDisc" />
+        <M3Icon name="album" />
       </template>
       No favorite albums.
     </ScreenEmptyState>
@@ -85,7 +85,6 @@
 </template>
 
 <script lang="ts" setup>
-import { faCompactDisc } from '@fortawesome/free-solid-svg-icons'
 import { computed, nextTick, onMounted, ref, toRef } from 'vue'
 import { albumStore } from '@/stores/albumStore'
 import { commonStore } from '@/stores/commonStore'
@@ -104,6 +103,7 @@ import ScreenBase from '@/components/screens/ScreenBase.vue'
 import AlbumListSorter from '@/components/album/AlbumListSorter.vue'
 import M3Chip from '@/components/m3/M3Chip.vue'
 import EmptyLibraryHint from '@/components/ui/EmptyLibraryHint.vue'
+import M3Icon from '@/components/m3/M3Icon.vue'
 
 const { isMobile } = useViewport()
 const grid = ref<InstanceType<typeof AlbumGrid>>()

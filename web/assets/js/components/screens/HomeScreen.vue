@@ -17,7 +17,7 @@
 
     <ScreenEmptyState v-if="libraryEmpty">
       <template #icon>
-        <Icon :icon="faVolumeOff" />
+        <M3Icon name="volume_off" />
       </template>
       No songs found.
       <EmptyLibraryHint />
@@ -31,7 +31,6 @@
 </template>
 
 <script lang="ts" setup>
-import { faVolumeOff } from '@fortawesome/free-solid-svg-icons'
 import { sample } from 'lodash-es'
 import type { Component } from 'vue'
 import { computed, defineAsyncComponent, ref } from 'vue'
@@ -62,6 +61,7 @@ import ScreenEmptyState from '@/components/ui/ScreenEmptyState.vue'
 import BtnScrollToTop from '@/components/ui/BtnScrollToTop.vue'
 import ScreenBase from '@/components/screens/ScreenBase.vue'
 import EmptyLibraryHint from '@/components/ui/EmptyLibraryHint.vue'
+import M3Icon from '@/components/m3/M3Icon.vue'
 
 const ReorderBlocksModal = defineAsyncComponent(() => import('@/components/screens/home/ReorderBlocksModal.vue'))
 
@@ -72,18 +72,18 @@ interface Block {
 }
 
 const blocks: Block[] = [
-  { id: 'recently-played-songs', label: 'Recently Played', component: RecentlyPlayedPlayables },
-  { id: 'recently-added-albums', label: 'Latest Albums', component: NewAlbums },
-  { id: 'similar-songs', label: 'You Might Also Like', component: SimilarSongs },
-  { id: 'most-played-albums', label: 'Top Albums', component: TopAlbums },
-  { id: 'most-played-songs', label: 'Most Played', component: MostPlayedSongs },
-  { id: 'most-played-artists', label: 'Top Artists', component: TopArtists },
-  { id: 'recently-added-songs', label: 'New Songs', component: NewSongs },
-  { id: 'recently-added-artists', label: 'New Artists', component: NewArtists },
-  { id: 'least-played-songs', label: 'Hidden Gems', component: LeastPlayedSongs },
-  { id: 'random-songs', label: 'Random Songs', component: RandomSongs },
-  { id: 'random-albums', label: 'Random Albums', component: RandomAlbums },
-  { id: 'random-artists', label: 'Random Artists', component: RandomArtists },
+  { id: 'recently-played-songs', label: 'Recently played', component: RecentlyPlayedPlayables },
+  { id: 'recently-added-albums', label: 'Latest albums', component: NewAlbums },
+  { id: 'similar-songs', label: 'You might also like', component: SimilarSongs },
+  { id: 'most-played-albums', label: 'Top albums', component: TopAlbums },
+  { id: 'most-played-songs', label: 'Most played', component: MostPlayedSongs },
+  { id: 'most-played-artists', label: 'Top artists', component: TopArtists },
+  { id: 'recently-added-songs', label: 'New songs', component: NewSongs },
+  { id: 'recently-added-artists', label: 'New artists', component: NewArtists },
+  { id: 'least-played-songs', label: 'Least played', component: LeastPlayedSongs },
+  { id: 'random-songs', label: 'Random songs', component: RandomSongs },
+  { id: 'random-albums', label: 'Random albums', component: RandomAlbums },
+  { id: 'random-artists', label: 'Random artists', component: RandomArtists },
 ]
 
 const { openModal } = useModal()
@@ -163,7 +163,7 @@ useRouter().onScreenActivated('Home', async () => {
 
     /* Divider sits in the gap between blocks. */
     &::before {
-      @apply content-[''] absolute -top-6 left-0 right-0 -mx-6 h-px bg-k-fg-5;
+      @apply content-[''] absolute -top-6 left-0 right-0 -mx-6 h-px bg-(--schemes-surface-container-high);
     }
   }
 }

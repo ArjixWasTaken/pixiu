@@ -1,7 +1,7 @@
 <template>
   <article class="flex flex-col items-center min-w-[24px]">
     <span ref="sliderEl" class="slider h-[100px]" />
-    <label class="mt-2 mb-0 text-left text-sm text-k-fg">
+    <label class="mt-2 mb-0 text-left text-sm text-(--schemes-on-surface)">
       <slot />
     </label>
   </article>
@@ -106,8 +106,8 @@ article {
         background: linear-gradient(
           to bottom,
           transparent,
-          color-mix(in srgb, var(--color-fg) 15%, transparent) 15%,
-          color-mix(in srgb, var(--color-fg) 15%, transparent) 85%,
+          color-mix(in srgb, var(--schemes-on-surface) 15%, transparent) 15%,
+          color-mix(in srgb, var(--schemes-on-surface) 15%, transparent) 85%,
           transparent
         );
         top: 0;

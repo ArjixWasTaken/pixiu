@@ -1,6 +1,6 @@
 <template>
   <HomeScreenBlock>
-    <template #header>New Artists</template>
+    <template #header>New artists</template>
     <Carousel>
       <template v-if="loading">
         <ArtistCardSkeleton v-for="i in 6" :key="i" />
@@ -8,7 +8,7 @@
       <template v-else-if="artists.length">
         <ArtistCard v-for="artist in artists" :key="artist.id" :artist />
       </template>
-      <p v-else class="text-k-fg-50">No new artists.</p>
+      <p v-else class="text-(--schemes-on-surface-variant)">No new artists.</p>
     </Carousel>
   </HomeScreenBlock>
 </template>

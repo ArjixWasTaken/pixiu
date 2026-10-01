@@ -1,6 +1,6 @@
 <template>
   <article
-    class="album-row group h-[64px] pl-5 flex items-center border-b border-k-fg-10 hover:bg-k-fg-5 transition-colors"
+    class="album-row group h-[64px] pl-5 flex items-center border-b border-(--schemes-outline-variant) hover:bg-(--schemes-surface-container-high) transition-colors"
     data-testid="album-row"
     :draggable="true"
     @contextmenu.prevent="onContextMenu"
@@ -19,10 +19,12 @@
       </a>
       <template v-else>{{ album.artist_name }}</template>
     </span>
-    <span v-if="shouldShowColumn('time')" class="time text-k-fg-50 tabular-nums">
+    <span v-if="shouldShowColumn('time')" class="time text-(--schemes-on-surface-variant) tabular-nums">
       {{ formatLength(album.length) }}
     </span>
-    <span v-if="shouldShowColumn('year')" class="year text-k-fg-50 tabular-nums">{{ album.year ?? '—' }}</span>
+    <span v-if="shouldShowColumn('year')" class="year text-(--schemes-on-surface-variant) tabular-nums">{{
+      album.year ?? '—'
+    }}</span>
     <span v-if="shouldShowColumn('rating')" class="rating">
       <StarRating :rateable="album" size="xs" />
     </span>

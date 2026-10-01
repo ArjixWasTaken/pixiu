@@ -99,7 +99,7 @@ const album = computed(() => playable.value.album_name)
 
 const { isMobile } = useViewport()
 
-/** When it was played, on Recently Played. */
+/** When it was played, on Recently played. */
 const played = computed(() =>
   context.type === 'RecentlyPlayed' && playable.value.played_at ? `played ${timeAgo(playable.value.played_at)}` : null,
 )

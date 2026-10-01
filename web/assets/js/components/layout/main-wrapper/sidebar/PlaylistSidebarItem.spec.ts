@@ -35,7 +35,7 @@ describe('playlistSidebarItem.vue', () => {
     await assertOpenContextMenu(openContextMenu as Mock, PlaylistContextMenu, { playlist: list })
   })
 
-  it.each<FavoriteList['name'] | RecentlyPlayedList['name']>(['Favorites', 'Recently Played'])(
+  it.each<FavoriteList['name'] | RecentlyPlayedList['name']>(['Favorites', 'Recently played'])(
     'does not request context menu if not playlist',
     async name => {
       // eslint-disable-line no-unexpected-multiline

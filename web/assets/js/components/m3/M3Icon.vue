@@ -1,11 +1,14 @@
 <template>
-  <span :style class="material-symbols-outlined m3-icon" aria-hidden="true">{{ name }}</span>
+  <span :data-icon="name" :style aria-hidden="true" class="material-symbols-outlined m3-icon" />
 </template>
 
 <script lang="ts" setup>
 import { computed } from 'vue'
 
-/** A Material Symbols glyph, like the design's `sym()`. */
+/**
+ * A Material Symbols glyph, like the design's `sym()`. The ligature comes from
+ * CSS, so the icon's name stays out of the text of labels and copied text.
+ */
 const props = withDefaults(defineProps<{ name: string; size?: number; fill?: boolean }>(), {
   size: 24,
   fill: false,
@@ -27,5 +30,9 @@ const style = computed(() => ({
   overflow: hidden;
   flex-shrink: 0;
   user-select: none;
+
+  &::before {
+    content: attr(data-icon);
+  }
 }
 </style>

@@ -18,8 +18,8 @@ describe('editPlaylistFolderForm.vue', () => {
       },
     })
 
-    await h.type(screen.getByPlaceholderText('Folder name'), 'Your folder')
-    await h.user.selectOptions(screen.getByRole('combobox', { name: 'Parent Folder' }), parent.id)
+    await h.type(screen.getByRole('textbox', { name: 'Name' }), 'Your folder')
+    await h.user.selectOptions(screen.getByRole('combobox', { name: 'Inside' }), parent.id)
     await h.user.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() => {
@@ -45,7 +45,7 @@ describe('editPlaylistFolderForm.vue', () => {
     })
 
     expect(screen.getAllByRole('option').map(option => option.textContent?.trim())).toEqual([
-      'Root',
+      'No folder',
       'Collections',
       'Collections / Favorites',
       'Music',

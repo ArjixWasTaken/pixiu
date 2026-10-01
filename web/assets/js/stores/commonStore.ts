@@ -36,7 +36,6 @@ const initialState = {
   supports_batch_downloading: false,
   supports_transcoding: false,
   dir_separator: '/',
-  current_theme: null! as Theme,
   hunting: undefined as HuntingSummary | undefined,
 }
 
@@ -66,7 +65,7 @@ export const commonStore = {
     playlistStore.init(this.state.playlists)
     playlistFolderStore.init(this.state.playlist_folders)
     queueStore.init(this.state.queue_state)
-    themeStore.init(this.state.current_theme || themeStore.getCurrentTheme())
+    themeStore.init()
     huntingStore.init(this.state.hunting)
 
     return this.state

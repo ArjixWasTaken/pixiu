@@ -157,7 +157,7 @@ describe('playableContextMenu.vue', () => {
     const queueMock = h.mock(queueStore, 'queueAfterCurrent')
     const { playables } = await renderComponent()
 
-    await h.user.click(screen.getByText('After Current'))
+    await h.user.click(screen.getByText('After current song'))
 
     expect(queueMock).toHaveBeenCalledWith(playables)
   })
@@ -167,7 +167,7 @@ describe('playableContextMenu.vue', () => {
     const queueMock = h.mock(queueStore, 'queue')
     const { playables } = await renderComponent()
 
-    await h.user.click(screen.getByText('Bottom of Queue'))
+    await h.user.click(screen.getByText('Bottom of queue'))
 
     expect(queueMock).toHaveBeenCalledWith(playables)
   })
@@ -177,7 +177,7 @@ describe('playableContextMenu.vue', () => {
     const queueMock = h.mock(queueStore, 'queueToTop')
     const { playables } = await renderComponent()
 
-    await h.user.click(screen.getByText('Top of Queue'))
+    await h.user.click(screen.getByText('Top of queue'))
 
     expect(queueMock).toHaveBeenCalledWith(playables)
   })
@@ -189,18 +189,18 @@ describe('playableContextMenu.vue', () => {
     h.visit('/queue')
     const { playables } = await renderComponent()
 
-    await h.user.click(screen.getByText('Remove from Queue'))
+    await h.user.click(screen.getByText('Remove from queue'))
 
     expect(removeMock).toHaveBeenCalledWith(playables)
   })
 
-  it('does not show "Remove from Queue" when not on Queue screen', async () => {
+  it('does not show "Remove from queue" when not on Queue screen', async () => {
     fillQueue()
 
     h.visit('/songs')
     await renderComponent()
 
-    expect(screen.queryByText('Remove from Queue')).toBeNull()
+    expect(screen.queryByText('Remove from queue')).toBeNull()
   })
 
   it('adds to favorites', async () => {
@@ -225,7 +225,7 @@ describe('playableContextMenu.vue', () => {
     h.visit('/favorites')
     const { playables } = await renderComponent()
 
-    await h.user.click(screen.getByText('Remove from Favorites'))
+    await h.user.click(screen.getByText('Remove from favorites'))
 
     expect(unlikeMock).toHaveBeenCalledWith(playables)
   })
@@ -267,7 +267,7 @@ describe('playableContextMenu.vue', () => {
     h.visit('/songs')
     await renderComponent()
 
-    expect(screen.queryByText('Remove from Playlist')).toBeNull()
+    expect(screen.queryByText('Remove from playlist')).toBeNull()
   })
 
   it('does not allow edit songs if current user is not admin', async () => {
@@ -286,7 +286,7 @@ describe('playableContextMenu.vue', () => {
     h.actingAsUser()
     const { playables } = await renderComponent()
 
-    await h.user.click(screen.getByText('New Playlist…'))
+    await h.user.click(screen.getByText('New playlist…'))
 
     await assertOpenModal(openModalMock, CreatePlaylistForm, { folder: null, playables })
   })
@@ -294,7 +294,7 @@ describe('playableContextMenu.vue', () => {
   it('makes songs available offline', async () => {
     const { playables } = await renderComponent()
 
-    await h.user.click(screen.getByText('Make Available Offline'))
+    await h.user.click(screen.getByText('Make available offline'))
 
     for (const playable of playables) {
       expect(makeAvailableOfflineMock).toHaveBeenCalledWith(playable)
@@ -305,7 +305,7 @@ describe('playableContextMenu.vue', () => {
     isCachedMock.mockReturnValue(true)
     const { playables } = await renderComponent()
 
-    await h.user.click(screen.getByText('Remove Offline Versions'))
+    await h.user.click(screen.getByText('Remove offline copies'))
 
     for (const playable of playables) {
       expect(removeOfflineCacheMock).toHaveBeenCalledWith(playable)

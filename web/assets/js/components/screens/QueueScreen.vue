@@ -2,7 +2,7 @@
   <ScreenBase>
     <template #header>
       <ScreenHeader :layout="playables.length === 0 ? 'collapsed' : headerLayout">
-        Current Queue
+        Queue
 
         <template #thumbnail>
           <ThumbnailStack :thumbnails />
@@ -39,7 +39,7 @@
 
     <ScreenEmptyState v-else>
       <template #icon>
-        <Icon :icon="faCoffee" />
+        <M3Icon name="coffee" />
       </template>
 
       No songs queued.
@@ -52,7 +52,6 @@
 </template>
 
 <script lang="ts" setup>
-import { faCoffee } from '@fortawesome/free-solid-svg-icons'
 import { computed, nextTick, onMounted, ref, toRef } from 'vue'
 import { until } from '@vueuse/core'
 import { pluralize } from '@/utils/formatters'
@@ -72,6 +71,7 @@ import ScreenHeader from '@/components/ui/ScreenHeader.vue'
 import ScreenEmptyState from '@/components/ui/ScreenEmptyState.vue'
 import ScreenBase from '@/components/screens/ScreenBase.vue'
 import PlayableListSkeleton from '@/components/playable/playable-list/PlayableListSkeleton.vue'
+import M3Icon from '@/components/m3/M3Icon.vue'
 
 const { go, onScreenActivated, url } = useRouter()
 

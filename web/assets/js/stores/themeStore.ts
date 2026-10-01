@@ -11,13 +11,8 @@ export const themeStore = {
     themes,
   }),
 
-  init(theme: Theme | Theme['id'] = 'orange') {
-    if (typeof theme === 'object' && theme.is_custom) {
-      // custom theme from server. Add it to the list of themes.
-      this.state.themes.push(theme)
-    }
-
-    this.setTheme(theme)
+  init() {
+    this.setTheme(this.getCurrentTheme())
 
     // Following the system: follow it when it changes, too.
     window.matchMedia?.(DARK_QUERY).addEventListener?.('change', () => {

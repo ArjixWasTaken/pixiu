@@ -135,9 +135,6 @@ class TestHarness {
               'koel-overflow-fade': {},
               'koel-new-tab': {},
             },
-            components: {
-              Icon: this.stub('Icon'),
-            },
           },
         },
         this.supplyRequiredProvides(options),

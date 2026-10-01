@@ -148,7 +148,7 @@ export const useDraggable = (type: DraggableType) => {
       case 'genre':
         dragged = <Genre>dragged
         data = dragged.id
-        text = dragged.name || 'No Genre'
+        text = dragged.name || 'No genre'
         break
 
       default:

@@ -18,7 +18,7 @@ describe('themeStore', () => {
 
     themeStore.init()
 
-    expect(setThemeMock).toHaveBeenCalledWith('orange')
+    expect(setThemeMock).toHaveBeenCalledWith(themeStore.getDefaultTheme())
   })
 
   it('selects a scheme through data-mode', () => {

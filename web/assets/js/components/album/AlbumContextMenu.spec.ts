@@ -60,7 +60,7 @@ describe('albumContextMenu.vue', () => {
     const playMock = h.mock(playbackService, 'queueAndPlay')
 
     const { album } = await renderComponent()
-    await h.user.click(screen.getByText('Play All'))
+    await h.user.click(screen.getByText('Play all'))
     await h.tick()
 
     expect(fetchMock).toHaveBeenCalledWith(album)
@@ -75,7 +75,7 @@ describe('albumContextMenu.vue', () => {
     const playMock = h.mock(playbackService, 'queueAndPlay')
 
     const { album } = await renderComponent()
-    await h.user.click(screen.getByText('Shuffle All'))
+    await h.user.click(screen.getByText('Shuffle all'))
     await h.tick()
 
     expect(fetchMock).toHaveBeenCalledWith(album)

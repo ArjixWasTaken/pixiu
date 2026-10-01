@@ -3,7 +3,7 @@
     <header class="flex flex-wrap items-center justify-between gap-3">
       <div>
         <h3 class="text-lg font-semibold">Sign in inside the login browser</h3>
-        <p class="text-k-fg-70 max-w-[64ch]">
+        <p class="text-(--schemes-on-surface-variant) max-w-[64ch]">
           A real browser runs on your server. Its screen streams here and your clicks and typing go to it, so Google’s
           normal sign-in works, two-factor included.
         </p>
@@ -14,13 +14,15 @@
       </span>
     </header>
 
-    <div class="overflow-hidden rounded-xl border border-k-fg-10 bg-black">
-      <p class="flex items-center gap-2 px-3 py-1.5 border-b border-k-fg-10 font-mono text-xs text-k-fg-70">
+    <div class="overflow-hidden rounded-xl border border-(--schemes-outline-variant) bg-black">
+      <p
+        class="flex items-center gap-2 px-3 py-1.5 border-b border-(--schemes-outline-variant) font-mono text-xs text-(--schemes-on-surface-variant)"
+      >
         live · {{ status.host ?? (status.open ? 'loading…' : 'closed') }}
       </p>
       <canvas
         ref="canvas"
-        class="block h-auto w-full outline-none focus:ring-2 focus:ring-k-highlight/60 focus:ring-inset"
+        class="block h-auto w-full outline-none focus:ring-2 focus:ring-(--schemes-primary)/60 focus:ring-inset"
         height="800"
         tabindex="0"
         width="1280"
@@ -30,7 +32,7 @@
     <!-- Owns the sign-in fields mirrored into the canvas, so password managers see a login form. -->
     <form id="login-mirror" ref="mirrorForm" action="#" />
 
-    <p class="text-sm text-k-fg-70">
+    <p class="text-sm text-(--schemes-on-surface-variant)">
       <template v-if="mirrors">
         Your password manager can fill the sign-in fields. It sees them on {{ origin }}, so add that address to your
         Google login.
@@ -42,8 +44,8 @@
     </p>
 
     <footer class="flex justify-end gap-2">
-      <Btn variant="ghost" @click.prevent="cancel">Cancel</Btn>
-      <Btn :disabled="!status.logged_in" @click.prevent="finish">Done</Btn>
+      <M3Button variant="text" @click.prevent="cancel">Cancel</M3Button>
+      <M3Button :disabled="!status.logged_in" @click.prevent="finish">Done</M3Button>
     </footer>
   </section>
 </template>
@@ -55,7 +57,7 @@ import { huntingService } from '@/services/huntingService'
 import { startLoginScreen, supportsMirrors } from '@/utils/loginScreen'
 import { useErrorHandler } from '@/composables/useErrorHandler'
 
-import Btn from '@/components/ui/form/Btn.vue'
+import M3Button from '@/components/m3/M3Button.vue'
 
 const emit = defineEmits<{ (e: 'done'): void; (e: 'cancel'): void }>()
 
@@ -132,14 +134,14 @@ onBeforeUnmount(stop)
 @reference '@css/app.pcss';
 
 .pill {
-  @apply flex items-center gap-2 h-9 px-4 rounded-full bg-k-fg-5 text-sm;
+  @apply flex items-center gap-2 h-9 px-4 rounded-full bg-(--schemes-surface-container-high) text-sm;
 
   .dot {
-    @apply size-2.5 rounded-full bg-k-warning animate-pulse;
+    @apply size-2.5 rounded-full bg-(--schemes-tertiary) animate-pulse;
   }
 
   &.signed .dot {
-    @apply bg-k-success animate-none;
+    @apply bg-(--schemes-tertiary) animate-none;
   }
 }
 </style>

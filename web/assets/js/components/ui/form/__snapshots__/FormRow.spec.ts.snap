@@ -1,3 +1,0 @@
-// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
-
-exports[`formRow.vue > renders single column with label and help slots 1`] = `<div class="flex flex-col gap-2"><label class="text-(--schemes-on-surface)"><span class="m3-label-large block mb-1.5 text-(--schemes-on-surface-variant)">Name</span><input></label><small class="m3-body-small text-(--schemes-on-surface-variant) mt-0.5">Enter your name</small></div>`;

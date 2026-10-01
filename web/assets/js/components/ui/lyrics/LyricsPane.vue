@@ -22,7 +22,7 @@
       <a role="button" @click.prevent="showEditSongForm">Click here</a>
       to add lyrics.
     </template>
-    <span v-else>No lyrics available. Are you listening to Bach?</span>
+    <span v-else>This song has no lyrics.</span>
   </p>
 </template>
 

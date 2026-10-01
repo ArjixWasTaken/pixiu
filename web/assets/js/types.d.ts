@@ -285,7 +285,7 @@ interface FavoriteList {
 }
 
 interface RecentlyPlayedList {
-  name: 'Recently Played'
+  name: 'Recently played'
   playables: Playable[]
 }
 
@@ -467,7 +467,6 @@ interface ScreenNames {
   OfflineSongs: true
   'Password.Reset': true
   Playlist: true
-  Profile: true
   Queue: true
   RecentlyPlayed: true
   ResetPassword: true
@@ -507,25 +506,10 @@ interface PlayableListControlsConfig {
   filter: boolean
 }
 
-type ThemeableProperty =
-  | '--color-fg'
-  | '--color-bg'
-  | '--color-highlight'
-  | '--bg-image'
-  | '--bg-position'
-  | '--bg-attachment'
-  | '--bg-size'
-  | '--font-family'
-  | '--font-size'
-
 interface Theme {
   id: string
   name: string
   thumbnail_color: string
-  thumbnail_image?: string
-  selected?: boolean
-  properties?: Partial<Record<ThemeableProperty, string>>
-  is_custom?: boolean
 }
 
 type ViewMode = 'grid' | 'list' | 'table'

@@ -3,7 +3,6 @@ import { screen } from '@testing-library/vue'
 import { createHarness } from '@/__tests__/TestHarness'
 import type { UploadStatus } from '@/services/uploadService'
 import { uploadService } from '@/services/uploadService'
-import Btn from '@/components/ui/form/Btn.vue'
 import Component from './UploadItem.vue'
 
 const mockShowConfirmDialog = vi.fn()
@@ -30,11 +29,6 @@ describe('uploadItem.vue', () => {
     const rendered = h.render(Component, {
       props: {
         file,
-      },
-      global: {
-        stubs: {
-          Btn,
-        },
       },
     })
 

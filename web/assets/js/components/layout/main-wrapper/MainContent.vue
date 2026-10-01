@@ -30,7 +30,6 @@
       <WatchesScreen v-if="screen === 'Watches'" />
       <JobsScreen v-if="screen === 'Jobs'" />
       <OrphansScreen v-if="screen === 'Orphans'" />
-      <ProfileScreen v-if="screen === 'Profile'" />
       <NotFoundScreen v-if="screen === '404'" />
 
       <template v-for="(component, name) in addedScreens" :key="name">
@@ -63,7 +62,6 @@ const GenreScreen = defineAsyncComponent(() => import('@/components/screens/Genr
 const HomeScreen = defineAsyncComponent(() => import('@/components/screens/HomeScreen.vue'))
 const NotFoundScreen = defineAsyncComponent(() => import('@/components/screens/NotFoundScreen.vue'))
 const PlaylistScreen = defineAsyncComponent(() => import('@/components/screens/PlaylistScreen.vue'))
-const ProfileScreen = defineAsyncComponent(() => import('@/components/screens/ProfileScreen.vue'))
 // QueueScreen and OfflineSongsScreen must NOT be lazy-loaded, so they work offline.
 import QueueScreen from '@/components/screens/QueueScreen.vue'
 import OfflineSongsScreen from '@/components/screens/OfflineSongsScreen.vue'

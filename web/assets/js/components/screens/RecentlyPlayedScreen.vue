@@ -2,7 +2,7 @@
   <ScreenBase>
     <template #header>
       <ScreenHeader :layout="playables.length === 0 ? 'collapsed' : headerLayout">
-        Recently Played
+        Recently played
 
         <template #thumbnail>
           <ThumbnailStack :thumbnails="thumbnails" />
@@ -37,7 +37,7 @@
 
     <ScreenEmptyState v-else>
       <template #icon>
-        <Icon :icon="faClock" />
+        <M3Icon name="schedule" />
       </template>
       Nothing played recently.
       <span class="secondary block">Start playing to populate this playlist.</span>
@@ -46,7 +46,6 @@
 </template>
 
 <script lang="ts" setup>
-import { faClock } from '@fortawesome/free-regular-svg-icons'
 import { ref, toRef } from 'vue'
 import { pluralize } from '@/utils/formatters'
 import { recentlyPlayedStore } from '@/stores/recentlyPlayedStore'
@@ -58,6 +57,7 @@ import ScreenHeader from '@/components/ui/ScreenHeader.vue'
 import ScreenEmptyState from '@/components/ui/ScreenEmptyState.vue'
 import ScreenBase from '@/components/screens/ScreenBase.vue'
 import PlayableListSkeleton from '@/components/playable/playable-list/PlayableListSkeleton.vue'
+import M3Icon from '@/components/m3/M3Icon.vue'
 
 const recentlyPlayedSongs = toRef(recentlyPlayedStore.state, 'playables')
 

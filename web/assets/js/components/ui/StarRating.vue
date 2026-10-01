@@ -23,7 +23,7 @@
         class="sr-only"
         @change="onChange(star)"
       />
-      <Icon :icon="(hover || currentRating) >= star ? faStar : faEmptyStar" :size="size" />
+      <M3Icon :fill="(hover || currentRating) >= star" :size="size === 'xs' ? 16 : 20" name="star" />
       <span class="sr-only">Rate {{ star }} of 5</span>
     </label>
   </span>
@@ -31,12 +31,12 @@
 
 <script lang="ts" setup>
 import type { Reactive } from 'vue'
-import { faStar } from '@fortawesome/free-solid-svg-icons'
-import { faStar as faEmptyStar } from '@fortawesome/free-regular-svg-icons'
 import { computed, ref, useId } from 'vue'
 import { albumStore } from '@/stores/albumStore'
 import { artistStore } from '@/stores/artistStore'
 import { playableStore } from '@/stores/playableStore'
+
+import M3Icon from '@/components/m3/M3Icon.vue'
 
 type Rateable = Song | Album | Artist
 

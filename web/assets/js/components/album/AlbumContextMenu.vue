@@ -1,9 +1,9 @@
 <template>
   <ul role="none">
-    <MenuItem @click="play">Play All</MenuItem>
-    <MenuItem @click="shuffle">Shuffle All</MenuItem>
+    <MenuItem @click="play">Play all</MenuItem>
+    <MenuItem @click="shuffle">Shuffle all</MenuItem>
     <Separator />
-    <MenuItem @click="toggleFavorite">{{ album.favorite ? 'Undo Favorite' : 'Favorite' }}</MenuItem>
+    <MenuItem @click="toggleFavorite">{{ album.favorite ? 'Remove from favorites' : 'Add to favorites' }}</MenuItem>
     <Separator />
     <li
       tabindex="-1"
@@ -22,7 +22,7 @@
     </template>
     <template v-if="canToggleOffline">
       <Separator />
-      <MenuItem @click="toggleOffline">{{ allCached ? 'Remove Offline Versions' : 'Make Available Offline' }}</MenuItem>
+      <MenuItem @click="toggleOffline">{{ allCached ? 'Remove offline copies' : 'Make available offline' }}</MenuItem>
     </template>
     <template v-if="musicBrainzUrl">
       <Separator />

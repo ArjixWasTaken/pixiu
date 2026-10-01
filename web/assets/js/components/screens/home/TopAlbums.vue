@@ -1,6 +1,6 @@
 <template>
   <HomeScreenBlock>
-    <template #header>Top Albums</template>
+    <template #header>Top albums</template>
     <Carousel>
       <template v-if="loading">
         <AlbumCardSkeleton v-for="i in 6" :key="i" />
@@ -8,7 +8,7 @@
       <template v-else-if="albums.length">
         <AlbumCard v-for="album in albums" :key="album.id" :album />
       </template>
-      <p v-else class="text-k-fg-50">No albums found.</p>
+      <p v-else class="text-(--schemes-on-surface-variant)">No albums found.</p>
     </Carousel>
   </HomeScreenBlock>
 </template>

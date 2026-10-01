@@ -51,7 +51,7 @@ const { list } = toRefs(props)
 
 const isPlaylist = (list: PlaylistLike): list is Playlist => 'id' in list
 const isFavoriteList = (list: PlaylistLike): list is FavoriteList => list.name === 'Favorites'
-const isRecentlyPlayedList = (list: PlaylistLike): list is RecentlyPlayedList => list.name === 'Recently Played'
+const isRecentlyPlayedList = (list: PlaylistLike): list is RecentlyPlayedList => list.name === 'Recently played'
 
 const active = computed(() => {
   return (

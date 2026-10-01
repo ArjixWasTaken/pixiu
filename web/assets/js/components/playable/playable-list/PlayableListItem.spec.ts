@@ -78,10 +78,10 @@ describe('playableListItem.vue', () => {
 
     screen.getByText('Test Song')
     screen.getByText('Test Artist · Test Album')
-    screen.getByRole('button', { name: 'Undo Favorite' })
+    screen.getByRole('button', { name: 'Remove from favorites' })
   })
 
-  it('says when a song was played on Recently Played', () => {
+  it('says when a song was played on Recently played', () => {
     const song = h.factory('song').make({
       album_name: 'Test Album',
       artist_name: 'Test Artist',
@@ -128,7 +128,7 @@ describe('playableListItem.vue', () => {
     const toggleFavoriteMock = h.mock(playableStore, 'toggleFavorite')
     const { row } = renderComponent()
 
-    await h.user.click(screen.getByRole('button', { name: 'Favorite' }))
+    await h.user.click(screen.getByRole('button', { name: 'Add to favorites' }))
 
     expect(toggleFavoriteMock).toHaveBeenCalledWith(row.playable)
   })

@@ -98,7 +98,7 @@ const showAddToButton = computed(() => Boolean(selectedPlayables.value.length))
 
 // When the AddTo trigger button disappears (no items selected), the Popover
 // is unmounted via v-if without firing @toggle(false), so we reset the menu
-// open-state flag explicitly. Otherwise the trigger's "Cancel" / "Add To…"
+// open-state flag explicitly. Otherwise the trigger's "Cancel" / "Add to…"
 // label could be stuck on "Cancel" if items are reselected later.
 watch(showAddToButton, visible => {
   if (!visible) {

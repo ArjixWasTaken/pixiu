@@ -8,7 +8,7 @@ describe('themeCard.vue', () => {
   const h = createHarness()
 
   it('sets the scheme when clicked', async () => {
-    const theme = h.factory('theme').make({ name: 'Sample' })
+    const theme: Theme = { id: 'red', name: 'Sample', thumbnail_color: 'rgb(255,167,155)' }
     const setThemeMock = h.mock(themeStore, 'setTheme')
 
     h.render(Component, { props: { theme } })

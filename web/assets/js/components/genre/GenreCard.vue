@@ -3,10 +3,10 @@
     <a
       :class="`tone-${tone % 4}`"
       :href="url('genres.show', { id: genre.id })"
-      :title="genre.name || 'No Genre'"
+      :title="genre.name || 'No genre'"
       class="genre-card m3-state"
     >
-      <span :class="genre.name || 'italic'" class="m3-title-large truncate name">{{ genre.name || 'No Genre' }}</span>
+      <span :class="genre.name || 'italic'" class="m3-title-large truncate name">{{ genre.name || 'No genre' }}</span>
       <span class="m3-body-medium count">{{ pluralize(genre.song_count, 'song') }}</span>
     </a>
   </li>

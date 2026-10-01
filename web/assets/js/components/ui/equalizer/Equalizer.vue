@@ -4,7 +4,7 @@
       <h1 class="m3-headline-small">Equalizer</h1>
       <label class="flex items-center gap-2 m3-label-large">
         {{ enabled ? 'On' : 'Off' }}
-        <CheckBox v-model="enabled" aria-label="Equalizer on" name="equalizer_enabled" />
+        <M3Switch v-model="enabled" aria-label="Equalizer on" name="equalizer_enabled" />
       </label>
     </div>
 
@@ -27,8 +27,8 @@
       />
     </main>
 
-    <footer class="border-t-k-fg-5">
-      <Btn @click.prevent="close">Close</Btn>
+    <footer class="border-t-(--schemes-outline-variant)">
+      <M3Button @click.prevent="close">Close</M3Button>
     </footer>
   </div>
 </template>
@@ -41,8 +41,8 @@ import { equalizerPresets as builtInPresets } from '@/config/audio'
 import { useDialogBox } from '@/composables/useDialogBox'
 import { preferenceStore } from '@/stores/preferenceStore'
 
-import Btn from '@/components/ui/form/Btn.vue'
-import CheckBox from '@/components/ui/form/CheckBox.vue'
+import M3Button from '@/components/m3/M3Button.vue'
+import M3Switch from '@/components/m3/M3Switch.vue'
 import EqualizerBands from '@/components/ui/equalizer/EqualizerBands.vue'
 import EqualizerHeader from '@/components/ui/equalizer/EqualizerHeader.vue'
 

@@ -8,7 +8,7 @@
       @drop="onDrop"
     >
       <div class="pointer-events-none flex flex-col items-center justify-center gap-4">
-        <Icon :icon="faUpload" size="6x" />
+        <M3Icon name="upload" :size="96" />
         <h3 class="text-3xl font-extralight">Drop to upload</h3>
       </div>
     </div>
@@ -16,9 +16,9 @@
 </template>
 
 <script lang="ts" setup>
-import { faUpload } from '@fortawesome/free-solid-svg-icons'
 import { OnClickOutside } from '@vueuse/components'
 import { useUpload } from '@/composables/useUpload'
+import M3Icon from '@/components/m3/M3Icon.vue'
 
 const emit = defineEmits<{ (e: 'close'): void }>()
 

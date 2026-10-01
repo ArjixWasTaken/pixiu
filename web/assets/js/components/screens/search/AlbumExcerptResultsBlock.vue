@@ -9,7 +9,7 @@
       <template v-else-if="albums.length">
         <AlbumCard v-for="album in albums" :key="album.id" :album />
       </template>
-      <p v-else class="text-k-fg-50">None found.</p>
+      <p v-else class="text-(--schemes-on-surface-variant)">None found.</p>
     </Carousel>
   </SearchResultBlock>
 </template>

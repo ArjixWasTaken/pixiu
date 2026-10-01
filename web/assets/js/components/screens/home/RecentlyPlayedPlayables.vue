@@ -1,6 +1,6 @@
 <template>
   <HomeScreenBlock>
-    <template #header>Recently Played</template>
+    <template #header>Recently played</template>
     <template #actions>
       <ViewAllRecentlyPlayedPlayablesButton v-if="playables.length" />
     </template>

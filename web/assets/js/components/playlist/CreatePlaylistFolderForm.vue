@@ -1,18 +1,16 @@
 <template>
   <form class="md:w-[420px] min-w-full" @submit.prevent="handleSubmit" @keydown.esc="maybeClose">
     <header>
-      <h1>New Playlist Folder</h1>
+      <h1>New playlist folder</h1>
     </header>
 
-    <main>
-      <FormRow>
-        <TextInput v-model="data.name" v-koel-focus name="name" placeholder="Folder name" required />
-      </FormRow>
+    <main class="pt-2">
+      <M3TextField v-model="data.name" v-koel-focus label="Name" name="name" required />
     </main>
 
     <footer>
-      <Btn type="submit">Save</Btn>
-      <Btn variant="ghost" @click.prevent="maybeClose">Cancel</Btn>
+      <M3Button variant="text" @click.prevent="maybeClose">Cancel</M3Button>
+      <M3Button type="submit">Save</M3Button>
     </footer>
   </form>
 </template>
@@ -23,9 +21,8 @@ import { useDialogBox } from '@/composables/useDialogBox'
 import { useMessageToaster } from '@/composables/useMessageToaster'
 import { useForm } from '@/composables/useForm'
 
-import Btn from '@/components/ui/form/Btn.vue'
-import TextInput from '@/components/ui/form/TextInput.vue'
-import FormRow from '@/components/ui/form/FormRow.vue'
+import M3Button from '@/components/m3/M3Button.vue'
+import M3TextField from '@/components/m3/M3TextField.vue'
 
 const emit = defineEmits<{ (e: 'close'): void }>()
 const props = withDefaults(defineProps<{ parent?: PlaylistFolder | null }>(), {

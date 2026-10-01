@@ -1,5 +1,5 @@
 <template>
-  <article class="flex items-stretch min-h-[32px] bg-k-fg-5 rounded-lg overflow-hidden">
+  <article class="flex items-stretch min-h-[32px] bg-(--schemes-surface-container-high) rounded-lg overflow-hidden">
     <span
       class="self-center min-w-0 flex-1 overflow-hidden whitespace-nowrap px-4 [mask-image:linear-gradient(to_right,black_calc(100%-3rem),transparent)]"
     >
@@ -8,26 +8,21 @@
     <time
       :datetime="upload.created_at"
       :title="uploadedAt.toLocaleString()"
-      class="self-center shrink-0 px-4 text-k-fg-50"
+      class="self-center shrink-0 px-4 text-(--schemes-on-surface-variant)"
     >
       Uploaded {{ uploadedAgo }}
     </time>
-    <Btn class="h-full px-4!" icon-only title="Keep" unrounded variant="success" @click="keep">
-      <Icon :icon="faCheck" />
-    </Btn>
-    <Btn class="h-full px-4!" icon-only title="Discard" unrounded variant="destructive" @click="confirmDiscard">
-      <Icon :icon="faTrashCan" />
-    </Btn>
+    <M3IconButton icon="check" label="Keep" @click="keep" />
+    <M3IconButton icon="delete" label="Discard" @click="confirmDiscard" />
   </article>
 </template>
 
 <script setup lang="ts">
-import { faCheck, faTrashCan } from '@fortawesome/free-solid-svg-icons'
 import { useTimeAgo } from '@vueuse/core'
 import { useDialogBox } from '@/composables/useDialogBox'
 import { uploadService } from '@/services/uploadService'
 
-import Btn from '@/components/ui/form/Btn.vue'
+import M3IconButton from '@/components/m3/M3IconButton.vue'
 
 import type { DuplicateUpload } from '@/services/uploadService'
 

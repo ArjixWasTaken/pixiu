@@ -66,7 +66,7 @@ describe('editSongForm.vue', () => {
     await h.type(screen.getByTestId('year-input'), '1971')
     await h.type(screen.getByTestId('lyrics-input'), "I'm gonna make him an offer he can't refuse")
 
-    await h.user.click(screen.getByRole('button', { name: 'Update' }))
+    await h.user.click(screen.getByRole('button', { name: 'Save' }))
 
     expect(updateMock).toHaveBeenCalledWith(songs, {
       title: 'Highway to Hell',
@@ -113,7 +113,7 @@ describe('editSongForm.vue', () => {
     await h.type(screen.getByTestId('year-input'), '1990')
     await h.type(screen.getByTestId('genre-input'), 'Pop')
 
-    await h.user.click(screen.getByRole('button', { name: 'Update' }))
+    await h.user.click(screen.getByRole('button', { name: 'Save' }))
 
     expect(updateMock).toHaveBeenCalledWith(songs, {
       album_name: 'Back in Black',

@@ -50,13 +50,13 @@
         <template #subMenuItems>
           <MenuItem :title="playables[0].album_name" @click="viewAlbum(playables[0])">
             <template #icon>
-              <Icon :icon="faCompactDisc" fixed-width />
+              <M3Icon name="album" />
             </template>
             Album: {{ playables[0].album_name }}
           </MenuItem>
           <MenuItem :title="playables[0].artist_name" @click="viewArtist(playables[0])">
             <template #icon>
-              <MicVocalIcon :size="16" class="inline-block" />
+              <M3Icon name="artist" :size="16" class="inline-block" />
             </template>
             Artist: {{ playables[0].artist_name }}
           </MenuItem>
@@ -64,12 +64,12 @@
       </MenuItem>
     </template>
     <MenuItem>
-      Add To
+      Add to
       <template #subMenuItems>
         <template v-if="queue.length">
-          <MenuItem v-if="currentSong" @click="queueAfterCurrent">After Current</MenuItem>
-          <MenuItem @click="queueToBottom">Bottom of Queue</MenuItem>
-          <MenuItem @click="queueToTop">Top of Queue</MenuItem>
+          <MenuItem v-if="currentSong" @click="queueAfterCurrent">After current song</MenuItem>
+          <MenuItem @click="queueToBottom">Bottom of queue</MenuItem>
+          <MenuItem @click="queueToTop">Top of queue</MenuItem>
         </template>
         <MenuItem v-else @click="queueToBottom">Queue</MenuItem>
         <template v-if="!isFavoritesScreen && !(onlyOneSelected && playables[0].favorite)">
@@ -85,7 +85,7 @@
           </ul>
         </template>
         <Separator />
-        <MenuItem @click="addToNewPlaylist">New Playlist…</MenuItem>
+        <MenuItem @click="addToNewPlaylist">New playlist…</MenuItem>
       </template>
     </MenuItem>
 
@@ -103,24 +103,24 @@
 
     <template v-if="isQueueScreen">
       <Separator />
-      <MenuItem @click="removeFromQueue">Remove from Queue</MenuItem>
+      <MenuItem @click="removeFromQueue">Remove from queue</MenuItem>
       <Separator />
     </template>
 
     <template v-if="isFavoritesScreen">
       <Separator />
-      <MenuItem @click="removeFromFavorites">Remove from Favorites</MenuItem>
+      <MenuItem @click="removeFromFavorites">Remove from favorites</MenuItem>
     </template>
 
-    <MenuItem v-if="onlyOneSelected" @click="openSongInfo">Song Info…</MenuItem>
+    <MenuItem v-if="onlyOneSelected" @click="openSongInfo">Song info…</MenuItem>
     <MenuItem v-if="downloadable" @click="download">Download</MenuItem>
     <MenuItem v-if="canToggleOffline" @click="toggleOffline">
-      {{ allCached ? 'Remove Offline Versions' : 'Make Available Offline' }}
+      {{ allCached ? 'Remove offline copies' : 'Make available offline' }}
     </MenuItem>
 
     <template v-if="canBeRemovedFromPlaylist">
       <Separator />
-      <MenuItem @click="removePlayablesFromPlaylist">Remove from Playlist</MenuItem>
+      <MenuItem @click="removePlayablesFromPlaylist">Remove from playlist</MenuItem>
     </template>
 
     <template v-if="mirroredWatch">
@@ -136,8 +136,6 @@
 </template>
 
 <script lang="ts" setup>
-import { faCompactDisc } from '@fortawesome/free-solid-svg-icons'
-import { MicVocalIcon } from 'lucide-vue-next'
 import { computed, ref, toRef, toRefs } from 'vue'
 import { defineAsyncComponent } from '@/utils/helpers'
 import { pluralize, secondsToHis } from '@/utils/formatters'

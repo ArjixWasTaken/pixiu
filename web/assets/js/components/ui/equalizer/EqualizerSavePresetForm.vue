@@ -1,15 +1,8 @@
 <template>
   <form class="flex gap-2 items-center w-full" @submit.prevent="handleSubmit" @keydown.esc="maybeCancel">
-    <TextInput
-      v-model="data.name"
-      v-koel-focus
-      name="preset-name"
-      placeholder="Preset name"
-      title="Preset name"
-      required
-    />
-    <Btn type="submit" variant="ghost">Save</Btn>
-    <Btn type="button" variant="ghost" @click.prevent="maybeCancel">Cancel</Btn>
+    <M3TextField v-model="data.name" v-koel-focus class="flex-1" label="Preset name" name="preset-name" required />
+    <M3Button type="button" variant="text" @click.prevent="maybeCancel">Cancel</M3Button>
+    <M3Button type="submit">Save</M3Button>
   </form>
 </template>
 
@@ -17,8 +10,8 @@
 import { useDialogBox } from '@/composables/useDialogBox'
 import { useForm } from '@/composables/useForm'
 
-import Btn from '@/components/ui/form/Btn.vue'
-import TextInput from '@/components/ui/form/TextInput.vue'
+import M3Button from '@/components/m3/M3Button.vue'
+import M3TextField from '@/components/m3/M3TextField.vue'
 
 const emit = defineEmits<{
   (e: 'submit', name: string): void

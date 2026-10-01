@@ -1,73 +1,63 @@
 <template>
   <div class="space-y-4">
-    <FormRow>
-      <label class="pref-row">
-        <span>Playing a song plays the rest of its playlist, album, artist or genre</span>
-        <CheckBox v-model="preferences.continuous_playback" name="continuous_playback" />
-      </label>
-    </FormRow>
-    <FormRow v-if="onMobile">
-      <label class="pref-row">
-        <span>Show "Now Playing" notification</span>
-        <CheckBox v-model="preferences.show_now_playing_notification" name="notify" />
-      </label>
-    </FormRow>
-    <FormRow v-if="!onMobile">
-      <label class="pref-row">
-        <span>Confirm before closing {{ appName }}</span>
-        <CheckBox v-model="preferences.confirm_before_closing" name="confirm_closing" />
-      </label>
-    </FormRow>
-    <FormRow v-if="showTranscodingOption">
-      <div class="pref-row">
-        <span>
-          Convert and play media at
-          <select
-            v-model="preferences.transcode_quality"
-            :disabled="!preferences.transcode_on_mobile"
-            class="appearance-auto rounded-sm"
-          >
-            <option v-for="quality in [64, 96, 128, 192, 256, 320]" :key="quality" :value="quality">
-              {{ quality }}
-            </option>
-          </select>
-          kbps on mobile
-        </span>
-        <CheckBox
-          v-model="preferences.transcode_on_mobile"
-          data-testid="transcode_on_mobile"
-          name="transcode_on_mobile"
-        />
-      </div>
-    </FormRow>
-    <FormRow>
-      <div class="pref-row">
-        <span class="flex-1">
-          <span class="flex items-center gap-3">
-            <label id="crossfade-label" for="crossfade-slider" class="shrink-0">Crossfade songs</label>
-            <input
-              id="crossfade-slider"
-              v-model.number="preferences.crossfade_duration"
-              type="range"
-              min="0"
-              max="15"
-              step="1"
-              data-testid="crossfade-slider"
-              class="crossfade-slider flex-1 min-w-32 max-w-96"
-            />
-            <span class="text-k-fg-50 shrink-0">
-              {{ crossfadeEnabled ? `${preferences.crossfade_duration}s` : 'Off' }}
-            </span>
+    <label class="pref-row">
+      <span>Playing a song plays the rest of its playlist, album, artist or genre</span>
+      <M3Switch v-model="preferences.continuous_playback" name="continuous_playback" />
+    </label>
+    <label v-if="onMobile" class="pref-row">
+      <span>Show a notification when a song starts</span>
+      <M3Switch v-model="preferences.show_now_playing_notification" name="notify" />
+    </label>
+    <label v-if="!onMobile" class="pref-row">
+      <span>Confirm before closing {{ appName }}</span>
+      <M3Switch v-model="preferences.confirm_before_closing" name="confirm_closing" />
+    </label>
+    <div v-if="showTranscodingOption" class="pref-row">
+      <span>
+        Convert and play media at
+        <select
+          v-model="preferences.transcode_quality"
+          :disabled="!preferences.transcode_on_mobile"
+          class="appearance-auto rounded-sm"
+        >
+          <option v-for="quality in [64, 96, 128, 192, 256, 320]" :key="quality" :value="quality">
+            {{ quality }}
+          </option>
+        </select>
+        kbps on mobile
+      </span>
+      <M3Switch
+        v-model="preferences.transcode_on_mobile"
+        data-testid="transcode_on_mobile"
+        name="transcode_on_mobile"
+      />
+    </div>
+    <div class="pref-row">
+      <span class="flex-1">
+        <span class="flex items-center gap-3">
+          <label id="crossfade-label" for="crossfade-slider" class="shrink-0">Crossfade songs</label>
+          <input
+            id="crossfade-slider"
+            v-model.number="preferences.crossfade_duration"
+            type="range"
+            min="0"
+            max="15"
+            step="1"
+            data-testid="crossfade-slider"
+            class="crossfade-slider flex-1 min-w-32 max-w-96"
+          />
+          <span class="text-(--schemes-on-surface-variant) shrink-0">
+            {{ crossfadeEnabled ? `${preferences.crossfade_duration}s` : 'Off' }}
           </span>
         </span>
-        <CheckBox
-          :model-value="crossfadeEnabled"
-          name="crossfade"
-          data-testid="crossfade-toggle"
-          @update:model-value="toggleCrossfade"
-        />
-      </div>
-    </FormRow>
+      </span>
+      <M3Switch
+        :model-value="crossfadeEnabled"
+        name="crossfade"
+        data-testid="crossfade-toggle"
+        @update:model-value="toggleCrossfade"
+      />
+    </div>
   </div>
 </template>
 
@@ -78,8 +68,7 @@ import { commonStore } from '@/stores/commonStore'
 import { preferenceStore as preferences } from '@/stores/preferenceStore'
 import { useBranding } from '@/composables/useBranding'
 
-import CheckBox from '@/components/ui/form/CheckBox.vue'
-import FormRow from '@/components/ui/form/FormRow.vue'
+import M3Switch from '@/components/m3/M3Switch.vue'
 
 const onMobile = isMobile.any
 const { name: appName } = useBranding()
@@ -108,7 +97,7 @@ const toggleCrossfade = (enabled: boolean | undefined) => {
   height: 4px;
   border-radius: 2px;
   outline: none;
-  @apply bg-k-fg-10;
+  @apply bg-(--schemes-surface-container-highest);
   cursor: pointer;
 }
 
@@ -119,7 +108,7 @@ const toggleCrossfade = (enabled: boolean | undefined) => {
   border-radius: 50%;
   border: 0;
   cursor: pointer;
-  @apply bg-k-fg;
+  @apply bg-(--schemes-on-surface);
 }
 
 .crossfade-slider::-moz-range-thumb {
@@ -128,6 +117,6 @@ const toggleCrossfade = (enabled: boolean | undefined) => {
   border-radius: 50%;
   border: 0;
   cursor: pointer;
-  @apply bg-k-fg;
+  @apply bg-(--schemes-on-surface);
 }
 </style>

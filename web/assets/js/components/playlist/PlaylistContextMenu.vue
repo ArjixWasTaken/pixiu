@@ -2,18 +2,18 @@
   <ul role="none">
     <MenuItem @click="play">Play</MenuItem>
     <MenuItem @click="shuffle">Shuffle</MenuItem>
-    <MenuItem @click="addToQueue">Add to Queue</MenuItem>
+    <MenuItem @click="addToQueue">Add to queue</MenuItem>
     <template v-if="allowDownload">
       <Separator />
       <MenuItem @click="download">Download</MenuItem>
     </template>
     <template v-if="canToggleOffline">
       <Separator />
-      <MenuItem @click="toggleOffline">{{ allCached ? 'Remove Offline Versions' : 'Make Available Offline' }}</MenuItem>
+      <MenuItem @click="toggleOffline">{{ allCached ? 'Remove offline copies' : 'Make available offline' }}</MenuItem>
     </template>
     <template v-if="canMoveOutOfFolder">
       <Separator />
-      <MenuItem @click="moveOutOfFolder">Move Out of Folder</MenuItem>
+      <MenuItem @click="moveOutOfFolder">Move out of folder</MenuItem>
     </template>
     <template v-if="canEditPlaylist || canDeletePlaylist">
       <Separator />

@@ -187,7 +187,7 @@ describe('playlistContextMenu.vue', () => {
     const toastMock = h.mock(MessageToasterStub.value, 'success')
     const { playlist } = await renderComponent(h.factory('playlist').make())
 
-    await h.user.click(screen.getByText('Add to Queue'))
+    await h.user.click(screen.getByText('Add to queue'))
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(playlist)

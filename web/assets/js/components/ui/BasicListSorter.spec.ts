@@ -41,17 +41,17 @@ describe('basicListSorter', () => {
 
   it('renders all sort options in dropdown', async () => {
     renderComponent()
-    expect(screen.queryByTitle('Sort by Name')).toBeNull()
+    expect(screen.queryByTitle('Sort by name')).toBeNull()
     await open()
-    screen.getByTitle('Sort by Name')
-    screen.getByTitle('Sort by Date')
-    screen.getByTitle('Sort by Size')
+    screen.getByTitle('Sort by name')
+    screen.getByTitle('Sort by date')
+    screen.getByTitle('Sort by size')
   })
 
   it('marks the current field as active', async () => {
     renderComponent('date', 'asc')
     await open()
-    const dateItem = screen.getByTitle('Sort by Date')
+    const dateItem = screen.getByTitle('Sort by date')
     expect(dateItem.classList.contains('active')).toBe(true)
   })
 
@@ -59,7 +59,7 @@ describe('basicListSorter', () => {
     const { emitted } = renderComponent('name', 'asc')
 
     await open()
-    await h.user.click(screen.getByTitle('Sort by Name'))
+    await h.user.click(screen.getByTitle('Sort by name'))
 
     expect(emitted().sort).toBeTruthy()
     expect(emitted().sort[0]).toEqual(['name', 'desc'])
@@ -69,7 +69,7 @@ describe('basicListSorter', () => {
     const { emitted } = renderComponent('name', 'asc')
 
     await open()
-    await h.user.click(screen.getByTitle('Sort by Date'))
+    await h.user.click(screen.getByTitle('Sort by date'))
 
     expect(emitted().sort).toBeTruthy()
     expect(emitted().sort[0]).toEqual(['date', 'asc'])
@@ -78,6 +78,6 @@ describe('basicListSorter', () => {
   it('includes sort field in button title', () => {
     renderComponent('size', 'desc')
     const button = screen.getByRole('button')
-    expect(button.getAttribute('title')).toBe('Sorting by Size, descending')
+    expect(button.getAttribute('title')).toBe('Sorting by size, descending')
   })
 })

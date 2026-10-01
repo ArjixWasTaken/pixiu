@@ -12,7 +12,7 @@ describe('createPlaylistFolderForm.vue', () => {
 
     h.render(Component)
 
-    await h.type(screen.getByPlaceholderText('Folder name'), 'My folder')
+    await h.type(screen.getByRole('textbox', { name: 'Name' }), 'My folder')
     await h.user.click(screen.getByRole('button', { name: 'Save' }))
 
     expect(storeMock).toHaveBeenCalledWith('My folder')
@@ -26,7 +26,7 @@ describe('createPlaylistFolderForm.vue', () => {
       props: { parent },
     })
 
-    await h.type(screen.getByPlaceholderText('Folder name'), 'Child folder')
+    await h.type(screen.getByRole('textbox', { name: 'Name' }), 'Child folder')
     await h.user.click(screen.getByRole('button', { name: 'Save' }))
 
     expect(storeMock).toHaveBeenCalledWith('Child folder', parent)

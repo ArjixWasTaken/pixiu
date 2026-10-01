@@ -103,9 +103,13 @@ export const routes = [
     screen: 'Settings',
   },
   {
+    // Preferences live under Settings now.
     name: 'profile',
     path: '/profile',
-    screen: 'Profile',
+    screen: 'Settings',
+    meta: {
+      redirect: () => '/settings?tab=preferences',
+    },
   },
   {
     name: 'albums.show',

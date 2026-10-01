@@ -96,8 +96,8 @@ describe('homeScreen.vue', () => {
     const [, props] = openModalSpy.mock.calls[0] as [unknown, { blocks: { id: string; label: string }[] }]
     expect(props.blocks).toEqual(
       expect.arrayContaining([
-        { id: 'recently-played-songs', label: 'Recently Played' },
-        { id: 'random-artists', label: 'Random Artists' },
+        { id: 'recently-played-songs', label: 'Recently played' },
+        { id: 'random-artists', label: 'Random artists' },
       ]),
     )
   })

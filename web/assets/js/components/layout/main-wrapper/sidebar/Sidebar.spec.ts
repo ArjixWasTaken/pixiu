@@ -5,7 +5,7 @@ import { eventBus } from '@/utils/eventBus'
 import { setViewport } from '@/composables/useViewport'
 import Component from './Sidebar.vue'
 
-const standardItems = ['Home', 'All songs', 'Albums', 'Artists', 'Genres', 'Favorites', 'Recently Played']
+const standardItems = ['Home', 'All songs', 'Albums', 'Artists', 'Genres', 'Favorites', 'Recently played']
 
 describe('sidebar.vue on desktop', () => {
   const h = createHarness({

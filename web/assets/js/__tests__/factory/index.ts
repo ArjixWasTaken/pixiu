@@ -17,7 +17,6 @@ declare module 'factoria' {
       'smart-playlist-rule': SmartPlaylistRule
       'smart-playlist-rule-group': SmartPlaylistRuleGroup
       song: Song
-      theme: Theme
       user: User
     }
   }

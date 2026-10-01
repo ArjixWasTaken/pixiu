@@ -20,7 +20,7 @@ const emit = defineEmits<{ (e: 'sort', field: GenreListSortField, order: SortOrd
 
 const items: { label: string; field: GenreListSortField }[] = [
   { label: 'Name', field: 'name' },
-  { label: 'Song Count', field: 'song_count' },
+  { label: 'Song count', field: 'song_count' },
 ]
 
 const sort = (field: GenreListSortField, order: SortOrder) => emit('sort', field, order)

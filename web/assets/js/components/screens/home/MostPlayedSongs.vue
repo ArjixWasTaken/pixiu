@@ -1,6 +1,6 @@
 <template>
   <HomeScreenBlock>
-    <template #header>Most Played</template>
+    <template #header>Most played</template>
     <PlayableCardGridSkeleton v-if="loading" class="-mx-6" role="status" aria-busy="true" aria-label="Loading" />
     <template v-else>
       <PlayableCardGrid v-if="playables.length" class="-mx-6" :playables />

@@ -7,7 +7,7 @@
     @click="play"
   >
     <span class="flex-1">{{ track.title }}</span>
-    <span class="w-14 text-right text-k-fg-50">{{ fmtLength }}</span>
+    <span class="w-14 text-right text-(--schemes-on-surface-variant)">{{ fmtLength }}</span>
   </div>
 </template>
 
@@ -41,15 +41,15 @@ const play = () => matchedSong.value && playback().play(matchedSong.value)
   &:focus,
   &.active {
     span.title {
-      @apply text-k-highlight;
+      @apply text-(--schemes-primary);
     }
   }
 
   &.available {
-    @apply cursor-pointer text-k-fg;
+    @apply cursor-pointer text-(--schemes-on-surface);
 
     &:hover {
-      @apply text-k-highlight;
+      @apply text-(--schemes-primary);
     }
   }
 }

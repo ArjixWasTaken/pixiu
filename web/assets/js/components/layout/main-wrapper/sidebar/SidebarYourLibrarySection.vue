@@ -21,7 +21,7 @@
         <template #icon>
           <M3Icon name="cloud_download" />
         </template>
-        Available Offline
+        Available offline
       </SidebarItem>
     </ul>
   </SidebarSection>

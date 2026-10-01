@@ -2,7 +2,7 @@
   <form class="md:w-[560px] w-full" @submit.prevent="handleSubmit" @keydown.esc="maybeClose">
     <header>
       <h1>
-        New Playlist
+        New playlist
         <span v-if="playables.length" data-testid="from-playables">from {{ pluralize(playables, 'song') }}</span>
       </h1>
     </header>
