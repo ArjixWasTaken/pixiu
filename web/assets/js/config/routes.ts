@@ -108,7 +108,7 @@ export const routes = [
     path: '/profile',
     screen: 'Settings',
     meta: {
-      redirect: () => '/settings?tab=preferences',
+      redirect: () => '/settings#preferences',
     },
   },
   {

@@ -534,7 +534,7 @@ async fn linked_accounts_sign_in() {
 
     // Linking.
     let back = server.link(&alice, "alice-at-sso").await;
-    assert_eq!(back.location, "/settings?tab=account&linked=1");
+    assert_eq!(back.location, "/settings?linked=1#account");
     let (_, links) = server
         .call(Some(&alice), Method::GET, "/api/me/identities", None)
         .await;
@@ -719,7 +719,7 @@ async fn accounts_there_link_to_one_account_here() {
 
     assert_eq!(
         server.link(&bob, "alice-at-sso").await.location,
-        "/settings?tab=account&link_error=taken"
+        "/settings?link_error=taken#account"
     );
     let (_, links) = server
         .call(Some(&bob), Method::GET, "/api/me/identities", None)
@@ -735,7 +735,7 @@ async fn accounts_there_link_to_one_account_here() {
     assert_eq!(links[0]["email"], "alice-elsewhere@sso.example.com");
     assert_eq!(
         server.link(&bob, "alice-at-sso").await.location,
-        "/settings?tab=account&linked=1"
+        "/settings?linked=1#account"
     );
 }
 

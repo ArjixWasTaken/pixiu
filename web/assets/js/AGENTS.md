@@ -6,6 +6,7 @@
 - Icons are Material Symbols through `<M3Icon name="…" />` (`fill` for the filled style). Don't add icon packages.
 - Colors are the Material 3 roles, as `--schemes-*` variables (e.g. `text-(--schemes-on-surface-variant)`). Don't hard-code colors.
 - UI text is sentence case ("Add to queue", "New smart playlist"), and an action keeps one name across buttons, menus and toasts.
+- What a page shows within itself (its tab) lives in the URL's hash, through `useHash`/`useHashTab` from `@/composables/useHash` (`/settings#admin-users`), so a reload or a link opens it. Setting it replaces the URL; it never goes through the router.
 
 ## TypeScript Conventions
 

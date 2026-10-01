@@ -4,7 +4,9 @@ import { createHarness } from '@/__tests__/TestHarness'
 import Component from './SettingsScreen.vue'
 
 describe('settingsScreen.vue', () => {
-  const h = createHarness()
+  const h = createHarness({
+    afterEach: () => history.replaceState(null, '', '/'),
+  })
 
   const render = () =>
     h.render(Component, {
@@ -37,11 +39,38 @@ describe('settingsScreen.vue', () => {
     h.actingAsAdmin()
     render()
 
-    for (const tab of ['users', 'sign-in', 'email']) {
+    for (const tab of ['admin-users', 'admin-sign-in', 'admin-email']) {
       screen.getByTestId(`settings-tab-${tab}`)
     }
 
     // After a label of their own.
     screen.getByText('Server')
+  })
+
+  it('opens the tab the hash names', () => {
+    h.actingAsAdmin()
+    history.replaceState(null, '', '/settings#admin-users')
+    render()
+
+    expect(screen.getByTestId('settings-tab-admin-users').getAttribute('aria-selected')).toBe('true')
+  })
+
+  it('keeps the chosen tab in the hash', async () => {
+    render()
+
+    await h.user.click(screen.getByRole('tab', { name: 'Preferences' }))
+
+    expect(location.hash).toBe('#preferences')
+    expect(screen.getByTestId('settings-tab-preferences').getAttribute('aria-selected')).toBe('true')
+  })
+
+  it('takes a link from before, with the tab in the query, to the hash', () => {
+    h.actingAsAdmin()
+    history.replaceState(null, '', '/settings?tab=users')
+    h.visit('/settings?tab=users')
+    render()
+
+    expect(location.search).toBe('')
+    expect(location.hash).toBe('#admin-users')
   })
 })
