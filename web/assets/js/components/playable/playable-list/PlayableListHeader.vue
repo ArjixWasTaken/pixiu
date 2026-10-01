@@ -2,13 +2,12 @@
   <div v-if="showFilter || config.sortable" class="sort-bar" data-testid="list-toolbar">
     <ListFilter v-if="showFilter" />
     <span class="flex-1" />
-    <M3MenuPopover v-if="config.sortable" v-model:open="open" menu-class="sort-menu">
+    <M3MenuPopover v-if="config.sortable" v-model:open="open" :min-width="200">
       <template #anchor>
         <M3Chip
           :icon="sortOrder === 'asc' ? 'arrow_upward' : 'arrow_downward'"
           :title="`Sorted by ${currentLabel}, ${sortOrder === 'asc' ? 'ascending' : 'descending'}`"
           data-testid="sort-chip"
-          @click="open = !open"
         >
           {{ currentLabel }}
         </M3Chip>
@@ -103,9 +102,5 @@ const sort = (field: MaybeArray<PlayableListSortField>) => {
   gap: 8px;
   padding: 8px 24px;
   background: var(--schemes-surface);
-}
-
-:deep(.sort-menu) {
-  min-width: 200px;
 }
 </style>

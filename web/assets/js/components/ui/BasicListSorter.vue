@@ -1,7 +1,7 @@
 <template>
-  <M3MenuPopover v-model:open="open" menu-class="sort-menu">
+  <M3MenuPopover v-model:open="open" :min-width="200">
     <template #anchor>
-      <M3Chip :icon="order === 'asc' ? 'arrow_upward' : 'arrow_downward'" :title @click="open = !open">
+      <M3Chip :icon="order === 'asc' ? 'arrow_upward' : 'arrow_downward'" :title>
         {{ currentLabel }}
       </M3Chip>
     </template>
@@ -68,9 +68,3 @@ const title = computed(
   () => `Sorting by ${currentLabel.value.toLowerCase()}, ${currentOrder.value === 'asc' ? 'ascending' : 'descending'}`,
 )
 </script>
-
-<style scoped>
-:deep(.sort-menu) {
-  min-width: 200px;
-}
-</style>

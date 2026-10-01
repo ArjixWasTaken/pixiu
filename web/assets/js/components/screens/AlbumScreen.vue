@@ -30,29 +30,33 @@
       </ScreenHeader>
     </template>
 
-    <ScreenTabs v-if="album" class="screen-bleed" :class="loading && 'pointer-events-none'">
-      <template #header>
-        <nav>
-          <ul>
-            <li :class="activeTab === 'songs' && 'active'">
-              <a href="#songs" @click.prevent="activeTab = 'songs'">Songs</a>
-            </li>
-            <li :class="activeTab === 'other-albums' && 'active'">
-              <a href="#other-albums" @click.prevent="activeTab = 'other-albums'">Other albums</a>
-            </li>
-            <li v-if="useEncyclopedia" :class="activeTab === 'information' && 'active'">
-              <a href="#information" @click.prevent="activeTab = 'information'">Information</a>
-            </li>
-          </ul>
-        </nav>
-      </template>
-
-      <div v-show="activeTab === 'songs'" class="songs-pane">
+    <ScreenTabs
+      v-if="album"
+      v-model="activeTab"
+      :class="loading && 'pointer-events-none'"
+      :tabs
+      class="screen-bleed"
+      id-prefix="album"
+    >
+      <div
+        v-show="activeTab === 'songs'"
+        id="album-panel-songs"
+        aria-labelledby="album-tab-songs"
+        class="songs-pane"
+        role="tabpanel"
+      >
         <SongListSkeleton v-if="loading" role="status" aria-busy="true" aria-label="Loading" />
         <SongList v-if="!loading && album" ref="songList" @sort="onSort" @press:enter="onPressEnter" @swipe="onSwipe" />
       </div>
 
-      <div v-show="activeTab === 'other-albums'" class="albums-pane" data-testid="albums-pane">
+      <div
+        v-show="activeTab === 'other-albums'"
+        id="album-panel-other-albums"
+        aria-labelledby="album-tab-other-albums"
+        class="albums-pane"
+        data-testid="albums-pane"
+        role="tabpanel"
+      >
         <template v-if="otherAlbums">
           <GridListView v-if="otherAlbums.length" class="scroll-mask-y">
             <AlbumCard v-for="otherAlbum in otherAlbums" :key="otherAlbum.id" :album="otherAlbum" />
@@ -66,7 +70,14 @@
         </GridListView>
       </div>
 
-      <div v-if="useEncyclopedia && album" v-show="activeTab === 'information'" class="info-pane">
+      <div
+        v-if="useEncyclopedia && album"
+        v-show="activeTab === 'information'"
+        id="album-panel-information"
+        aria-labelledby="album-tab-information"
+        class="info-pane"
+        role="tabpanel"
+      >
         <AlbumInfo :album mode="full" />
         <AlbumMusicBrainz :album class="mt-10" />
       </div>
@@ -97,6 +108,7 @@ import AlbumThumbnail from '@/components/ui/album-artist/AlbumOrArtistThumbnail.
 import ScreenHeaderSkeleton from '@/components/ui/ScreenHeaderSkeleton.vue'
 import SongListSkeleton from '@/components/playable/playable-list/PlayableListSkeleton.vue'
 import ScreenTabs from '@/components/ui/ArtistAlbumScreenTabs.vue'
+import type { M3Tab } from '@/components/m3/M3Tabs.vue'
 import ScreenBase from '@/components/screens/ScreenBase.vue'
 import GridListView from '@/components/ui/GridListView.vue'
 
@@ -139,6 +151,12 @@ const {
 } = usePlayableList(songs, { type: 'Album' })
 
 const useEncyclopedia = useMusicBrainz
+
+const tabs = computed<M3Tab[]>(() => [
+  { id: 'songs', label: 'Songs' },
+  { id: 'other-albums', label: 'Other albums' },
+  ...(useEncyclopedia.value ? [{ id: 'information', label: 'Information' }] : []),
+])
 
 const isStandardArtist = computed(() => {
   if (!album.value) {

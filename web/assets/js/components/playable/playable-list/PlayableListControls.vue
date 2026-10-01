@@ -29,11 +29,14 @@
         </M3Button>
       </template>
 
-      <span v-if="showAddToButton" ref="addToButton" class="inline-flex">
-        <M3Button :icon="showingAddToMenu ? 'close' : 'playlist_add'" variant="tonal">
-          {{ showingAddToMenu ? 'Cancel' : 'Add to…' }}
-        </M3Button>
-      </span>
+      <Popover v-if="showAddToButton" v-model:open="showingAddToMenu" class="context-menu p-0">
+        <template #anchor>
+          <M3Button :icon="showingAddToMenu ? 'close' : 'playlist_add'" variant="tonal">
+            {{ showingAddToMenu ? 'Cancel' : 'Add to…' }}
+          </M3Button>
+        </template>
+        <AddToMenu :config="config.addTo" :playables="selectedPlayables" @closing="showingAddToMenu = false" />
+      </Popover>
 
       <M3Button
         v-if="config.clearQueue"
@@ -49,16 +52,6 @@
 
       <slot />
     </div>
-
-    <Popover
-      v-if="showAddToButton"
-      ref="popover"
-      :anchor="addToButton"
-      class="context-menu p-0"
-      @toggle="showingAddToMenu = $event"
-    >
-      <AddToMenu :config="config.addTo" :playables="selectedPlayables" @closing="popover?.hide()" />
-    </Popover>
   </div>
 </template>
 
@@ -85,16 +78,12 @@ const config = toRef(props, 'config')
 const [filteredPlayables] = requireInjection<[Ref<Playable[]>]>(FilteredPlayablesKey)
 const [selectedPlayables] = requireInjection<[Ref<Playable[]>]>(SelectedPlayablesKey)
 
-const addToButton = ref<HTMLElement>()
-const popover = ref<InstanceType<typeof Popover>>()
 const showingAddToMenu = ref(false)
 
 const showAddToButton = computed(() => Boolean(selectedPlayables.value.length))
 
-// When the AddTo trigger button disappears (no items selected), the Popover
-// is unmounted via v-if without firing @toggle(false), so we reset the menu
-// open-state flag explicitly. Otherwise the trigger's "Cancel" / "Add to…"
-// label could be stuck on "Cancel" if items are reselected later.
+// When the selection empties, the button and its panel go away: they come back
+// closed, the button reading "Add to…", once songs are selected again.
 watch(showAddToButton, visible => {
   if (!visible) {
     showingAddToMenu.value = false

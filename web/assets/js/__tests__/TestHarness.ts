@@ -3,7 +3,8 @@ import { cleanup, createEvent, fireEvent, render } from '@testing-library/vue'
 import userEvent from '@testing-library/user-event'
 import type { UserEvent } from '@testing-library/user-event'
 import { afterEach, beforeEach, vi } from 'vite-plus/test'
-import { defineComponent, nextTick, shallowRef } from 'vue'
+import { defineComponent, h, nextTick, shallowRef } from 'vue'
+import { DropdownMenuContent, DropdownMenuRoot } from 'reka-ui'
 import factory from '@/__tests__/factory'
 import { DialogBoxStub, MessageToasterStub, OverlayStub } from '@/__tests__/stubs'
 import { commonStore } from '@/stores/commonStore'
@@ -63,11 +64,12 @@ class TestHarness {
 
   public afterEach(cb?: Closure) {
     afterEach(() => {
+      // Unmounted first: what a component teleported (menus, dialogs) goes with it.
+      cleanup()
       document.body.innerHTML = ''
       setViewport({ mobile: true, wide: true })
       commonStore.state.song_length = 10
       cache.clear()
-      cleanup()
       this.restoreAllMocks()
       globalThis.fetch = this.realFetch
       eventBus.all.clear()
@@ -249,6 +251,24 @@ class TestHarness {
     window.AudioContext = vi.fn().mockImplementation(() => ({
       createMediaElementSource: vi.fn(noop),
     }))
+  }
+
+  /**
+   * Renders a context menu's items as they appear: inside an open menu
+   * (Reka UI's items need one around them).
+   */
+  public renderMenu(component: any, options: RenderOptions = {}) {
+    const props = (options.props ?? {}) as Record<string, unknown>
+    const anchor = { getBoundingClientRect: () => DOMRect.fromRect({ x: 0, y: 0, width: 0, height: 0 }) }
+
+    const Menu = defineComponent({
+      setup: () => () =>
+        h(DropdownMenuRoot, { open: true, modal: false }, () =>
+          h(DropdownMenuContent, { reference: anchor, class: 'context-menu' }, () => h(component, props)),
+        ),
+    })
+
+    return this.render(Menu, { ...options, props: {} })
   }
 
   /** Goes to a path, as the app would. */

@@ -34,7 +34,7 @@ describe('artistContextMenu.vue', () => {
         permissions: { edit: true },
       })
 
-    const rendered = h.render(Component, {
+    const rendered = h.renderMenu(Component, {
       props: {
         artist,
       },
@@ -132,7 +132,7 @@ describe('artistContextMenu.vue', () => {
     const menu = shallowRef<any>({ component: Component, position: { top: 0, left: 0 } })
     const artist = h.factory('artist').make({ rating: 0 })
 
-    h.render(Component, {
+    h.renderMenu(Component, {
       props: { artist },
       global: { provide: { [ContextMenuKey as symbol]: menu } },
     })

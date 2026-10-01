@@ -9,9 +9,9 @@ exports[`editSongForm.vue > edits a single song 1`] = `
       <h2 data-v-cf47e900="" class="" data-testid="displayed-album-name">IV</h2>
     </div>
   </header>
-  <div data-v-64fb00eb="" data-v-cf47e900="" class="secondary m3-tabs tabs" role="tablist">
-    <!--v-if--><button data-v-64fb00eb="" aria-selected="true" class="active tab m3-state m3-title-small" role="tab" type="button"><span data-v-64fb00eb="" class="inner"><!--v-if--><span data-v-64fb00eb="">Details</span><span data-v-64fb00eb="" class="indicator"></span></span></button>
-    <!--v-if--><button data-v-64fb00eb="" aria-selected="false" class="tab m3-state m3-title-small" role="tab" type="button"><span data-v-64fb00eb="" class="inner"><!--v-if--><span data-v-64fb00eb="">Lyrics</span>
+  <div data-v-64fb00eb="" data-v-cf47e900="" data-orientation="horizontal" class="tabs secondary m3-tabs" tabindex="0" dir="ltr" style="outline: none;" role="tablist" aria-orientation="horizontal">
+    <!--v-if--><button data-v-64fb00eb="" data-reka-collection-item="" tabindex="-1" data-orientation="horizontal" data-active="" id="reka-tabs-v-0-trigger-details" role="tab" type="button" aria-selected="true" data-state="active" class="active tab m3-state m3-title-small"><span data-v-64fb00eb="" class="inner"><!--v-if--><span data-v-64fb00eb="">Details</span><span data-v-64fb00eb="" class="indicator"></span></span></button>
+    <!--v-if--><button data-v-64fb00eb="" data-reka-collection-item="" tabindex="-1" data-orientation="horizontal" id="reka-tabs-v-0-trigger-lyrics" role="tab" type="button" aria-selected="false" data-state="inactive" class="tab m3-state m3-title-small"><span data-v-64fb00eb="" class="inner"><!--v-if--><span data-v-64fb00eb="">Lyrics</span>
       <!--v-if--></span>
     </button>
   </div>

@@ -1,37 +1,36 @@
 <template>
-  <div
-    ref="list"
-    :class="{ secondary, sticky, scrollable, 'fade-start': overflowsStart, 'fade-end': overflowsEnd }"
-    class="m3-tabs"
-    role="tablist"
-    @scroll.passive="measure"
-  >
-    <template v-for="(tab, index) in tabs" :key="tab.id">
-      <span v-if="startsGroup(index)" class="group m3-label-medium" role="presentation">{{ tab.group }}</span>
-      <button
-        :id="idPrefix && `${idPrefix}-tab-${tab.id}`"
-        :aria-controls="idPrefix && `${idPrefix}-panel-${tab.id}`"
-        :aria-selected="tab.id === value"
-        :class="{ active: tab.id === value, 'with-icon': tab.icon && !secondary }"
-        :data-testid="idPrefix && `${idPrefix}-tab-${tab.id}`"
-        class="tab m3-state m3-title-small"
-        role="tab"
-        type="button"
-        @click="value = tab.id"
-      >
-        <span class="inner">
-          <M3Icon v-if="tab.icon" :fill="tab.id === value" :name="tab.icon" />
-          <span>{{ tab.label }}</span>
-          <span v-if="tab.id === value" class="indicator" />
-        </span>
-      </button>
-    </template>
-  </div>
+  <TabsRoot v-model="value" as-child>
+    <TabsList
+      ref="list"
+      :class="{ secondary, sticky, scrollable, 'fade-start': overflowsStart, 'fade-end': overflowsEnd }"
+      class="m3-tabs"
+      @scroll.passive="measure"
+    >
+      <template v-for="(tab, index) in tabs" :key="tab.id">
+        <span v-if="startsGroup(index)" class="group m3-label-medium" role="presentation">{{ tab.group }}</span>
+        <TabsTrigger :value="tab.id" as-child>
+          <button
+            :class="{ active: tab.id === value, 'with-icon': tab.icon && !secondary }"
+            class="tab m3-state m3-title-small"
+            type="button"
+            v-bind="idPrefix && ids(tab)"
+          >
+            <span class="inner">
+              <M3Icon v-if="tab.icon" :fill="tab.id === value" :name="tab.icon" />
+              <span>{{ tab.label }}</span>
+              <span v-if="tab.id === value" class="indicator" />
+            </span>
+          </button>
+        </TabsTrigger>
+      </template>
+    </TabsList>
+  </TabsRoot>
 </template>
 
 <script lang="ts" setup>
+import { TabsList, TabsRoot, TabsTrigger } from 'reka-ui'
 import { nextTick, onMounted, ref, useTemplateRef, watch } from 'vue'
-import { useResizeObserver } from '@vueuse/core'
+import { unrefElement, useResizeObserver } from '@vueuse/core'
 import M3Icon from '@/components/m3/M3Icon.vue'
 
 export interface M3Tab {
@@ -42,6 +41,10 @@ export interface M3Tab {
   group?: string
 }
 
+/**
+ * Material 3 tabs; the panels are the caller's. Reka UI runs them: the arrow
+ * keys, Home and End move along the tabs and select, and Tab leaves for the panel.
+ */
 const props = withDefaults(
   defineProps<{
     tabs: M3Tab[]
@@ -58,16 +61,24 @@ const props = withDefaults(
 
 const value = defineModel<string>()
 
+/** With `idPrefix`, on the tab's own button (`as-child`): there, they win over Reka UI's. */
+const ids = (tab: M3Tab) => ({
+  id: `${props.idPrefix}-tab-${tab.id}`,
+  'aria-controls': `${props.idPrefix}-panel-${tab.id}`,
+  'data-testid': `${props.idPrefix}-tab-${tab.id}`,
+})
+
 const startsGroup = (index: number) =>
   Boolean(props.tabs[index].group) && props.tabs[index].group !== props.tabs[index - 1]?.group
 
 const list = useTemplateRef('list')
+const listElement = () => unrefElement(list) as HTMLElement | undefined
 const overflowsStart = ref(false)
 const overflowsEnd = ref(false)
 
 /** Tabs cut off at an edge fade out there, so it shows there are more. */
 const measure = () => {
-  const el = list.value
+  const el = listElement()
   if (!el) {
     return
   }
@@ -78,14 +89,14 @@ const measure = () => {
 /** The selected tab scrolls into view, so it is never hidden past an edge. */
 const revealSelected = async () => {
   await nextTick()
-  list.value?.querySelector<HTMLElement>('[aria-selected="true"]')?.scrollIntoView?.({
+  listElement()?.querySelector<HTMLElement>('[aria-selected="true"]')?.scrollIntoView?.({
     block: 'nearest',
     inline: 'nearest',
   })
   measure()
 }
 
-useResizeObserver(list, measure)
+useResizeObserver(listElement, measure)
 onMounted(revealSelected)
 watch(value, revealSelected)
 </script>
@@ -130,6 +141,7 @@ watch(value, revealSelected)
   background: transparent;
   color: var(--schemes-on-surface-variant);
   cursor: pointer;
+  outline-offset: -2px;
 
   &.with-icon {
     height: var(--m3-tab-height-icon);

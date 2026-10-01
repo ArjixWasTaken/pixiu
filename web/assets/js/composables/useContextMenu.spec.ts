@@ -35,6 +35,19 @@ describe('useContextMenu', () => {
     expect(contextMenuOptions.value.position).toEqual({ top: 75, left: 50 })
   })
 
+  it('opens under the button pressed from the keyboard, where there is no pointer', () => {
+    const { openContextMenu } = useContextMenu()
+    const FakeComponent = markRaw({ template: '<div />' })
+    const button = document.createElement('button')
+    button.getBoundingClientRect = () => DOMRect.fromRect({ x: 640, y: 118, width: 40, height: 32 })
+    button.addEventListener('click', event => openContextMenu(FakeComponent, event))
+
+    // Enter on a button clicks it with no pointer: no coordinates, and no click count.
+    button.dispatchEvent(new MouseEvent('click', { detail: 0 }))
+
+    expect(contextMenuOptions.value.position).toEqual({ top: 150, left: 640 })
+  })
+
   it('closes context menu', () => {
     const { openContextMenu, closeContextMenu } = useContextMenu()
     const FakeComponent = markRaw({ template: '<div />' })

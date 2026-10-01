@@ -60,7 +60,7 @@ describe('playableContextMenu.vue', () => {
   const renderComponent = async (playables?: MaybeArray<Playable>) => {
     playables = playables ? arrayify(playables) : h.factory('song').make(5)
 
-    const rendered = h.render(Component, {
+    const rendered = h.renderMenu(Component, {
       props: {
         playables,
       },
@@ -119,6 +119,7 @@ describe('playableContextMenu.vue', () => {
     const song = h.factory('song').make()
     await renderComponent(song)
 
+    await h.user.click(screen.getByText('Go to'))
     await h.user.click(screen.getByText(`Album: ${song.album_name}`))
 
     expect(goMock).toHaveBeenCalledWith(`/albums/${song.album_id}`)
@@ -129,6 +130,7 @@ describe('playableContextMenu.vue', () => {
     const song = h.factory('song').make()
     await renderComponent(song)
 
+    await h.user.click(screen.getByText('Go to'))
     await h.user.click(screen.getByText(`Artist: ${song.artist_name}`))
 
     expect(goMock).toHaveBeenCalledWith(`/artists/${song.artist_id}`)
@@ -147,6 +149,7 @@ describe('playableContextMenu.vue', () => {
     const queueMock = h.mock(queueStore, 'queue')
     const { playables } = await renderComponent()
 
+    await h.user.click(screen.getByText('Add to'))
     await h.user.click(screen.getByText('Queue'))
 
     expect(queueMock).toHaveBeenCalledWith(playables)
@@ -157,6 +160,7 @@ describe('playableContextMenu.vue', () => {
     const queueMock = h.mock(queueStore, 'queueAfterCurrent')
     const { playables } = await renderComponent()
 
+    await h.user.click(screen.getByText('Add to'))
     await h.user.click(screen.getByText('After current song'))
 
     expect(queueMock).toHaveBeenCalledWith(playables)
@@ -167,6 +171,7 @@ describe('playableContextMenu.vue', () => {
     const queueMock = h.mock(queueStore, 'queue')
     const { playables } = await renderComponent()
 
+    await h.user.click(screen.getByText('Add to'))
     await h.user.click(screen.getByText('Bottom of queue'))
 
     expect(queueMock).toHaveBeenCalledWith(playables)
@@ -177,6 +182,7 @@ describe('playableContextMenu.vue', () => {
     const queueMock = h.mock(queueStore, 'queueToTop')
     const { playables } = await renderComponent()
 
+    await h.user.click(screen.getByText('Add to'))
     await h.user.click(screen.getByText('Top of queue'))
 
     expect(queueMock).toHaveBeenCalledWith(playables)
@@ -207,6 +213,7 @@ describe('playableContextMenu.vue', () => {
     const likeMock = h.mock(playableStore, 'favorite')
     const { playables } = await renderComponent()
 
+    await h.user.click(screen.getByText('Add to'))
     await h.user.click(screen.getByText('Favorites'))
 
     expect(likeMock).toHaveBeenCalledWith(playables)
@@ -216,6 +223,7 @@ describe('playableContextMenu.vue', () => {
     await h.visit('/favorites')
     await renderComponent()
 
+    await h.user.click(screen.getByText('Add to'))
     expect(screen.queryByText('Favorites')).toBeNull()
   })
 
@@ -237,7 +245,8 @@ describe('playableContextMenu.vue', () => {
     h.mock(MessageToasterStub.value, 'success')
     const { playables } = await renderComponent()
 
-    playlistStore.state.playlists.forEach(playlist => screen.queryByText(playlist.name))
+    await h.user.click(screen.getByText('Add to'))
+    playlistStore.state.playlists.forEach(playlist => screen.getByText(playlist.name))
 
     await h.user.click(screen.getByText(playlistStore.state.playlists[0].name))
 
@@ -251,6 +260,7 @@ describe('playableContextMenu.vue', () => {
 
     await renderComponent()
 
+    await h.user.click(screen.getByText('Add to'))
     expect(screen.queryByText('My Mirror')).toBeNull()
   })
 
@@ -260,6 +270,7 @@ describe('playableContextMenu.vue', () => {
 
     await renderComponent()
 
+    await h.user.click(screen.getByText('Add to'))
     expect(screen.queryByText('My Smart Playlist')).toBeNull()
   })
 
@@ -286,6 +297,7 @@ describe('playableContextMenu.vue', () => {
     h.actingAsUser()
     const { playables } = await renderComponent()
 
+    await h.user.click(screen.getByText('Add to'))
     await h.user.click(screen.getByText('New playlist…'))
 
     await assertOpenModal(openModalMock, CreatePlaylistForm, { folder: null, playables })
@@ -349,7 +361,7 @@ describe('playableContextMenu.vue', () => {
     const menu = shallowRef<any>({ component: Component, position: { top: 0, left: 0 } })
     const song = h.factory('song').make({ rating: 0 })
 
-    h.render(Component, {
+    h.renderMenu(Component, {
       props: { playables: [song] },
       global: { provide: { [ContextMenuKey as symbol]: menu } },
     })

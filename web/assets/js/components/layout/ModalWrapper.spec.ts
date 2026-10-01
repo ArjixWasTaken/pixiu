@@ -84,4 +84,35 @@ describe('modalWrapper.vue', () => {
 
     expect(modalOptions.value.component).toBe(form)
   })
+
+  it('is a dialog named by its heading', async () => {
+    h.render(Component)
+    modalOptions.value = {
+      component: markRaw({ template: '<section><header><h1>Song information</h1></header></section>' }),
+      props: {},
+    }
+
+    await waitFor(() => screen.getByRole('dialog', { name: 'Song information' }))
+  })
+
+  it('keeps focus inside while open, and gives it back after', async () => {
+    const opener = document.createElement('button')
+    document.body.append(opener)
+    opener.focus()
+
+    h.render(Component)
+    modalOptions.value = {
+      component: markRaw({ template: '<section><button>First</button><button>Last</button></section>' }),
+      props: {},
+    }
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'First' })))
+
+    await h.user.tab()
+    await h.user.tab()
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'First' }))
+
+    modalOptions.value = { component: null }
+    await waitFor(() => expect(document.activeElement).toBe(opener))
+    opener.remove()
+  })
 })

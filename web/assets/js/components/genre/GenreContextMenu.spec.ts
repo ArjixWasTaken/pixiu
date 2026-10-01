@@ -17,7 +17,7 @@ describe('genreContextMenu.vue', () => {
         name: 'Classical',
       })
 
-    const rendered = h.render(Component, {
+    const rendered = h.renderMenu(Component, {
       props: {
         genre,
       },
@@ -29,7 +29,10 @@ describe('genreContextMenu.vue', () => {
     }
   }
 
-  it('renders', async () => expect((await renderComponent()).html()).toMatchSnapshot())
+  it('renders', async () => {
+    await renderComponent()
+    expect(screen.getByRole('menu').innerHTML).toMatchSnapshot()
+  })
 
   it('plays all', async () => {
     h.createAudioPlayer()

@@ -1,9 +1,12 @@
 <template>
-  <div class="add-to w-full max-w-[256px] min-w-[200px] p-3 space-y-3" data-testid="add-to-menu" tabindex="0">
+  <div class="add-to w-full max-w-[256px] min-w-[200px] p-3 space-y-3" data-testid="add-to-menu">
     <section class="existing-playlists">
       <p class="mb-2 text-[0.9rem]">Add {{ pluralize(playables, 'song') }} to</p>
 
-      <ul class="scroll-mask-y relative max-h-48 overflow-y-scroll space-y-1.5">
+      <ul
+        class="scroll-mask-y relative max-h-48 overflow-y-scroll space-y-1.5"
+        @keydown.enter.space.prevent="($event.target as HTMLElement).click()"
+      >
         <template v-if="config.queue">
           <template v-if="queue.length">
             <li

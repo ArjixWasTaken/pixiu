@@ -51,7 +51,7 @@ describe('albumScreen.vue', () => {
     const { fetchForArtist } = await renderComponent('/albums/al-1')
     expect(fetchForArtist).not.toHaveBeenCalled()
 
-    await h.user.click(screen.getByRole('link', { name: 'Other albums' }))
+    await h.user.click(screen.getByRole('tab', { name: 'Other albums' }))
 
     await waitFor(() => expect(h.router.currentRoute.value.hash).toBe('#other-albums'))
     await waitFor(() => expect(fetchForArtist).toHaveBeenCalled())

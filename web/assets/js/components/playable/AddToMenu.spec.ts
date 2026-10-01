@@ -89,6 +89,16 @@ describe('addToMenu.vue', () => {
     expect(mock).toHaveBeenCalledWith(playables)
   })
 
+  it('chooses with Enter, as with a click', async () => {
+    const mock = h.mock(playableStore, 'favorite')
+    const { playables } = renderComponent()
+
+    screen.getByTestId('add-to-favorites').focus()
+    await h.user.keyboard('{Enter}')
+
+    expect(mock).toHaveBeenCalledWith(playables)
+  })
+
   it('adds songs to existing playlist', async () => {
     const mock = h.mock(playlistStore, 'addContent')
     playlistStore.state.playlists = h.factory('playlist').make(3)

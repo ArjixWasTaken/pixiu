@@ -1,7 +1,7 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
 exports[`addToMenu.vue > renders 1`] = `
-<div data-v-69d9940b="" class="add-to w-full max-w-[256px] min-w-[200px] p-3 space-y-3" data-testid="add-to-menu" tabindex="0" showing="true">
+<div data-v-69d9940b="" class="add-to w-full max-w-[256px] min-w-[200px] p-3 space-y-3" data-testid="add-to-menu" showing="true">
   <section data-v-69d9940b="" class="existing-playlists">
     <p data-v-69d9940b="" class="mb-2 text-[0.9rem]">Add 5 songs to</p>
     <ul data-v-69d9940b="" class="scroll-mask-y relative max-h-48 overflow-y-scroll space-y-1.5">

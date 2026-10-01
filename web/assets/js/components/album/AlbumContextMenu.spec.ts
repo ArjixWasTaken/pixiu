@@ -40,7 +40,7 @@ describe('albumContextMenu.vue', () => {
         permissions: { edit: true },
       })
 
-    const rendered = h.actingAsAdmin().render(Component, {
+    const rendered = h.actingAsAdmin().renderMenu(Component, {
       props: {
         album,
       },
@@ -144,7 +144,7 @@ describe('albumContextMenu.vue', () => {
     const menu = shallowRef<any>({ component: Component, position: { top: 0, left: 0 } })
     const album = h.factory('album').make({ rating: 0 })
 
-    h.actingAsAdmin().render(Component, {
+    h.actingAsAdmin().renderMenu(Component, {
       props: { album },
       global: { provide: { [ContextMenuKey as symbol]: menu } },
     })

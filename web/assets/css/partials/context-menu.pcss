@@ -1,6 +1,7 @@
 /* Context menus as Material 3 menus; on phones, as bottom sheets. */
+/* Reka UI places the menu (in a wrapper of its own) and runs it. */
 .context-menu {
-  @apply fixed w-max z-1001;
+  @apply relative w-max z-1001;
 
   min-width: 200px;
   max-width: 320px;
@@ -38,11 +39,9 @@
     outline: none;
 
     &:hover,
-    &:focus {
-      background: color-mix(in srgb, var(--schemes-on-surface) 8%, transparent);
-    }
-
-    &:has(> .submenu[data-open]) {
+    &:focus,
+    &[data-highlighted],
+    &[data-state='open'] {
       background: color-mix(in srgb, var(--schemes-on-surface) 8%, transparent);
     }
 
@@ -57,21 +56,8 @@
     }
   }
 
-  .submenu {
-    @apply absolute top-0 left-full hidden;
-
-    &[data-open] {
-      @apply block;
-    }
-  }
-
   &.sheet {
-    /* Over the root's inset-auto utility and the popover's defaults. */
-    left: 0 !important;
-    right: 0 !important;
-    top: auto !important;
-    bottom: 0 !important;
-    width: auto !important;
+    width: 100%;
     max-width: none;
     max-height: min(80vh, 640px);
     overflow-y: auto;
@@ -80,10 +66,6 @@
     border-radius: 28px 28px 0 0;
     background: var(--schemes-surface-container-low);
     box-shadow: none;
-
-    &::backdrop {
-      background: color-mix(in srgb, var(--schemes-scrim) 32%, transparent);
-    }
 
     .sheet-handle {
       position: absolute;
@@ -111,20 +93,8 @@
       padding: 0;
     }
 
-    li.has-sub {
-      flex-wrap: wrap;
-
-      > .submenu {
-        order: 1;
-      }
-    }
-
-    .submenu {
-      position: static !important;
-      width: 100%;
-      max-width: none;
-      box-shadow: none;
-      background: transparent;
+    /* A submenu opens in place, under its item. */
+    .submenu.in-place {
       padding: 0 0 0 16px;
     }
   }

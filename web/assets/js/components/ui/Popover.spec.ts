@@ -1,91 +1,76 @@
 import { describe, expect, it } from 'vite-plus/test'
-import { defineComponent, h, nextTick, ref } from 'vue'
+import { screen, waitFor } from '@testing-library/vue'
+import { defineComponent, ref } from 'vue'
 import { createHarness } from '@/__tests__/TestHarness'
 import Component from './Popover.vue'
 
-const mount = (popoverProps: Record<string, unknown> = {}) => {
-  const harness = createHarness()
-  const events: boolean[] = []
+/** A button that opens a panel, as the app's popovers do. */
+const Host = defineComponent({
+  components: { Popover: Component },
+  setup: () => ({ open: ref(false) }),
+  template: `
+    <div>
+      <Popover v-model:open="open" class="my-panel">
+        <template #anchor><button type="button">Open</button></template>
+        <p>panel content</p>
+        <button type="button" @click="open = false">Done</button>
+      </Popover>
+      <p>Elsewhere</p>
+    </div>
+  `,
+})
 
-  const Host = defineComponent({
-    setup() {
-      const trigger = ref<HTMLButtonElement>()
-      const popover = ref<InstanceType<typeof Component>>()
-
-      return () => {
-        const componentProps = {
-          ref: popover,
-          anchor: trigger.value,
-          onToggle: (open: boolean) => events.push(open),
-          ...popoverProps,
-        }
-
-        return h('div', [
-          h('button', { ref: trigger, type: 'button' }, 'Open'),
-          h(Component, componentProps, () => 'panel content'),
-        ])
-      }
-    },
-  })
-
-  const rendered = harness.render(Host)
-
-  return {
-    container: rendered.container,
-    events,
-    button: () => rendered.container.querySelector<HTMLButtonElement>('button')!,
-    panel: () => rendered.container.querySelector<HTMLElement>('[popover]')!,
-  }
-}
+/** A moment after opening: Reka UI listens for clicks elsewhere from the next task on. */
+const settle = () => new Promise(resolve => setTimeout(resolve))
 
 describe('popover.vue', () => {
-  it('renders a popover panel with the requested mode', async () => {
-    const { panel } = mount({ mode: 'auto' })
-    await nextTick()
-    expect(panel().getAttribute('popover')).toBe('auto')
-    expect(panel().textContent).toContain('panel content')
+  const h = createHarness()
+
+  it('opens its panel from its anchor, and says so on the anchor', async () => {
+    h.render(Host)
+    const anchor = screen.getByRole('button', { name: 'Open' })
+    expect(screen.queryByText('panel content')).toBeNull()
+    expect(anchor.getAttribute('aria-expanded')).toBe('false')
+
+    await h.user.click(anchor)
+
+    screen.getByText('panel content')
+    expect(anchor.getAttribute('aria-expanded')).toBe('true')
+    expect(screen.getByRole('dialog').classList.contains('my-panel')).toBe(true)
   })
 
-  it('defaults to auto mode', async () => {
-    const { panel } = mount()
-    await nextTick()
-    expect(panel().getAttribute('popover')).toBe('auto')
+  it('closes when its anchor is pressed again', async () => {
+    h.render(Host)
+    const anchor = screen.getByRole('button', { name: 'Open' })
+
+    await h.user.click(anchor)
+    await settle()
+    await h.user.click(anchor)
+
+    await waitFor(() => expect(screen.queryByText('panel content')).toBeNull())
   })
 
-  it('supports manual mode', async () => {
-    const { panel } = mount({ mode: 'manual' })
-    await nextTick()
-    expect(panel().getAttribute('popover')).toBe('manual')
+  it('closes on Escape, giving focus back to its anchor', async () => {
+    h.render(Host)
+    const anchor = screen.getByRole('button', { name: 'Open' })
+
+    await h.user.click(anchor)
+    await h.user.keyboard('{Escape}')
+
+    await waitFor(() => expect(screen.queryByText('panel content')).toBeNull())
+    await waitFor(() => expect(document.activeElement).toBe(anchor))
   })
 
-  it('wires aria attributes onto the anchor', async () => {
-    const { button } = mount()
-    await nextTick()
-    expect(button().getAttribute('aria-haspopup')).toBe('menu')
-    expect(button().getAttribute('aria-expanded')).toBe('false')
-    expect(button().getAttribute('aria-controls')).toMatch(/^popover-/)
-  })
+  it('closes on a click elsewhere, or when told to', async () => {
+    h.render(Host)
 
-  it('updates aria-expanded when toggled', async () => {
-    const { button, panel } = mount()
-    await nextTick()
+    await h.user.click(screen.getByRole('button', { name: 'Open' }))
+    await settle()
+    await h.user.click(screen.getByText('Elsewhere'))
+    await waitFor(() => expect(screen.queryByText('panel content')).toBeNull())
 
-    panel().showPopover()
-    await nextTick()
-    expect(button().getAttribute('aria-expanded')).toBe('true')
-
-    panel().hidePopover()
-    await nextTick()
-    expect(button().getAttribute('aria-expanded')).toBe('false')
-  })
-
-  it('emits toggle events with the new open state', async () => {
-    const { events, panel } = mount()
-    await nextTick()
-
-    panel().showPopover()
-    panel().hidePopover()
-    await nextTick()
-    expect(events).toEqual([true, false])
+    await h.user.click(screen.getByRole('button', { name: 'Open' }))
+    await h.user.click(screen.getByRole('button', { name: 'Done' }))
+    await waitFor(() => expect(screen.queryByText('panel content')).toBeNull())
   })
 })

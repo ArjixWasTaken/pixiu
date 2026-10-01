@@ -16,6 +16,8 @@ export const ContextMenuKey: InjectionKey<
     props?: Record<string, any>
   }>
 > = Symbol('ContextMenu')
+/** Gives focus back to what opened the context menu (a song row, a ⋮ button). */
+export const ContextMenuOpenerKey: InjectionKey<() => void> = Symbol('ContextMenuOpener')
 
 export const ModalKey: InjectionKey<
   Ref<{

@@ -1,13 +1,23 @@
 <template>
   <div class="tabs">
     <header>
-      <slot name="header" />
+      <M3Tabs v-model="tab" :id-prefix :tabs />
     </header>
     <main>
       <slot />
     </main>
   </div>
 </template>
+
+<script lang="ts" setup>
+import type { M3Tab } from '@/components/m3/M3Tabs.vue'
+import M3Tabs from '@/components/m3/M3Tabs.vue'
+
+/** An album's or artist's tabs, kept in reach while the screen scrolls; the panels are the slot's. */
+defineProps<{ tabs: M3Tab[]; idPrefix: string }>()
+
+const tab = defineModel<string>()
+</script>
 
 <style lang="postcss" scoped>
 .tabs {
@@ -33,51 +43,8 @@ header {
   }
 }
 
-:deep(header ul) {
-  display: flex;
+:deep(.m3-tabs) {
   max-width: 560px;
-  overflow-x: auto;
-  scrollbar-width: none;
-
-  li {
-    flex: 1 0 auto;
-    list-style: none;
-
-    a {
-      position: relative;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: var(--m3-tab-height);
-      padding: 0 16px;
-      color: var(--schemes-on-surface-variant);
-      font-size: calc(var(--static-title-small-size) * 1px);
-      line-height: calc(var(--static-title-small-line-height) * 1px);
-      letter-spacing: calc(var(--static-title-small-tracking) * 1px);
-      font-weight: 500;
-      white-space: nowrap;
-
-      &:hover {
-        color: var(--schemes-on-surface);
-        background: color-mix(in srgb, var(--schemes-on-surface) 8%, transparent);
-      }
-    }
-
-    &.active a {
-      color: var(--schemes-primary);
-
-      &::after {
-        content: '';
-        position: absolute;
-        left: 16px;
-        right: 16px;
-        bottom: 0;
-        height: 3px;
-        border-radius: 3px 3px 0 0;
-        background: var(--schemes-primary);
-      }
-    }
-  }
 }
 
 main {

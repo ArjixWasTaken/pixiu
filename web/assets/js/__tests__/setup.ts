@@ -1,6 +1,5 @@
 import vueSnapshotSerializer from 'jest-serializer-vue'
 import { expect, vi } from 'vite-plus/test'
-import './shims/popover'
 import './shims/storage'
 import './shims/mediaSession'
 
@@ -28,6 +27,11 @@ globalThis.ResizeObserver =
       unobserve: vi.fn(),
     }
   })
+
+// jsdom has no pointer capture; Reka UI's swipes and sliders use it.
+Element.prototype.hasPointerCapture ??= () => false
+Element.prototype.setPointerCapture ??= () => {}
+Element.prototype.releasePointerCapture ??= () => {}
 
 globalThis.LemonSqueezy = {
   Url: {

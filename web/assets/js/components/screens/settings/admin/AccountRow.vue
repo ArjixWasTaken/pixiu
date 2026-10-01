@@ -14,9 +14,9 @@
         <p class="m3-body-medium text-(--schemes-on-surface-variant) truncate">{{ details }}</p>
       </div>
 
-      <M3MenuPopover v-model:open="menuOpen" menu-class="account-menu">
+      <M3MenuPopover v-model:open="menuOpen" :min-width="240">
         <template #anchor>
-          <M3IconButton icon="more_vert" title="Manage this account" @click="menuOpen = !menuOpen" />
+          <M3IconButton icon="more_vert" title="Manage this account" />
         </template>
         <M3MenuItem
           :label="account.role === 'admin' ? 'Remove admin' : 'Make admin'"
@@ -172,9 +172,5 @@ const { data, handleSubmit } = useForm<{ password: string }>({
     background: var(--schemes-error-container);
     color: var(--schemes-on-error-container);
   }
-}
-
-:deep(.account-menu) {
-  min-width: 240px;
 }
 </style>

@@ -22,21 +22,21 @@ describe('createPlaylistContextMenu.vue', () => {
   })
 
   it('opens CreatePlaylistForm when clicking New playlist', async () => {
-    h.render(Component)
+    h.renderMenu(Component)
     await h.user.click(screen.getByText('New playlist…'))
 
     await assertOpenModal(openModalMock, CreatePlaylistForm, { folder: null, playables: [] })
   })
 
   it('opens CreateSmartPlaylistForm when clicking New smart playlist', async () => {
-    h.render(Component)
+    h.renderMenu(Component)
     await h.user.click(screen.getByText('New smart playlist…'))
 
     await assertOpenModal(openModalMock, CreateSmartPlaylistForm, { folder: null })
   })
 
   it('opens CreatePlaylistFolderForm when clicking New folder', async () => {
-    h.render(Component)
+    h.renderMenu(Component)
     await h.user.click(screen.getByText('New folder…'))
 
     await assertOpenModal(openModalMock, CreatePlaylistFolderForm, { parent: null })

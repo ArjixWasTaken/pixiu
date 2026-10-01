@@ -40,7 +40,7 @@ describe('playlistContextMenu.vue', () => {
 
     userStore.state.current = user
 
-    const rendered = h.render(Component, {
+    const rendered = h.renderMenu(Component, {
       props: {
         playlist,
       },

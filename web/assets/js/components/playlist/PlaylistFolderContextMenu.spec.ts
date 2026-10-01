@@ -28,7 +28,7 @@ describe('playlistFolderContextMenu.vue', () => {
   const renderComponent = async (folder?: PlaylistFolder) => {
     folder = folder || h.factory('playlist-folder').make()
 
-    const rendered = h.render(Component, {
+    const rendered = h.renderMenu(Component, {
       props: {
         folder,
       },
@@ -72,6 +72,7 @@ describe('playlistFolderContextMenu.vue', () => {
   it('creates a child folder', async () => {
     const { folder } = await renderComponent()
 
+    await h.user.click(screen.getByText('Add'))
     await h.user.click(screen.getByText('New folder…'))
 
     await assertOpenModal(openModalMock, CreatePlaylistFolderForm, { parent: folder })

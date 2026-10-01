@@ -1,5 +1,5 @@
 <template>
-  <M3MenuPopover v-model:open="open" :placement class="flex items-center" menu-class="profile-menu">
+  <M3MenuPopover v-model:open="open" :placement class="flex items-center" :min-width="220">
     <template #anchor>
       <button
         v-if="withName"
@@ -7,7 +7,6 @@
         class="account-row m3-state m3-label-large"
         data-testid="profile-dropdown-trigger"
         type="button"
-        @click="open = !open"
       >
         <M3Avatar v-if="currentUser" :name="currentUser.name" :size :src="currentUser.avatar" />
         <span class="flex-1 min-w-0 truncate text-left">{{ currentUser?.name }}</span>
@@ -20,7 +19,6 @@
         class="rounded-full cursor-pointer overflow-hidden block"
         data-testid="profile-dropdown-trigger"
         type="button"
-        @click="open = !open"
       >
         <M3Avatar v-if="currentUser" :name="currentUser.name" :size :src="currentUser.avatar" />
       </button>
@@ -104,10 +102,6 @@ const choose = (item: ContextMenuAction) => {
 </script>
 
 <style scoped>
-:deep(.profile-menu) {
-  min-width: 220px;
-}
-
 .who {
   padding: 8px 16px;
   max-width: 280px;

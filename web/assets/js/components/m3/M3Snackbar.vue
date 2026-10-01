@@ -1,5 +1,5 @@
 <template>
-  <div class="m3-snackbar" role="status">
+  <div class="m3-snackbar">
     <span class="m3-body-medium message"><slot /></span>
     <slot name="action" />
     <button v-if="closeable" aria-label="Close" class="close m3-state" type="button" @click="emit('close')">

@@ -44,7 +44,9 @@ describe('allSongsScreen.vue', () => {
 
   it('renders', async () => {
     const [{ html }] = await renderComponent()
-    await waitFor(() => expect(html()).toMatchSnapshot())
+    // Once its cover (loaded on demand) shows: the snapshot is of the screen as it settles.
+    await waitFor(() => screen.getAllByTestId('thumbnail'))
+    expect(html()).toMatchSnapshot()
   })
 
   it('shuffles', async () => {
