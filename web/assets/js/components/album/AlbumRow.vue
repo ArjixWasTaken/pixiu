@@ -1,6 +1,6 @@
 <template>
   <article
-    class="album-row group h-[64px] pl-5 flex items-center border-b border-(--schemes-outline-variant) hover:bg-(--schemes-surface-container-high) transition-colors"
+    class="album-row group h-(--m3-row-height) pl-5 flex items-center border-b border-(--schemes-outline-variant) hover:bg-(--schemes-surface-container-high) transition-colors"
     data-testid="album-row"
     :draggable="true"
     @contextmenu.prevent="onContextMenu"

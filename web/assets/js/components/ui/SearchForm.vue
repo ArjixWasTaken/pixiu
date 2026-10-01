@@ -19,7 +19,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, ref, useTemplateRef } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import { eventBus } from '@/utils/eventBus'
 import { useRouter } from '@/composables/useRouter'
@@ -27,12 +27,13 @@ import { useViewport } from '@/composables/useViewport'
 
 import M3SearchBar from '@/components/m3/M3SearchBar.vue'
 
+const props = withDefaults(defineProps<{ autofocus?: boolean }>(), { autofocus: false })
 const emit = defineEmits<{ (e: 'focus-change', focused: boolean): void }>()
 
 const { go, url, onRouteChanged } = useRouter()
 const { isMobile } = useViewport()
 
-const placeholder = computed(() => (isMobile.value ? 'Search' : 'Search songs, artists and albums'))
+const placeholder = 'Search'
 
 const bar = useTemplateRef('bar')
 const q = ref('')
@@ -55,7 +56,14 @@ const onFocus = () => {
 
 const onBlur = () => emit('focus-change', false)
 
-eventBus.on('FOCUS_SEARCH_FIELD', () => bar.value?.focus())
+const focus = () => bar.value?.focus()
+
+onMounted(() => {
+  eventBus.on('FOCUS_SEARCH_FIELD', focus)
+  props.autofocus && focus()
+})
+
+onBeforeUnmount(() => eventBus.off('FOCUS_SEARCH_FIELD', focus))
 
 // Leaving the results leaves the search behind too.
 onRouteChanged(route => {

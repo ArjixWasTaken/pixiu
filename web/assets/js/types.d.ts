@@ -503,7 +503,6 @@ interface PlayableListControlsConfig {
   addTo: AddToMenuConfig
   clearQueue: boolean
   refresh: boolean
-  filter: boolean
 }
 
 interface Theme {

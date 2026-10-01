@@ -1,6 +1,8 @@
 <template>
-  <div v-if="config.sortable" class="sort-bar">
-    <M3MenuPopover v-model:open="open" menu-class="sort-menu">
+  <div v-if="showFilter || config.sortable" class="sort-bar" data-testid="list-toolbar">
+    <ListFilter v-if="showFilter" />
+    <span class="flex-1" />
+    <M3MenuPopover v-if="config.sortable" v-model:open="open" menu-class="sort-menu">
       <template #anchor>
         <M3Chip
           :icon="sortOrder === 'asc' ? 'arrow_upward' : 'arrow_downward'"
@@ -36,12 +38,18 @@
 import type { Ref } from 'vue'
 import { computed, ref } from 'vue'
 import { arrayify, requireInjection } from '@/utils/helpers'
-import { PlayableListConfigKey, PlayableListSortFieldKey, PlayableListSortOrderKey } from '@/config/symbols'
+import {
+  PlayableListConfigKey,
+  PlayableListSortFieldKey,
+  PlayableListSortOrderKey,
+  PlayablesKey,
+} from '@/config/symbols'
 
 import M3Chip from '@/components/m3/M3Chip.vue'
 import M3Icon from '@/components/m3/M3Icon.vue'
 import M3MenuItem from '@/components/m3/M3MenuItem.vue'
 import M3MenuPopover from '@/components/m3/M3MenuPopover.vue'
+import ListFilter from '@/components/ui/ListFilter.vue'
 
 const emit = defineEmits<{
   (e: 'sort', field: MaybeArray<PlayableListSortField>, order: SortOrder): void
@@ -51,6 +59,10 @@ const [sortField, setSortField] =
   requireInjection<[Ref<MaybeArray<PlayableListSortField>>, Closure]>(PlayableListSortFieldKey)
 const [sortOrder, setSortOrder] = requireInjection<[Ref<SortOrder>, Closure]>(PlayableListSortOrderKey)
 const [config] = requireInjection<[Partial<PlayableListConfig>]>(PlayableListConfigKey, [{}])
+
+const [allPlayables] = requireInjection<[Ref<Playable[]>]>(PlayablesKey, [ref([])])
+
+const showFilter = computed(() => config.filterable && allPlayables.value.length > 0)
 
 const open = ref(false)
 
@@ -81,10 +93,16 @@ const sort = (field: MaybeArray<PlayableListSortField>) => {
 </script>
 
 <style scoped>
+/* Filter and sort, kept in reach while the list scrolls. */
 .sort-bar {
+  position: sticky;
+  top: var(--sticky-top, 0);
+  z-index: 5;
   display: flex;
-  justify-content: flex-end;
-  padding: 0 24px 4px;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 24px;
+  background: var(--schemes-surface);
 }
 
 :deep(.sort-menu) {

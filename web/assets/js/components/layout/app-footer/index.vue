@@ -196,10 +196,9 @@ footer {
   flex-shrink: 0;
 
   &:not(.mobile) {
-    margin: 12px;
     min-height: var(--m3-player-height);
-    border-radius: 28px;
-    background: var(--schemes-surface-container-high);
+    border-top: 1px solid var(--schemes-outline-variant);
+    background: var(--schemes-surface-container);
   }
 
   &.mobile {

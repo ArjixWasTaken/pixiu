@@ -1,7 +1,7 @@
 <template>
   <section class="min-w-0" data-vue="HomeScreenBlock">
-    <header class="flex items-center justify-between gap-3 mb-3">
-      <h2 class="m3-title-large text-(--schemes-on-surface) min-w-0">
+    <header class="flex items-center justify-between gap-3 mb-2">
+      <h2 class="m3-title-medium text-(--schemes-on-surface) min-w-0">
         <slot name="header" />
       </h2>
       <div ref="actionsEl" class="flex items-center gap-1 shrink-0">

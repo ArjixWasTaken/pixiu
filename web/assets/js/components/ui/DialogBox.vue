@@ -2,8 +2,8 @@
   <dialog ref="dialog" :class="`${type}`" class="dialog-box">
     <div class="body">
       <M3Icon :name="icon" class="icon" />
-      <h3 class="m3-headline-small headline">{{ title || defaultTitle }}</h3>
-      <div class="m3-body-medium message">{{ message }}</div>
+      <h3 class="m3-headline-small headline">{{ headline }}</h3>
+      <div v-if="body" class="m3-body-medium message">{{ body }}</div>
     </div>
 
     <footer class="actions">
@@ -33,11 +33,12 @@ const icon = computed(
 )
 
 const defaultTitle = computed(
-  () =>
-    ({ info: '', success: '', warning: 'Heads up', danger: 'Something went wrong', confirm: 'Are you sure?' })[
-      type.value
-    ],
+  () => ({ info: '', success: '', warning: 'Heads up', danger: 'Something went wrong', confirm: '' })[type.value],
 )
+
+/** A question without a title is the headline itself ("Discard 1 file?"). */
+const headline = computed(() => title.value || (type.value === 'confirm' ? message.value : defaultTitle.value))
+const body = computed(() => (!title.value && type.value === 'confirm' ? '' : message.value))
 
 // @ts-ignore
 const close = () => dialog.value?.close()

@@ -1,6 +1,6 @@
 <template>
   <section id="mainContent" class="main-content" data-testid="main-content">
-    <TopBar />
+    <TopBar v-if="isMobile" />
     <NowPlayingPanel v-if="!isMobile" />
     <div class="screens">
       <!--
@@ -108,9 +108,7 @@ onMounted(() => {
   flex-direction: column;
   flex: 1 1 0%;
   min-width: 0;
-  margin: 12px 12px 0 0;
   overflow: hidden;
-  border-radius: 28px;
   background: var(--schemes-surface);
 }
 
@@ -120,18 +118,5 @@ onMounted(() => {
   min-height: 0;
   display: flex;
   flex-direction: column;
-}
-
-@media (max-width: 768px) {
-  .main-content {
-    margin: 0;
-    border-radius: 0;
-  }
-}
-
-@media (max-width: 640px) and (min-width: 769px) {
-  .main-content {
-    margin-left: 12px;
-  }
 }
 </style>

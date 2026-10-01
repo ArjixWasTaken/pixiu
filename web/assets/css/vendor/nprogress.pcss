@@ -6,20 +6,13 @@
 #nprogress {
   @apply pointer-events-none;
 
+  /* A thin line along the top of the window, out of the way of everything. */
   .bar {
-    @apply hidden;
+    @apply fixed z-9999 top-0 left-0 w-full h-[2px] bg-(--schemes-primary);
   }
 
-  /* Fancy blur effect */
-  .peg {
-    @apply hidden;
-  }
-
+  .peg,
   .spinner {
-    @apply block fixed z-9999 top-[15px] right-[13px];
-  }
-
-  .spinner-icon {
-    @apply w-[18px] aspect-square border-2 border-transparent border-t-(--schemes-primary) border-l-(--schemes-primary) rounded-full animate-spin;
+    @apply hidden;
   }
 }

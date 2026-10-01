@@ -1,5 +1,11 @@
 <template>
-  <div :draggable class="song-info" data-vue="FooterPlayableInfo" @dragstart="onDragStart">
+  <div
+    :class="{ behind: nowPlaying.open.value }"
+    :draggable
+    class="song-info"
+    data-vue="FooterPlayableInfo"
+    @dragstart="onDragStart"
+  >
     <button
       :aria-label="nowPlaying.open.value ? 'Collapse player' : 'Expand player'"
       :style="{ backgroundImage: `url(${cover}), url(${defaultCover})` }"
@@ -58,20 +64,25 @@ const toggleFavorite = () => use(playable.value, p => playableStore.toggleFavori
   flex-shrink: 0;
 }
 
+/* The expanded player shows all of this, large: the bar leaves it out meanwhile. */
+.behind > * {
+  visibility: hidden;
+}
+
 .album-thumb {
   width: 56px;
   height: 56px;
   flex-shrink: 0;
   border-radius: 12px;
+  background-size: cover;
+  background-position: center;
+  cursor: pointer;
 
   @media (pointer: fine) and (min-width: 769px) {
     width: 48px;
     height: 48px;
     border-radius: 6px;
   }
-  background-size: cover;
-  background-position: center;
-  cursor: pointer;
 }
 
 .meta {

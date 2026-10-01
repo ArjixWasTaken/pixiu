@@ -1,10 +1,9 @@
 <template>
-  <HomeScreenBlock>
+  <HomeScreenBlock v-if="loading || playables.length">
     <template #header>New songs</template>
     <PlayableCardGridSkeleton v-if="loading" class="-mx-6" role="status" aria-busy="true" aria-label="Loading" />
     <template v-else>
-      <PlayableCardGrid v-if="playables.length" class="-mx-6" :playables />
-      <p v-else>No songs available.</p>
+      <PlayableCardGrid class="-mx-6" :playables />
     </template>
   </HomeScreenBlock>
 </template>

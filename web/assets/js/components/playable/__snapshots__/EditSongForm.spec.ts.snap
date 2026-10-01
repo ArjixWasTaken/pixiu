@@ -9,9 +9,12 @@ exports[`editSongForm.vue > edits a single song 1`] = `
       <h2 data-v-cf47e900="" class="" data-testid="displayed-album-name">IV</h2>
     </div>
   </header>
-  <div data-v-64fb00eb="" data-v-cf47e900="" class="secondary m3-tabs tabs" role="tablist"><button data-v-64fb00eb="" aria-selected="true" class="active tab m3-state m3-title-small" role="tab" type="button"><span data-v-64fb00eb="" class="inner"><!--v-if--><span data-v-64fb00eb="">Details</span><span data-v-64fb00eb="" class="indicator"></span></span></button><button data-v-64fb00eb="" aria-selected="false" class="tab m3-state m3-title-small" role="tab" type="button"><span data-v-64fb00eb="" class="inner"><!--v-if--><span data-v-64fb00eb="">Lyrics</span>
+  <div data-v-64fb00eb="" data-v-cf47e900="" class="secondary m3-tabs tabs" role="tablist">
+    <!--v-if--><button data-v-64fb00eb="" aria-selected="true" class="active tab m3-state m3-title-small" role="tab" type="button"><span data-v-64fb00eb="" class="inner"><!--v-if--><span data-v-64fb00eb="">Details</span><span data-v-64fb00eb="" class="indicator"></span></span></button>
+    <!--v-if--><button data-v-64fb00eb="" aria-selected="false" class="tab m3-state m3-title-small" role="tab" type="button"><span data-v-64fb00eb="" class="inner"><!--v-if--><span data-v-64fb00eb="">Lyrics</span>
       <!--v-if--></span>
-    </button></div>
+    </button>
+  </div>
   <main data-v-cf47e900="" class="pt-4">
     <div data-v-cf47e900="" class="flex flex-col gap-4"><label data-v-4c8780fc="" data-v-cf47e900="" class="filled m3-text-field"><span data-v-4c8780fc="" class="field"><!--v-if--><input data-v-4c8780fc="" aria-label="Title" data-testid="title-input" name="title" placeholder=" " type="text" class="m3-body-large"><!--v-if--><fieldset data-v-4c8780fc="" aria-hidden="true"><legend data-v-4c8780fc="" class="m3-body-small"><span data-v-4c8780fc="">Title</span></legend>
         </fieldset><span data-v-4c8780fc="" class="label m3-body-large">Title</span></span>

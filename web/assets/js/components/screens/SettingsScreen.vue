@@ -1,7 +1,7 @@
 <template>
   <ScreenBase>
     <template #header>
-      <ScreenHeader>Settings</ScreenHeader>
+      <ScreenHeader layout="collapsed">Settings</ScreenHeader>
     </template>
 
     <div v-if="tabs.length" class="settings-tabs" data-vue="SettingsScreen">
@@ -14,6 +14,8 @@
           :id="`settings-panel-${tab.id}`"
           :key="tab.id"
           :aria-labelledby="`settings-tab-${tab.id}`"
+          :class="{ columns: tab.columns }"
+          class="panel"
           role="tabpanel"
         >
           <component :is="tab.component" v-bind="tab.props" />
@@ -51,14 +53,18 @@ export interface SettingsTab {
   icon?: string
   /** Whether the signed-in user sees the tab; everyone does by default. */
   visible?: () => boolean
+  /** Tabs of a group follow its name ("Server"); a tab without one is the user's own. */
+  group?: string
+  /** On a wide screen, its groups sit in two columns. */
+  columns?: boolean
 }
 
 const { currentUserCan } = usePolicies()
 const { getRouteParam, onScreenActivated } = useRouter()
 
 const allTabs = applyFilters<SettingsTab[]>(Filter.SETTINGS_TABS, [
-  { id: 'account', label: 'Account', icon: 'account_circle', component: AccountSettings },
-  { id: 'preferences', label: 'Preferences', icon: 'tune', component: PreferencesSettings },
+  { id: 'account', label: 'Account', icon: 'account_circle', component: AccountSettings, columns: true },
+  { id: 'preferences', label: 'Preferences', icon: 'tune', component: PreferencesSettings, columns: true },
   { id: 'youtube-music', label: 'YouTube Music', icon: 'smart_display', component: YouTubeMusicSettings },
   { id: 'library', label: 'Library', icon: 'library_music', component: LibrarySettings },
   {
@@ -66,6 +72,7 @@ const allTabs = applyFilters<SettingsTab[]>(Filter.SETTINGS_TABS, [
     label: 'Users',
     icon: 'group',
     component: UsersSettings,
+    group: 'Server',
     visible: () => currentUserCan.manageUsers(),
   },
   {
@@ -73,6 +80,8 @@ const allTabs = applyFilters<SettingsTab[]>(Filter.SETTINGS_TABS, [
     label: 'Sign-in',
     icon: 'login',
     component: SignInSettings,
+    group: 'Server',
+    columns: true,
     visible: () => currentUserCan.manageUsers(),
   },
   {
@@ -80,6 +89,8 @@ const allTabs = applyFilters<SettingsTab[]>(Filter.SETTINGS_TABS, [
     label: 'Email',
     icon: 'mail',
     component: EmailSettings,
+    group: 'Server',
+    columns: true,
     visible: () => currentUserCan.manageUsers(),
   },
 ])
@@ -132,7 +143,28 @@ watch(tabs, visible => {
 }
 
 .panels {
+  padding: var(--m3-gutter) 0;
+}
+
+.panel {
   max-width: 808px;
-  padding: 24px 0;
+}
+
+/* Wide enough for two: the groups flow down one column, then the next. */
+@media (min-width: 1280px) {
+  .panel.columns {
+    max-width: 1280px;
+
+    > :deep(.flex-col) {
+      display: block;
+      columns: 2;
+      column-gap: var(--m3-gutter);
+
+      > * {
+        break-inside: avoid;
+        margin-bottom: var(--m3-gutter);
+      }
+    }
+  }
 }
 </style>

@@ -9,8 +9,8 @@
     <SettingGroup>
       <template #title>Single sign-on</template>
       <template #subtitle>
-        An OpenID Connect provider (Authelia, say) people may sign in with, once they link their account there under
-        Settings → Account. It never makes accounts.
+        An OpenID Connect provider (Authelia, say). People sign in with it once they link it under Settings → Account;
+        it never makes accounts.
       </template>
       <SingleSignOnForm
         v-if="settings"

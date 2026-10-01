@@ -1,20 +1,5 @@
 <template>
   <ScreenBase id="homeWrapper">
-    <template #header>
-      <ScreenHeader layout="collapsed">
-        {{ greeting }}
-        <template #trailing>
-          <M3IconButton
-            v-if="!libraryEmpty"
-            data-testid="reorder-home-blocks-btn"
-            icon="tune"
-            label="Choose and order home blocks"
-            @click="openReorderModal"
-          />
-        </template>
-      </ScreenHeader>
-    </template>
-
     <ScreenEmptyState v-if="libraryEmpty">
       <template #icon>
         <M3Icon name="volume_off" />
@@ -23,22 +8,25 @@
       <EmptyLibraryHint />
     </ScreenEmptyState>
 
-    <div v-else class="home-sections flex flex-col gap-8 pt-2 w-full">
+    <div v-else class="home-sections flex flex-col gap-6 pt-6 w-full">
       <component v-for="block in shownBlocks" :key="block.id" :is="block.component" :loading :data-testid="block.id" />
+      <div>
+        <M3Button data-testid="reorder-home-blocks-btn" icon="tune" variant="text" @click="openReorderModal">
+          Choose sections
+        </M3Button>
+      </div>
       <BtnScrollToTop />
     </div>
   </ScreenBase>
 </template>
 
 <script lang="ts" setup>
-import { sample } from 'lodash-es'
 import type { Component } from 'vue'
 import { computed, defineAsyncComponent, ref } from 'vue'
 import { eventBus } from '@/utils/eventBus'
 import { commonStore } from '@/stores/commonStore'
 import { overviewStore } from '@/stores/overviewStore'
 import { preferenceStore } from '@/stores/preferenceStore'
-import { userStore } from '@/stores/userStore'
 import { useRouter } from '@/composables/useRouter'
 import { useModal } from '@/composables/useModal'
 import { useErrorHandler } from '@/composables/useErrorHandler'
@@ -55,8 +43,7 @@ import RandomArtists from '@/components/screens/home/RandomArtists.vue'
 import LeastPlayedSongs from '@/components/screens/home/LeastPlayedSongs.vue'
 import RandomSongs from '@/components/screens/home/RandomSongs.vue'
 import SimilarSongs from '@/components/screens/home/SimilarSongs.vue'
-import ScreenHeader from '@/components/ui/ScreenHeader.vue'
-import M3IconButton from '@/components/m3/M3IconButton.vue'
+import M3Button from '@/components/m3/M3Button.vue'
 import ScreenEmptyState from '@/components/ui/ScreenEmptyState.vue'
 import BtnScrollToTop from '@/components/ui/BtnScrollToTop.vue'
 import ScreenBase from '@/components/screens/ScreenBase.vue'
@@ -88,19 +75,6 @@ const blocks: Block[] = [
 
 const { openModal } = useModal()
 
-const greetings = [
-  'Oh hai!',
-  'Hey, %s!',
-  'Howdy, %s!',
-  'Yo!',
-  'How’s it going, %s?',
-  'Sup, %s?',
-  'How’s life, %s?',
-  'How’s your day, %s?',
-  'How have you been, %s?',
-]
-
-const greeting = computed(() => (userStore.current ? sample(greetings)!.replace('%s', userStore.current.name) : ''))
 const libraryEmpty = computed(() => commonStore.state.song_length === 0)
 
 const loading = ref(false)
@@ -156,15 +130,6 @@ useRouter().onScreenActivated('Home', async () => {
 
   > * {
     @apply min-w-0;
-  }
-
-  > *:not(:first-child) {
-    @apply relative;
-
-    /* Divider sits in the gap between blocks. */
-    &::before {
-      @apply content-[''] absolute -top-6 left-0 right-0 -mx-6 h-px bg-(--schemes-surface-container-high);
-    }
   }
 }
 </style>

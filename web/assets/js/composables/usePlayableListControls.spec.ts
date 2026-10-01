@@ -35,12 +35,6 @@ describe('usePlayableListControls', () => {
     expect(usePlayableListControls('Album').config.refresh).toBe(false)
   })
 
-  it('enables filter for supported screens', () => {
-    expect(usePlayableListControls('Queue').config.filter).toBe(true)
-    expect(usePlayableListControls('Artist').config.filter).toBe(true)
-    expect(usePlayableListControls('Favorites').config.filter).toBe(true)
-  })
-
   it('accepts config overrides as object', () => {
     const { config } = usePlayableListControls('Album', { clearQueue: true })
     expect(config.clearQueue).toBe(true)

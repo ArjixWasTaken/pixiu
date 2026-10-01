@@ -5,6 +5,7 @@
     class="album-artist-card"
     data-testid="artist-album-card"
     interactive
+    variant="plain"
     tabindex="0"
     @click="open"
     @contextmenu.prevent="onContextMenu"
@@ -94,6 +95,7 @@ const onContextMenu = (e: MouseEvent) => emit('contextmenu', e)
 .text {
   min-width: 0;
   padding: 0 4px 4px;
+  margin-top: -4px;
 
   :deep(p),
   :deep(a) {

@@ -1,8 +1,8 @@
 <template>
   <div
     ref="scroller"
+    :class="{ nested }"
     class="scroll-mask-y virtual-grid-scroller will-change-transform overflow-scroll h-full"
-    @scroll.passive="onScroll"
   >
     <!-- Measuring phase: render one item to measure height, gap, and padding -->
     <div v-if="measuring && items.length" ref="measureContainer" v-bind="$attrs" class="grid">
@@ -20,7 +20,8 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, toRefs, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, toRefs, watch } from 'vue'
+import { useScrollViewport } from '@/composables/useScrollViewport'
 
 defineOptions({ inheritAttrs: false })
 
@@ -34,9 +35,6 @@ const { items, minItemWidth } = toRefs(props)
 
 const scroller = ref<HTMLElement>()
 const measureContainer = ref<HTMLElement>()
-const scrollerWidth = ref(0)
-const scrollerHeight = ref(0)
-const scrollTop = ref(0)
 const measuredItemHeight = ref(0)
 const measuredRowGap = ref(0)
 const measuredColumnGap = ref(0)
@@ -45,6 +43,15 @@ const measuredPaddingY = ref(0)
 const measuring = ref(true)
 
 const renderAhead = 3
+
+const {
+  scrollTop,
+  height: scrollerHeight,
+  width: scrollerWidth,
+  nested,
+  nearEnd,
+  scrollTo,
+} = useScrollViewport(scroller, () => nearEnd(rowHeight.value) && emit('scrolled-to-end'))
 
 const columnCount = computed(() => {
   const contentWidth = scrollerWidth.value - measuredPaddingX.value
@@ -105,52 +112,9 @@ const measure = async () => {
   measuring.value = false
 }
 
-let scrollRafId = 0
+onMounted(measure)
 
-const onScroll = (e: Event) => {
-  cancelAnimationFrame(scrollRafId)
-
-  scrollRafId = requestAnimationFrame(() => {
-    const el = scroller.value
-
-    if (!el) {
-      return
-    }
-
-    scrollTop.value = (e.target as HTMLElement).scrollTop
-
-    if (el.scrollTop + el.clientHeight + rowHeight.value >= el.scrollHeight) {
-      emit('scrolled-to-end')
-    }
-  })
-}
-
-const resizeObserver = new ResizeObserver((entries: ResizeObserverEntry[]) => {
-  for (const entry of entries) {
-    scrollerWidth.value = entry.contentRect.width
-    scrollerHeight.value = entry.contentRect.height
-  }
-})
-
-onMounted(async () => {
-  if (scroller.value) {
-    resizeObserver.observe(scroller.value)
-    scrollerWidth.value = scroller.value.offsetWidth
-    scrollerHeight.value = scroller.value.offsetHeight
-  }
-
-  await measure()
-})
-
-onBeforeUnmount(() => {
-  cancelAnimationFrame(scrollRafId)
-
-  if (scroller.value) {
-    resizeObserver.unobserve(scroller.value)
-  }
-})
-
-const scrollToTop = () => scroller.value?.scrollTo({ top: 0, behavior: 'smooth' })
+const scrollToTop = () => scrollTo(0)
 
 watch(minItemWidth, () => measure())
 
@@ -161,7 +125,7 @@ watch(
       !measuring.value &&
       items.value.length > 0 &&
       measuredItemHeight.value > 0 &&
-      totalHeight.value <= scrollerHeight.value
+      (totalHeight.value <= scrollerHeight.value || nearEnd(rowHeight.value))
     ) {
       emit('scrolled-to-end')
     }
@@ -172,10 +136,6 @@ watch(
 watch(
   () => items.value.length,
   async (newLen: number, oldLen: number) => {
-    if (newLen < oldLen) {
-      scrollTop.value = 0
-    }
-
     if (oldLen === 0 && newLen > 0 && !measuredItemHeight.value) {
       await measure()
     }
@@ -186,7 +146,14 @@ defineExpose({ scrollToTop })
 </script>
 
 <style lang="postcss" scoped>
-.virtual-grid-scroller {
+/* On a screen, the screen scrolls the grid. */
+.virtual-grid-scroller.nested {
+  overflow: visible;
+  height: auto;
+  mask-image: none;
+}
+
+.virtual-grid-scroller:not(.nested) {
   @supports (scrollbar-gutter: stable) {
     overflow: auto;
     scrollbar-gutter: stable;

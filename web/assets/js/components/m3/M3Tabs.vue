@@ -6,25 +6,26 @@
     role="tablist"
     @scroll.passive="measure"
   >
-    <button
-      v-for="tab in tabs"
-      :id="idPrefix && `${idPrefix}-tab-${tab.id}`"
-      :key="tab.id"
-      :aria-controls="idPrefix && `${idPrefix}-panel-${tab.id}`"
-      :aria-selected="tab.id === value"
-      :class="{ active: tab.id === value, 'with-icon': tab.icon && !secondary }"
-      :data-testid="idPrefix && `${idPrefix}-tab-${tab.id}`"
-      class="tab m3-state m3-title-small"
-      role="tab"
-      type="button"
-      @click="value = tab.id"
-    >
-      <span class="inner">
-        <M3Icon v-if="tab.icon" :fill="tab.id === value" :name="tab.icon" />
-        <span>{{ tab.label }}</span>
-        <span v-if="tab.id === value" class="indicator" />
-      </span>
-    </button>
+    <template v-for="(tab, index) in tabs" :key="tab.id">
+      <span v-if="startsGroup(index)" class="group m3-label-medium" role="presentation">{{ tab.group }}</span>
+      <button
+        :id="idPrefix && `${idPrefix}-tab-${tab.id}`"
+        :aria-controls="idPrefix && `${idPrefix}-panel-${tab.id}`"
+        :aria-selected="tab.id === value"
+        :class="{ active: tab.id === value, 'with-icon': tab.icon && !secondary }"
+        :data-testid="idPrefix && `${idPrefix}-tab-${tab.id}`"
+        class="tab m3-state m3-title-small"
+        role="tab"
+        type="button"
+        @click="value = tab.id"
+      >
+        <span class="inner">
+          <M3Icon v-if="tab.icon" :fill="tab.id === value" :name="tab.icon" />
+          <span>{{ tab.label }}</span>
+          <span v-if="tab.id === value" class="indicator" />
+        </span>
+      </button>
+    </template>
   </div>
 </template>
 
@@ -37,9 +38,11 @@ export interface M3Tab {
   id: string
   label: string
   icon?: string
+  /** Tabs of a group follow its name, set apart from those before. */
+  group?: string
 }
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     tabs: M3Tab[]
     secondary?: boolean
@@ -54,6 +57,9 @@ withDefaults(
 )
 
 const value = defineModel<string>()
+
+const startsGroup = (index: number) =>
+  Boolean(props.tabs[index].group) && props.tabs[index].group !== props.tabs[index - 1]?.group
 
 const list = useTemplateRef('list')
 const overflowsStart = ref(false)
@@ -150,6 +156,20 @@ watch(value, revealSelected)
   flex-direction: column;
   justify-content: center;
   gap: 2px;
+}
+
+.group {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  margin: 10px 0 10px 16px;
+  padding: 0 4px 0 20px;
+  border-left: 1px solid var(--schemes-outline-variant);
+  color: var(--schemes-outline);
+  font-size: calc(var(--static-label-small-size) * 1px);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .indicator {

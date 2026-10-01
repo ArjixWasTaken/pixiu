@@ -1,5 +1,5 @@
 <template>
-  <HomeScreenBlock>
+  <HomeScreenBlock v-if="loading || artists.length">
     <template #header>Random artists</template>
     <template #actions>
       <M3IconButton v-if="artists.length" :disabled="refreshing" label="Refresh" @click.prevent="refresh">
@@ -10,10 +10,9 @@
       <template v-if="loading">
         <ArtistCardSkeleton v-for="i in 6" :key="i" />
       </template>
-      <template v-else-if="artists.length">
+      <template v-else>
         <ArtistCard v-for="artist in artists" :key="artist.id" :artist />
       </template>
-      <p v-else class="text-(--schemes-on-surface-variant)">No artists yet.</p>
     </Carousel>
   </HomeScreenBlock>
 </template>

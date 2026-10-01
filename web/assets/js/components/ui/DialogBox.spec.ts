@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vite-plus/test'
 import { screen } from '@testing-library/vue'
+import { nextTick } from 'vue'
 import { createHarness } from '@/__tests__/TestHarness'
 import Component from './DialogBox.vue'
 
@@ -33,5 +34,16 @@ describe('dialogBox', () => {
   it('has info class by default', () => {
     renderComponent()
     expect(document.querySelector('dialog.info')).toBeTruthy()
+  })
+
+  it('makes a bare question the headline', async () => {
+    const { container } = renderComponent()
+    const dialog = (container.querySelector('dialog') as any)['__vueParentComponent'].exposed
+
+    dialog.confirm('Discard 1 file?')
+    await nextTick()
+
+    screen.getByRole('heading', { name: 'Discard 1 file?', hidden: true })
+    expect(screen.queryByText('Are you sure?')).toBeNull()
   })
 })

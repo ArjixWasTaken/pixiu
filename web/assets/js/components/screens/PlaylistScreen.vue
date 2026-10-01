@@ -1,5 +1,5 @@
 <template>
-  <ScreenBase v-if="playlistId" :background-image="playlist?.cover || thumbnails[0]">
+  <ScreenBase v-if="playlistId">
     <template #header>
       <ScreenHeader
         v-if="playlist"

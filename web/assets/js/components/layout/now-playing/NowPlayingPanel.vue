@@ -86,13 +86,12 @@ onRouteChanged(() => nowPlaying.close())
 <style scoped>
 .now-playing-panel {
   position: absolute;
-  inset: 76px 0 0 0;
+  inset: 0;
   z-index: 30;
   display: flex;
   gap: 48px;
-  padding: 16px 40px 24px;
+  padding: 24px 40px;
   overflow: hidden;
-  border-radius: 0 0 28px 28px;
   background: var(--schemes-surface);
 }
 

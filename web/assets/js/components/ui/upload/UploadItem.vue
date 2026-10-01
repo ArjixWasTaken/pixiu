@@ -103,10 +103,11 @@ const abort = async () => {
 
 <style lang="postcss" scoped>
 @reference '@css/app.pcss';
+/* Progress runs along the foot of the row, clear of its text. */
 article > div::before {
   width: v-bind(progressBarWidth);
   content: '';
-  @apply absolute h-full top-0 left-0 z-0 duration-200 ease-out bg-(--schemes-primary);
+  @apply absolute h-[3px] bottom-0 left-0 z-0 transition-[width] duration-200 ease-out bg-(--schemes-primary);
 }
 
 .uploaded:hover {

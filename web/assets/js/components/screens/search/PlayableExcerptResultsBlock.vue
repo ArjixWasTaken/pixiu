@@ -49,6 +49,7 @@ const {
   {},
   {
     sortable: false,
+    filterable: false,
   },
 )
 

@@ -30,6 +30,7 @@ describe('settingsScreen.vue', () => {
       'YouTube Music',
       'Library',
     ])
+    expect(screen.queryByText('Server')).toBeNull()
   })
 
   it('shows admins the server tabs too', () => {
@@ -39,5 +40,8 @@ describe('settingsScreen.vue', () => {
     for (const tab of ['users', 'sign-in', 'email']) {
       screen.getByTestId(`settings-tab-${tab}`)
     }
+
+    // After a label of their own.
+    screen.getByText('Server')
   })
 })

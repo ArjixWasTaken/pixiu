@@ -1,14 +1,10 @@
 <template>
   <section class="max-h-full min-h-full w-full flex flex-col transform-gpu overflow-hidden">
-    <div
-      v-if="backgroundImage"
-      class="cover-bg"
-      data-testid="cover-bg"
-      :style="{ backgroundImage: `url(${backgroundImage})` }"
-    />
-    <slot name="header" />
-
     <main class="screen-body flex flex-col flex-1 place-content-start overflow-y-auto">
+      <!-- In the scroller, so the header scrolls away; what must stay in reach is sticky. -->
+      <div v-if="$slots.header" class="screen-head">
+        <slot name="header" />
+      </div>
       <HookSlot :context="{ screen: getCurrentScreen() }" name="screen.top" />
       <slot />
     </main>
@@ -20,20 +16,10 @@ import { useRouter } from '@/composables/useRouter'
 
 import HookSlot from '@/components/utils/HookSlot.vue'
 
-withDefaults(
-  defineProps<{
-    backgroundImage?: string
-  }>(),
-  {
-    backgroundImage: undefined,
-  },
-)
-
 const { getCurrentScreen } = useRouter()
 </script>
 
 <style lang="postcss" scoped>
-@reference '@css/app.pcss';
 main {
   -ms-overflow-style: -ms-autohiding-scrollbar;
 }
@@ -50,20 +36,14 @@ main {
     --screen-pad-bottom: 16px;
   }
 
+  .screen-head {
+    flex-shrink: 0;
+    margin: 0 calc(-1 * var(--screen-pad-x));
+  }
+
   /* Lists and grids that run to the edges of the screen. */
   :slotted(.screen-bleed) {
     margin: 0 calc(-1 * var(--screen-pad-x)) calc(-1 * var(--screen-pad-bottom));
   }
-}
-
-/* The current album or artist, blurred behind the header. */
-.cover-bg {
-  @apply absolute bg-cover bg-center pointer-events-none;
-  inset: 0 0 auto 0;
-  height: 360px;
-  filter: blur(48px) saturate(1.2);
-  opacity: 0.35;
-  -webkit-mask-image: linear-gradient(to bottom, black, transparent);
-  mask-image: linear-gradient(to bottom, black, transparent);
 }
 </style>

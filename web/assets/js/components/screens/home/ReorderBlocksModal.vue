@@ -7,7 +7,7 @@
     @keydown.esc="close"
   >
     <header>
-      <h1>Home blocks</h1>
+      <h1>Home sections</h1>
     </header>
 
     <main class="space-y-1">

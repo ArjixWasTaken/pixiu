@@ -1,7 +1,7 @@
 <template>
   <div
     ref="wrapper"
-    class="playable-list-wrap relative flex flex-col flex-1 overflow-auto py-0"
+    class="playable-list-wrap relative flex flex-col flex-1 py-0"
     data-testid="song-list"
     @keydown.delete.prevent.stop="handleDelete"
     @keydown.enter.prevent.stop="handleEnter"
@@ -48,6 +48,7 @@ import { useListSelection } from '@/composables/useListSelection'
 import { playback } from '@/services/playbackManager'
 import { useSwipeDirection } from '@/composables/useSwipeDirection'
 import { useContextMenu } from '@/composables/useContextMenu'
+import { useSizeVariable } from '@/composables/useSizeVariable'
 
 import {
   FilteredPlayablesKey,
@@ -309,18 +310,18 @@ const showDiscLabel = (row: Playable) => {
   return discIndexMap.value[index] !== undefined
 }
 
-const standardSongItemHeight = 72
-const discNumberHeight = 44
+const songItemHeight = useSizeVariable('--m3-row-height', 72)
+const discNumberHeight = useSizeVariable('--m3-disc-height', 44)
 
 const calculatedItemHeight = computed(() => {
   if (noDiscLabel.value) {
-    return standardSongItemHeight
+    return songItemHeight.value
   }
 
   const discCount = Object.keys(discIndexMap.value).length
-  const totalAdditionalPixels = discCount * discNumberHeight
+  const totalAdditionalPixels = discCount * discNumberHeight.value
 
-  const totalHeight = rows.value.length * standardSongItemHeight + totalAdditionalPixels
+  const totalHeight = rows.value.length * songItemHeight.value + totalAdditionalPixels
 
   return totalHeight / rows.value.length
 })

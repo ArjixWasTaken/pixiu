@@ -1,5 +1,5 @@
 <template>
-  <HomeScreenBlock>
+  <HomeScreenBlock v-if="loading || playables.length">
     <template #header>Random songs</template>
     <template #actions>
       <M3IconButton v-if="playables.length" :disabled="refreshing" label="Refresh" @click.prevent="refresh">
@@ -8,8 +8,7 @@
     </template>
     <PlayableCardGridSkeleton v-if="loading" class="-mx-6" role="status" aria-busy="true" aria-label="Loading" />
     <template v-else>
-      <PlayableCardGrid v-if="playables.length" :aria-busy="refreshing" class="-mx-6" :playables />
-      <p v-else>No songs available.</p>
+      <PlayableCardGrid :aria-busy="refreshing" class="-mx-6" :playables />
     </template>
   </HomeScreenBlock>
 </template>

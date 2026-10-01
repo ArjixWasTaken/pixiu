@@ -9,7 +9,7 @@
       tabindex="0"
       @dblclick.prevent.stop="play"
     >
-      <PlayableThumbnail :playable @clicked="play" />
+      <PlayableThumbnail :numbered="inAlbum" :playable @clicked="play" />
 
       <span class="content">
         <span class="title m3-body-large">
@@ -38,10 +38,15 @@
           <StarRating :rateable="playable" size="xs" />
         </span>
         <span v-if="shouldShowColumn('duration')" class="time m3-label-medium">{{ fmtLength }}</span>
-        <FavoriteButton v-if="shouldShowColumn('favorite')" :favorite="playable.favorite" @toggle="toggleFavorite" />
+        <FavoriteButton
+          v-if="shouldShowColumn('favorite')"
+          :class="{ reveal: !playable.favorite }"
+          :favorite="playable.favorite"
+          @toggle="toggleFavorite"
+        />
         <M3IconButton
           :icon-size="20"
-          class="more"
+          class="more reveal"
           icon="more_vert"
           label="More actions"
           @click.stop="emit('request-context-menu', $event)"
@@ -99,6 +104,9 @@ const album = computed(() => playable.value.album_name)
 
 const { isMobile } = useViewport()
 
+/** In an album, the cover is the album's: rows show their track number instead. */
+const inAlbum = computed(() => context.type === 'Album')
+
 /** When it was played, on Recently played. */
 const played = computed(() =>
   context.type === 'RecentlyPlayed' && playable.value.played_at ? `played ${timeAgo(playable.value.played_at)}` : null,
@@ -106,7 +114,11 @@ const played = computed(() =>
 
 /** "Artist · album" on wide screens; phones show the length instead of the album. */
 const supporting = computed(() =>
-  [artist.value, isMobile.value ? fmtLength : shouldShowColumn('album') ? album.value : null, played.value]
+  [
+    artist.value,
+    isMobile.value ? fmtLength : shouldShowColumn('album') && !inAlbum.value ? album.value : null,
+    played.value,
+  ]
     .filter(Boolean)
     .join(' · '),
 )
@@ -118,7 +130,10 @@ const toggleFavorite = () => playableStore.toggleFavorite(playable.value)
 
 <style lang="postcss" scoped>
 .disc {
-  padding: 16px 16px 8px;
+  display: flex;
+  align-items: flex-end;
+  height: var(--m3-disc-height);
+  padding: 0 16px 8px;
   color: var(--schemes-on-surface-variant);
 }
 
@@ -217,6 +232,18 @@ const toggleFavorite = () => playableStore.toggleFavorite(playable.value)
 
   @media (max-width: 768px) {
     display: none;
+  }
+}
+
+/* With a mouse, a row's actions show when it is pointed at, focused or selected. */
+@media (hover: hover) {
+  .reveal {
+    opacity: 0;
+    transition: opacity 100ms linear;
+
+    .song-item:is(:hover, :focus-within, .selected) & {
+      opacity: 1;
+    }
   }
 }
 

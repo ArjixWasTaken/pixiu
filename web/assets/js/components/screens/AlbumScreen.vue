@@ -1,5 +1,5 @@
 <template>
-  <ScreenBase :background-image="album?.cover">
+  <ScreenBase>
     <template #header>
       <ScreenHeaderSkeleton v-if="loading && !album" role="status" aria-busy="true" aria-label="Loading" />
 
@@ -21,16 +21,8 @@
         </template>
 
         <template #controls>
-          <SongListControls
-            v-if="songs.length"
-            :config="songsControls"
-            @filter="applyFilter"
-            @play-all="playAll"
-            @play-selected="playSelected"
-          >
-            <FavoriteButton v-if="album.favorite" :favorite="album.favorite" @toggle="toggleFavorite" />
-
-            <StarRating :rateable="album" class="px-2" />
+          <SongListControls v-if="songs.length" :config @play-all="playAll" @play-selected="playSelected">
+            <FavoriteButton :favorite="album.favorite" @toggle="toggleFavorite" />
 
             <M3IconButton icon="more_vert" label="More actions" @click="requestContextMenu" />
           </SongListControls>
@@ -115,7 +107,6 @@ const AlbumCard = defineAsyncComponent(() => import('@/components/album/AlbumCar
 const ContextMenu = defineAsyncComponent(() => import('@/components/album/AlbumContextMenu.vue'))
 const AlbumCardSkeleton = defineAsyncComponent(() => import('@/components/ui/album-artist/ArtistAlbumCardSkeleton.vue'))
 const FavoriteButton = defineAsyncComponent(() => import('@/components/ui/FavoriteButton.vue'))
-const StarRating = defineAsyncComponent(() => import('@/components/ui/StarRating.vue'))
 
 const { getRouteParam, go, onScreenActivated, onRouteChanged, url, triggerNotFound } = useRouter()
 const { PlayableListControls: SongListControls, config } = usePlayableListControls('Album')
@@ -125,8 +116,6 @@ const { openContextMenu } = useContextMenu()
 
 const activeTab = ref<Tab>('songs')
 
-// Filtering lists songs, so only the Songs tab offers it.
-const songsControls = computed(() => (activeTab.value === 'songs' ? config : { ...config, filter: false }))
 const album = ref<Album | undefined>()
 const songs = ref<Song[]>([])
 const loading = ref(false)
@@ -143,7 +132,6 @@ const {
   onPressEnter,
   playAll,
   playSelected,
-  applyFilter,
   onSwipe,
 } = usePlayableList(songs, { type: 'Album' })
 

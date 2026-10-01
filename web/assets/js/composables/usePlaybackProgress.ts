@@ -1,6 +1,7 @@
 import { computed, onBeforeUnmount, ref } from 'vue'
 import { playback } from '@/services/playbackManager'
 import { crossfadeService } from '@/services/crossfadeService'
+import { queueStore } from '@/stores/queueStore'
 import { secondsToHis } from '@/utils/formatters'
 
 const activeMedia = (): HTMLMediaElement | null => {
@@ -48,7 +49,8 @@ export const usePlaybackProgress = () => {
 
   const percent = computed(() => (duration.value > 0 ? (currentTime.value / duration.value) * 100 : 0))
   const current = computed(() => secondsToHis(currentTime.value))
-  const total = computed(() => secondsToHis(duration.value))
+  // Before the media loads, the song's own length.
+  const total = computed(() => secondsToHis(duration.value || queueStore.current?.length || 0))
 
   return { currentTime, duration, buffered, loading, seeking, percent, current, total, seek }
 }

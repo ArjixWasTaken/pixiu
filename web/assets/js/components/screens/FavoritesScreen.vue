@@ -27,13 +27,7 @@
         </template>
 
         <template #controls>
-          <PlayableListControls
-            v-if="playables.length"
-            :config
-            @filter="applyFilter"
-            @play-all="playAll"
-            @play-selected="playSelected"
-          />
+          <PlayableListControls v-if="playables.length" :config @play-all="playAll" @play-selected="playSelected" />
         </template>
       </ScreenHeader>
     </template>
@@ -96,7 +90,6 @@ const {
   onPressEnter,
   playAll,
   playSelected,
-  applyFilter,
   onSwipe,
   sort: baseSort,
   config: listConfig,

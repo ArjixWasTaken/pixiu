@@ -1,12 +1,14 @@
 <template>
   <button
-    :style="{ backgroundImage: `url(${defaultCover})` }"
+    :class="{ numbered }"
+    :style="numbered ? undefined : { backgroundImage: `url(${defaultCover})` }"
     :title
     class="song-thumbnail"
     type="button"
     @click.prevent.stop="emit('clicked')"
   >
-    <img v-if="src" :src alt="Cover image" loading="lazy" />
+    <span v-if="numbered" class="number m3-body-medium">{{ playable.track || '–' }}</span>
+    <img v-else-if="src" :src alt="Cover image" loading="lazy" />
     <span v-if="current" class="now">
       <template v-if="playable.playback_state === 'Playing'">
         <span
@@ -30,7 +32,14 @@ import { useBranding } from '@/composables/useBranding'
 
 import M3Icon from '@/components/m3/M3Icon.vue'
 
-const props = defineProps<{ playable: Playable }>()
+const props = withDefaults(
+  defineProps<{
+    playable: Playable
+    /** The track number in place of the cover, as in an album's list. */
+    numbered?: boolean
+  }>(),
+  { numbered: false },
+)
 const emit = defineEmits<{ (e: 'clicked'): void }>()
 
 const { playable } = toRefs(props)
@@ -69,6 +78,28 @@ const title = computed(() => {
     width: 100%;
     height: 100%;
     object-fit: cover;
+  }
+}
+
+.numbered {
+  background: transparent;
+
+  .number {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--schemes-on-surface-variant);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .now,
+  .hover {
+    background: var(--schemes-surface);
+  }
+
+  .hover {
+    color: var(--schemes-on-surface);
   }
 }
 

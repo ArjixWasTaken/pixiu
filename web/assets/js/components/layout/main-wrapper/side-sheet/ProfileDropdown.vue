@@ -1,7 +1,20 @@
 <template>
-  <M3MenuPopover v-model:open="open" class="flex items-center" menu-class="profile-menu">
+  <M3MenuPopover v-model:open="open" :placement class="flex items-center" menu-class="profile-menu">
     <template #anchor>
       <button
+        v-if="withName"
+        aria-label="Account"
+        class="account-row m3-state m3-label-large"
+        data-testid="profile-dropdown-trigger"
+        type="button"
+        @click="open = !open"
+      >
+        <M3Avatar v-if="currentUser" :name="currentUser.name" :size :src="currentUser.avatar" />
+        <span class="flex-1 min-w-0 truncate text-left">{{ currentUser?.name }}</span>
+        <M3Icon :size="20" name="unfold_more" />
+      </button>
+      <button
+        v-else
         :style="{ width: `${size}px`, height: `${size}px` }"
         aria-label="Account"
         class="rounded-full cursor-pointer overflow-hidden block"
@@ -38,10 +51,19 @@ import { applyFilters } from '@/hooks'
 
 import M3Avatar from '@/components/m3/M3Avatar.vue'
 import M3Divider from '@/components/m3/M3Divider.vue'
+import M3Icon from '@/components/m3/M3Icon.vue'
 import M3MenuItem from '@/components/m3/M3MenuItem.vue'
 import M3MenuPopover from '@/components/m3/M3MenuPopover.vue'
 
-withDefaults(defineProps<{ size?: number }>(), { size: 40 })
+withDefaults(
+  defineProps<{
+    size?: number
+    /** A full-width row with the account's name, as at the foot of the sidebar. */
+    withName?: boolean
+    placement?: 'bottom-end' | 'top-start' | 'right-end'
+  }>(),
+  { size: 40, withName: false, placement: 'bottom-end' },
+)
 
 const AboutKoelModal = defineAsyncComponent(() => import('@/components/meta/AboutKoelModal.vue'))
 
@@ -97,5 +119,17 @@ const choose = (item: ContextMenuAction) => {
 
 .who-secondary {
   color: var(--schemes-on-surface-variant);
+}
+
+.account-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  height: 48px;
+  padding: 0 12px;
+  border-radius: 12px;
+  color: var(--schemes-on-surface);
+  cursor: pointer;
 }
 </style>

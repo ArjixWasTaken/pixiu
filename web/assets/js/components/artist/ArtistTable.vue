@@ -64,7 +64,7 @@
       </span>
     </div>
 
-    <VirtualScroller :items="artists" :item-height="64" @scrolled-to-end="$emit('scrolled-to-end')">
+    <VirtualScroller :items="artists" :item-height="rowHeight" @scrolled-to-end="$emit('scrolled-to-end')">
       <template #default="{ item }: { item: Artist }">
         <ArtistRow :artist="item" @toggle-favorite="emit('toggle-favorite', $event)" />
       </template>
@@ -75,6 +75,7 @@
 <script lang="ts" setup>
 import { toRefs } from 'vue'
 import { useTableColumnVisibility } from '@/composables/useTableColumnVisibility'
+import { useSizeVariable } from '@/composables/useSizeVariable'
 import { artistTableColumnConfig } from '@/config/tables'
 
 import VirtualScroller from '@/components/ui/VirtualScroller.vue'
@@ -95,6 +96,7 @@ const emit = defineEmits<{
 }>()
 
 const { shouldShowColumn } = useTableColumnVisibility(artistTableColumnConfig)
+const rowHeight = useSizeVariable('--m3-row-height', 72)
 const { field, order } = toRefs(props)
 
 const onSort = (clicked: ArtistListSortField) => {

@@ -23,7 +23,7 @@ describe('artistScreen.vue', () => {
     await waitFor(() => expect(fetchSongs).toHaveBeenCalledWith('ar-1'))
     await screen.findByText('Kevin MacLeod')
     // The header's async parts, loaded before the test ends.
-    await screen.findByRole('radiogroup', { name: /^Rating/ })
+    await screen.findByRole('button', { name: /favorites$/ })
   }
 
   it('filters the songs on the Songs tab', async () => {

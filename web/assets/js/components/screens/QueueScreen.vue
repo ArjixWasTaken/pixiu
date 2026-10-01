@@ -17,7 +17,6 @@
           <PlayableListControls
             v-if="playables.length"
             :config
-            @filter="applyFilter"
             @clear-queue="clearQueue"
             @play-all="playAll"
             @play-selected="playSelected"
@@ -85,7 +84,6 @@ const {
   thumbnails,
   selectedPlayables,
   playSelected,
-  applyFilter,
   onSwipe,
 } = usePlayableList(toRef(queueStore.state, 'playables'), { type: 'Queue' }, { reorderable: true, sortable: false })
 

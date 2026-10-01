@@ -107,6 +107,21 @@ describe('playableListItem.vue', () => {
     screen.getByText('Test Artist · Test Album')
   })
 
+  it('shows the track number in place of the cover in an album', () => {
+    const playable = h.factory('song').make({ track: 7, album_name: 'Groovy', favorite: false })
+    renderComponent(playable, false, { type: 'Album' })
+
+    screen.getByText('7')
+    expect(screen.queryByAltText('Cover image')).toBeNull()
+    expect(screen.queryByText(/Groovy/)).toBeNull()
+  })
+
+  it('shows the cover elsewhere', () => {
+    renderComponent(h.factory('song').make({ track: 7, album_cover: 'http://test/cover.jpg' }))
+
+    screen.getByAltText('Cover image')
+  })
+
   it('emits play event on double click', async () => {
     const { emitted } = renderComponent()
     await h.user.dblClick(screen.getByTestId('song-item'))

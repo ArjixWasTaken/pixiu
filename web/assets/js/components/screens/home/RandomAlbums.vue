@@ -1,5 +1,5 @@
 <template>
-  <HomeScreenBlock>
+  <HomeScreenBlock v-if="loading || albums.length">
     <template #header>Random albums</template>
     <template #actions>
       <M3IconButton v-if="albums.length" :disabled="refreshing" label="Refresh" @click.prevent="refresh">
@@ -10,10 +10,9 @@
       <template v-if="loading">
         <AlbumCardSkeleton v-for="i in 6" :key="i" />
       </template>
-      <template v-else-if="albums.length">
+      <template v-else>
         <AlbumCard v-for="album in albums" :key="album.id" :album />
       </template>
-      <p v-else class="text-(--schemes-on-surface-variant)">No albums yet.</p>
     </Carousel>
   </HomeScreenBlock>
 </template>
