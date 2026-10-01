@@ -9,8 +9,10 @@ import { DialogBoxStub, MessageToasterStub, OverlayStub } from '@/__tests__/stub
 import { commonStore } from '@/stores/commonStore'
 import { userStore } from '@/stores/userStore'
 import { http } from '@/services/http'
-import { ContextMenuKey, DialogBoxKey, MessageToasterKey, ModalKey, OverlayKey, RouterKey } from '@/config/symbols'
-import Router from '@/router'
+import type { Router } from 'vue-router'
+import { createMemoryHistory } from 'vue-router'
+import { ContextMenuKey, DialogBoxKey, MessageToasterKey, ModalKey, OverlayKey } from '@/config/symbols'
+import { createAppRouter, resetRouting } from '@/router'
 import { preferenceStore } from '@/stores/preferenceStore'
 import { noop } from '@/utils/helpers'
 import { deepMerge, setPropIfNotExists } from '@/__tests__/utils'
@@ -22,13 +24,15 @@ import { setViewport } from '@/composables/useViewport'
 setViewport({ mobile: true, wide: true })
 
 class TestHarness {
-  public router: Router
+  /** A fresh one for each spec, in memory, starting at Home. */
+  public router!: Router
   public user: UserEvent
   private backupMethods = new Map()
   private realFetch = globalThis.fetch
 
   public constructor() {
-    this.router = new Router()
+    // One from the start, for specs that render before the hooks run; each spec gets its own.
+    this.router = createAppRouter(createMemoryHistory())
     this.user = userEvent.setup({ delay: null }) // @see https://github.com/testing-library/user-event/issues/833
 
     this.setReadOnlyProperty(navigator, 'clipboard', {
@@ -37,7 +41,10 @@ class TestHarness {
   }
 
   public beforeEach(cb?: Closure) {
-    beforeEach(() => {
+    beforeEach(async () => {
+      this.router = createAppRouter(createMemoryHistory())
+      await this.router.push('/home')
+
       this.mock(http, 'request').mockResolvedValue({}) // prevent actual HTTP requests from being made
       // The Subsonic client uses fetch: answer every call with an empty success. Kept out of the
       // mock registry, so specs that swap fetch themselves and call restoreAllMocks() keep theirs.
@@ -64,6 +71,7 @@ class TestHarness {
       this.restoreAllMocks()
       globalThis.fetch = this.realFetch
       eventBus.all.clear()
+      resetRouting()
       cb?.()
     })
   }
@@ -204,11 +212,12 @@ class TestHarness {
   private supplyRequiredProvides(options: RenderOptions) {
     options.global = options.global || {}
     options.global.provide = options.global.provide || {}
+    // RouterView and the like find the spec's router.
+    options.global.plugins = [...(options.global.plugins ?? []), this.router]
 
     setPropIfNotExists(options.global.provide, DialogBoxKey, DialogBoxStub)
     setPropIfNotExists(options.global.provide, MessageToasterKey, MessageToasterStub)
     setPropIfNotExists(options.global.provide, OverlayKey, OverlayStub)
-    setPropIfNotExists(options.global.provide, RouterKey, this.router)
 
     setPropIfNotExists(
       options.global.provide,
@@ -242,12 +251,9 @@ class TestHarness {
     }))
   }
 
-  public visit(hash: string) {
-    if (!hash.startsWith('/')) {
-      hash = `/${hash}`
-    }
-
-    this.router.resolve(hash)
+  /** Goes to a path, as the app would. */
+  public async visit(path: string) {
+    await this.router.push(path.startsWith('/') ? path : `/${path}`)
     return this
   }
 

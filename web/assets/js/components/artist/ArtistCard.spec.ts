@@ -16,7 +16,7 @@ describe('artistCard.vue', () => {
   const h = createHarness()
 
   const renderComponent = () => {
-    const artist = h.factory('artist').make({ id: 'led-zeppelin', name: 'Led Zeppelin', favorite: false })
+    const artist = h.factory('artist').make({ id: 'ar-1', name: 'Led Zeppelin', favorite: false })
 
     return {
       ...h.render(Component, {
@@ -33,7 +33,7 @@ describe('artistCard.vue', () => {
 
     await h.user.click(screen.getByTestId('artist-album-card'))
 
-    expect(goMock).toHaveBeenCalledWith('/#/artists/led-zeppelin')
+    expect(goMock).toHaveBeenCalledWith('/artists/ar-1')
   })
 
   it('shuffles on double click', async () => {

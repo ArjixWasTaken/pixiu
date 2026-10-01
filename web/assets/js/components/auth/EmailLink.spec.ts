@@ -22,7 +22,7 @@ describe('emailLink.vue', () => {
 
   it('confirms an email address', async () => {
     const verify = h.mock(authService, 'verifyEmail').mockResolvedValue(false)
-    h.visit('/verify-email/abc_DEF-123')
+    await h.visit('/verify-email/abc_DEF-123')
     h.render(Component)
 
     await screen.findByText('Your email is confirmed')
@@ -32,7 +32,7 @@ describe('emailLink.vue', () => {
 
   it('says when confirming opened an approved account', async () => {
     h.mock(authService, 'verifyEmail').mockResolvedValue(true)
-    h.visit('/verify-email/abc')
+    await h.visit('/verify-email/abc')
     h.render(Component)
 
     await screen.findByText('Your account is ready')
@@ -41,7 +41,7 @@ describe('emailLink.vue', () => {
   it('says when a confirmation link no longer works, which is no error', async () => {
     const error = vi.spyOn(logger, 'error')
     h.mock(authService, 'verifyEmail').mockRejectedValue(expired())
-    h.visit('/verify-email/used')
+    await h.visit('/verify-email/used')
     h.render(Component)
 
     await screen.findByText('This link no longer works')
@@ -51,7 +51,7 @@ describe('emailLink.vue', () => {
   it('logs a confirmation that failed otherwise', async () => {
     const error = vi.spyOn(logger, 'error').mockImplementation(() => {})
     h.mock(authService, 'verifyEmail').mockRejectedValue(new Error('offline'))
-    h.visit('/verify-email/abc')
+    await h.visit('/verify-email/abc')
     h.render(Component)
 
     await screen.findByText('That did not work')
@@ -60,7 +60,7 @@ describe('emailLink.vue', () => {
 
   it('sets a new password from a reset link', async () => {
     const reset = h.mock(authService, 'resetPassword').mockResolvedValue(undefined)
-    h.visit('/reset-password/tok3n')
+    await h.visit('/reset-password/tok3n')
     h.render(Component)
 
     await h.type(screen.getByLabelText('New password'), 'a fresh one')
@@ -73,7 +73,7 @@ describe('emailLink.vue', () => {
 
   it('sends people back when a reset link no longer works', async () => {
     h.mock(authService, 'resetPassword').mockRejectedValue(expired())
-    h.visit('/reset-password/used')
+    await h.visit('/reset-password/used')
     h.render(Component)
 
     await h.type(screen.getByLabelText('New password'), 'a fresh one')

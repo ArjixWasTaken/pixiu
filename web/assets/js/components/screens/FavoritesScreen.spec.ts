@@ -14,7 +14,7 @@ describe('favoritesScreen.vue', () => {
     const fetchMock = h.mock(playableStore, 'fetchFavorites').mockResolvedValue(favorites)
 
     h.render(Component)
-    h.visit('/favorites')
+    await h.visit('/favorites')
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalled())
   }

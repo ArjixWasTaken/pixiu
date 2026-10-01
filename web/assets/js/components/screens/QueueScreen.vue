@@ -57,7 +57,6 @@ import { pluralize } from '@/utils/formatters'
 import { commonStore } from '@/stores/commonStore'
 import { queueStore } from '@/stores/queueStore'
 import { playableStore } from '@/stores/playableStore'
-import { cache } from '@/services/cache'
 import { useRouter } from '@/composables/useRouter'
 import { useErrorHandler } from '@/composables/useErrorHandler'
 import { usePlayableList } from '@/composables/usePlayableList'
@@ -72,7 +71,7 @@ import ScreenBase from '@/components/screens/ScreenBase.vue'
 import PlayableListSkeleton from '@/components/playable/playable-list/PlayableListSkeleton.vue'
 import M3Icon from '@/components/m3/M3Icon.vue'
 
-const { go, onScreenActivated, url } = useRouter()
+const { getRouteParam, go, onScreenActivated, replace, url } = useRouter()
 
 const {
   PlayableList,
@@ -132,16 +131,20 @@ const onPressEnter = () => selectedPlayables.value.length && playback().play(sel
 const onReorder = (target: Playable, placement: Placement) =>
   queueStore.move(selectedPlayables.value, target, placement)
 
+// A shared song (`/songs/tr-1`, sent here as `?song=tr-1`): the queue starts with it.
 onScreenActivated('Queue', async () => {
-  if (!cache.get('song-to-queue')) {
+  const songId = getRouteParam('song')
+
+  if (!songId) {
     return
   }
 
+  replace(url('queue'))
   let playable: Playable | undefined
 
   try {
     loading.value = true
-    playable = await playableStore.resolve(cache.get('song-to-queue')!)
+    playable = await playableStore.resolve(songId)
 
     if (!playable) {
       throw new Error('Song not found')
@@ -150,7 +153,6 @@ onScreenActivated('Queue', async () => {
     useErrorHandler('dialog').handleHttpError(error)
     return
   } finally {
-    cache.remove('playable-to-queue')
     loading.value = false
   }
 

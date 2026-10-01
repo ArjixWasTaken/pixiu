@@ -116,7 +116,7 @@ describe('playlistContextMenu.vue', () => {
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(playlist)
       expect(queueMock).toHaveBeenCalledWith(songs)
-      expect(goMock).toHaveBeenCalledWith('/#/queue')
+      expect(goMock).toHaveBeenCalledWith('/queue')
     })
   })
 
@@ -154,7 +154,7 @@ describe('playlistContextMenu.vue', () => {
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(playlist)
       expect(queueMock).toHaveBeenCalledWith(songs, true)
-      expect(goMock).toHaveBeenCalledWith('/#/queue')
+      expect(goMock).toHaveBeenCalledWith('/queue')
     })
   })
 

@@ -20,6 +20,6 @@ describe('recentlyPlayedPlayables.vue', () => {
 
     await h.user.click(screen.getByRole('button', { name: 'View all' }))
 
-    expect(mock).toHaveBeenCalledWith('/#/recently-played')
+    expect(mock).toHaveBeenCalledWith('/recently-played')
   })
 })

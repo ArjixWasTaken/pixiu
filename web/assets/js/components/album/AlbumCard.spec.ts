@@ -20,9 +20,9 @@ describe('albumCard', () => {
 
   const createAlbum = (overrides: Partial<Album> = {}) =>
     h.factory('album').make({
-      id: 'iv',
+      id: 'al-4',
       name: 'IV',
-      artist_id: 'led-zeppelin',
+      artist_id: 'ar-1',
       artist_name: 'Led Zeppelin',
       cover: 'https://example.com/cover.jpg',
       favorite: false,
@@ -49,7 +49,7 @@ describe('albumCard', () => {
 
     await h.user.click(screen.getByTestId('artist-album-card'))
 
-    expect(goMock).toHaveBeenCalledWith('/#/albums/iv')
+    expect(goMock).toHaveBeenCalledWith('/albums/al-4')
   })
 
   it('shuffles on double click', async () => {

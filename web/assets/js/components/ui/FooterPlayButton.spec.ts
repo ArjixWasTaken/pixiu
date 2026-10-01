@@ -47,14 +47,14 @@ describe('footerPlayButton.vue', () => {
     const playMock = h.mock(playbackService, 'queueAndPlay')
     const goMock = h.mock(Router, 'go')
 
-    h.visit(hash)
+    await h.visit(hash)
     renderComponent()
 
     await h.user.click(screen.getByRole('button'))
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(id)
       expect(playMock).toHaveBeenCalledWith(songs)
-      expect(goMock).toHaveBeenCalledWith('/#/queue')
+      expect(goMock).toHaveBeenCalledWith('/queue')
     })
   })
 
@@ -71,14 +71,14 @@ describe('footerPlayButton.vue', () => {
     const playMock = h.mock(playbackService, 'queueAndPlay')
     const goMock = h.mock(Router, 'go')
 
-    h.visit(hash)
+    await h.visit(hash)
     renderComponent()
 
     await h.user.click(screen.getByRole('button'))
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalled()
       expect(playMock).toHaveBeenCalledWith(songs)
-      expect(goMock).toHaveBeenCalledWith('/#/queue')
+      expect(goMock).toHaveBeenCalledWith('/queue')
     })
   })
 
@@ -90,7 +90,7 @@ describe('footerPlayButton.vue', () => {
     const playMock = h.mock(playbackService, 'queueAndPlay')
     const goMock = h.mock(Router, 'go')
 
-    h.visit('songs')
+    await h.visit('songs')
     renderComponent()
 
     await h.user.click(screen.getByRole('button'))

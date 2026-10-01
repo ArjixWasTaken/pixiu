@@ -1,304 +1,163 @@
-import type { Ref } from 'vue'
-import { ref, watch } from 'vue'
+import { ref, shallowRef } from 'vue'
+import type { RouteLocationNormalizedLoaded, Router as VueRouter, RouterHistory } from 'vue-router'
+import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteName } from '@/config/routes'
-import { routes as builtInRoutes } from '@/config/routes'
+import { routes } from '@/config/routes'
 import { forceReloadWindow } from '@/utils/helpers'
-import { basePath, toClientPath, usesCleanUrls } from '@/utils/clientUrl'
+import { basePath, toClientPath } from '@/utils/clientUrl'
 
-type RouteParams = Record<string, string>
-type ResolvedHook = (params: RouteParams) => Promise<boolean | void> | boolean | void
-type RedirectHook = (params: RouteParams) => Route | string
-type RouteGuard = () => boolean
-
+/** A route as the screens know it (see `useRouter`). */
 export interface Route {
   name?: string
   path: string
   screen: ScreenName
-  constraints?: Record<string, string>
-  params?: RouteParams
-  meta?: {
-    guard?: RouteGuard
-    layout?: string
-    onResolved?: ResolvedHook
-    public?: boolean
-    redirect?: RedirectHook
-  } & Record<string, any>
+  /** The path's parameters, and the query's. */
+  params: Record<string, string>
 }
 
-let cachedRoutes: Route[] | null = null
+type RouteChangedHandler = (route: Route, previous: Route | undefined) => unknown
 
-const routes = () => (cachedRoutes ??= [...builtInRoutes])
+const first = (value: unknown) => (Array.isArray(value) ? value[0] : value)
 
-const currentClientPath = () =>
-  usesCleanUrls() ? toClientPath(`${location.pathname}${location.search}`) : location.hash
+const stringify = (record: Record<string, unknown>) =>
+  Object.fromEntries(
+    Object.entries(record)
+      .map(([key, value]) => [key, first(value)])
+      .filter(([, value]) => value !== null && value !== undefined)
+      .map(([key, value]) => [key, String(value)]),
+  ) as Record<string, string>
 
-interface CompiledRoute {
-  regex: RegExp
-  paramNames: string[]
-  originalRoute: Route
+export const toRoute = (location: RouteLocationNormalizedLoaded): Route => ({
+  name: location.name as string | undefined,
+  path: location.path,
+  screen: location.meta.screen ?? '404',
+  params: { ...stringify(location.query), ...stringify(location.params) },
+})
+
+/** The router in use: the app's, or a spec's. */
+const active = shallowRef<VueRouter>()
+
+/** Set when what a screen shows doesn't exist, or a guard says no: the 404 screen shows, the address stays. */
+export const notFound = ref(false)
+
+const handlers = new Set<RouteChangedHandler>()
+let guarding = false
+
+const denied = (location: RouteLocationNormalizedLoaded) => guarding && location.meta.guard?.() === false
+
+/** Old links had the path in the hash (`/#/albums/al-1`): they become plain paths. */
+const rewriteHashUrl = () => {
+  const legacy = location.hash.match(/^#!?\//)
+
+  if (legacy) {
+    history.replaceState(history.state, '', `${basePath()}${location.hash.substring(legacy[0].length)}`)
+  }
 }
 
-interface MatchedRoute {
-  originalRoute: Route
-  params: RouteParams
+export const createAppRouter = (history?: RouterHistory) => {
+  if (!history) {
+    rewriteHashUrl()
+    history = createWebHistory(basePath())
+  }
+
+  const router = createRouter({ history, routes: [...routes] })
+
+  router.afterEach((to, from, failure) => {
+    if (failure) {
+      return
+    }
+
+    notFound.value = denied(to)
+
+    // A tab moving in the hash is not a new screen: nothing refetches.
+    if (from.matched.length && to.path === from.path && JSON.stringify(to.query) === JSON.stringify(from.query)) {
+      return
+    }
+
+    const previous = from.matched.length ? toRoute(from) : undefined
+    handlers.forEach(handler => handler(toRoute(to), previous))
+  })
+
+  active.value = router
+  return router
 }
 
-type RouteChangedHandler = (newRoute: Route, oldRoute: Route | undefined) => any
+export const activeRouter = () => active.value!
 
-export default class Router {
-  public $currentRoute: Ref<Route>
-  private readonly compiledRoutes: CompiledRoute[]
+export const onRouteChanged = (handler: RouteChangedHandler) => {
+  handlers.add(handler)
+  return () => handlers.delete(handler)
+}
 
-  private readonly homeRoute: Route
-  private readonly notFoundRoute: Route
-  private routeChangedHandlers: RouteChangedHandler[] = []
-  /**
-   * Whether route guards run: once the signed-in user is known. Until then
-   * the app checks the first route itself, after start-up.
-   */
-  private guarding = false
+/** From when the signed-in user is known: guards apply to this route and every one after. */
+export const startGuarding = () => {
+  guarding = true
+  notFound.value = denied(activeRouter().currentRoute.value)
+}
 
-  compileRoute(route: Route): CompiledRoute {
-    const paramNames: string[] = []
+/** For specs: forget the guards and the handlers. */
+export const resetRouting = () => {
+  guarding = false
+  notFound.value = false
+  handlers.clear()
+}
 
-    const regexPath = route.path.replace(/\/:(\w+)\??/g, (match, key) => {
-      const constraint = route.constraints?.[key] ?? '[^/]+'
-      paramNames.push(key)
-      return match.endsWith('?') ? `(?:/(?<${key}>${constraint}))?` : `/(?<${key}>${constraint})`
-    })
-
-    return {
-      paramNames,
-      originalRoute: route,
-      regex: new RegExp(`^${regexPath}/?$`),
-    }
-  }
-
-  constructor() {
-    const allRoutes = routes()
-
-    this.homeRoute = allRoutes.find(({ screen }) => screen === 'Home')!
-    this.notFoundRoute = allRoutes.find(({ screen }) => screen === '404')!
-    this.$currentRoute = ref(this.homeRoute)
-
-    this.compiledRoutes = allRoutes.map(this.compileRoute)
-
-    watch(
-      this.$currentRoute,
-      (newValue, oldValue) => this.routeChangedHandlers.forEach(async handler => await handler(newValue, oldValue)),
-      {
-        deep: true,
-        immediate: true,
-      },
-    )
-
-    addEventListener('popstate', () => this.resolve(), true)
-
-    if (usesCleanUrls()) {
-      this.rewriteHashUrl()
-      addEventListener('click', this.interceptLinkClick)
-    }
-  }
-
-  private rewriteHashUrl() {
-    if (location.hash.startsWith('#/')) {
-      history.replaceState(null, '', `${basePath()}${location.hash.substring(2)}`)
-    }
-  }
-
-  private interceptLinkClick = (event: MouseEvent) => {
-    if (
-      event.defaultPrevented ||
-      event.button !== 0 ||
-      event.metaKey ||
-      event.ctrlKey ||
-      event.shiftKey ||
-      event.altKey
-    ) {
-      return
-    }
-
-    const link = (event.target as Element | null)?.closest('a')
-
-    if (!link || (link.target && link.target !== '_self') || link.hasAttribute('download')) {
-      return
-    }
-
-    const url = new URL(link.href, location.href)
-
-    if (url.origin !== location.origin || !url.pathname.startsWith(basePath())) {
-      return
-    }
-
-    const path = toClientPath(`${url.pathname}${url.search}`)
-
-    if (!this.tryMatchRoute(path)) {
-      return
-    }
-
-    event.preventDefault()
-    Router.go(path)
-  }
-
-  public static go(path: string | number, reload = false) {
+const Router = {
+  /** Goes to a path within the app (or back and forth through history, with a number). */
+  go(path: string | number, reload = false) {
     if (typeof path === 'number') {
-      history.go(path)
+      activeRouter().go(path)
       return
     }
 
-    Router.navigate(path, 'push')
-
+    activeRouter().push(toClientPath(path))
     reload && forceReloadWindow()
-  }
+  },
 
-  public static replace(path: string) {
-    Router.navigate(path, 'replace')
-  }
-
-  private static navigate(path: string, mode: 'push' | 'replace') {
-    if (usesCleanUrls()) {
-      const url = `${basePath()}${toClientPath(path).substring(1)}`
-
-      if (mode === 'push') {
-        history.pushState(null, '', url)
-      } else {
-        history.replaceState(null, '', url)
-      }
-
-      dispatchEvent(new PopStateEvent('popstate'))
-
-      return
-    }
-
-    if (!path.startsWith('/')) {
-      path = `/${path}`
-    }
-
-    if (!path.startsWith('/#')) {
-      path = `/#${path}`
-    }
-
-    const url = `${location.origin}${location.pathname}${path.substring(1)}`
-
-    if (mode === 'push') {
-      location.assign(url)
-    } else {
-      location.replace(url)
-    }
-  }
-
-  public resolve(path?: string) {
-    path = path ?? currentClientPath()
-
-    const [pathWithoutQuery, query] = path.split('?')
-
-    if (['', '/', '#', '#/', '#!/'].includes(pathWithoutQuery)) {
-      // Replacing the URL resolves it again (through popstate) and activates
-      // Home; say so, or a caller reading the result is left without a route.
-      Router.replace(query ? `${this.homeRoute.path}?${query}` : this.homeRoute.path)
-      return this.homeRoute
-    }
-
-    const matchedRoute = this.tryMatchRoute(path)
-    const [route, params] = matchedRoute ? [matchedRoute.originalRoute, matchedRoute.params] : [null, null]
-
-    if (!route || (this.guarding && route.meta?.guard?.() === false)) {
-      this.triggerNotFound()
-      return null
-    }
-
-    route.meta?.onResolve?.(params)
-
-    if (route.meta?.redirect) {
-      const to = route.meta.redirect(params)
-      typeof to === 'string' ? Router.go(to) : this.activateRoute(to, params)
-    } else {
-      this.activateRoute(route, params)
-    }
-
-    return route
-  }
-
-  public triggerNotFound = () => this.activateRoute(this.notFoundRoute)
-  public startGuarding = () => (this.guarding = true)
-  public onRouteChanged = (handler: RouteChangedHandler) => this.routeChangedHandlers.push(handler)
-
-  public activateRoute(route: Route, params: RouteParams = {}) {
-    this.$currentRoute.value = route
-    this.$currentRoute.value.params = params
-  }
-
-  private tryMatchRoute(screenPath: string): MatchedRoute | null {
-    const [path, queryString] = screenPath.replace(/^#?/, '').split('?')
-
-    for (const route of this.compiledRoutes) {
-      const match = path.match(route.regex)
-
-      if (match) {
-        // Ids may hold any character (a genre's is its name).
-        const params = Object.fromEntries(
-          Object.entries(match.groups ?? {}).map(([key, value]) => [
-            key,
-            value === undefined ? value : decodeURIComponent(value),
-          ]),
-        )
-
-        if (queryString) {
-          const searchParams = new URLSearchParams(queryString)
-          for (const [key, value] of searchParams) {
-            params[key] = value
-          }
-        }
-
-        return {
-          params,
-          originalRoute: route.originalRoute,
-        }
-      }
-    }
-
-    return null
-  }
-
-  public static url(name: RouteName, params: object = {}) {
-    const route = routes().find(route => route.name === name)
-
-    if (!route) {
-      throw new Error(`Route "${name}" not found`)
-    }
-
-    let path = route.path as string
-
-    path = path.replace(/:(\w+)\??/g, (_, key: string, offset: number, fullPath: string) => {
-      const isOptional = fullPath[offset + key.length + 1] === '?'
-      const value = params[key]
-
-      if (value !== undefined && value !== null) {
-        return encodeURIComponent(String(value))
-      }
-
-      if (isOptional) {
-        return ''
-      }
-
-      throw new Error(`Missing required param "${key}" for route "${name}"`)
-    })
-
-    // Remove any accidental trailing slashes caused by optional segments
-    path = path.replace(/\/+$/, '') || '/'
-
-    if (!path.startsWith('/')) {
-      path = `/${path}`
-    }
-
-    if (usesCleanUrls()) {
-      return `${basePath()}${path.substring(1)}`
-    }
-
-    if (!path.startsWith('/#')) {
-      path = `/#${path}`
-    }
-
-    return path
-  }
+  /** The address of a named route. */
+  url(name: RouteName, params: Record<string, unknown> = {}) {
+    return activeRouter().resolve({ name, params: params as Record<string, string> }).href
+  },
 }
+
+export default Router
+
+/** Links to the app's own screens stay in the app; the router takes them. */
+const interceptLinkClick = (event: MouseEvent) => {
+  const router = active.value
+
+  if (
+    !router ||
+    event.defaultPrevented ||
+    event.button !== 0 ||
+    event.metaKey ||
+    event.ctrlKey ||
+    event.shiftKey ||
+    event.altKey
+  ) {
+    return
+  }
+
+  const link = (event.target as Element | null)?.closest('a')
+
+  if (!link || (link.target && link.target !== '_self') || link.hasAttribute('download')) {
+    return
+  }
+
+  const url = new URL(link.href, location.href)
+
+  if (url.origin !== location.origin || !url.pathname.startsWith(basePath())) {
+    return
+  }
+
+  const path = toClientPath(`${url.pathname}${url.search}${url.hash}`)
+
+  if (!router.resolve(path).matched.some(record => record.meta.screen && record.meta.screen !== '404')) {
+    return
+  }
+
+  event.preventDefault()
+  router.push(path)
+}
+
+addEventListener('click', interceptLinkClick)

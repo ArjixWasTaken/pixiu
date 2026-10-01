@@ -17,7 +17,7 @@ describe('genreScreen', () => {
       songs: songs || h.factory('song').make(13),
     })
 
-    const rendered = h.visit(`genres/${genre.id}`).render(Component, {
+    const rendered = (await h.visit(`genres/${genre.id}`)).render(Component, {
       global: {
         stubs: {
           SongList: h.stub('song-list'),

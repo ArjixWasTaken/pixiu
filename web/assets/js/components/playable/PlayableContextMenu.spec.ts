@@ -121,7 +121,7 @@ describe('playableContextMenu.vue', () => {
 
     await h.user.click(screen.getByText(`Album: ${song.album_name}`))
 
-    expect(goMock).toHaveBeenCalledWith(`/#/albums/${song.album_id}`)
+    expect(goMock).toHaveBeenCalledWith(`/albums/${song.album_id}`)
   })
 
   it('goes to artist details screen', async () => {
@@ -131,7 +131,7 @@ describe('playableContextMenu.vue', () => {
 
     await h.user.click(screen.getByText(`Artist: ${song.artist_name}`))
 
-    expect(goMock).toHaveBeenCalledWith(`/#/artists/${song.artist_id}`)
+    expect(goMock).toHaveBeenCalledWith(`/artists/${song.artist_id}`)
   })
 
   it('downloads', async () => {
@@ -186,7 +186,7 @@ describe('playableContextMenu.vue', () => {
     fillQueue()
     const removeMock = h.mock(queueStore, 'unqueue')
 
-    h.visit('/queue')
+    await h.visit('/queue')
     const { playables } = await renderComponent()
 
     await h.user.click(screen.getByText('Remove from queue'))
@@ -197,7 +197,7 @@ describe('playableContextMenu.vue', () => {
   it('does not show "Remove from queue" when not on Queue screen', async () => {
     fillQueue()
 
-    h.visit('/songs')
+    await h.visit('/songs')
     await renderComponent()
 
     expect(screen.queryByText('Remove from queue')).toBeNull()
@@ -213,7 +213,7 @@ describe('playableContextMenu.vue', () => {
   })
 
   it('does not have an option to add to favorites for Favorites screen', async () => {
-    h.visit('/favorites')
+    await h.visit('/favorites')
     await renderComponent()
 
     expect(screen.queryByText('Favorites')).toBeNull()
@@ -222,7 +222,7 @@ describe('playableContextMenu.vue', () => {
   it('removes from favorites', async () => {
     const unlikeMock = h.mock(playableStore, 'undoFavorite')
 
-    h.visit('/favorites')
+    await h.visit('/favorites')
     const { playables } = await renderComponent()
 
     await h.user.click(screen.getByText('Remove from favorites'))
@@ -264,7 +264,7 @@ describe('playableContextMenu.vue', () => {
   })
 
   it('does not have an option to remove from playlist if not on Playlist screen', async () => {
-    h.visit('/songs')
+    await h.visit('/songs')
     await renderComponent()
 
     expect(screen.queryByText('Remove from playlist')).toBeNull()

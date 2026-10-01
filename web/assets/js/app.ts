@@ -2,13 +2,12 @@ import { createApp } from 'vue'
 import { focus } from '@/directives/focus'
 import { hideBrokenIcon } from '@/directives/hideBrokenIcon'
 import { newTab } from '@/directives/newTab'
-import { RouterKey } from '@/config/symbols'
-import Router from '@/router'
+import { createAppRouter } from '@/router'
 import '@/../css/app.pcss'
 import App from './App.vue'
 
 const app = createApp(App)
-  .provide(RouterKey, new Router())
+  .use(createAppRouter())
   .directive('koel-focus', focus)
   .directive('koel-hide-broken-icon', hideBrokenIcon)
   .directive('koel-new-tab', newTab)

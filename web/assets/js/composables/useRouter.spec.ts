@@ -1,53 +1,51 @@
-import { describe, expect, it, vi } from 'vite-plus/test'
-
-const onRouteChangedMock = vi.fn()
-const resolveMock = vi.fn()
-const triggerNotFoundMock = vi.fn()
-
-const currentRoute = {
-  value: {
-    screen: 'Home' as ScreenName,
-    path: '/',
-    params: { id: '42' },
-  },
-}
-
-vi.mock('@/utils/helpers', async importOriginal => ({
-  ...(await importOriginal<typeof import('@/utils/helpers')>()),
-  requireInjection: () => ({
-    $currentRoute: currentRoute,
-    onRouteChanged: onRouteChangedMock,
-    resolve: resolveMock,
-    triggerNotFound: triggerNotFoundMock,
-    startGuarding: vi.fn(),
-  }),
-}))
-
-vi.mock('@/router', () => {
-  const goMock = vi.fn()
-  const urlMock = vi.fn((name: string) => `/#/${name}`)
-
-  return {
-    default: Object.assign(function () {}, { go: goMock, url: urlMock }),
-  }
-})
-
+import { describe, expect, it } from 'vite-plus/test'
+import { defineComponent } from 'vue'
+import { createHarness } from '@/__tests__/TestHarness'
 import { useRouter } from './useRouter'
 
 describe('useRouter', () => {
-  it('gets route param', () => {
+  const h = createHarness()
+
+  it('reads a parameter of the path, else of the query', async () => {
+    await h.visit('/genres/Rock?sort=name')
+
     const { getRouteParam } = useRouter()
-    expect(getRouteParam('id')).toBe('42')
+    expect(getRouteParam('id')).toBe('Rock')
+    expect(getRouteParam('sort')).toBe('name')
   })
 
-  it('gets current screen', () => {
-    const { getCurrentScreen } = useRouter()
-    expect(getCurrentScreen()).toBe('Home')
+  it('knows the screen showing', async () => {
+    await h.visit('/albums')
+
+    const { getCurrentScreen, isCurrentScreen } = useRouter()
+    expect(getCurrentScreen()).toBe('Albums')
+    expect(isCurrentScreen('Albums', 'Album')).toBe(true)
+    expect(isCurrentScreen('Queue')).toBe(false)
   })
 
-  it('checks current screen', () => {
-    const { isCurrentScreen } = useRouter()
-    expect(isCurrentScreen('Home' as ScreenName)).toBe(true)
-    expect(isCurrentScreen('Queue' as ScreenName)).toBe(false)
+  it('runs a screen hook now, and when the screen comes up again', async () => {
+    await h.visit('/albums')
+    let runs = 0
+    useRouter().onScreenActivated('Albums', () => runs++)
+    expect(runs).toBe(1)
+
+    await h.visit('/home')
+    await h.visit('/albums')
+    expect(runs).toBe(2)
+  })
+
+  it('stops telling a component of route changes once it unmounts', async () => {
+    let calls = 0
+    const Listener = defineComponent({
+      setup: () => useRouter().onRouteChanged(() => calls++) && undefined,
+      render: () => null,
+    })
+
+    const { unmount } = h.render(Listener)
+    await h.visit('/albums')
+    unmount()
+    await h.visit('/artists')
+
+    expect(calls).toBe(1)
   })
 })

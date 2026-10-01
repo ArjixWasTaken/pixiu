@@ -8,9 +8,7 @@ import Component from './AlbumScreen.vue'
 vi.mock('@/composables/useContextMenu')
 
 describe('albumScreen.vue', () => {
-  const h = createHarness({
-    afterEach: () => history.replaceState(null, '', '/'),
-  })
+  const h = createHarness()
 
   const renderComponent = async (path: string) => {
     const album = h.factory('album').make({ id: 'al-1', name: 'Groovy' })
@@ -18,7 +16,7 @@ describe('albumScreen.vue', () => {
     const fetchForArtist = h.mock(albumStore, 'fetchForArtist').mockResolvedValue([album])
     const fetchSongs = h.mock(playableStore, 'fetchSongsForAlbum').mockResolvedValue(h.factory('song').make(3))
 
-    h.visit(path)
+    await h.visit(path)
     h.render(Component, { global: { stubs: { AlbumCard: h.stub('album-card') } } })
 
     await waitFor(() => expect(fetchSongs).toHaveBeenCalledWith('al-1'))
@@ -36,36 +34,32 @@ describe('albumScreen.vue', () => {
   })
 
   it('offers no song filter on the other tabs', async () => {
-    await renderComponent('/albums/al-1?tab=other-albums')
+    await renderComponent('/albums/al-1#other-albums')
 
     await screen.findByRole('button', { name: 'Shuffle' })
     expect(screen.queryByRole('button', { name: 'Filter' })).toBeNull()
   })
 
   it('opens the tab the hash names', async () => {
-    history.replaceState(null, '', '/albums/al-1#other-albums')
-    const { fetchForArtist } = await renderComponent('/albums/al-1')
+    const { fetchForArtist } = await renderComponent('/albums/al-1#other-albums')
 
     await waitFor(() => expect(fetchForArtist).toHaveBeenCalled())
     expect(screen.getByTestId('albums-pane').style.display).toBe('')
   })
 
   it('keeps the chosen tab in the hash, and fetches its albums then', async () => {
-    history.replaceState(null, '', '/albums/al-1')
     const { fetchForArtist } = await renderComponent('/albums/al-1')
     expect(fetchForArtist).not.toHaveBeenCalled()
 
     await h.user.click(screen.getByRole('link', { name: 'Other albums' }))
 
-    expect(location.hash).toBe('#other-albums')
+    await waitFor(() => expect(h.router.currentRoute.value.hash).toBe('#other-albums'))
     await waitFor(() => expect(fetchForArtist).toHaveBeenCalled())
   })
 
   it('takes a link from before, with the tab in the path, to the hash', async () => {
-    history.replaceState(null, '', '/albums/al-1/information')
     await renderComponent('/albums/al-1/information')
 
-    expect(location.pathname).toBe('/albums/al-1')
-    expect(location.hash).toBe('#information')
+    expect(h.router.currentRoute.value.fullPath).toBe('/albums/al-1#information')
   })
 })

@@ -12,25 +12,25 @@ describe('topBar.vue', () => {
   const renderComponent = () =>
     h.render(Component, { global: { stubs: { ProfileDropdown: h.stub('profile-dropdown') } } })
 
-  it('searches the library', () => {
-    h.visit('/home')
+  it('searches the library', async () => {
+    await h.visit('/home')
     renderComponent()
 
     screen.getByRole('searchbox')
     screen.getByTestId('profile-dropdown')
   })
 
-  it('leaves searching to Discover’s own field there', () => {
-    h.visit('/discover')
+  it('leaves searching to Discover’s own field there', async () => {
+    await h.visit('/discover')
     renderComponent()
 
     expect(screen.queryByRole('searchbox')).toBeNull()
     screen.getByTestId('profile-dropdown')
   })
 
-  it('keeps the account menu on phones at Discover, where the search field that holds it is gone', () => {
+  it('keeps the account menu on phones at Discover, where the search field that holds it is gone', async () => {
     setViewport({ mobile: true })
-    h.visit('/discover')
+    await h.visit('/discover')
     renderComponent()
 
     screen.getByTestId('profile-dropdown')

@@ -88,7 +88,8 @@ import { useUserStorage } from '@/composables/useUserStorage'
 import { useRouter } from '@/composables/useRouter'
 import { useThirdPartyServices } from '@/composables/useThirdPartyServices'
 import { useContextMenu } from '@/composables/useContextMenu'
-import { moveTabToHash, useHashTab } from '@/composables/useHash'
+import { useHashTab } from '@/composables/useHash'
+import { isNotFound } from '@/services/subsonic'
 
 import M3IconButton from '@/components/m3/M3IconButton.vue'
 import ScreenHeader from '@/components/ui/ScreenHeader.vue'
@@ -156,14 +157,6 @@ const fetchScreenData = async () => {
 
   const id = getRouteParam('id')
 
-  // Links from before the tab lived in the hash: `/albums/al-1/other-albums`.
-  const legacyTab = getRouteParam<Tab>('tab')
-
-  if (legacyTab && validTabs.includes(legacyTab)) {
-    moveTabToHash(legacyTab)
-    activeTab.value = legacyTab
-  }
-
   album.value = undefined
   info.value = undefined
   otherAlbums.value = undefined
@@ -183,7 +176,7 @@ const fetchScreenData = async () => {
 
     sort(sortField.value, sortOrder.value)
   } catch (error: unknown) {
-    if ((error as any)?.status === 404) {
+    if (isNotFound(error)) {
       triggerNotFound()
       return
     }

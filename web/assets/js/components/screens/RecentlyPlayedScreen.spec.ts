@@ -19,7 +19,7 @@ describe('recentlyPlayedScreen.vue', () => {
       },
     })
 
-    h.visit('/recently-played')
+    await h.visit('/recently-played')
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalled())
   }

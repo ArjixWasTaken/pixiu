@@ -20,7 +20,7 @@ describe('homeScreen.vue', () => {
   const h = createHarness()
 
   const renderComponent = async () => {
-    h.visit('/home')
+    await h.visit('/home')
     h.render(Component)
   }
 
@@ -35,7 +35,8 @@ describe('homeScreen.vue', () => {
 
   it('renders overview components if applicable', async () => {
     commonStore.state.song_length = 100
-    const fetchOverviewMock = h.mock(overviewStore, 'fetch')
+    // Still loading: every section shows, its skeleton in place (an empty one hides once loaded).
+    const fetchOverviewMock = h.mock(overviewStore, 'fetch').mockReturnValue(new Promise(() => {}))
 
     await renderComponent()
 

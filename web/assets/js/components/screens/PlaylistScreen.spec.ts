@@ -30,7 +30,7 @@ describe('playlistScreen.vue', () => {
       },
     })
 
-    h.visit(`playlists/${playlist.id}`)
+    await h.visit(`playlists/${playlist.id}`)
 
     await waitFor(() => expect(fetchSongsMock).toHaveBeenCalledWith(playlist, false))
 

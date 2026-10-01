@@ -1,19 +1,32 @@
-import { RouterKey } from '@/config/symbols'
-import Router from '@/router'
-import { requireInjection } from '@/utils/helpers'
+import { getCurrentInstance, onUnmounted } from 'vue'
+import type { Route } from '@/router'
+import Router, { activeRouter, notFound, onRouteChanged as subscribe, startGuarding, toRoute } from '@/router'
+import { toClientPath } from '@/utils/clientUrl'
 
-let router: Router
-
+/**
+ * What the screens need of the router: where they are, ways elsewhere, and
+ * word when the route changes. vue-router does the work (see `router.ts`).
+ */
 export const useRouter = () => {
-  router = router || requireInjection(RouterKey)
+  const current = () => activeRouter().currentRoute.value
 
-  const getRouteParam = <T = string>(name: string) => router.$currentRoute.value?.params?.[name] as T
-  const getCurrentScreen = () => router.$currentRoute.value?.screen
-  const isCurrentScreen = (...screens: ScreenName[]) => screens.includes(router.$currentRoute.value?.screen)
+  const getCurrentScreen = (): ScreenName => (notFound.value ? '404' : (current().meta.screen ?? '404'))
+  const isCurrentScreen = (...screens: ScreenName[]) => screens.includes(getCurrentScreen())
 
+  /** A parameter of the path, else of the query. */
+  const getRouteParam = <T = string>(name: string) => toRoute(current()).params[name] as T
+
+  /** Calls `handler` on each new route (not on a hash change); in a component, until it unmounts. */
+  const onRouteChanged = (handler: (route: Route, previous?: Route) => unknown) => {
+    const stop = subscribe(handler)
+    getCurrentInstance() && onUnmounted(stop)
+    return stop
+  }
+
+  /** Runs `cb` now if `screen` shows, and each time it comes up again. */
   const onScreenActivated = (screen: ScreenName, cb: Closure) => {
     isCurrentScreen(screen) && cb()
-    router.onRouteChanged(route => route.screen === screen && cb())
+    onRouteChanged(route => route.screen === screen && cb())
   }
 
   return {
@@ -21,11 +34,12 @@ export const useRouter = () => {
     getCurrentScreen,
     isCurrentScreen,
     onScreenActivated,
-    go: Router.go,
-    onRouteChanged: router.onRouteChanged.bind(router),
-    resolveRoute: router.resolve.bind(router),
-    triggerNotFound: router.triggerNotFound.bind(router),
-    startGuarding: router.startGuarding.bind(router),
-    url: Router.url,
+    onRouteChanged,
+    startGuarding,
+    triggerNotFound: () => (notFound.value = true),
+    go: (...args: Parameters<typeof Router.go>) => Router.go(...args),
+    /** Goes to a path in place of the current history entry. */
+    replace: (path: string) => activeRouter().replace(toClientPath(path)),
+    url: (...args: Parameters<typeof Router.url>) => Router.url(...args),
   }
 }

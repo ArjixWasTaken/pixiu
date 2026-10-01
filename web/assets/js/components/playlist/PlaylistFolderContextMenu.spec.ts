@@ -92,7 +92,7 @@ describe('playlistFolderContextMenu.vue', () => {
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(playlists)
       expect(queueMock).toHaveBeenCalledWith(songs)
-      expect(goMock).toHaveBeenCalledWith('/#/queue')
+      expect(goMock).toHaveBeenCalledWith('/queue')
     })
   })
 
@@ -133,7 +133,7 @@ describe('playlistFolderContextMenu.vue', () => {
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(playlists)
       expect(queueMock).toHaveBeenCalledWith(songs, true)
-      expect(goMock).toHaveBeenCalledWith('/#/queue')
+      expect(goMock).toHaveBeenCalledWith('/queue')
     })
   })
 

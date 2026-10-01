@@ -107,6 +107,8 @@ eventBus.on('SONGS_DELETED', () => overviewStore.fetch())
 eventBus.on('SONGS_UPDATED', () => overviewStore.fetch())
 eventBus.on('SONG_UPLOADED', () => overviewStore.fetch())
 
+const { handleHttpError } = useErrorHandler('dialog')
+
 useRouter().onScreenActivated('Home', async () => {
   if (!initialized) {
     loading.value = true
@@ -114,7 +116,7 @@ useRouter().onScreenActivated('Home', async () => {
       await overviewStore.fetch()
       initialized = true
     } catch (error: unknown) {
-      useErrorHandler('dialog').handleHttpError(error)
+      handleHttpError(error)
     } finally {
       loading.value = false
     }

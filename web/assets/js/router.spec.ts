@@ -1,276 +1,143 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
-import Router from './router'
-import factory from '@/__tests__/factory'
-import { userStore } from '@/stores/userStore'
+import { describe, expect, it, vi } from 'vite-plus/test'
+import { createHarness } from '@/__tests__/TestHarness'
+import { useRouter } from '@/composables/useRouter'
+import Router, { createAppRouter, notFound } from '@/router'
 
-describe('Router', () => {
-  let router: Router
+describe('router', () => {
+  const h = createHarness()
 
-  beforeEach(() => {
-    location.hash = ''
-    router = new Router()
-  })
+  const at = () => h.router.currentRoute.value.fullPath
 
-  describe('compileRoute', () => {
-    it('compiles a static route', () => {
-      const compiled = router.compileRoute({ path: '/home', screen: 'Home' })
-
-      expect(compiled.regex.test('/home')).toBe(true)
-      expect(compiled.regex.test('/home/')).toBe(true)
-      expect(compiled.regex.test('/other')).toBe(false)
-      expect(compiled.paramNames).toEqual([])
+  describe('routes', () => {
+    it('makes the address of a named route', () => {
+      expect(Router.url('home')).toBe('/home')
+      expect(Router.url('albums.show', { id: 'al-1' })).toBe('/albums/al-1')
     })
 
-    it('compiles a route with a required param', () => {
-      const compiled = router.compileRoute({ path: '/albums/:id', screen: 'Album' })
-
-      expect(compiled.regex.test('/albums/123')).toBe(true)
-      expect(compiled.regex.test('/albums')).toBe(false)
-      expect(compiled.paramNames).toEqual(['id'])
+    it('refuses an unknown route, or one missing a parameter', () => {
+      expect(() => Router.url('nope' as never)).toThrow()
+      expect(() => Router.url('albums.show')).toThrow()
     })
 
-    it('compiles a route with an optional param', () => {
-      const compiled = router.compileRoute({ path: '/albums/:id/:tab?', screen: 'Album' })
-
-      expect(compiled.regex.test('/albums/123')).toBe(true)
-      expect(compiled.regex.test('/albums/123/songs')).toBe(true)
-      expect(compiled.paramNames).toEqual(['id', 'tab'])
+    it('opens Home at the root, keeping what the server sent along', async () => {
+      await h.visit('/?sso_error=busy')
+      expect(at()).toBe('/home?sso_error=busy')
     })
 
-    it('compiles a route with constraints', () => {
-      const compiled = router.compileRoute({
-        path: '/albums/:id/:tab?',
-        screen: 'Album',
-        constraints: {
-          id: '[0-9]+',
-          tab: '(songs|information)',
-        },
-      })
+    it.each([
+      ['/albums/al-1/information', '/albums/al-1#information'],
+      ['/artists/ar-1/albums', '/artists/ar-1#albums'],
+      ['/settings?tab=users', '/settings#admin-users'],
+      ['/settings?tab=account&linked=1', '/settings?linked=1#account'],
+      ['/profile', '/settings#preferences'],
+    ])('takes an old link (%s) to its tab in the hash', async (from, to) => {
+      await h.visit(from)
+      expect(at()).toBe(to)
+    })
 
-      expect(compiled.regex.test('/albums/123')).toBe(true)
-      expect(compiled.regex.test('/albums/123/songs')).toBe(true)
-      expect(compiled.regex.test('/albums/abc')).toBe(false)
-      expect(compiled.regex.test('/albums/123/invalid')).toBe(false)
+    it('opens a shared song in the queue', async () => {
+      await h.visit('/songs/tr-7')
+
+      expect(at()).toBe('/queue?song=tr-7')
+      expect(useRouter().getRouteParam('song')).toBe('tr-7')
+    })
+
+    it('shows the 404 screen for an address it does not know, at that address', async () => {
+      await h.visit('/nowhere/at/all')
+
+      expect(at()).toBe('/nowhere/at/all')
+      expect(useRouter().getCurrentScreen()).toBe('404')
     })
   })
 
-  describe('resolve', () => {
-    it('sends empty hashes home without adding a history entry', () => {
-      const replaceSpy = vi.spyOn(Router, 'replace').mockImplementation(() => {})
+  describe('guards', () => {
+    it('show the 404 screen where the user may not go, once guarding', async () => {
+      const { startGuarding, isCurrentScreen } = useRouter()
 
-      for (const hash of ['', '#/', '#!/']) {
-        router.resolve(hash)
-        expect(replaceSpy).toHaveBeenCalledWith('/home')
-      }
+      await h.visit('/upload')
+      expect(isCurrentScreen('Upload')).toBe(true)
+
+      startGuarding()
+      expect(isCurrentScreen('404')).toBe(true)
+
+      await h.visit('/home')
+      expect(isCurrentScreen('Home')).toBe(true)
     })
 
-    it('keeps the query string when sending the root home', () => {
-      const replaceSpy = vi.spyOn(Router, 'replace').mockImplementation(() => {})
+    it('let through who may', async () => {
+      h.actingAsAdmin()
+      useRouter().startGuarding()
 
-      router.resolve('#/?source=email')
-
-      expect(replaceSpy).toHaveBeenCalledWith('/home?source=email')
-    })
-
-    it('resolves a matching route', () => {
-      const route = router.resolve('#/songs')
-
-      expect(route).not.toBeNull()
-      expect(route!.screen).toBe('Songs')
-    })
-
-    it('resolves a route with params', () => {
-      const route = router.resolve('#/genres/rock')
-
-      expect(route).not.toBeNull()
-      expect(route!.screen).toBe('Genre')
-      expect(router.$currentRoute.value.params).toEqual({ id: 'rock' })
-    })
-
-    it('resolves a route with query string params', () => {
-      const route = router.resolve('#/genres/rock?sort=name')
-
-      expect(route).not.toBeNull()
-      expect(router.$currentRoute.value.params).toEqual({ id: 'rock', sort: 'name' })
-    })
-
-    it('triggers not found for unmatched routes', () => {
-      const route = router.resolve('#/this/does/not/exist')
-
-      expect(route).toBeNull()
-      expect(router.$currentRoute.value.screen).toBe('404')
-    })
-
-    it('refuses routes their guard denies once guarding, on every navigation', () => {
-      // Someone who may not upload.
-      userStore.state.current = factory('user').state('current').make() as CurrentUser
-
-      // Before start-up, the app checks the first route itself.
-      expect(router.resolve('#/upload')?.screen).toBe('Upload')
-
-      router.startGuarding()
-      expect(router.resolve('#/upload')).toBeNull()
-      expect(router.$currentRoute.value.screen).toBe('404')
-      expect(router.resolve('#/songs')?.screen).toBe('Songs')
+      await h.visit('/upload')
+      expect(useRouter().isCurrentScreen('Upload')).toBe(true)
     })
   })
 
-  describe('activateRoute', () => {
-    it('sets the current route and params', () => {
-      const route = { path: '/test', screen: 'Home' as ScreenName }
-
-      router.activateRoute(route, { foo: 'bar' })
-
-      expect(router.$currentRoute.value.path).toBe('/test')
-      expect(router.$currentRoute.value.screen).toBe('Home')
-      expect(router.$currentRoute.value.params).toEqual({ foo: 'bar' })
-    })
-
-    it('defaults params to an empty object', () => {
-      const route = { path: '/test', screen: 'Home' as ScreenName }
-
-      router.activateRoute(route)
-
-      expect(router.$currentRoute.value.params).toEqual({})
-    })
-  })
-
-  describe('onRouteChanged', () => {
-    it('calls registered handlers on route change', async () => {
+  describe('route changes', () => {
+    it('tells the screens, but not of a tab moving in the hash', async () => {
       const handler = vi.fn()
-      router.onRouteChanged(handler)
+      useRouter().onRouteChanged(handler)
 
-      router.activateRoute({ path: '/songs', screen: 'Songs' })
+      await h.visit('/settings')
+      expect(handler).toHaveBeenCalledWith(expect.objectContaining({ screen: 'Settings' }), expect.anything())
 
-      await vi.dynamicImportSettled()
+      handler.mockClear()
+      await h.router.replace({ path: '/settings', hash: '#admin-users' })
+      expect(handler).not.toHaveBeenCalled()
+    })
 
-      expect(handler).toHaveBeenCalled()
+    it('clear a 404 a screen asked for', async () => {
+      const { triggerNotFound, isCurrentScreen } = useRouter()
+
+      triggerNotFound()
+      expect(isCurrentScreen('404')).toBe(true)
+
+      await h.visit('/albums')
+      expect(notFound.value).toBe(false)
+      expect(isCurrentScreen('Albums')).toBe(true)
     })
   })
 
-  describe('url', () => {
-    it('generates a URL for a named route', () => {
-      expect(Router.url('home')).toBe('/#/home')
-    })
-
-    it('generates a URL with required params', () => {
-      expect(Router.url('genres.show', { id: 'rock' })).toBe('/#/genres/rock')
-    })
-
-    it('generates a URL with optional params', () => {
-      const id = '01JQABC1234567890ABCDEFGHIJ'
-      expect(Router.url('albums.show', { id, tab: 'songs' })).toBe(`/#/albums/${id}/songs`)
-    })
-
-    it('generates a URL with optional params omitted', () => {
-      const id = '01JQABC1234567890ABCDEFGHIJ'
-      expect(Router.url('albums.show', { id })).toBe(`/#/albums/${id}`)
-    })
-
-    it('throws for unknown route names', () => {
-      expect(() => Router.url('nonexistent' as any)).toThrowError('Route "nonexistent" not found')
-    })
-
-    it('throws for missing required params', () => {
-      expect(() => Router.url('genres.show')).toThrowError('Missing required param "id"')
-    })
-  })
-
-  describe('triggerNotFound', () => {
-    it('activates the 404 route', () => {
-      router.triggerNotFound()
-
-      expect(router.$currentRoute.value.screen).toBe('404')
-    })
-  })
-
-  describe('with clean URLs', () => {
-    const clickLink = (href: string, init: MouseEventInit = {}) => {
-      const link = document.createElement('a')
-      link.href = href
+  describe('links', () => {
+    /** Whether the app took the click. The browser's own navigation is cancelled either way: jsdom has none. */
+    const click = (href: string, init: MouseEventInit = {}) => {
+      const link = Object.assign(document.createElement('a'), { href })
       document.body.appendChild(link)
 
-      let claimedByRouter = false
-
-      const recordAndStop = (event: Event) => {
-        claimedByRouter = event.defaultPrevented
+      let taken = false
+      const after = (event: Event) => {
+        taken = event.defaultPrevented
         event.preventDefault()
       }
 
-      window.addEventListener('click', recordAndStop)
+      // Listening after the router's own listener, which was there first.
+      window.addEventListener('click', after)
       link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0, ...init }))
-      window.removeEventListener('click', recordAndStop)
-      link.remove()
+      window.removeEventListener('click', after)
 
-      return claimedByRouter
+      return taken
     }
 
-    beforeEach(() => {
-      vi.restoreAllMocks()
-      window.KOEL.clean_urls = true
-      history.replaceState(null, '', '/')
+    it('keep a click on a link to a screen inside the app', async () => {
+      expect(click('/albums/al-1#other-albums')).toBe(true)
+      await vi.waitFor(() => expect(at()).toBe('/albums/al-1#other-albums'))
     })
 
-    afterEach(() => {
-      window.KOEL.clean_urls = false
-      history.replaceState(null, '', '/')
+    it('leave anything that is not a screen to the browser', async () => {
+      expect(click('/rest/stream?id=tr-1')).toBe(false)
+      expect(click('https://musicbrainz.org/release/x')).toBe(false)
     })
 
-    it('generates plain paths', () => {
-      expect(Router.url('genres.show', { id: 'rock' })).toBe('/genres/rock')
+    it('leave a click with a modifier key to the browser', async () => {
+      expect(click('/albums', { ctrlKey: true })).toBe(false)
     })
+  })
 
-    it('sends the root home in place of the current history entry', () => {
-      history.replaceState(null, '', '/?source=email')
-      const entries = history.length
+  it('turns an old hash address into a plain path', () => {
+    history.replaceState(null, '', '/#/albums/al-1')
+    createAppRouter()
 
-      router.resolve()
-
-      expect(`${location.pathname}${location.search}`).toBe('/home?source=email')
-      expect(history.length).toBe(entries)
-    })
-
-    it('resolves the route from the path', () => {
-      history.replaceState(null, '', '/songs')
-
-      expect(router.resolve()!.screen).toBe('Songs')
-    })
-
-    it('navigates without leaving the page', () => {
-      const resolveSpy = vi.spyOn(router, 'resolve')
-
-      Router.go('/albums')
-
-      expect(location.pathname).toBe('/albums')
-      expect(resolveSpy).toHaveBeenCalled()
-    })
-
-    it('turns an old hash URL into a plain path', () => {
-      history.replaceState(null, '', '/#/albums')
-
-      new Router()
-
-      expect([location.pathname, location.hash]).toEqual(['/albums', ''])
-    })
-
-    it('keeps a click on a link to a screen inside the app', () => {
-      const cleanRouter = new Router()
-
-      expect(clickLink('/albums')).toBe(true)
-      expect(location.pathname).toBe('/albums')
-      expect(cleanRouter.$currentRoute.value.screen).toBe('Albums')
-    })
-
-    it('leaves a link to something that is not a screen to the browser', () => {
-      new Router()
-
-      expect(clickLink('/download/songs')).toBe(false)
-    })
-
-    it('leaves a click with a modifier key to the browser', () => {
-      new Router()
-
-      expect(clickLink('/albums', { metaKey: true })).toBe(false)
-    })
+    expect(`${location.pathname}${location.hash}`).toBe('/albums/al-1')
+    history.replaceState(null, '', '/')
   })
 })

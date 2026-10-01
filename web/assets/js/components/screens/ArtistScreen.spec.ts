@@ -17,7 +17,7 @@ describe('artistScreen.vue', () => {
     h.mock(albumStore, 'fetchForArtist').mockResolvedValue(h.factory('album').make(2))
     const fetchSongs = h.mock(playableStore, 'fetchSongsForArtist').mockResolvedValue(h.factory('song').make(3))
 
-    h.visit(path)
+    await h.visit(path)
     h.render(Component, { global: { stubs: { AlbumCard: h.stub('album-card') } } })
 
     await waitFor(() => expect(fetchSongs).toHaveBeenCalledWith('ar-1'))
@@ -33,7 +33,7 @@ describe('artistScreen.vue', () => {
   })
 
   it('offers no song filter on the other tabs', async () => {
-    await renderComponent('/artists/ar-1?tab=albums')
+    await renderComponent('/artists/ar-1#albums')
 
     await screen.findByRole('button', { name: 'Shuffle' })
     expect(screen.queryByRole('button', { name: 'Filter' })).toBeNull()

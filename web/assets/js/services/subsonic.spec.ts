@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vite-plus/test'
 import { createHarness } from '@/__tests__/TestHarness'
-import { subsonic } from '@/services/subsonic'
+import { isNotFound, subsonic, SubsonicError } from '@/services/subsonic'
 
 describe('subsonic', () => {
   const h = createHarness()
@@ -97,5 +97,12 @@ describe('subsonic', () => {
     expect(subsonic.streamUrl('tr-1')).toContain('/rest/stream?')
     expect(subsonic.streamUrl('tr-1')).not.toContain('maxBitRate')
     expect(subsonic.streamUrl('tr-1', 128)).toContain('maxBitRate=128')
+  })
+
+  it('knows a missing thing, from Subsonic or the JSON API', () => {
+    expect(isNotFound(new SubsonicError(70, 'Album not found'))).toBe(true)
+    expect(isNotFound({ status: 404 })).toBe(true)
+    expect(isNotFound(new SubsonicError(10, 'Missing parameter'))).toBe(false)
+    expect(isNotFound(new Error('offline'))).toBe(false)
   })
 })
