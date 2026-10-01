@@ -1,7 +1,7 @@
 <template>
   <OnClickOutside @trigger="close">
     <div
-      v-if="allowsUpload && mediaPathSetUp"
+      v-if="allowsUpload"
       class="drop-zone w-screen h-screen fixed z-50 top-0 left-0 rounded-3xl bg-black/40 flex items-center justify-center overflow-hidden duration-200"
       @dragleave="close"
       @dragover="onDragOver"
@@ -22,7 +22,7 @@ import { useUpload } from '@/composables/useUpload'
 
 const emit = defineEmits<{ (e: 'close'): void }>()
 
-const { allowsUpload, mediaPathSetUp, handleDropEvent } = useUpload()
+const { allowsUpload, handleDropEvent } = useUpload()
 
 const onDragOver = (event: DragEvent) => {
   if (!event.dataTransfer?.types.includes('Files')) {

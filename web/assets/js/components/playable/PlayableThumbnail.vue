@@ -26,7 +26,6 @@
 
 <script lang="ts" setup>
 import { computed, toRefs } from 'vue'
-import { getPlayableProp } from '@/utils/helpers'
 import { useBranding } from '@/composables/useBranding'
 
 import M3Icon from '@/components/m3/M3Icon.vue'
@@ -38,7 +37,7 @@ const { playable } = toRefs(props)
 
 const { cover: defaultCover } = useBranding()
 
-const src = computed(() => getPlayableProp(playable.value, 'album_cover', 'episode_image'))
+const src = computed(() => playable.value.album_cover)
 const current = computed(() => ['Playing', 'Paused'].includes(playable.value.playback_state!))
 
 const title = computed(() => {

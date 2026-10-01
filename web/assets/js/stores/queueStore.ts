@@ -2,7 +2,6 @@ import { reactive } from 'vue'
 import { differenceBy, unionBy } from 'lodash-es'
 import { arrayify, moveItemsInList } from '@/utils/helpers'
 import { logger } from '@/utils/logger'
-import { isSong } from '@/utils/typeGuards'
 import { library } from '@/services/library'
 import { subsonic } from '@/services/subsonic'
 import { playableStore } from '@/stores/playableStore'
@@ -34,7 +33,7 @@ export const queueStore = {
 
   set all(playables: Playable[]) {
     this.state.playables = playables
-    playableStore.syncWithVault(playables.filter(isSong))
+    playableStore.syncWithVault(playables)
     this.saveState()
   },
 

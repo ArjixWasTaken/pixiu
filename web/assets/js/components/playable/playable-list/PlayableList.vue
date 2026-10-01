@@ -7,7 +7,7 @@
     @keydown.enter.prevent.stop="handleEnter"
     @keydown.a.prevent="selectAllWithKeyboard"
   >
-    <PlayableListHeader v-if="config.hasHeader" :content-type="contentType" @sort="sort" />
+    <PlayableListHeader v-if="config.hasHeader" @sort="sort" />
 
     <VirtualScroller
       ref="virtualScroller"
@@ -41,7 +41,6 @@ import isMobile from 'ismobilejs'
 import type { Ref } from 'vue'
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { defineAsyncComponent, requireInjection } from '@/utils/helpers'
-import { getPlayableCollectionContentType } from '@/utils/typeGuards'
 import { preferenceStore as preferences } from '@/stores/preferenceStore'
 import { queueStore } from '@/stores/queueStore'
 import { useDraggable, useDroppable } from '@/composables/useDragAndDrop'
@@ -121,8 +120,6 @@ const shouldTriggerContinuousPlayback = computed(() => {
     ['Playlist', 'Album', 'Artist', 'Genre', 'Favorites'].includes(context.type)
   )
 })
-
-const contentType = computed(() => getPlayableCollectionContentType(rows.value.map(({ playable }) => playable)))
 
 const getAllPlayablesWithSort = () => rows.value.map(row => row.playable)
 

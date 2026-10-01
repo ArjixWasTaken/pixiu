@@ -50,16 +50,6 @@ onMounted(async () => {
       }
     })
 
-    const { broadcastSubscriber } = await import('@/services/broadcastSubscriber')
-    broadcastSubscriber.init(currentUser.value.id)
-
-    const { socketService } = await import('@/services/socketService')
-
-    if (await socketService.init()) {
-      const { socketListener } = await import('@/services/socketListener')
-      socketListener.listen()
-    }
-
     emits('success')
   } catch (error: unknown) {
     handleHttpError(error)

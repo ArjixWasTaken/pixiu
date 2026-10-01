@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vite-plus/test'
 import { createHarness } from '@/__tests__/TestHarness'
-import { commonStore } from '@/stores/commonStore'
 import { usePolicies } from './usePolicies'
 
 describe('usePolicies', () => {
@@ -18,37 +17,12 @@ describe('usePolicies', () => {
     expect(currentUserCan.editSong(song)).toBe(true)
   })
 
-  it('allows Plus user to edit their own songs', async () => {
-    const user = h.factory('user').make({ abilities: [] }) as CurrentUser
-    h.actingAsUser(user)
-
-    await h.withPlusEdition(async () => {
-      const { currentUserCan } = usePolicies()
-      const ownSong = h.factory('song').make({ owner_id: user.id })
-
-      expect(currentUserCan.editSong(ownSong)).toBe(true)
-    })
-  })
-
-  it('denies Plus user editing others songs', async () => {
-    const user = h.factory('user').make({ abilities: [] }) as CurrentUser
-    h.actingAsUser(user)
-
-    await h.withPlusEdition(async () => {
-      const { currentUserCan } = usePolicies()
-      const otherSong = h.factory('song').make({ owner_id: '999' })
-
-      expect(currentUserCan.editSong(otherSong)).toBe(false)
-    })
-  })
-
-  it('denies non-Plus non-admin editing songs', () => {
+  it('denies editing songs without the permission', () => {
     h.actingAsUser({
       ...h.factory('user').make(),
       abilities: [],
     } as CurrentUser)
 
-    commonStore.state.koel_plus.active = false
     const { currentUserCan } = usePolicies()
 
     expect(currentUserCan.editSong(h.factory('song').make())).toBe(false)
@@ -110,14 +84,11 @@ describe('usePolicies', () => {
     expect(currentUserCan.manageUsers()).toBe(false)
   })
 
-  it('allows upload for Plus users', async () => {
-    const user = h.factory('user').make({ abilities: [] }) as CurrentUser
-    h.actingAsUser(user)
+  it('forbids upload without the manage songs permission', () => {
+    h.actingAsUser(h.factory('user').make({ abilities: [] }) as CurrentUser)
 
-    await h.withPlusEdition(async () => {
-      const { currentUserCan } = usePolicies()
-      expect(currentUserCan.uploadSongs()).toBe(true)
-    })
+    const { currentUserCan } = usePolicies()
+    expect(currentUserCan.uploadSongs()).toBe(false)
   })
 
   it('allows upload for users with manage songs permission', () => {
@@ -128,16 +99,6 @@ describe('usePolicies', () => {
 
     const { currentUserCan } = usePolicies()
     expect(currentUserCan.uploadSongs()).toBe(true)
-  })
-
-  it('forbids upload for Plus guests', async () => {
-    const guest = h.factory('user').make({ abilities: [], role: 'guest' }) as CurrentUser
-    h.actingAsUser(guest)
-
-    await h.withPlusEdition(async () => {
-      const { currentUserCan } = usePolicies()
-      expect(currentUserCan.uploadSongs()).toBe(false)
-    })
   })
 
   it('reads the edit permission embedded in the user', () => {
@@ -156,23 +117,5 @@ describe('usePolicies', () => {
 
     expect(currentUserCan.deleteUser(deletable)).toBe(true)
     expect(currentUserCan.deleteUser(readonly)).toBe(false)
-  })
-
-  it('reads the edit permission embedded in the radio station', () => {
-    const { currentUserCan } = usePolicies()
-    const editable = h.factory('radio-station').make({ permissions: { edit: true, delete: false } })
-    const readonly = h.factory('radio-station').make({ permissions: { edit: false, delete: false } })
-
-    expect(currentUserCan.editRadioStation(editable)).toBe(true)
-    expect(currentUserCan.editRadioStation(readonly)).toBe(false)
-  })
-
-  it('reads the delete permission embedded in the radio station', () => {
-    const { currentUserCan } = usePolicies()
-    const deletable = h.factory('radio-station').make({ permissions: { edit: false, delete: true } })
-    const readonly = h.factory('radio-station').make({ permissions: { edit: false, delete: false } })
-
-    expect(currentUserCan.deleteRadioStation(deletable)).toBe(true)
-    expect(currentUserCan.deleteRadioStation(readonly)).toBe(false)
   })
 })

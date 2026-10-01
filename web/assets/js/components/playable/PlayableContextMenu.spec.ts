@@ -14,7 +14,6 @@ import { queueStore } from '@/stores/queueStore'
 import { playableStore } from '@/stores/playableStore'
 import { MessageToasterStub } from '@/__tests__/stubs'
 import Router from '@/router'
-import CreateEmbedForm from '@/components/embed/CreateEmbedForm.vue'
 import CreatePlaylistForm from '@/components/playlist/CreatePlaylistForm.vue'
 
 const openModalMock = vi.fn()
@@ -133,26 +132,6 @@ describe('playableContextMenu.vue', () => {
     await h.user.click(screen.getByText(`Artist: ${song.artist_name}`))
 
     expect(goMock).toHaveBeenCalledWith(`/#/artists/${song.artist_id}`)
-  })
-
-  it('goes to podcast screen', async () => {
-    const goMock = h.mock(Router, 'go')
-    const episode = h.factory('episode').make()
-    await renderComponent(episode)
-
-    await h.user.click(screen.getByText('Podcast'))
-
-    expect(goMock).toHaveBeenCalledWith(`/#/podcasts/${episode.podcast_id}`)
-  })
-
-  it('goes to episode description', async () => {
-    const goMock = h.mock(Router, 'go')
-    const episode = h.factory('episode').make()
-    await renderComponent(episode)
-
-    await h.user.click(screen.getByText('Episode'))
-
-    expect(goMock).toHaveBeenCalledWith(`/#/episodes/${episode.id}`)
   })
 
   it('downloads', async () => {
@@ -297,25 +276,6 @@ describe('playableContextMenu.vue', () => {
     expect(screen.queryByText('Edit…')).toBeNull()
   })
 
-  it('has an option to copy shareable URL in Community edition', async () => {
-    await renderComponent(h.factory('song').make())
-    screen.getByText('Copy URL')
-  })
-
-  it('has an option to copy shareable URL if song is public in Plus edition', async () => {
-    await h.withPlusEdition(async () => {
-      await renderComponent(h.factory('song').make({ is_public: true }))
-      screen.getByText('Copy URL')
-    })
-  })
-
-  it('does not have an option to share if song is private in Plus edition', async () => {
-    await h.withPlusEdition(async () => {
-      await renderComponent(h.factory('song').make({ is_public: false }))
-      expect(screen.queryByText('Copy URL')).toBeNull()
-    })
-  })
-
   it('does not have an option to delete songs if current user is not admin', async () => {
     h.actingAsUser()
     await renderComponent()
@@ -331,136 +291,6 @@ describe('playableContextMenu.vue', () => {
     await assertOpenModal(openModalMock, CreatePlaylistForm, { folder: null, playables })
   })
 
-  it('does not have the options to mark song as private or public in Community edition', async () => {
-    await renderComponent(h.factory('song').make())
-    expect(screen.queryByText('Mark as Private')).toBeNull()
-    expect(screen.queryByText('Unmark as Private')).toBeNull()
-  })
-
-  it('makes songs private', async () =>
-    await h.withPlusEdition(async () => {
-      const user = h.factory('user').state('current').make() as CurrentUser
-      const songs = h.factory('song').make(
-        {
-          is_public: true,
-          owner_id: user.id,
-        },
-        5,
-      )
-
-      h.actingAsUser(user)
-
-      await renderComponent(songs)
-      const privatizeMock = h.mock(playableStore, 'privatizeSongs').mockResolvedValue(songs.map(song => song.id))
-
-      await h.user.click(screen.getByText('Mark as Private'))
-
-      expect(privatizeMock).toHaveBeenCalledWith(songs)
-    }))
-
-  it('makes songs public', async () =>
-    await h.withPlusEdition(async () => {
-      const user = h.factory('user').state('current').make() as CurrentUser
-      const songs = h.factory('song').make(
-        {
-          is_public: false,
-          owner_id: user.id,
-        },
-        5,
-      )
-
-      h.actingAsUser(user)
-
-      await renderComponent(songs)
-      const publicizeMock = h.mock(playableStore, 'publicizeSongs').mockResolvedValue(songs.map(song => song.id))
-
-      await h.user.click(screen.getByText('Unmark as Private'))
-
-      expect(publicizeMock).toHaveBeenCalledWith(songs)
-    }))
-
-  it('does not have an option to make songs public or private if current user is not owner', async () => {
-    await h.withPlusEdition(async () => {
-      const user = h.factory('user').state('current').make() as CurrentUser
-      const owner = h.factory('user').make()
-      const songs = h.factory('song').make(
-        {
-          is_public: false,
-          owner_id: owner.id,
-        },
-        5,
-      )
-
-      h.actingAsUser(user)
-
-      await renderComponent(songs)
-
-      expect(screen.queryByText('Unmark as Private')).toBeNull()
-      expect(screen.queryByText('Mark as Private')).toBeNull()
-    })
-  })
-
-  it('has both options to make public and private if songs have mixed visibilities', async () => {
-    await h.withPlusEdition(async () => {
-      const owner = h.factory('user').state('current').make() as CurrentUser
-      const songs = h
-        .factory('song')
-        .make(
-          {
-            is_public: false,
-            owner_id: owner.id,
-          },
-          2,
-        )
-        .concat(
-          ...h.factory('song').make(
-            {
-              is_public: true,
-              owner_id: owner.id,
-            },
-            3,
-          ),
-        )
-
-      h.actingAsUser(owner)
-      await renderComponent(songs)
-
-      screen.getByText('Unmark as Private')
-      screen.getByText('Mark as Private')
-    })
-  })
-
-  it('does not have an option to make songs public or private or Community edition', async () => {
-    const owner = h.factory('user').state('current').make() as CurrentUser
-    const songs = h.factory('song').make(
-      {
-        is_public: false,
-        owner_id: owner.id,
-      },
-      5,
-    )
-
-    h.actingAsUser(owner)
-    await renderComponent(songs)
-
-    expect(screen.queryByText('Unmark as Private')).toBeNull()
-    expect(screen.queryByText('Mark as Private')).toBeNull()
-  })
-
-  it('requests the embed form', async () => {
-    const { playables } = await renderComponent(h.factory('song').make())
-    await h.user.click(screen.getByText('Embed…'))
-
-    await assertOpenModal(openModalMock, CreateEmbedForm, { embeddable: playables[0] })
-  })
-
-  it('does not have an option to embed when embedding is disabled', async () => {
-    commonStore.state.allows_embedding = false
-    await renderComponent(h.factory('song').make())
-
-    expect(screen.queryByText('Embed…')).toBeNull()
-  })
-
   it('makes songs available offline', async () => {
     const { playables } = await renderComponent()
 
@@ -469,11 +299,6 @@ describe('playableContextMenu.vue', () => {
     for (const playable of playables) {
       expect(makeAvailableOfflineMock).toHaveBeenCalledWith(playable)
     }
-  })
-
-  it('does not show offline option for episodes', async () => {
-    await renderComponent(h.factory('episode').make())
-    expect(screen.queryByText('Make Available Offline')).toBeNull()
   })
 
   it('removes offline versions when all songs are cached', async () => {

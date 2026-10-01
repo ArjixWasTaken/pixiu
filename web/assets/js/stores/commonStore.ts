@@ -7,7 +7,6 @@ import { playlistFolderStore } from '@/stores/playlistFolderStore'
 import { playlistStore } from '@/stores/playlistStore'
 import { preferenceStore } from '@/stores/preferenceStore'
 import { queueStore } from '@/stores/queueStore'
-import { settingStore } from '@/stores/settingStore'
 import { themeStore } from '@/stores/themeStore'
 import { userStore } from '@/stores/userStore'
 import { huntingStore } from '@/stores/huntingStore'
@@ -15,34 +14,15 @@ import type { HuntingSummary } from '@/services/huntingService'
 
 const initialState = {
   allows_download: false,
-  allows_embedding: true,
   assignable_roles: [] as Array<{ id: Role; label: string; description: string }>,
   cdn_url: '',
   current_user: null! as CurrentUser,
   current_version: '',
-  koel_plus: {
-    active: false,
-    short_key: null as string | null,
-    customer_name: null as string | null,
-    customer_email: null as string | null,
-    product_id: '' as string | null,
-  },
   latest_version: '',
-  media_path_set: false,
   playlists: [] as Playlist[],
   playlist_folders: [] as PlaylistFolder[],
-  settings: {} as Settings,
   uses_musicbrainz: false,
-  uses_i_tunes: false,
-  uses_last_fm: false,
-  uses_spotify: false,
-  uses_ticketmaster: false,
-  uses_media_browser: false,
-  uses_podcasts: true,
-  uses_radio: true,
-  uses_ai: false,
   users: [] as User[],
-  uses_you_tube: false,
   storage_driver: 'local',
   supports_presigned_uploads: false,
   song_count: 0,
@@ -78,9 +58,6 @@ export const commonStore = {
 
     Object.assign(this.state, bootstrap, { playlists, queue_state: queueState })
 
-    // Always disable YouTube integration on mobile.
-    this.state.uses_you_tube = this.state.uses_you_tube && !isMobile.any
-
     // Only enable transcoding on mobile
     this.state.supports_transcoding = this.state.supports_transcoding && isMobile.any
 
@@ -88,7 +65,6 @@ export const commonStore = {
     preferenceStore.init(this.state.current_user.preferences)
     playlistStore.init(this.state.playlists)
     playlistFolderStore.init(this.state.playlist_folders)
-    settingStore.init(this.state.settings)
     queueStore.init(this.state.queue_state)
     themeStore.init(this.state.current_theme || themeStore.getCurrentTheme())
     huntingStore.init(this.state.hunting)

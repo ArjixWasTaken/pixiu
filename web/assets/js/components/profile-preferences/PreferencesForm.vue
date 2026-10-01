@@ -1,22 +1,8 @@
 <template>
   <div class="space-y-4">
-    <FormRow v-if="isPlus">
-      <label class="pref-row">
-        <span>Make uploaded songs public by default</span>
-        <CheckBox v-model="preferences.make_uploads_public" name="make_uploads_public" />
-      </label>
-    </FormRow>
-    <FormRow v-if="isPlus">
-      <label class="pref-row">
-        <span
-          >Show other users' public songs, albums, artists, and radio stations in your library (reload required)</span
-        >
-        <CheckBox v-model="preferences.include_public_media" name="include_public_media" />
-      </label>
-    </FormRow>
     <FormRow>
       <label class="pref-row">
-        <span>{{ continuousPlaybackLabel }}</span>
+        <span>Playing a song plays the rest of its playlist, album, artist or genre</span>
         <CheckBox v-model="preferences.continuous_playback" name="continuous_playback" />
       </label>
     </FormRow>
@@ -90,14 +76,12 @@ import isMobile from 'ismobilejs'
 import { computed, toRef } from 'vue'
 import { commonStore } from '@/stores/commonStore'
 import { preferenceStore as preferences } from '@/stores/preferenceStore'
-import { useKoelPlus } from '@/composables/useKoelPlus'
 import { useBranding } from '@/composables/useBranding'
 
 import CheckBox from '@/components/ui/form/CheckBox.vue'
 import FormRow from '@/components/ui/form/FormRow.vue'
 
 const onMobile = isMobile.any
-const { isPlus } = useKoelPlus()
 const { name: appName } = useBranding()
 
 const showTranscodingOption = toRef(commonStore.state, 'supports_transcoding')
@@ -107,18 +91,6 @@ const crossfadeEnabled = computed(() => preferences.crossfade_duration > 0)
 const toggleCrossfade = (enabled: boolean | undefined) => {
   preferences.crossfade_duration = enabled ? 7 : 0
 }
-
-const continuousPlaybackLabel = computed(() => {
-  const types = ['playlist', 'album', 'artist', 'genre', 'podcast']
-
-  if (commonStore.state.uses_media_browser) {
-    types.push('folder')
-  }
-
-  types[types.length - 1] = `or ${types[types.length - 1]}`
-
-  return `Playing a song or episode triggers continuous playback of the entire ${types.join(', ')}`
-})
 </script>
 
 <style lang="postcss" scoped>

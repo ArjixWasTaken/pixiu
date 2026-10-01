@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
-import { commonStore } from '@/stores/commonStore'
 import { uploadService } from '@/services/uploadService'
 import type { UploadFile, UploadStatus } from '@/services/uploadService'
 
@@ -37,21 +36,6 @@ describe('useUpload', () => {
   // Queued files would start uploading for real; these tests only look at the queue.
   beforeEach(() => vi.spyOn(uploadService, 'proceed').mockImplementation(() => {}))
   afterEach(() => vi.restoreAllMocks())
-
-  it('computes mediaPathSetUp when storage is not local', () => {
-    commonStore.state.storage_driver = 's3'
-
-    const { mediaPathSetUp } = useUpload()
-    expect(mediaPathSetUp.value).toBe(true)
-  })
-
-  it('computes mediaPathSetUp based on media_path_set for local storage', () => {
-    commonStore.state.storage_driver = 'local'
-    commonStore.state.media_path_set = false
-
-    const { mediaPathSetUp } = useUpload()
-    expect(mediaPathSetUp.value).toBe(false)
-  })
 
   it('queues valid files for upload', () => {
     const { queueFilesForUpload } = useUpload()

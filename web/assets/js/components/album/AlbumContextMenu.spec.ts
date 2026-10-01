@@ -11,7 +11,6 @@ import { albumStore } from '@/stores/albumStore'
 import { commonStore } from '@/stores/commonStore'
 import { playableStore } from '@/stores/playableStore'
 import EditAlbumForm from '@/components/album/EditAlbumForm.vue'
-import CreateEmbedForm from '@/components/embed/CreateEmbedForm.vue'
 
 const openModalMock = vi.fn()
 
@@ -113,20 +112,6 @@ describe('albumContextMenu.vue', () => {
     await h.user.click(screen.getByText('Edit…'))
 
     await assertOpenModal(openModalMock, EditAlbumForm, { album })
-  })
-
-  it('requests the embed form', async () => {
-    const { album } = await renderComponent()
-    await h.user.click(screen.getByText('Embed…'))
-
-    await assertOpenModal(openModalMock, CreateEmbedForm, { embeddable: album })
-  })
-
-  it('does not have an option to embed when embedding is disabled', async () => {
-    commonStore.state.allows_embedding = false
-    await renderComponent()
-
-    expect(screen.queryByText('Embed…')).toBeNull()
   })
 
   it('links to MusicBrainz', async () => {

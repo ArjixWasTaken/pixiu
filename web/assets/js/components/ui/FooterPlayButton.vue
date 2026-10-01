@@ -30,15 +30,7 @@ const streamable = requireInjection(CurrentStreamableKey, ref())
 
 const libraryEmpty = computed(() => commonStore.state.song_count === 0)
 const playing = computed(() => streamable.value?.playback_state === 'Playing')
-const isRadio = computed(() => streamable.value?.type === 'radio-stations')
-
-const title = computed(() => {
-  if (isRadio.value) {
-    return streamable.value?.playback_state === 'Playing' ? 'Stop streaming' : 'Start streaming'
-  }
-
-  return playing.value ? 'Pause' : 'Play or resume'
-})
+const title = computed(() => (playing.value ? 'Pause' : 'Play or resume'))
 
 const initiatePlayback = async () => {
   if (libraryEmpty.value) {
@@ -81,11 +73,6 @@ const toggle = async () => {
     return
   }
 
-  if (isRadio.value) {
-    await playback('radio').toggle()
-    return
-  }
-
-  await playback('queue').toggle()
+  await playback().toggle()
 }
 </script>

@@ -17,8 +17,7 @@
           </PlaylistThumbnail>
         </template>
 
-        <template v-if="filteredPlayables.length || playlist.is_collaborative" #meta>
-          <CollaboratorsBadge v-if="collaborators.length" :collaborators />
+        <template v-if="filteredPlayables.length" #meta>
           <span>{{ pluralize(filteredPlayables, 'song') }}</span>
           <span>{{ duration }}</span>
         </template>
@@ -86,7 +85,6 @@ import { huntingStore } from '@/stores/huntingStore'
 import { useMessageToaster } from '@/composables/useMessageToaster'
 import { playlistStore } from '@/stores/playlistStore'
 import { playableStore } from '@/stores/playableStore'
-import { playlistCollaborationService } from '@/services/playlistCollaborationService'
 import { defineAsyncComponent } from '@/utils/helpers'
 import { useRouter } from '@/composables/useRouter'
 import { useErrorHandler } from '@/composables/useErrorHandler'
@@ -100,7 +98,6 @@ import { useModal } from '@/composables/useModal'
 import M3IconButton from '@/components/m3/M3IconButton.vue'
 import ScreenHeader from '@/components/ui/ScreenHeader.vue'
 import ScreenEmptyState from '@/components/ui/ScreenEmptyState.vue'
-import CollaboratorsBadge from '@/components/playlist/PlaylistCollaboratorsBadge.vue'
 import PlaylistThumbnail from '@/components/ui/PlaylistThumbnail.vue'
 import ScreenBase from '@/components/screens/ScreenBase.vue'
 import ScreenHeaderSkeleton from '@/components/ui/ScreenHeaderSkeleton.vue'
@@ -147,7 +144,6 @@ const getState = (id: Playlist['id']) => {
 
 let currentState = blankState()
 const allPlayables = ref<Playable[]>([])
-const collaborators = ref<PlaylistCollaborator[]>([])
 
 const playlistId = ref<Playlist['id']>()
 const playlist = ref<Playlist>()
@@ -238,12 +234,7 @@ const fetchDetails = async (refresh = false) => {
   try {
     loading.value = true
 
-    ;[allPlayables.value, collaborators.value] = await Promise.all([
-      playableStore.fetchForPlaylist(playlist.value!, refresh),
-      playlist.value!.is_collaborative
-        ? playlistCollaborationService.fetchCollaborators(playlist.value!)
-        : Promise.resolve<PlaylistCollaborator[]>([]),
-    ])
+    allPlayables.value = await playableStore.fetchForPlaylist(playlist.value!, refresh)
   } catch (error: unknown) {
     useErrorHandler().handleHttpError(error)
   } finally {
@@ -268,9 +259,6 @@ watch(playlistId, async id => {
 
   context.entity = playlist.value
 
-  // reset this config value to its default to not cause rows to be mal-rendered
-  listConfig.collaborative = false
-
   // Make sure this value isn't shared among different playlists.
   selectedPlayables.value = []
 
@@ -283,7 +271,6 @@ watch(playlistId, async id => {
   fetchMirror()
 
   listConfig.reorderable = currentState.sortField === 'position' && playlist.value.permissions.edit
-  listConfig.collaborative = playlist.value.is_collaborative
   listConfig.hasCustomOrderSort = !playlist.value.is_smart
 
   currentState.sortField ??= playlist.value?.is_smart ? 'title' : 'position'
@@ -309,7 +296,6 @@ eventBus
     }
   })
   .on('PLAYLIST_UPDATED', async ({ id }) => id === playlistId.value && (await fetchDetails()))
-  .on('PLAYLIST_COLLABORATOR_REMOVED', async ({ id }) => id === playlistId.value && (await fetchDetails()))
   .on('PLAYLIST_CONTENT_REMOVED', async ({ id }, removed) => {
     if (id === playlistId.value) {
       allPlayables.value = differenceBy(allPlayables.value, removed, 'id')

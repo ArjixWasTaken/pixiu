@@ -119,11 +119,6 @@ describe('playableStore', () => {
     expect(removeArtistsMock).toHaveBeenCalledWith(['led-zeppelin'])
   })
 
-  it('gets shareable URL', () => {
-    const song = h.factory('song').make()
-    expect(playableStore.getShareableUrl(song)).toBe(`http://test/#/songs/${song.id}`)
-  })
-
   it('syncs new songs into the vault and applies playback state defaults', () => {
     const song = h.factory('song').make({
       playback_state: null,

@@ -66,7 +66,6 @@ import { usePlayableList } from '@/composables/usePlayableList'
 import { usePlayableListControls } from '@/composables/usePlayableListControls'
 import { playback } from '@/services/playbackManager'
 import { requireInjection } from '@/utils/helpers'
-import { isRadioStation } from '@/utils/typeGuards'
 import { CurrentStreamableKey } from '@/config/symbols'
 
 import ScreenHeader from '@/components/ui/ScreenHeader.vue'
@@ -169,7 +168,7 @@ const currentStreamable = requireInjection(CurrentStreamableKey, ref())
 const revealCurrent = async () => {
   const current = queueStore.current ?? currentStreamable.value
 
-  if (!current || isRadioStation(current)) {
+  if (!current) {
     return
   }
 

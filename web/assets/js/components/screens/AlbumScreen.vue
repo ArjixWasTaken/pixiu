@@ -118,7 +118,7 @@ const StarRating = defineAsyncComponent(() => import('@/components/ui/StarRating
 const { getRouteParam, go, onScreenActivated, onRouteChanged, url, triggerNotFound } = useRouter()
 const { PlayableListControls: SongListControls, config } = usePlayableListControls('Album')
 const { get: lsGet, set: lsSet } = useLocalStorage()
-const { useLastfm, useMusicBrainz } = useThirdPartyServices()
+const { useMusicBrainz } = useThirdPartyServices()
 const { openContextMenu } = useContextMenu()
 
 const activeTab = ref<Tab>('songs')
@@ -145,7 +145,7 @@ const {
   onSwipe,
 } = usePlayableList(songs, { type: 'Album' })
 
-const useEncyclopedia = computed(() => useMusicBrainz.value || useLastfm.value)
+const useEncyclopedia = useMusicBrainz
 
 const isStandardArtist = computed(() => {
   if (!album.value) {

@@ -39,7 +39,7 @@ const TrackList = defineAsyncComponent(() => import('@/components/album/AlbumTra
 
 const { album, mode } = toRefs(props)
 
-const { useMusicBrainz, useLastfm, useSpotify } = useThirdPartyServices()
+const { useMusicBrainz } = useThirdPartyServices()
 
 const loading = ref(false)
 const info = ref<AlbumInfo | null>(null)
@@ -49,7 +49,7 @@ watch(
   async () => {
     info.value = null
 
-    if (useMusicBrainz.value || useLastfm.value || useSpotify.value) {
+    if (useMusicBrainz.value) {
       loading.value = true
       info.value = await encyclopediaService.fetchForAlbum(album.value)
       loading.value = false

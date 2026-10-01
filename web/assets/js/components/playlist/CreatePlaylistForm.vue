@@ -3,7 +3,7 @@
     <header>
       <h1>
         New Playlist
-        <span v-if="playables.length" data-testid="from-playables">from {{ pluralize(playables, entityName) }}</span>
+        <span v-if="playables.length" data-testid="from-playables">from {{ pluralize(playables, 'song') }}</span>
       </h1>
     </header>
 
@@ -24,10 +24,8 @@
 </template>
 
 <script lang="ts" setup>
-import { computed } from 'vue'
 import type { CreatePlaylistData } from '@/stores/playlistStore'
 import { playlistStore } from '@/stores/playlistStore'
-import { getPlayableCollectionContentType } from '@/utils/typeGuards'
 import { pluralize } from '@/utils/formatters'
 import { useRouter } from '@/composables/useRouter'
 import { useDialogBox } from '@/composables/useDialogBox'
@@ -65,17 +63,6 @@ const { data, loading, isPristine, handleSubmit } = useForm<CreatePlaylistData>(
     toastSuccess(`Playlist "${playlist.name}" created.`)
     go(url('playlists.show', { id: playlist.id }))
   },
-})
-
-const entityName = computed(() => {
-  switch (getPlayableCollectionContentType(playables)) {
-    case 'songs':
-      return 'song'
-    case 'episodes':
-      return 'song'
-    default:
-      return 'item'
-  }
 })
 
 const maybeClose = async () => {

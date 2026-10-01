@@ -8,8 +8,6 @@
       lists), so we use v-show.
       For those that don't need to maintain their own UI state, we use v-if to avoid rendering them when not needed.
     -->
-      <VisualizerScreen v-if="screen === 'Visualizer'" />
-
       <HomeScreen v-if="screenLoaded('Home')" v-show="screen === 'Home'" />
       <QueueScreen v-if="screenLoaded('Queue')" v-show="screen === 'Queue'" />
       <AllSongsScreen v-if="screenLoaded('Songs')" v-show="screen === 'Songs'" />
@@ -22,9 +20,6 @@
       <UploadScreen v-if="screenLoaded('Upload')" v-show="screen === 'Upload'" />
       <SearchExcerptsScreen v-if="screenLoaded('Search.Excerpt')" v-show="screen === 'Search.Excerpt'" />
       <GenreScreen v-if="screenLoaded('Genre')" v-show="screen === 'Genre'" />
-      <PodcastListScreen v-if="screenLoaded('Podcasts')" v-show="screen === 'Podcasts'" />
-      <RadioStationListScreen v-if="screenLoaded('Radio.Stations')" v-show="screen === 'Radio.Stations'" />
-      <MediaBrowser v-if="useMediaBrowser && screenLoaded('MediaBrowser')" v-show="screen === 'MediaBrowser'" />
       <GenreListScreen v-if="screenLoaded('Genres')" v-show="screen === 'Genres'" />
 
       <SearchSongResultsScreen v-if="screen === 'Search.Playables'" />
@@ -36,11 +31,7 @@
       <JobsScreen v-if="screen === 'Jobs'" />
       <OrphansScreen v-if="screen === 'Orphans'" />
       <ProfileScreen v-if="screen === 'Profile'" />
-      <PodcastScreen v-if="screen === 'Podcast'" />
-      <EpisodeScreen v-if="screen === 'Episode'" />
-      <YouTubeScreen v-if="useYouTube" v-show="screen === 'YouTube'" />
       <NotFoundScreen v-if="screen === '404'" />
-      <AcceptPlaylistCollaborationInvite v-if="screen === 'Playlist.Collaborate'" />
 
       <template v-for="(component, name) in addedScreens" :key="name">
         <component :is="component" v-if="screen === name" />
@@ -50,43 +41,32 @@
 </template>
 
 <script lang="ts" setup>
-import { onMounted, reactive, ref, toRef } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
 import type { Component } from 'vue'
 import { Filter } from '@/config/hooks'
 import { applyFilters } from '@/hooks'
 import { defineAsyncComponent } from '@/utils/helpers'
 import { useRouter } from '@/composables/useRouter'
-import { useThirdPartyServices } from '@/composables/useThirdPartyServices'
-import { commonStore } from '@/stores/commonStore'
 import { useViewport } from '@/composables/useViewport'
 
 import TopBar from '@/components/layout/main-wrapper/TopBar.vue'
 import NowPlayingPanel from '@/components/layout/now-playing/NowPlayingPanel.vue'
-
-const AcceptPlaylistCollaborationInvite = defineAsyncComponent(
-  () => import('@/components/screens/AcceptPlaylistCollaborationInvite.vue'),
-)
 
 const AlbumListScreen = defineAsyncComponent(() => import('@/components/screens/AlbumListScreen.vue'))
 const AlbumScreen = defineAsyncComponent(() => import('@/components/screens/AlbumScreen.vue'))
 const AllSongsScreen = defineAsyncComponent(() => import('@/components/screens/AllSongsScreen.vue'))
 const ArtistListScreen = defineAsyncComponent(() => import('@/components/screens/ArtistListScreen.vue'))
 const ArtistScreen = defineAsyncComponent(() => import('@/components/screens/ArtistScreen.vue'))
-const EpisodeScreen = defineAsyncComponent(() => import('@/components/screens/EpisodeScreen.vue'))
 const FavoritesScreen = defineAsyncComponent(() => import('@/components/screens/FavoritesScreen.vue'))
 const GenreListScreen = defineAsyncComponent(() => import('@/components/screens/GenreListScreen.vue'))
 const GenreScreen = defineAsyncComponent(() => import('@/components/screens/GenreScreen.vue'))
 const HomeScreen = defineAsyncComponent(() => import('@/components/screens/HomeScreen.vue'))
-const MediaBrowser = defineAsyncComponent(() => import('@/components/screens/MediaBrowserScreen.vue'))
 const NotFoundScreen = defineAsyncComponent(() => import('@/components/screens/NotFoundScreen.vue'))
 const PlaylistScreen = defineAsyncComponent(() => import('@/components/screens/PlaylistScreen.vue'))
-const PodcastListScreen = defineAsyncComponent(() => import('@/components/screens/PodcastListScreen.vue'))
-const PodcastScreen = defineAsyncComponent(() => import('@/components/screens/PodcastScreen.vue'))
 const ProfileScreen = defineAsyncComponent(() => import('@/components/screens/ProfileScreen.vue'))
 // QueueScreen and OfflineSongsScreen must NOT be lazy-loaded, so they work offline.
 import QueueScreen from '@/components/screens/QueueScreen.vue'
 import OfflineSongsScreen from '@/components/screens/OfflineSongsScreen.vue'
-const RadioStationListScreen = defineAsyncComponent(() => import('@/components/screens/RadioStationListScreen.vue'))
 const RecentlyPlayedScreen = defineAsyncComponent(() => import('@/components/screens/RecentlyPlayedScreen.vue'))
 const SearchExcerptsScreen = defineAsyncComponent(() => import('@/components/screens/search/SearchExcerptsScreen.vue'))
 const SearchSongResultsScreen = defineAsyncComponent(
@@ -98,18 +78,14 @@ const WatchesScreen = defineAsyncComponent(() => import('@/components/screens/hu
 const JobsScreen = defineAsyncComponent(() => import('@/components/screens/hunting/JobsScreen.vue'))
 const OrphansScreen = defineAsyncComponent(() => import('@/components/screens/hunting/OrphansScreen.vue'))
 const UploadScreen = defineAsyncComponent(() => import('@/components/screens/UploadScreen.vue'))
-const VisualizerScreen = defineAsyncComponent(() => import('@/components/screens/VisualizerScreen.vue'))
-const YouTubeScreen = defineAsyncComponent(() => import('@/components/screens/YouTubeScreen.vue'))
 
 const addedScreens = applyFilters<Partial<Record<ScreenName, Component>>>(Filter.SCREENS, {})
 
-const { useYouTube } = useThirdPartyServices()
 const { isMobile } = useViewport()
 const { onRouteChanged, getCurrentScreen } = useRouter()
 
 const screen = ref<ScreenName>('Home')
 const loadedScreens = reactive<ScreenName[]>([])
-const useMediaBrowser = toRef(commonStore.state, 'uses_media_browser')
 
 onRouteChanged(route => {
   if (!loadedScreens.includes(route.screen)) {

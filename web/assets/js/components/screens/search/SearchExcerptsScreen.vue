@@ -16,18 +16,6 @@
       />
       <ArtistResultsBlock :artists="excerpt.artists" :searching data-testid="artist-excerpts" />
       <AlbumResultsBlock :albums="excerpt.albums" :searching data-testid="album-excerpts" />
-      <PodcastExcerptResultsBlock
-        v-if="commonStore.state.uses_podcasts"
-        :podcasts="excerpt.podcasts"
-        :searching
-        data-testid="podcast-excerpts"
-      />
-      <RadioStationExcerptResultsBlock
-        v-if="commonStore.state.uses_radio"
-        :stations="excerpt.radio_stations"
-        :searching
-        data-testid="radio-station-excerpts"
-      />
 
       <M3Button :href="discoverUrl" icon="travel_explore" variant="tonal">
         Search YouTube Music for “{{ q }}”
@@ -48,7 +36,6 @@
 import { intersectionBy } from 'lodash-es'
 import { computed, ref, toRef } from 'vue'
 import { eventBus } from '@/utils/eventBus'
-import { commonStore } from '@/stores/commonStore'
 import { searchStore } from '@/stores/searchStore'
 import { useRouter } from '@/composables/useRouter'
 
@@ -60,8 +47,6 @@ import ScreenBase from '@/components/screens/ScreenBase.vue'
 import PlayableExcerptResultsBlock from '@/components/screens/search/PlayableExcerptResultsBlock.vue'
 import ArtistResultsBlock from '@/components/screens/search/ArtistExcerptResultsBlock.vue'
 import AlbumResultsBlock from '@/components/screens/search/AlbumExcerptResultsBlock.vue'
-import PodcastExcerptResultsBlock from '@/components/screens/search/PodcastExcerptResultsBlock.vue'
-import RadioStationExcerptResultsBlock from '@/components/screens/search/RadioStationExcerptResultsBlock.vue'
 
 const { url } = useRouter()
 

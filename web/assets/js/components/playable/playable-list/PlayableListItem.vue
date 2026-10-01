@@ -1,6 +1,6 @@
 <template>
   <div class="px-3">
-    <h4 v-if="isSong(playable) && showDisc && playable.disc" class="disc m3-title-small">Disc {{ playable.disc }}</h4>
+    <h4 v-if="showDisc && playable.disc" class="disc m3-title-small">Disc {{ playable.disc }}</h4>
 
     <article
       :class="{ playing, selected: item.selected }"
@@ -34,7 +34,7 @@
       </span>
 
       <span class="trailing">
-        <span v-if="shouldShowColumn('rating') && isSong(playable)" class="rating">
+        <span v-if="shouldShowColumn('rating')" class="rating">
           <StarRating :rateable="playable" size="xs" />
         </span>
         <span v-if="shouldShowColumn('duration')" class="time m3-label-medium">{{ fmtLength }}</span>
@@ -53,8 +53,7 @@
 
 <script lang="ts" setup>
 import { computed, toRefs } from 'vue'
-import { getPlayableProp, requireInjection } from '@/utils/helpers'
-import { isSong } from '@/utils/typeGuards'
+import { requireInjection } from '@/utils/helpers'
 import { secondsToHis, timeAgo } from '@/utils/formatters'
 import { useTableColumnVisibility } from '@/composables/useTableColumnVisibility'
 import { useOfflinePlayback } from '@/composables/useOfflinePlayback'
@@ -89,22 +88,20 @@ const { item } = toRefs(props)
 const playable = computed<Playable>(() => item.value.playable)
 const playing = computed(() => ['Playing', 'Paused'].includes(playable.value.playback_state!))
 const { isCached, isCaching, hasCachingError, getCachingError } = useOfflinePlayback()
-const cachedOffline = computed(() => isSong(playable.value) && isCached(playable.value))
-const cachingOffline = computed(() => isSong(playable.value) && isCaching(playable.value))
-const cachingFailed = computed(() => isSong(playable.value) && hasCachingError(playable.value))
+const cachedOffline = computed(() => isCached(playable.value))
+const cachingOffline = computed(() => isCaching(playable.value))
+const cachingFailed = computed(() => hasCachingError(playable.value))
 const cachingErrorMessage = computed(() => getCachingError(playable.value))
 
 const fmtLength = secondsToHis(playable.value.length)
-const artist = computed(() => getPlayableProp(playable.value, 'artist_name', 'podcast_author'))
-const album = computed(() => getPlayableProp(playable.value, 'album_name', 'podcast_title'))
+const artist = computed(() => playable.value.artist_name)
+const album = computed(() => playable.value.album_name)
 
 const { isMobile } = useViewport()
 
 /** When it was played, on Recently Played. */
 const played = computed(() =>
-  context.type === 'RecentlyPlayed' && isSong(playable.value) && playable.value.played_at
-    ? `played ${timeAgo(playable.value.played_at)}`
-    : null,
+  context.type === 'RecentlyPlayed' && playable.value.played_at ? `played ${timeAgo(playable.value.played_at)}` : null,
 )
 
 /** "Artist · album" on wide screens; phones show the length instead of the album. */

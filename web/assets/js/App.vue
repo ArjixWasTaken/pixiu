@@ -20,12 +20,10 @@
     <MainWrapper />
     <AppFooter />
     <MobileNavigationBar v-if="isMobile" />
-    <AiAssistantScreen v-if="commonStore.state.uses_ai" v-show="isCurrentScreen('AI')" />
     <DropZone v-show="showDropZone" @close="showDropZone = false" />
   </main>
 
   <Auth v-if="layout === 'auth'" @logged-in="triggerAppInitialization" />
-  <Embed v-if="layout === 'embed'" />
   <EmailLink v-if="layout === 'email-link'" />
   <SsoComplete v-if="layout === 'sso'" />
 
@@ -40,7 +38,6 @@ import { computed, onMounted, provide, ref, shallowRef, watch } from 'vue'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
 import { queueStore } from '@/stores/queueStore'
 import { authService } from '@/services/authService'
-import { radioStationStore } from '@/stores/radioStationStore'
 import {
   ContextMenuKey,
   CurrentStreamableKey,
@@ -51,7 +48,6 @@ import {
 } from '@/config/symbols'
 import { useRouter } from '@/composables/useRouter'
 import { useViewport } from '@/composables/useViewport'
-import { commonStore } from '@/stores/commonStore'
 import { userStore } from '@/stores/userStore'
 import type { Route } from '@/router'
 
@@ -74,10 +70,8 @@ import ContextMenu from '@/components/ui/context-menu/ContextMenu.vue'
 const HotkeyListener = defineAsyncComponent(() => import('@/components/utils/HotkeyListener.vue'))
 const Auth = defineAsyncComponent(() => import('@/components/auth/Auth.vue'))
 const MainWrapper = defineAsyncComponent(() => import('@/components/layout/main-wrapper/index.vue'))
-const AiAssistantScreen = defineAsyncComponent(() => import('@/components/ai/AiAssistantScreen.vue'))
 const DropZone = defineAsyncComponent(() => import('@/components/ui/upload/DropZone.vue'))
 const ChangePasswordRequired = defineAsyncComponent(() => import('@/components/account/ChangePasswordRequired.vue'))
-const Embed = defineAsyncComponent(() => import('@/components/embed/widget/EmbedWidget.vue'))
 const EmailLink = defineAsyncComponent(() => import('@/components/auth/EmailLink.vue'))
 const SsoComplete = defineAsyncComponent(() => import('@/components/auth/SsoComplete.vue'))
 
@@ -125,7 +119,7 @@ onMounted(() => {
   currentRoute.value = resolveRoute()
 
   if (currentRoute.value?.meta?.public) {
-    // If the route is public (embed, login, reset password etc.) we don't need to check for authentication.
+    // If the route is public (sign-in, email links etc.) we don't need to check for authentication.
     return
   }
 
@@ -148,15 +142,6 @@ const onDragOver = (e: DragEvent) => {
 watch(
   () => queueStore.current,
   song => (currentStreamable.value = song),
-)
-
-watch(
-  () => radioStationStore.current,
-  station => {
-    if (station) {
-      currentStreamable.value = station
-    }
-  },
 )
 
 onRouteChanged(route => (currentRoute.value = route))

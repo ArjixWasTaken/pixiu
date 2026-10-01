@@ -1,7 +1,7 @@
 <template>
   <ExcerptResultBlock>
     <template #header>
-      {{ headingText }}
+      Songs
 
       <M3Button
         v-if="playables.length && !searching"
@@ -22,9 +22,8 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, toRefs } from 'vue'
+import { toRefs } from 'vue'
 import { useRouter } from '@/composables/useRouter'
-import { getPlayableCollectionContentType } from '@/utils/typeGuards'
 import { usePlayableList } from '@/composables/usePlayableList'
 import { playback } from '@/services/playbackManager'
 
@@ -52,17 +51,6 @@ const {
     sortable: false,
   },
 )
-
-const headingText = computed(() => {
-  switch (getPlayableCollectionContentType(props.playables)) {
-    case 'episodes':
-      return 'Episodes'
-    case 'songs':
-      return 'Songs'
-    default:
-      return 'Songs & Episodes'
-  }
-})
 
 const { go, url } = useRouter()
 

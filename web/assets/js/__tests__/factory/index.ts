@@ -9,24 +9,16 @@ declare module 'factoria' {
       'album-track': AlbumTrack
       artist: Artist
       'artist-info': ArtistInfo
-      embed: Embed
-      episode: Episode
       favorite: Favorite
-      folder: Folder
       genre: Genre
       interaction: Interaction
-      'live-event': LiveEvent
       playlist: Playlist
-      'playlist-collaborator': PlaylistCollaborator
       'playlist-folder': PlaylistFolder
-      podcast: Podcast
-      'radio-station': RadioStation
       'smart-playlist-rule': SmartPlaylistRule
       'smart-playlist-rule-group': SmartPlaylistRuleGroup
       song: Song
       theme: Theme
       user: User
-      'you-tube-video': YouTubeVideo
     }
   }
 }

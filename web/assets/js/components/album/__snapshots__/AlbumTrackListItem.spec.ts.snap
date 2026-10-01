@@ -1,7 +1,3 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`albumTrackListItem.vue > renders 1`] = `
-<div data-v-ef763618="" class="track-list-item flex flex-1 gap-1" title="" tabindex="0"><span data-v-ef763618="" class="flex-1">Fahrstuhl to Heaven</span>
-  <!----><span data-v-ef763618="" class="w-14 text-right text-k-fg-50">04:40</span>
-</div>
-`;
+exports[`albumTrackListItem.vue > renders 1`] = `<div data-v-ef763618="" class="track-list-item flex flex-1 gap-1" title="" tabindex="0"><span data-v-ef763618="" class="flex-1">Fahrstuhl to Heaven</span><span data-v-ef763618="" class="w-14 text-right text-k-fg-50">04:40</span></div>`;

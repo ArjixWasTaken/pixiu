@@ -5,7 +5,7 @@ import { computed, provide, reactive, ref } from 'vue'
 import { commonStore } from '@/stores/commonStore'
 import { queueStore } from '@/stores/queueStore'
 import { playableStore } from '@/stores/playableStore'
-import { arrayify, defineAsyncComponent, getPlayableProp, provideReadonly } from '@/utils/helpers'
+import { arrayify, defineAsyncComponent, provideReadonly } from '@/utils/helpers'
 import { eventBus } from '@/utils/eventBus'
 import { useFuzzySearch } from '@/composables/useFuzzySearch'
 import { useRouter } from '@/composables/useRouter'
@@ -34,7 +34,6 @@ export const usePlayableList = (
     filterable: true,
     sortable: true,
     reorderable: false,
-    collaborative: false,
     hasCustomOrderSort: false,
     hasHeader: true,
   }
@@ -46,16 +45,7 @@ export const usePlayableList = (
 
   const { isCurrentScreen, go, url } = useRouter()
 
-  const fuzzy = config.filterable
-    ? useFuzzySearch(playables, [
-        'title',
-        'artist_name',
-        'album_name',
-        'podcast_title',
-        'podcast_author',
-        'episode_description',
-      ])
-    : null
+  const fuzzy = config.filterable ? useFuzzySearch(playables, ['title', 'artist_name', 'album_name']) : null
 
   const playableList = ref<InstanceType<typeof PlayableList>>()
 
@@ -124,9 +114,9 @@ export const usePlayableList = (
   })
 
   const thumbnails = computed(() => {
-    const playablesWithCover = playables.value.filter(p => getPlayableProp(p, 'album_cover', 'episode_image'))
+    const playablesWithCover = playables.value.filter(p => p.album_cover)
 
-    const sampleCovers = playablesWithCover.slice(0, 100).map(p => getPlayableProp(p, 'album_cover', 'episode_image'))
+    const sampleCovers = playablesWithCover.slice(0, 100).map(p => p.album_cover)
 
     return Array.from(new Set(sampleCovers)).slice(0, 4)
   })

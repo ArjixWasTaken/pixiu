@@ -38,7 +38,7 @@ const PlaylistContextMenu = defineAsyncComponent(() => import('@/components/play
 
 const { url, isCurrentScreen, getRouteParam } = useRouter()
 const { startDragging } = useDraggable('playlist')
-const { acceptsDrop, resolveDroppedItems } = useDroppable(['playables', 'album', 'artist', 'browser-media'])
+const { acceptsDrop, resolveDroppedItems } = useDroppable(['playables', 'album', 'artist'])
 const { openContextMenu } = useContextMenu()
 
 const draggedPlaylist = inject(DraggedPlaylistKey, ref<Playlist | null>(null))

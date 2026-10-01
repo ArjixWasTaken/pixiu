@@ -9,7 +9,7 @@ describe('albumInfo.vue', () => {
   const h = createHarness()
 
   const renderComponent = async (mode: EncyclopediaDisplayMode = 'aside', info?: AlbumInfo) => {
-    commonStore.state.uses_last_fm = true
+    commonStore.state.uses_musicbrainz = true
 
     if (info === undefined) {
       info = h.factory('album-info').make()
@@ -55,7 +55,7 @@ describe('albumInfo.vue', () => {
   })
 
   it('says when Wikipedia has nothing, without a source', async () => {
-    commonStore.state.uses_last_fm = true
+    commonStore.state.uses_musicbrainz = true
     h.mock(encyclopediaService, 'fetchForAlbum').mockResolvedValue(null)
     h.render(Component, {
       props: { album: h.factory('album').make({ name: 'IV' }), mode: 'full' },

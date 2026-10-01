@@ -1,16 +1,15 @@
 import { ref } from 'vue'
 import { pluralize } from '@/utils/formatters'
-import { arrayify, getPlayableProp } from '@/utils/helpers'
+import { arrayify } from '@/utils/helpers'
 import { logger } from '@/utils/logger'
 import { albumStore } from '@/stores/albumStore'
 import { artistStore } from '@/stores/artistStore'
 import { playlistStore } from '@/stores/playlistStore'
 import { playlistFolderStore } from '@/stores/playlistFolderStore'
 import { playableStore } from '@/stores/playableStore'
-import { mediaBrowser } from '@/services/mediaBrowser'
 
-type Draggable = MaybeArray<Playable> | Album | Artist | Genre | Playlist | PlaylistFolder | MaybeArray<Song | Folder>
-const draggableTypes = <const>['playables', 'album', 'artist', 'genre', 'playlist', 'playlist-folder', 'browser-media']
+type Draggable = MaybeArray<Playable> | Album | Artist | Genre | Playlist | PlaylistFolder
+const draggableTypes = <const>['playables', 'album', 'artist', 'genre', 'playlist', 'playlist-folder']
 type DraggableType = (typeof draggableTypes)[number]
 
 export const currentDragType = ref<DraggableType | null>(null)
@@ -117,10 +116,7 @@ export const useDraggable = (type: DraggableType) => {
     switch (type) {
       case 'playables':
         dragged = arrayify(<Playable>dragged)
-        text =
-          dragged.length === 1
-            ? `${dragged[0].title} by ${getPlayableProp(dragged[0], 'artist_name', 'podcast_author')}`
-            : pluralize(dragged, 'item')
+        text = dragged.length === 1 ? `${dragged[0].title} by ${dragged[0].artist_name}` : pluralize(dragged, 'song')
 
         data = dragged.map(song => song.id)
         break
@@ -147,12 +143,6 @@ export const useDraggable = (type: DraggableType) => {
         dragged = <PlaylistFolder>dragged
         text = dragged.name
         data = dragged.id
-        break
-
-      case 'browser-media':
-        dragged = arrayify(dragged as MaybeArray<Song | Folder>)
-        data = mediaBrowser.extractMediaReferences(dragged)
-        text = pluralize(dragged, 'item')
         break
 
       case 'genre':
@@ -241,8 +231,6 @@ export const useDroppable = (acceptedTypes: DraggableType[]) => {
           return folder
             ? await playableStore.fetchForPlaylists(playlistFolderStore.playlistsInTree(folder))
             : <Song[]>[]
-        case 'browser-media':
-          return await playableStore.resolveSongsFromMediaReferences(data)
         case 'genre':
           return await playableStore.fetchSongsByGenre(<string>data)
         default:

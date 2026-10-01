@@ -28,7 +28,7 @@ export const toSafeFileName = (name: string) =>
 const padNumber = (value: number, width: number) => String(value).padStart(width, '0')
 
 const getCreditedTitle = (playable: Playable) => {
-  const credit = playable.type === 'songs' ? playable.artist_name : playable.podcast_title
+  const credit = playable.artist_name
 
   return credit ? `${credit} - ${playable.title}` : playable.title
 }

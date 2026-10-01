@@ -106,7 +106,4 @@ export const artistStore = {
       throw error
     }
   },
-
-  // píxiū knows no concerts.
-  fetchEvents: async (_artist: Artist): Promise<LiveEvent[]> => [],
 }

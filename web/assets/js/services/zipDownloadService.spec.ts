@@ -151,11 +151,14 @@ describe('zipDownloadService', () => {
     await expect(zipDownloadService.start([makeSong()], 'Songs', 'none')).rejects.toThrow(ZipInProgressError)
   })
 
-  it('zips songs and episodes in order and saves the archive', async () => {
+  it('zips songs in order and saves the archive', async () => {
     stubPrivateStorage()
     stubSongDownloads()
-    const episode = h.factory('episode').make({ podcast_title: 'The Show', title: 'Pilot' })
-    const playables = [makeSong({ title: 'One' }), episode, makeSong({ title: 'Two' })]
+    const playables = [
+      makeSong({ title: 'One' }),
+      makeSong({ title: 'Pilot', artist_name: 'The Show' }),
+      makeSong({ title: 'Two' }),
+    ]
     const saveMock = h.mock(zipDownloadService, 'save')
 
     await zipDownloadService.start(playables, 'My Mix', 'position')

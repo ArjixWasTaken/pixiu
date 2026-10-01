@@ -43,9 +43,8 @@
 
 <script lang="ts" setup>
 import { computed, toRefs } from 'vue'
-import { defineAsyncComponent, getPlayableProp } from '@/utils/helpers'
+import { defineAsyncComponent } from '@/utils/helpers'
 import { secondsToHis } from '@/utils/formatters'
-import { isSong } from '@/utils/typeGuards'
 import { useDraggable } from '@/composables/useDragAndDrop'
 import { useContextMenu } from '@/composables/useContextMenu'
 import { useOfflinePlayback } from '@/composables/useOfflinePlayback'
@@ -67,11 +66,11 @@ const { startDragging } = useDraggable('playables')
 const { openContextMenu } = useContextMenu()
 const { isCached, isCaching, hasCachingError, getCachingError } = useOfflinePlayback()
 
-const artist = computed(() => getPlayableProp(playable.value, 'artist_name', 'podcast_author') || '')
+const artist = computed(() => playable.value.artist_name || '')
 const playing = computed(() => ['Playing', 'Paused'].includes(playable.value.playback_state!))
-const cachedOffline = computed(() => isSong(playable.value) && isCached(playable.value))
-const cachingOffline = computed(() => isSong(playable.value) && isCaching(playable.value))
-const cachingFailed = computed(() => isSong(playable.value) && hasCachingError(playable.value))
+const cachedOffline = computed(() => isCached(playable.value))
+const cachingOffline = computed(() => isCaching(playable.value))
+const cachingFailed = computed(() => hasCachingError(playable.value))
 const cachingErrorMessage = computed(() => getCachingError(playable.value))
 const fmtLength = secondsToHis(playable.value.length)
 

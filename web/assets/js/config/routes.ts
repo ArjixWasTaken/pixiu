@@ -2,9 +2,6 @@ import type { Route } from '@/router'
 import { cache } from '@/services/cache'
 import { usePolicies } from '@/composables/usePolicies'
 
-const UUID_REGEX = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
-const ULID_REGEX = '[0-9A-Za-z]{26}'
-
 // píxiū's ids, as its Subsonic API writes them.
 const ALBUM_ID = 'al-[0-9]+'
 const ARTIST_ID = 'ar-[0-9]+'
@@ -106,19 +103,9 @@ export const routes = [
     screen: 'Settings',
   },
   {
-    name: 'youtube',
-    path: '/youtube',
-    screen: 'YouTube',
-  },
-  {
     name: 'profile',
     path: '/profile',
     screen: 'Profile',
-  },
-  {
-    name: 'visualizer',
-    path: 'visualizer',
-    screen: 'Visualizer',
   },
   {
     name: 'albums.show',
@@ -135,7 +122,7 @@ export const routes = [
     screen: 'Artist',
     constraints: {
       id: ARTIST_ID,
-      tab: '(songs|albums|information|events)',
+      tab: '(songs|albums|information)',
     },
   },
   {
@@ -144,14 +131,6 @@ export const routes = [
     screen: 'Playlist',
     constraints: {
       id: PLAYLIST_ID,
-    },
-  },
-  {
-    name: 'playlist.collaborate',
-    path: '/playlist/collaborate/:id',
-    screen: 'Playlist.Collaborate',
-    constraints: {
-      id: UUID_REGEX,
     },
   },
   {
@@ -165,34 +144,6 @@ export const routes = [
     screen: 'Genre',
   },
   {
-    name: 'podcasts.index',
-    path: '/podcasts',
-    screen: 'Podcasts',
-  },
-  {
-    name: 'podcasts.show',
-    path: '/podcasts/:id',
-    screen: 'Podcast',
-    constraints: {
-      id: UUID_REGEX,
-    },
-  },
-  {
-    name: 'episodes.show',
-    path: '/episodes/:id',
-    screen: 'Episode',
-  },
-  {
-    name: 'radio-stations.index',
-    path: '/radio/stations',
-    screen: 'Radio.Stations',
-  },
-  {
-    name: 'visualizer',
-    path: '/visualizer',
-    screen: 'Visualizer',
-  },
-  {
     name: 'songs.queue',
     path: '/songs/:id',
     screen: 'Queue',
@@ -202,19 +153,6 @@ export const routes = [
     meta: {
       redirect: () => 'queue',
       onResolved: params => cache.set('playable-to-queue', params.id),
-    },
-  },
-  {
-    name: 'ai',
-    path: '/ai',
-    screen: 'AI',
-  },
-  {
-    name: 'media-browser',
-    path: '/browse/:folder?',
-    screen: 'MediaBrowser',
-    constraints: {
-      folder: UUID_REGEX,
     },
   },
   {
@@ -251,18 +189,6 @@ export const routes = [
     },
     constraints: {
       code: EMAIL_TOKEN,
-    },
-  },
-  {
-    name: 'embed',
-    path: '/embed/:id/:options',
-    screen: 'Embed',
-    meta: {
-      public: true,
-      layout: 'embed',
-    },
-    constraints: {
-      id: ULID_REGEX,
     },
   },
 ] as const satisfies Route[]

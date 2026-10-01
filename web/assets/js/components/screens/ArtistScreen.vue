@@ -45,9 +45,6 @@
             <li v-if="useEncyclopedia" :class="activeTab === 'information' && 'active'">
               <a :href="url('artists.show', { id: artist.id, tab: 'information' })">Information</a>
             </li>
-            <li v-if="useTicketmaster" :class="activeTab === 'events' && 'active'">
-              <a :href="url('artists.show', { id: artist.id, tab: 'events' })">Events</a>
-            </li>
           </ul>
         </nav>
       </template>
@@ -76,10 +73,6 @@
 
       <div v-if="useEncyclopedia && artist" v-show="activeTab === 'information'" class="info-pane">
         <ArtistInfo :artist mode="full" />
-      </div>
-
-      <div v-if="useTicketmaster && artist" v-show="activeTab === 'events'" class="events-pane">
-        <ArtistEventList :artist />
       </div>
     </ScreenTabs>
   </ScreenBase>
@@ -112,17 +105,16 @@ import GridListView from '@/components/ui/GridListView.vue'
 
 const ArtistInfo = defineAsyncComponent(() => import('@/components/artist/ArtistInfo.vue'))
 const AlbumCard = defineAsyncComponent(() => import('@/components/album/AlbumCard.vue'))
-const ArtistEventList = defineAsyncComponent(() => import('@/components/artist/ArtistEventList.vue'))
 const AlbumCardSkeleton = defineAsyncComponent(() => import('@/components/ui/album-artist/ArtistAlbumCardSkeleton.vue'))
 const FavoriteButton = defineAsyncComponent(() => import('@/components/ui/FavoriteButton.vue'))
 const StarRating = defineAsyncComponent(() => import('@/components/ui/StarRating.vue'))
 const ArtistContextMenu = defineAsyncComponent(() => import('@/components/artist/ArtistContextMenu.vue'))
 
-const validTabs = ['songs', 'albums', 'information', 'events'] as const
+const validTabs = ['songs', 'albums', 'information'] as const
 type Tab = (typeof validTabs)[number]
 
 const { PlayableListControls: SongListControls, config } = usePlayableListControls('Artist')
-const { useLastfm, useMusicBrainz, useTicketmaster } = useThirdPartyServices()
+const { useMusicBrainz } = useThirdPartyServices()
 const { getRouteParam, go, onScreenActivated, onRouteChanged, url, triggerNotFound } = useRouter()
 const { openContextMenu } = useContextMenu()
 const { get: lsGet, set: lsSet } = useLocalStorage()
@@ -150,7 +142,7 @@ const {
   onSwipe,
 } = usePlayableList(songs, { type: 'Artist' })
 
-const useEncyclopedia = computed(() => useMusicBrainz.value || useLastfm.value)
+const useEncyclopedia = useMusicBrainz
 
 const albumCount = computed(() => {
   const albums = new Set()

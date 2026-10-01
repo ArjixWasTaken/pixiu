@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it } from 'vite-plus/test'
 import { screen } from '@testing-library/vue'
 import { createHarness } from '@/__tests__/TestHarness'
-import { commonStore } from '@/stores/commonStore'
 import { eventBus } from '@/utils/eventBus'
 import { setViewport } from '@/composables/useViewport'
 import Component from './Sidebar.vue'
@@ -21,16 +20,6 @@ describe('sidebar.vue on desktop', () => {
   it('shows the standard items', () => {
     h.actingAsUser().render(Component)
     standardItems.forEach(label => screen.getByText(label))
-  })
-
-  it('shows the YouTube sidebar item on demand', async () => {
-    commonStore.state.uses_you_tube = true
-    h.render(Component)
-
-    eventBus.emit('PLAY_YOUTUBE_VIDEO', { id: '123', title: 'A Random Video' })
-    await h.tick()
-
-    screen.getByText('A Random Video')
   })
 
   it('collapses into a rail and expands again', async () => {

@@ -1,23 +1,17 @@
 <template>
   <div class="playback-controls" data-vue="FooterPlaybackControls">
     <div class="buttons">
-      <M3IconButton
-        :disabled="isRadio"
-        fill
-        icon="skip_previous"
-        label="Play previous in queue"
-        @click.prevent="playPrev"
-      />
+      <M3IconButton fill icon="skip_previous" label="Play previous in queue" @click.prevent="playPrev" />
       <PlayButton />
-      <M3IconButton :disabled="isRadio" fill icon="skip_next" label="Play next in queue" @click.prevent="playNext" />
-      <RepeatModeSwitch :class="isRadio && 'pointer-events-none opacity-30'" />
+      <M3IconButton fill icon="skip_next" label="Play next in queue" @click.prevent="playNext" />
+      <RepeatModeSwitch />
     </div>
-    <AudioPlayer v-show="streamable" :class="isRadio && 'pointer-events-none'" />
+    <AudioPlayer v-show="streamable" />
   </div>
 </template>
 
 <script lang="ts" setup>
-import { computed, ref } from 'vue'
+import { ref } from 'vue'
 import { requireInjection } from '@/utils/helpers'
 import { CurrentStreamableKey } from '@/config/symbols'
 import { playback } from '@/services/playbackManager'
@@ -29,10 +23,8 @@ import RepeatModeSwitch from '@/components/ui/RepeatModeSwitch.vue'
 
 const streamable = requireInjection(CurrentStreamableKey, ref())
 
-const isRadio = computed(() => streamable.value?.type === 'radio-stations')
-
-const playPrev = async () => isRadio.value || (await playback().playPrev())
-const playNext = async () => isRadio.value || (await playback().playNext())
+const playPrev = () => playback().playPrev()
+const playNext = () => playback().playNext()
 </script>
 
 <style scoped>

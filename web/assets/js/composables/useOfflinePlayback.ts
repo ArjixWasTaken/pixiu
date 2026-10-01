@@ -5,7 +5,6 @@ import type { OfflineManifestEntry } from '@/services/offlineManifest'
 import { http } from '@/services/http'
 import { eventBus } from '@/utils/eventBus'
 import { logger } from '@/utils/logger'
-import { isSong } from '@/utils/typeGuards'
 
 type CacheProgress = {
   songId: Song['id']
@@ -320,15 +319,15 @@ export const useOfflinePlayback = () => {
   }
 
   const makePlayablesAvailableOffline = (playables: Playable[]) => {
-    playables.filter(p => isSong(p) && !isCached(p)).forEach(p => makeAvailableOffline(p))
+    playables.filter(p => !isCached(p)).forEach(p => makeAvailableOffline(p))
   }
 
   const removePlayablesOfflineCache = (playables: Playable[]) => {
-    playables.filter(p => isSong(p) && isCached(p)).forEach(p => removeOfflineCache(p))
+    playables.filter(p => isCached(p)).forEach(p => removeOfflineCache(p))
   }
 
   const allPlayablesCached = (playables: Playable[]): boolean => {
-    const songs = playables.filter(p => isSong(p))
+    const songs = playables
     return songs.length > 0 && songs.every(p => isCached(p))
   }
 

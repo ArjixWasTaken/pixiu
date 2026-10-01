@@ -15,7 +15,6 @@
 
 <script setup lang="ts">
 import { computed, toRefs } from 'vue'
-import { getPlayableProp } from '@/utils/helpers'
 import { useBranding } from '@/composables/useBranding'
 
 const props = defineProps<{ playable: Playable }>()
@@ -23,6 +22,6 @@ const { playable } = toRefs(props)
 
 const { cover: defaultCover } = useBranding()
 
-const src = computed(() => getPlayableProp(playable.value, 'album_cover', 'episode_image'))
-const author = computed(() => getPlayableProp(playable.value, 'artist_name', 'podcast_author'))
+const src = computed(() => playable.value.album_cover)
+const author = computed(() => playable.value.artist_name)
 </script>

@@ -11,7 +11,6 @@ import {
 import type { ReadonlyInjectionKey } from '@/config/symbols'
 import { logger } from '@/utils/logger'
 import { sha256 } from '@/utils/crypto'
-import { isSong } from '@/utils/typeGuards'
 
 import LoadingComponent from '@/components/ui/Loading.vue'
 
@@ -129,14 +128,6 @@ export const copyText = async (text: string) => {
     copyArea.select()
     document.execCommand('copy')
   }
-}
-
-export const getPlayableProp = <SK extends keyof Song, EK extends keyof Episode>(
-  playable: Playable,
-  songKey: SK,
-  episodeKey: EK,
-): Song[SK] | Episode[EK] => {
-  return isSong(playable) ? playable[songKey] : playable[episodeKey]
 }
 
 export const defineAsyncComponent = (loader: AsyncComponentLoader, loadingComponent?: Component) => {
