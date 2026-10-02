@@ -5,7 +5,7 @@ use std::{
 
 use pixiu_db::{
     Album, Artist, AudioFile, ClaimKind, Db, OfferingStatus, ReleaseReason, ReleasedClaim,
-    SourceKey, Track, TrackAlias, TrackClaim, keyed,
+    SourceKey, Track, TrackAlias, TrackClaim, keyed, toasty,
 };
 use pixiu_treasury::{
     Claim, IngestError, OfferingError, Offerings, Provenance, Release, Treasury, tags,
@@ -815,4 +815,122 @@ async fn orphans_are_kept_until_the_admin_deletes_them() {
     assert!(!cover.exists());
     assert!(AudioFile::all().exec(&mut db).await.unwrap().is_empty());
     assert!(hoard.treasury.orphans(OWNER).await.unwrap().is_empty());
+}
+
+/// Files `name` with `info` changed by `change`, as `provenance` says.
+async fn file_as(
+    hoard: &Hoard,
+    name: &str,
+    provenance: Provenance,
+    change: impl FnOnce(&mut tags::AudioInfo),
+) -> Album {
+    let staged = hoard.stage(name);
+    let mut info = tags::read(&staged).unwrap();
+    change(&mut info);
+    let track = hoard
+        .treasury
+        .ingest(OWNER, &staged, &info, None, provenance, Claim::offering())
+        .await
+        .unwrap();
+    Album::get_by_id(&mut hoard.db.clone(), &track.album_id)
+        .await
+        .unwrap()
+}
+
+#[tokio::test]
+async fn singles_are_told_apart_from_albums() {
+    let download = |single: bool| Provenance {
+        single,
+        ..Provenance::download(SourceKey::youtube_music("song"), None, None)
+    };
+
+    let hoard = Hoard::new().await;
+    let album = file_as(&hoard, "01-first-light.flac", download(false), |_| {}).await;
+    assert!(!album.single, "an album");
+
+    let hoard = Hoard::new().await;
+    let single = file_as(&hoard, "01-first-light.flac", download(true), |_| {}).await;
+    assert!(single.single, "the platform says single");
+
+    let hoard = Hoard::new().await;
+    let tagged = file_as(
+        &hoard,
+        "01-first-light.flac",
+        Provenance::offering("a.flac", None),
+        |info| {
+            info.release_type = Some("Single; Soundtrack".to_owned());
+        },
+    )
+    .await;
+    assert!(tagged.single, "the tags say single, primary type first");
+
+    let hoard = Hoard::new().await;
+    let untitled = file_as(
+        &hoard,
+        "01-first-light.flac",
+        Provenance::offering("a.flac", None),
+        |info| {
+            info.album = None;
+        },
+    )
+    .await;
+    assert_eq!(untitled.title, "Unknown Album");
+    assert!(untitled.single, "songs without an album stand alone");
+}
+
+#[tokio::test]
+async fn singles_filed_earlier_are_marked_once() {
+    let hoard = Hoard::new().await;
+    let mut db = hoard.db.clone();
+    let mut unmark = async |album: Album| {
+        let mut album = album;
+        toasty::update!(album { single: false })
+            .exec(&mut db)
+            .await
+            .unwrap();
+        album.id
+    };
+    let upload = || Provenance::offering("a.flac", None);
+    // A catch-all, a single named like its song, and a lone track of an
+    // album, filed before píxiū told singles apart.
+    let catch_all = file_as(&hoard, "01-first-light.flac", upload(), |info| {
+        info.album = Some("Singles".to_owned());
+    })
+    .await;
+    let catch_all = unmark(catch_all).await;
+    let single = file_as(&hoard, "02-second-wind.mp3", upload(), |info| {
+        info.album = Some("Second Wind".to_owned());
+        info.artist = Some("Other Artist".to_owned());
+    })
+    .await;
+    let single = unmark(single).await;
+    let lone = file_as(&hoard, "untagged.opus", upload(), |info| {
+        info.title = Some("Prelude".to_owned());
+        info.album = Some("Overture Suite".to_owned());
+    })
+    .await;
+    let lone = unmark(lone).await;
+
+    assert_eq!(hoard.treasury.mark_singles().await.unwrap(), 2);
+
+    let single_of = |id: u64| {
+        let mut db = hoard.db.clone();
+        async move { Album::get_by_id(&mut db, &id).await.unwrap().single }
+    };
+    assert!(single_of(catch_all).await);
+    assert!(single_of(single).await);
+    assert!(
+        !single_of(lone).await,
+        "a lone track of an album stays under it"
+    );
+
+    // Once only: albums unmarked since (by MusicBrainz, say) stay so.
+    let mut db = hoard.db.clone();
+    let mut album = Album::get_by_id(&mut db, &single).await.unwrap();
+    toasty::update!(album { single: false })
+        .exec(&mut db)
+        .await
+        .unwrap();
+    assert_eq!(hoard.treasury.mark_singles().await.unwrap(), 0);
+    assert!(!single_of(single).await);
 }

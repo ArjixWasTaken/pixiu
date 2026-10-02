@@ -67,6 +67,26 @@ describe('subsonic', () => {
     expect(subsonic.toSong({ id: 'tr-4', title: 'Uploaded' }).source_platform).toBeNull()
   })
 
+  it('tells singles from albums', () => {
+    expect(subsonic.toAlbum({ id: 'al-5', name: 'Dawn Chorus', releaseTypes: ['Single'] }).is_single).toBe(true)
+    expect(subsonic.toAlbum({ id: 'al-6', name: 'Morning', releaseTypes: [] }).is_single).toBe(false)
+    expect(subsonic.toAlbum({ id: 'al-7', name: 'Morning' }).is_single).toBe(false)
+    expect(subsonic.toSong({ id: 'tr-5', title: 'Dawn Chorus', single: true }).is_single).toBe(true)
+    expect(subsonic.toSong({ id: 'tr-6', title: 'Overture' }).is_single).toBe(false)
+  })
+
+  it('asks for albums only, as singles show among the songs', async () => {
+    const fetch = h
+      .mock(globalThis, 'fetch')
+      .mockResolvedValue(
+        new Response(JSON.stringify({ 'subsonic-response': { status: 'ok', albumList2: { album: [] } } })),
+      )
+
+    await subsonic.albumList('newest', 6)
+
+    expect(String(fetch.mock.calls[0][0])).toMatch(/[?&]singles=false(&|$)/)
+  })
+
   it('counts an artist’s albums', () => {
     expect(subsonic.toArtist({ id: 'ar-1', name: 'Kevin MacLeod', albumCount: 3 })).toMatchObject({
       id: 'ar-1',

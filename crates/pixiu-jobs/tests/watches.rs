@@ -176,6 +176,7 @@ async fn hoard(db: &mut Db, video_id: &str) -> u64 {
         title_key: format!("album {video_id}"),
         artist_id: artist.id,
         created_at: now(),
+        single: false,
     })
     .exec(db)
     .await

@@ -34,6 +34,26 @@ pub struct TrackEdit {
     pub isrc: Option<String>,
 }
 
+/// What MusicBrainz says about a song on its own (a single's): its album
+/// stays as it is.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SongEdit {
+    pub track_id: u64,
+    pub title: String,
+    /// As printed, e.g. "Artist A feat. Artist B".
+    pub artist_credit: String,
+    /// The primary artist.
+    pub artist: ArtistRef,
+    /// MusicBrainz recording id.
+    pub mbid: String,
+    /// `None` keeps the current one.
+    pub isrc: Option<String>,
+    /// Taken when the song has none.
+    pub year: Option<i32>,
+    /// Taken when the song has none.
+    pub genre: Option<String>,
+}
+
 /// New metadata for an album, and for some or all of its tracks.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AlbumEdit {
@@ -145,6 +165,51 @@ impl Treasury {
             self.forget_artist_if_empty(&mut db, artist_id).await?;
         }
         tracing::info!(album = album.id, title = %edit.title, "album metadata changed");
+        Ok(())
+    }
+
+    /// Rewrites what the library says about songs, leaving their albums
+    /// alone. Only the database changes.
+    ///
+    /// # Errors
+    ///
+    /// Fails on database errors.
+    pub async fn edit_songs(&self, edits: &[SongEdit]) -> Result<(), IngestError> {
+        let _guard = self.lock.lock().await;
+        let mut db = self.db.clone();
+        let mut old_artists = Vec::new();
+        for edit in edits {
+            let Some(mut track) = Track::filter_by_id(edit.track_id)
+                .first()
+                .exec(&mut db)
+                .await?
+            else {
+                continue;
+            };
+            let artist = resolve_artist(&mut db, track.user_id, &edit.artist).await?;
+            old_artists.push(track.artist_id);
+            let unset =
+                |text: &Option<String>| text.as_deref().is_none_or(|text| text.trim().is_empty());
+            toasty::update!(track {
+                title: edit.title.clone(),
+                artist_credit: edit.artist_credit.clone(),
+                artist_id: artist.id,
+                mbid: Some(edit.mbid.clone()),
+                isrc: edit.isrc.clone().or(track.isrc.clone()),
+                year: track.year.or(edit.year),
+                genre: if unset(&track.genre) {
+                    edit.genre.clone()
+                } else {
+                    track.genre.clone()
+                },
+            })
+            .exec(&mut db)
+            .await?;
+        }
+        for artist_id in old_artists {
+            self.forget_artist_if_empty(&mut db, artist_id).await?;
+        }
+        tracing::info!(songs = edits.len(), "song metadata changed");
         Ok(())
     }
 

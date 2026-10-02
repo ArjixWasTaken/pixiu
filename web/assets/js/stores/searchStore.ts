@@ -24,11 +24,13 @@ export const useSearchStore = defineStore('search', () => {
 
   /** A few of each kind matching `q`, for the search screen (which keeps them by `q`, see there). */
   const excerptSearch = async (q: string): Promise<ExcerptState> => {
-    const result = await subsonic.search(q, 6)
+    // Singles show among the songs: more albums are asked for, to have six left.
+    const result = await subsonic.search(q, 6, 24)
+    const albums = result.albums.filter(album => !album.is_single).slice(0, 6)
 
     return {
       playables: usePlayableStore().syncWithVault(result.songs),
-      albums: useAlbumStore().syncWithVault(result.albums),
+      albums: useAlbumStore().syncWithVault(albums),
       artists: useArtistStore().syncWithVault(result.artists),
     }
   }

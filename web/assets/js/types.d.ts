@@ -134,6 +134,8 @@ interface Album {
   mbid?: string | null
   /** The platform it was downloaded from (`config/platforms.ts`); none for uploads. */
   source_platform?: string | null
+  /** A single, or an artist's songs that came with no album: its songs are shown on their own. */
+  is_single?: boolean
   year: number | null
   length: number
   is_external: boolean
@@ -185,6 +187,8 @@ interface Song extends BasePlayable {
   mbid?: string | null
   /** The platform it was downloaded from (`config/platforms.ts`); none for uploads. */
   source_platform?: string | null
+  /** A single's song (or one that came with no album): shown on its own, not under an album. */
+  is_single?: boolean
   file_size?: number | null
   basename?: string
   deleted?: boolean

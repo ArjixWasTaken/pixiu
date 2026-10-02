@@ -12,6 +12,7 @@
 
         <template #meta>
           <span>{{ pluralize(albumCount, 'album') }}</span>
+          <span v-if="singles.length">{{ pluralize(singles.length, 'single') }}</span>
           <span>{{ songCount }}</span>
           <span>{{ duration }}</span>
         </template>
@@ -59,12 +60,23 @@
       >
         <GridListView class="scroll-mask-y">
           <template v-if="albums">
-            <AlbumCard v-for="album in albums" :key="album.id" :album :show-release-year="true" />
+            <AlbumCard v-for="album in realAlbums" :key="album.id" :album :show-release-year="true" />
           </template>
           <template v-else>
             <AlbumCardSkeleton v-for="i in 6" :key="i" />
           </template>
         </GridListView>
+      </div>
+
+      <div
+        v-if="singles.length"
+        v-show="activeTab === 'singles'"
+        id="artist-panel-singles"
+        aria-labelledby="artist-tab-singles"
+        class="singles-pane px-6 py-4"
+        role="tabpanel"
+      >
+        <PlayableCardGrid :playables="singles" />
       </div>
 
       <div
@@ -108,6 +120,7 @@ import ScreenTabs from '@/components/ui/ArtistAlbumScreenTabs.vue'
 import type { M3Tab } from '@/components/m3/M3Tabs.vue'
 import ScreenBase from '@/components/screens/ScreenBase.vue'
 import GridListView from '@/components/ui/GridListView.vue'
+import PlayableCardGrid from '@/components/screens/home/PlayableCardGrid.vue'
 
 const albumStore = useAlbumStore()
 const artistStore = useArtistStore()
@@ -119,7 +132,7 @@ const AlbumCardSkeleton = defineAsyncComponent(() => import('@/components/ui/alb
 const FavoriteButton = defineAsyncComponent(() => import('@/components/ui/FavoriteButton.vue'))
 const ArtistContextMenu = defineAsyncComponent(() => import('@/components/artist/ArtistContextMenu.vue'))
 
-const validTabs = ['songs', 'albums', 'information'] as const
+const validTabs = ['songs', 'albums', 'singles', 'information'] as const
 type Tab = (typeof validTabs)[number]
 
 const { PlayableListControls: SongListControls, config } = usePlayableListControls('Artist')
@@ -152,15 +165,22 @@ const {
 
 const useEncyclopedia = useMusicBrainz
 
+/** The artist's singles: songs on their own, not under an album. */
+const singles = computed(() => songs.value.filter(song => song.is_single))
+
 const tabs = computed<M3Tab[]>(() => [
   { id: 'songs', label: 'Songs' },
   { id: 'albums', label: 'Albums' },
+  ...(singles.value.length ? [{ id: 'singles', label: 'Singles' }] : []),
   ...(useEncyclopedia.value ? [{ id: 'information', label: 'Information' }] : []),
 ])
 
+/** Albums only: singles have a tab of their own. */
+const realAlbums = computed(() => albums.value?.filter(album => !album.is_single) ?? [])
+
 const albumCount = computed(() => {
   const albums = new Set()
-  songs.value.forEach(song => albums.add(song.album_id))
+  songs.value.forEach(song => !song.is_single && albums.add(song.album_id))
   return albums.size
 })
 

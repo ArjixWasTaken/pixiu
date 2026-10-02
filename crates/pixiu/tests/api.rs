@@ -325,8 +325,18 @@ async fn favorites_plays_and_genres_shape_the_lists() {
     let recent = api.get(&token, "/api/songs/recently-played").await;
     assert_eq!(titles(&recent), ["Second Wind"]);
 
+    // Albums only: the untagged song's "Unknown Album" is no album to list,
+    // and its song stands alone.
     let albums = api.get(&token, "/api/albums?sort=name").await;
-    assert!(titles(&albums).contains(&"Test Album"), "{albums}");
+    assert_eq!(titles(&albums), ["Test Album"], "{albums}");
+    let songs = api.get(&token, "/api/songs").await;
+    assert!(
+        songs["data"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|song| song["single"] == true)
+    );
     let artists = api.get(&token, "/api/artists").await;
     assert!(!titles(&artists).is_empty());
 

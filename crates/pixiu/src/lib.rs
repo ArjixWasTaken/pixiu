@@ -100,6 +100,10 @@ impl Services {
             .collect_garbage()
             .await
             .context("failed to clean up the store")?;
+        treasury
+            .mark_singles()
+            .await
+            .context("failed to mark the library's singles")?;
         let offerings = Offerings::new(paths.offerings_dir(), treasury.clone());
         offerings
             .relocate_legacy()

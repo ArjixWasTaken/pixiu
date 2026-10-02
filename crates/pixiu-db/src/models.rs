@@ -228,6 +228,10 @@ pub struct Album {
     /// (`.store/images/…`). Albums with the same picture share the file.
     pub cover: Option<String>,
 
+    /// A single, or an artist's songs that came with no album: the player
+    /// shows its songs on their own, not as an album.
+    pub single: bool,
+
     pub created_at: Timestamp,
 
     #[has_many]

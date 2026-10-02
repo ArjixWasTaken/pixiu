@@ -130,6 +130,7 @@ const toSong = (child: Record<string, any>): Song => ({
   is_external: false,
   mbid: child.musicBrainzId ?? null,
   source_platform: child.sourcePlatform ?? null,
+  is_single: child.single === true,
   file_size: child.size ?? null,
   basename: basename(child.path),
 })
@@ -146,6 +147,7 @@ const toAlbum = (album: Record<string, any>): Album => ({
   created_at: album.created ?? '',
   mbid: album.musicBrainzId ?? null,
   source_platform: album.sourcePlatform ?? null,
+  is_single: ((album.releaseTypes ?? []) as string[]).includes('Single'),
   year: album.year ?? null,
   length: album.duration ?? 0,
   is_external: false,
@@ -209,8 +211,9 @@ export const subsonic = {
     bitrate ? url('stream', { id, format: 'mp3', maxBitRate: bitrate }) : url('stream', { id }),
 
   /** An album list (`random`, `newest`, `frequent`, `recent`, …). */
+  /** Albums only: singles show as songs (`singles=false` is píxiū's own). */
   async albumList(type: string, size: number, offset = 0) {
-    const body = await call('getAlbumList2', { type, size, offset })
+    const body = await call('getAlbumList2', { type, size, offset, singles: false })
     return ((body.albumList2?.album ?? []) as Record<string, any>[]).map(toAlbum)
   },
 
@@ -266,8 +269,8 @@ export const subsonic = {
   /** Counts a play (`submission`), or says what is playing now. */
   scrobble: (id: string, submission: boolean, time?: number) => call('scrobble', { id, submission, time }),
 
-  async search(query: string, count: number) {
-    const body = await call('search3', { query, songCount: count, albumCount: count, artistCount: count })
+  async search(query: string, count: number, albumCount = count) {
+    const body = await call('search3', { query, songCount: count, albumCount, artistCount: count })
     const result = body.searchResult3 ?? {}
 
     return {

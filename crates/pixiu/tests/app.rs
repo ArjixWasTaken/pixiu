@@ -337,6 +337,7 @@ async fn songs_are_excluded_from_watched_playlists() {
             title_key: "road songs",
             artist_id: artist.id,
             created_at: now(),
+            single: false,
         })
         .exec(db)
         .await

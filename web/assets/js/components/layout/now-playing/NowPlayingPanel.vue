@@ -76,7 +76,11 @@ const tabs: M3Tab[] = [
 const cover = computed(() => song.value?.album_cover || defaultCover)
 
 const subtitle = computed(() =>
-  song.value ? [song.value.artist_name, song.value.album_name, song.value.year].filter(Boolean).join(' · ') : '',
+  song.value
+    ? [song.value.artist_name, song.value.is_single ? null : song.value.album_name, song.value.year]
+        .filter(Boolean)
+        .join(' · ')
+    : '',
 )
 
 const toggleFavorite = () => song.value && playableStore.toggleFavorite(song.value)

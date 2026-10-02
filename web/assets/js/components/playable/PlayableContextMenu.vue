@@ -60,7 +60,7 @@
       <MenuItem v-if="onlyOneSelected">
         Go to
         <template #subMenuItems>
-          <MenuItem :title="playables[0].album_name" @click="viewAlbum(playables[0])">
+          <MenuItem v-if="!playables[0].is_single" :title="playables[0].album_name" @click="viewAlbum(playables[0])">
             <template #icon>
               <M3Icon name="album" />
             </template>

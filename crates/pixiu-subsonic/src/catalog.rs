@@ -222,6 +222,8 @@ pub(crate) fn song(
         .attr("isVideo", false)
         .attr_opt("musicBrainzId", track.mbid.as_deref())
         .attr_opt("sourcePlatform", platform_of(track.source_key.as_deref()))
+        // píxiū's own: a single's song, which its web player shows on its own.
+        .attr_opt("single", album.filter(|album| album.single).map(|_| true))
         .attr("displayArtist", track.artist_credit.as_str())
         .attr_opt(
             "displayAlbumArtist",
@@ -283,7 +285,9 @@ pub(crate) fn album_id3(
         .list(
             "artists",
             artist.map(|artist| artist_ref("artists", artist)),
-        );
+        )
+        // OpenSubsonic: apps that know release types file singles apart.
+        .values("releaseTypes", album.single.then_some("Single"));
     annotate(element, plays)
 }
 
@@ -315,6 +319,7 @@ pub(crate) fn album_child(
         .attr("albumId", ids::album(album.id))
         .attr("artistId", ids::artist(album.artist_id))
         .attr_opt("sourcePlatform", platform_of(album.source_key.as_deref()))
+        .attr_opt("single", album.single.then_some(true))
         .attr("mediaType", "album");
     annotate(element, plays)
 }

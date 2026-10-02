@@ -229,6 +229,7 @@ async fn legacy_files_are_adopted_once() {
         artist_id: artist.id,
         cover: Some("Old Artist/Old Album/cover.jpg".to_owned()),
         created_at: now(),
+        single: false,
     })
     .exec(&mut db)
     .await

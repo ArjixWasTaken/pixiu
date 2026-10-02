@@ -20,7 +20,7 @@ use crate::{
 };
 
 const UNKNOWN_ARTIST: &str = "Unknown Artist";
-const UNKNOWN_ALBUM: &str = "Unknown Album";
+pub(crate) const UNKNOWN_ALBUM: &str = "Unknown Album";
 const UNTITLED: &str = "Untitled";
 
 /// Where a track comes from.
@@ -37,6 +37,9 @@ pub struct Provenance {
     pub source_name: Option<String>,
     /// For uploads, the zip archive it was unpacked from.
     pub source_archive: Option<String>,
+    /// For downloads, whether the platform calls its album a single, or it
+    /// came with no album.
+    pub single: bool,
 }
 
 impl Provenance {
@@ -50,6 +53,7 @@ impl Provenance {
             artist_key: None,
             source_name: Some(file_name.into()),
             source_archive: archive,
+            single: false,
         }
     }
 
@@ -68,6 +72,7 @@ impl Provenance {
             artist_key: album_artist,
             source_name: None,
             source_archive: None,
+            single: false,
         }
     }
 }
@@ -351,8 +356,20 @@ impl Treasury {
         } else {
             find_or_create_artist(db, owner, primary, None).await?.id
         };
-        let album =
-            find_or_create_album(db, &album_artist, info, provenance.album_key.as_ref()).await?;
+        // Songs without an album stand alone too: they gather in a catch-all.
+        let catch_all = info
+            .album
+            .as_deref()
+            .is_none_or(|album| album == UNKNOWN_ALBUM);
+        let single = provenance.single || catch_all || tagged_single(info);
+        let album = find_or_create_album(
+            db,
+            &album_artist,
+            info,
+            provenance.album_key.as_ref(),
+            single,
+        )
+        .await?;
 
         let title_key = name_key(title);
         if let Some(duplicate) = Track::filter_by_album_id(album.id)
@@ -574,21 +591,38 @@ async fn note_key(
     })
 }
 
+/// Whether the file's tags call its release a single (`RELEASETYPE`, as
+/// MusicBrainz Picard writes it: the primary type first).
+fn tagged_single(info: &AudioInfo) -> bool {
+    info.release_type.as_deref().is_some_and(|kind| {
+        kind.split([';', '/', ','])
+            .next()
+            .is_some_and(|primary| primary.trim().eq_ignore_ascii_case("single"))
+    })
+}
+
 /// The album a track belongs to: by its key on the platform when known
-/// (names can differ between releases), then by artist and title.
+/// (names can differ between releases), then by artist and title. A new
+/// album is `single` as asked; one found by its key becomes single when
+/// the platform says so (one found by title may be a namesake album).
 async fn find_or_create_album(
     db: &mut Db,
     album_artist: &Artist,
     info: &AudioInfo,
     source: Option<&SourceKey>,
+    single: bool,
 ) -> Result<Album, toasty::Error> {
     let source = source.map(SourceKey::as_stored);
     if let Some(stored) = &source
-        && let Some(album) = Album::filter_by_user_id_and_source_key(album_artist.user_id, stored)
-            .first()
-            .exec(db)
-            .await?
+        && let Some(mut album) =
+            Album::filter_by_user_id_and_source_key(album_artist.user_id, stored)
+                .first()
+                .exec(db)
+                .await?
     {
+        if single && !album.single {
+            toasty::update!(album { single: true }).exec(db).await?;
+        }
         return Ok(album);
     }
 
@@ -620,6 +654,7 @@ async fn find_or_create_album(
         genre: info.genre.clone(),
         mbid: info.album_mbid.clone(),
         source_key: source,
+        single,
         created_at: now(),
     })
     .exec(db)

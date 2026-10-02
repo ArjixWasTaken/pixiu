@@ -27,10 +27,11 @@ pub(crate) async fn lookup_all(
     State(state): State<ApiState>,
     session: Session,
 ) -> ApiResult<Json<JsonValue>> {
-    let albums = session.library(&state).all_albums().await?;
+    let lib = session.library(&state);
+    let albums = lib.all_albums().await?;
     let mut queued = 0;
     for album in albums.iter().filter(|album| album.enrichment.is_none()) {
-        let title = format!("Look up {}", album.title);
+        let title = pixiu_jobs::enrich::lookup_title(&mut lib.db(), album).await;
         state
             .jobs
             .enqueue(

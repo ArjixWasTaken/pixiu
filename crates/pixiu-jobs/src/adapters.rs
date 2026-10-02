@@ -341,8 +341,7 @@ impl HuntExecutor {
         Outcome::Expand(jobs)
     }
 
-    /// An enrich job for `owner`'s album, unless one is already waiting or
-    /// the album is the artist's singles.
+    /// An enrich job for `owner`'s album, unless one is already waiting.
     async fn enrich_later(&self, owner: u64, album_id: u64) -> Vec<NewJob> {
         let mut db = self.hunter.treasury().db();
         let waiting = queue::unfinished(&mut db, owner).await.is_ok_and(|jobs| {
@@ -352,16 +351,11 @@ impl HuntExecutor {
         let Ok(Some(album)) = Album::filter_by_id(album_id).first().exec(&mut db).await else {
             return Vec::new();
         };
-        // Songs without an album are no release MusicBrainz could know.
-        if waiting || album.title == pixiu_hunt::SINGLES {
+        if waiting {
             return Vec::new();
         }
-        vec![NewJob::enrich(
-            album_id,
-            &format!("Look up {}", album.title),
-            None,
-            false,
-        )]
+        let title = enrich::lookup_title(&mut db, &album).await;
+        vec![NewJob::enrich(album_id, &title, None, false)]
     }
 
     async fn enrich(&self, job: &Job) -> Outcome {

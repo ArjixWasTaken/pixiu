@@ -487,6 +487,48 @@ async fn downloads_name_their_platform() {
     assert_eq!(json["album"]["sourcePlatform"], "youtube_music");
 }
 
+#[tokio::test]
+async fn singles_are_marked_and_may_be_left_out() {
+    let api = Api::new().await;
+    let mut db = api.db.clone();
+    let id = api.album_id("Test Album").await;
+    let album_list = |singles: &'static str| {
+        let api = &api;
+        async move {
+            let json = api
+                .call(
+                    "getAlbumList2",
+                    &format!("type=alphabeticalByName&size=500{singles}"),
+                )
+                .await
+                .ok();
+            names(&json["albumList2"]["album"], "name")
+        }
+    };
+    let albums = album_list("").await;
+    assert!(albums.contains(&"Test Album".to_owned()));
+    let json = api.call("getAlbum", &format!("id={id}")).await.ok();
+    assert_eq!(json["album"]["releaseTypes"], serde_json::json!([]));
+    assert!(json["album"]["song"][0].get("single").is_none());
+
+    let mut album = Album::get_by_id(&mut db, &id[3..].parse::<u64>().unwrap())
+        .await
+        .unwrap();
+    toasty::update!(album { single: true })
+        .exec(&mut db)
+        .await
+        .unwrap();
+
+    let json = api.call("getAlbum", &format!("id={id}")).await.ok();
+    assert_eq!(json["album"]["releaseTypes"], serde_json::json!(["Single"]));
+    assert_eq!(json["album"]["song"][0]["single"], true);
+    // Apps see singles as before; píxiū's player asks for albums only.
+    assert_eq!(album_list("").await, albums);
+    // The untagged upload's "Unknown Album" stands alone too.
+    assert_eq!(albums, ["Test Album", "Unknown Album"]);
+    assert_eq!(album_list("&singles=false").await, Vec::<String>::new());
+}
+
 /// The song ids of the library by file extension.
 async fn songs_by_suffix(api: &Api) -> std::collections::HashMap<String, String> {
     let json = api.call("search3", "query=").await.ok();

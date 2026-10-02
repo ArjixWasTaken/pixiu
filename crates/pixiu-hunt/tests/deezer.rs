@@ -43,20 +43,34 @@ fn json(body: &str) -> Reply {
 /// What the fake servers answer to `method` on `target` (path and query).
 fn reply(base: &str, method: &str, target: &str, range: Option<(u64, u64)>) -> Reply {
     let audio = std::fs::read(fixture("01-first-light.flac")).unwrap();
-    let song = |id: u64, title: &str, isrc: &str| {
+    let song_on = |album: u64, id: u64, title: &str, isrc: &str| {
+        let album_title = if album == 5 { "Morning" } else { title };
         format!(
             r#"{{"id": {id}, "title": "{title}", "duration": 1, "isrc": "{isrc}",
                 "track_position": 3, "disk_number": 2,
                 "artist": {{"id": 7, "name": "Main Artist"}},
                 "contributors": [{{"id": 7, "name": "Main Artist", "role": "Main"}},
                                  {{"id": 8, "name": "Guest", "role": "Featured"}}],
-                "album": {{"id": 5, "title": "Morning", "cover_xl": "{base}/cover.jpg"}}}}"#
+                "album": {{"id": {album}, "title": "{album_title}", "cover_xl": "{base}/cover.jpg"}}}}"#
         )
     };
+    let song = |id: u64, title: &str, isrc: &str| song_on(5, id, title, isrc);
     match (method, target) {
         // Deezer.
         ("GET", "/deezer/track/42") => json(&song(42, "Dawn Chorus", ISRC)),
         ("GET", "/deezer/track/43") => json(&song(43, "Unheard", "ZZXX12100099")),
+        // The same recording, released as a single.
+        ("GET", "/deezer/track/44") => json(&song_on(6, 44, "Dawn Chorus", ISRC)),
+        ("GET", "/deezer/album/6") => json(&format!(
+            r#"{{"id": 6, "title": "Dawn Chorus", "release_date": "2021-03-01",
+                "record_type": "single", "cover_xl": "{base}/cover.jpg",
+                "artist": {{"id": 7, "name": "Main Artist"}}}}"#
+        )),
+        ("GET", "/deezer/album/6/tracks?limit=100") => json(&format!(
+            r#"{{"data": [{{"id": 44, "title": "Dawn Chorus", "duration": 1, "isrc": "{ISRC}",
+                           "track_position": 1, "disk_number": 1,
+                           "artist": {{"id": 7, "name": "Main Artist"}}}}]}}"#
+        )),
         ("GET", "/deezer/album/5") => json(&format!(
             r#"{{"id": 5, "title": "Morning", "release_date": "2021-04-02",
                 "record_type": "album", "cover_xl": "{base}/cover.jpg",
@@ -276,4 +290,19 @@ async fn albums_come_with_every_page_of_songs() {
             .all(|track| track.album.as_ref().map(|a| a.id.id()) == Some("5")),
         "songs listed by their album know it"
     );
+}
+
+#[tokio::test]
+async fn deezer_singles_are_filed_as_singles() {
+    let s = setup().await;
+
+    let single = download(&s, "44").await.unwrap();
+    let album = download(&s, "42").await.unwrap();
+
+    let mut db = s.treasury.db();
+    let single = Album::get_by_id(&mut db, &single.album_id).await.unwrap();
+    assert_eq!(single.title, "Dawn Chorus");
+    assert!(single.single, "Deezer calls it a single");
+    let album = Album::get_by_id(&mut db, &album.album_id).await.unwrap();
+    assert!(!album.single);
 }

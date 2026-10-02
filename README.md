@@ -23,7 +23,7 @@ that downloads music from YouTube Music and Deezer into a library it owns.
 | **Jobs** | Downloads, syncs and lookups, live. |
 | **Uploads** | Audio files or zip archives, reviewed before they join the library. |
 | **Orphans** | Songs nothing keeps any more (left a playlist, excluded, unwatched); kept or deleted by hand, never automatically. |
-| **Tagging** | [MusicBrainz](https://musicbrainz.org/) lookups, Cover Art Archive covers, Wikipedia bios; pick a release when unsure; edit albums by hand. |
+| **Tagging** | [MusicBrainz](https://musicbrainz.org/) lookups, Cover Art Archive covers, Wikipedia bios; pick a release when unsure; edit albums by hand. Singles, and songs that came with no album, stand alone: the player lists them as songs, Subsonic marks them `releaseTypes: ["Single"]`, and MusicBrainz looks them up song by song. |
 | **Lyrics** | From the file, [LRCLIB](https://lrclib.net) or YouTube Music; instrumentals recognized. |
 | **YouTube Music login** | A real browser on the server, shown in the player (two-factor works; password managers via [HTML-in-Canvas](https://github.com/WICG/html-in-canvas) where available). Cookies checked and refreshed automatically. |
 | **Accounts** | A library, YouTube Music login and settings per account; admins make accounts, turn them off, reset passwords, promote admins, and see what each library takes up on disk. |

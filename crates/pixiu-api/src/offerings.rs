@@ -128,7 +128,7 @@ pub(crate) async fn accept_batch(
     let outcome = state.offerings.accept_batch(owner, &batch).await?;
     for album_id in &outcome.albums {
         if let Some(album) = lib.album(*album_id).await? {
-            let title = format!("Look up {}", album.title);
+            let title = pixiu_jobs::enrich::lookup_title(&mut lib.db(), &album).await;
             state
                 .jobs
                 .enqueue(owner, NewJob::enrich(*album_id, &title, None, false))

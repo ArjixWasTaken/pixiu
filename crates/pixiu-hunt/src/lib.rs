@@ -61,9 +61,8 @@ pub enum HuntError {
     Join(#[from] tokio::task::JoinError),
 }
 
-/// The album songs without one are filed under, per artist. It is no
-/// release, so MusicBrainz is not asked about it.
-pub const SINGLES: &str = "Singles";
+/// The album songs without one are filed under, per artist.
+pub use pixiu_treasury::SINGLES;
 
 /// How often yt-dlp is tried again when YouTube refuses it.
 const YT_DLP_RETRIES: u32 = 2;
@@ -581,12 +580,21 @@ fn describe<'a>(
         cover_url: album
             .and_then(|album| album.cover_url.as_deref())
             .or(track.cover_url.as_deref()),
-        provenance: Provenance::download(
-            key.clone(),
-            album
-                .map(|album| album.id.clone())
-                .or_else(|| track.album.as_ref().map(|album| album.id.clone())),
-            album_artist_id,
-        ),
+        provenance: Provenance {
+            // A platform's single, or a song with no album at all (filed
+            // under the artist's singles); unknown when the album could not
+            // be fetched.
+            single: match album {
+                Some(album) => album.kind == AlbumKind::Single,
+                None => track.album.is_none(),
+            },
+            ..Provenance::download(
+                key.clone(),
+                album
+                    .map(|album| album.id.clone())
+                    .or_else(|| track.album.as_ref().map(|album| album.id.clone())),
+                album_artist_id,
+            )
+        },
     }
 }

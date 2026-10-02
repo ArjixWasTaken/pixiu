@@ -87,6 +87,20 @@ describe('playableListItem.vue', () => {
     screen.getByRole('button', { name: 'Make available offline' })
   })
 
+  it('says a single is one, rather than naming its album', () => {
+    const song = h.factory('song').make({
+      title: 'Dawn Chorus',
+      album_name: 'Dawn Chorus',
+      artist_name: 'Main Artist',
+      is_single: true,
+    })
+
+    setViewport({ mobile: false })
+    renderComponent(song)
+
+    screen.getByText('Main Artist · Single')
+  })
+
   it('says when a song was played on Recently played', () => {
     const song = h.factory('song').make({
       album_name: 'Test Album',
