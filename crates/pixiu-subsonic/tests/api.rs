@@ -441,6 +441,8 @@ async fn streaming_supports_ranges() {
         .unwrap();
     assert!(disposition.starts_with("attachment;"), "{disposition}");
     assert!(disposition.contains("First%20Light.flac"), "{disposition}");
+    // So that browsers save it under that name.
+    assert_eq!(download.headers[header::X_CONTENT_TYPE_OPTIONS], "nosniff");
 
     assert_eq!(api.call("stream", "id=tr-999").await.error_code(), 70);
 }

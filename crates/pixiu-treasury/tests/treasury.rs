@@ -592,6 +592,46 @@ async fn another_video_of_a_track_is_noted_as_it() {
 }
 
 #[tokio::test]
+async fn ogg_files_are_taken_by_their_content_whatever_their_name() {
+    let hoard = Hoard::new().await;
+    let offerings = hoard.offerings();
+
+    // As Firefox saves an Opus download.
+    let batch = Offerings::new_batch();
+    let opus = std::fs::read(fixture("untagged.opus")).unwrap();
+    upload(&offerings, &batch, "untagged.ogx", &opus).await;
+    let registered = offerings.process_batch(OWNER, &batch).await.unwrap();
+    assert_eq!(registered.len(), 1);
+    assert_eq!(registered[0].status, OfferingStatus::Pending);
+
+    let track = offerings.accept(OWNER, registered[0].id).await.unwrap();
+    assert_eq!(track.suffix, "opus");
+    assert_eq!(track.content_type, "audio/ogg");
+}
+
+#[test]
+fn the_web_player_accepts_the_same_extensions() {
+    let page = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../web/index.html"),
+    )
+    .unwrap();
+    let list = page
+        .split("accepted_audio_extensions: [")
+        .nth(1)
+        .and_then(|rest| rest.split(']').next())
+        .expect("web/index.html lists accepted_audio_extensions");
+    let mut web: Vec<&str> = list
+        .split(',')
+        .map(|item| item.trim().trim_matches('\''))
+        .filter(|item| !item.is_empty() && *item != "zip")
+        .collect();
+    let mut server = pixiu_treasury::offerings::AUDIO_EXTENSIONS.to_vec();
+    web.sort_unstable();
+    server.sort_unstable();
+    assert_eq!(web, server);
+}
+
+#[tokio::test]
 async fn offerings_remember_their_upload_names() {
     let hoard = Hoard::new().await;
     let staged = hoard.stage("01-first-light.flac");
