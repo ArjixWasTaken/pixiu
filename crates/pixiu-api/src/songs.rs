@@ -5,9 +5,7 @@ use axum::{
     Json,
     extract::{Path, State},
 };
-use pixiu_db::{
-    ClaimKind, Library, Lyrics, LyricsSource, SourceKey, Track, TrackClaim, TrackOrigin,
-};
+use pixiu_db::{ClaimKind, Library, Lyrics, LyricsSource, Track, TrackClaim, TrackOrigin};
 use pixiu_hunt::Page;
 use pixiu_subsonic::ids;
 use serde_json::{Value as JsonValue, json};
@@ -122,8 +120,7 @@ pub(crate) async fn info(
         },
         "source_name": track.source_name,
         "source_archive": track.source_archive,
-        "youtube_url": SourceKey::from_stored(track.source_key.as_deref())
-            .and_then(|key| state.hunter.platforms().page_url(Page::Song, &key)),
+        "source": crate::source_json(&state, Page::Song, track.source_key.as_deref()),
         "mbid": track.mbid,
         "isrc": track.isrc,
         "added_at": track.added_at,

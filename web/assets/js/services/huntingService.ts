@@ -140,13 +140,22 @@ export interface Settings {
   albums_not_looked_up: number
 }
 
+/** The platform something was downloaded from, and its page there. */
+export interface SourceLink {
+  platform: string
+  /** The platform's name, like "YouTube Music". */
+  name: string
+  url: string | null
+}
+
 export interface SongInfo {
   format: string
   size: number
   origin: 'offering' | 'download'
   source_name: string | null
   source_archive: string | null
-  youtube_url: string | null
+  /** Where it was downloaded from; `null` for uploads. */
+  source: SourceLink | null
   mbid: string | null
   isrc: string | null
   added_at: string
@@ -173,8 +182,8 @@ export interface AlbumDetails {
   enriched_at: string | null
   mbid: string | null
   candidates: ReleaseCandidate[]
-  source: 'youtube_music' | 'offering'
-  youtube_url: string | null
+  /** Where it was downloaded from; `null` for uploads. */
+  source: SourceLink | null
   tracks: Array<{ id: string; title: string; track: number | null; disc: number | null }>
 }
 

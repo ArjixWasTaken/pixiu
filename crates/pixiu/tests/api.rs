@@ -652,7 +652,8 @@ async fn songs_and_albums_tell_more_than_subsonic() {
     let details = api
         .get(&token, &format!("/api/albums/{album_id}/details"))
         .await;
-    assert_eq!(details["source"], "offering");
+    // Uploaded: from no platform.
+    assert!(details["source"].is_null(), "{details}");
     assert_eq!(details["tracks"].as_array().unwrap().len(), 2);
 
     api.send(

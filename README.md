@@ -120,7 +120,7 @@ Defaults, then `pixiu.toml` (or `PIXIU_CONFIG`), then `PIXIU_` environment varia
 | `pixiu-core` | Config, secrets, passwords, alerts |
 | `pixiu-db` | [Toasty](https://github.com/tokio-rs/toasty) models and migrations (SQLite) |
 | `pixiu-enrich` | MusicBrainz, Cover Art Archive, LRCLIB, Wikipedia |
-| `pixiu-hunt` | YouTube Music ([rustypipe](https://codeberg.org/ThetaDev/rustypipe)), downloads |
+| `pixiu-hunt` | Downloads, from a `Source` per platform; YouTube Music's through [rustypipe](https://codeberg.org/ThetaDev/rustypipe) |
 | `pixiu-jobs` | Job queue, session wardens |
 | `pixiu-media` | Remuxing and transcoding (FFmpeg) |
 | `pixiu-subsonic` | OpenSubsonic API (`/rest`) |

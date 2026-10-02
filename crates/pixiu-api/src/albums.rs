@@ -7,7 +7,7 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
 };
-use pixiu_db::{Album, Enrichment, Library, SourceKey, Track};
+use pixiu_db::{Album, Enrichment, Library, Track};
 use pixiu_hunt::Page;
 use pixiu_jobs::NewJob;
 use pixiu_subsonic::ids;
@@ -49,7 +49,6 @@ pub(crate) async fn details(
         .as_deref()
         .and_then(|candidates| serde_json::from_str(candidates).ok())
         .unwrap_or_else(|| json!([]));
-    let source = SourceKey::from_stored(album.source_key.as_deref());
     let mut tracks = Track::filter_by_album_id(album.id).exec(&mut db).await?;
     tracks.sort_by_key(|track| (track.disc_number, track.track_number, track.id));
     Ok(Json(json!({
@@ -64,10 +63,7 @@ pub(crate) async fn details(
         "enriched_at": album.enriched_at,
         "mbid": album.mbid,
         "candidates": candidates,
-        "source": if source.is_some() { "youtube_music" } else { "offering" },
-        "youtube_url": source
-            .as_ref()
-            .and_then(|key| state.hunter.platforms().page_url(Page::Album, key)),
+        "source": crate::source_json(&state, Page::Album, album.source_key.as_deref()),
         "tracks": tracks.iter().map(|track| json!({
             "id": ids::track(track.id),
             "title": track.title,

@@ -18,7 +18,12 @@
           <dd>{{ info.format }} · {{ formatBytes(info.size) }}</dd>
           <dt>Came from</dt>
           <dd>
-            <a v-if="info.youtube_url" :href="info.youtube_url" rel="noopener" target="_blank">YouTube Music</a>
+            <template v-if="info.source">
+              <a v-if="info.source.url" :href="info.source.url" rel="noopener" target="_blank">{{
+                info.source.name
+              }}</a>
+              <template v-else>{{ info.source.name }}</template>
+            </template>
             <template v-else>
               Upload<template v-if="info.source_name"> “{{ info.source_name }}”</template>
               <template v-if="info.source_archive"> from {{ info.source_archive }}</template>

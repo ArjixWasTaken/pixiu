@@ -447,6 +447,14 @@ async fn songs_are_excluded_from_watched_playlists() {
     let info = server
         .api_json(&format!("/api/songs/tr-{track}/info"))
         .await;
+    assert_eq!(
+        info["source"],
+        json!({
+            "platform": "youtube_music",
+            "name": "YouTube Music",
+            "url": "https://music.youtube.com/watch?v=vidA",
+        })
+    );
     assert_eq!(info["kept"][0]["why"], "Watched playlist “Road trip”");
     assert_eq!(info["kept"][0]["excludable_from"], watch);
 
