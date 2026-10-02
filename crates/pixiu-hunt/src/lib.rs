@@ -2,8 +2,9 @@
 //! hoard.
 
 mod download;
-pub mod link;
+mod link;
 pub mod model;
+pub mod source;
 mod tagging;
 pub mod ytmusic;
 
@@ -14,21 +15,30 @@ use std::{
     time::{Duration, Instant},
 };
 
-use pixiu_db::{AudioFile, SourceKey, Track, toasty};
+use pixiu_db::{AudioFile, Platform, SourceKey, Track, toasty};
 use pixiu_treasury::{Claim, Cover, IngestError, Provenance, Treasury, tags};
 
 pub use model::{
     AlbumKind, AlbumRef, Discography, RemoteAlbum, RemoteArtist, RemotePlaylist, RemoteTrack,
     SearchResults, SessionCheck, image_url_at,
 };
-pub use ytmusic::{AudioSource, LIKED_MUSIC, YtMusic, YtMusicPool};
+pub use source::{Link, Page, Platforms, Source, YtDlpTarget};
+pub use ytmusic::{AudioSource, LIKED_MUSIC, YouTubeMusicSource, YtMusic, YtMusicPool};
 
 #[derive(Debug, thiserror::Error)]
 pub enum HuntError {
     #[error("the hoard already holds this track")]
     AlreadyHoarded { track_id: u64 },
-    #[error("YouTube Music: {0}")]
-    YouTube(#[from] rustypipe::error::Error),
+    #[error("{}: {message}", platform.name())]
+    Source {
+        platform: Platform,
+        message: String,
+        /// The platform wants a login for this, e.g. for liked music or a
+        /// private playlist.
+        needs_login: bool,
+    },
+    #[error("píxiū cannot download from {} yet", .0.name())]
+    NoSource(Platform),
     #[error("no audio stream for {0}")]
     NoAudio(String),
     #[error("download failed: {0}")]
@@ -61,7 +71,23 @@ impl HuntError {
     /// a private playlist.
     #[must_use]
     pub fn needs_login(&self) -> bool {
-        matches!(self, Self::YouTube(rustypipe::error::Error::Auth(_)))
+        matches!(
+            self,
+            Self::Source {
+                needs_login: true,
+                ..
+            }
+        )
+    }
+}
+
+impl From<rustypipe::error::Error> for HuntError {
+    fn from(error: rustypipe::error::Error) -> Self {
+        HuntError::Source {
+            platform: Platform::YouTubeMusic,
+            needs_login: matches!(error, rustypipe::error::Error::Auth(_)),
+            message: error.to_string(),
+        }
     }
 }
 
@@ -105,7 +131,7 @@ pub struct DownloadRequest {
 
 /// Downloads music into the treasure.
 pub struct Hunter {
-    ytm: Arc<YtMusicPool>,
+    platforms: Platforms,
     treasury: Treasury,
     staging: PathBuf,
     http: reqwest::Client,
@@ -120,13 +146,13 @@ impl Hunter {
     ///
     /// Fails when the staging directory cannot be created.
     pub fn new(
-        ytm: Arc<YtMusicPool>,
+        platforms: Platforms,
         treasury: Treasury,
         staging: PathBuf,
     ) -> Result<Self, HuntError> {
         std::fs::create_dir_all(&staging)?;
         Ok(Self {
-            ytm,
+            platforms,
             treasury,
             staging,
             http: reqwest::Client::builder()
@@ -138,17 +164,10 @@ impl Hunter {
         })
     }
 
-    /// The client without a login, for what everyone shares: searches,
-    /// albums, artists, lyrics.
+    /// The platforms it downloads from.
     #[must_use]
-    pub fn ytmusic(&self) -> Arc<YtMusic> {
-        self.ytm.public()
-    }
-
-    /// Every user's client.
-    #[must_use]
-    pub fn clients(&self) -> &Arc<YtMusicPool> {
-        &self.ytm
+    pub fn platforms(&self) -> &Platforms {
+        &self.platforms
     }
 
     #[must_use]
@@ -167,7 +186,7 @@ impl Hunter {
         {
             return Ok(album.clone());
         }
-        let album = self.ytm.public().album(key.id()).await?;
+        let album = self.platforms.of(key)?.album(key.id()).await?;
         let mut cache = self.albums.lock().unwrap();
         cache.retain(|_, (fetched, _)| fetched.elapsed() < ALBUM_CACHE_TTL);
         cache.insert(key.clone(), (Instant::now(), album.clone()));
@@ -221,7 +240,8 @@ impl Hunter {
         }
 
         progress(1);
-        let track = self.ytm.public().track(key.id()).await?;
+        let source = self.platforms.of(key)?;
+        let track = source.track(key.id()).await?;
         let album = match &track.album {
             Some(reference) => match self.album(&reference.id).await {
                 Ok(album) => Some(album),
@@ -268,7 +288,7 @@ impl Hunter {
         album: Option<&RemoteAlbum>,
         file: AudioFile,
     ) -> Result<Track, HuntError> {
-        let described = describe(&request.key, track, album);
+        let described = describe(self.platforms.of(&request.key)?, &request.key, track, album);
         let path = self.treasury.resolve(&file.path);
         let mut info = tokio::task::spawn_blocking(move || tags::read(&path))
             .await?
@@ -325,7 +345,7 @@ impl Hunter {
         };
         progress(90);
 
-        let described = describe(&request.key, track, album);
+        let described = describe(self.platforms.of(&request.key)?, &request.key, track, album);
         let cover = match described.cover_url {
             Some(url) => self.fetch_cover(url).await,
             None => None,
@@ -382,9 +402,15 @@ impl Hunter {
         staging: &Path,
     ) -> Result<PathBuf, HuntError> {
         let key = &request.key;
+        let Some(target) = self.platforms.of(key)?.yt_dlp(key.id()) else {
+            return Err(HuntError::YtDlp(format!(
+                "it cannot download from {}",
+                key.platform().name()
+            )));
+        };
         let mut attempt = 0;
         loop {
-            let result = download::yt_dlp(key.id(), staging, request.cookies.as_deref()).await;
+            let result = download::yt_dlp(&target, staging, request.cookies.as_deref()).await;
             match result {
                 Err(HuntError::YtDlp(reason))
                     if attempt < YT_DLP_RETRIES
@@ -417,7 +443,11 @@ impl Hunter {
         let direct = async {
             // The owner's login, when they have one, lets streams that need
             // one through.
-            let source = self.ytm.client(request.owner).audio(key.id()).await?;
+            let source = self
+                .platforms
+                .of(key)?
+                .audio(request.owner, key.id())
+                .await?;
             let path = staging.join(format!("audio.{}", source.extension));
             download::fetch(&self.http, &source, &path, &report).await?;
             Ok::<_, HuntError>(path)
@@ -481,6 +511,7 @@ struct Described<'a> {
 }
 
 fn describe<'a>(
+    source: &dyn Source,
     key: &SourceKey,
     track: &'a RemoteTrack,
     album: Option<&'a RemoteAlbum>,
@@ -513,7 +544,7 @@ fn describe<'a>(
         album_artist,
         track_number,
         year: album.and_then(|album| album.year),
-        source_url: format!("https://music.youtube.com/watch?v={}", key.id()),
+        source_url: source.page_url(Page::Song, key.id()),
         cover_url: album
             .and_then(|album| album.cover_url.as_deref())
             .or(track.cover_url.as_deref()),

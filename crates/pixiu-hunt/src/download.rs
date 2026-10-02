@@ -14,7 +14,7 @@ use reqwest::{
 };
 use tokio::io::AsyncWriteExt;
 
-use crate::{HuntError, ytmusic::AudioSource};
+use crate::{HuntError, source::YtDlpTarget, ytmusic::AudioSource};
 
 /// YouTube throttles large requests; many smaller ranges download at full
 /// speed.
@@ -113,14 +113,14 @@ async fn fetch_range(
     Err(last_error.expect("at least one attempt ran"))
 }
 
-/// Downloads the best audio of `video_id` with `yt-dlp` into `dir`,
-/// returning the file it wrote.
+/// Downloads the best audio of `target` with `yt-dlp` into `dir` (the job's
+/// own), returning the file it wrote.
 pub(crate) async fn yt_dlp(
-    video_id: &str,
+    target: &YtDlpTarget,
     dir: &Path,
     cookies: Option<&str>,
 ) -> Result<PathBuf, HuntError> {
-    let prefix = format!("{video_id}.yt-dlp");
+    let prefix = "audio.yt-dlp";
     let mut command = tokio::process::Command::new("yt-dlp");
     command
         .args(["--no-playlist", "--no-progress", "--quiet", "--no-warnings"])
@@ -129,16 +129,16 @@ pub(crate) async fn yt_dlp(
         .arg(dir.join(format!("{prefix}.%(ext)s")))
         .kill_on_drop(true);
 
-    let cookie_file = match cookies {
-        Some(header) => {
-            let path = dir.join(format!("{video_id}.cookies.txt"));
-            write_private(&path, &netscape_cookies(header)).await?;
+    let cookie_file = match (cookies, target.cookie_domain) {
+        (Some(header), Some(domain)) => {
+            let path = dir.join("cookies.txt");
+            write_private(&path, &netscape_cookies(header, domain)).await?;
             command.arg("--cookies").arg(&path);
             Some(path)
         }
-        None => None,
+        _ => None,
     };
-    command.arg(format!("https://music.youtube.com/watch?v={video_id}"));
+    command.arg(&target.url);
 
     let output = command.output().await;
     if let Some(path) = &cookie_file {
@@ -156,7 +156,7 @@ pub(crate) async fn yt_dlp(
         if entry
             .file_name()
             .to_str()
-            .is_some_and(|name| name.starts_with(&prefix))
+            .is_some_and(|name| name.starts_with(prefix))
         {
             return Ok(entry.path());
         }
@@ -207,13 +207,14 @@ mod plain_reason_tests {
     }
 }
 
-/// Converts a `Cookie` header into the Netscape cookie file `yt-dlp` reads.
-fn netscape_cookies(header: &str) -> String {
+/// Converts a `Cookie` header into the Netscape cookie file `yt-dlp` reads,
+/// for `domain` (like `.youtube.com`).
+fn netscape_cookies(header: &str, domain: &str) -> String {
     let mut file = String::from("# Netscape HTTP Cookie File\n");
     for pair in header.split(';') {
         if let Some((name, value)) = pair.trim().split_once('=') {
             file.push_str(&format!(
-                ".youtube.com\tTRUE\t/\tTRUE\t0\t{}\t{}\n",
+                "{domain}\tTRUE\t/\tTRUE\t0\t{}\t{}\n",
                 name.trim(),
                 value.trim()
             ));
@@ -239,7 +240,7 @@ mod tests {
     #[test]
     fn converts_cookie_headers() {
         assert_eq!(
-            netscape_cookies("SID=abc; HSID=d=e ;x"),
+            netscape_cookies("SID=abc; HSID=d=e ;x", ".youtube.com"),
             "# Netscape HTTP Cookie File\n\
              .youtube.com\tTRUE\t/\tTRUE\t0\tSID\tabc\n\
              .youtube.com\tTRUE\t/\tTRUE\t0\tHSID\td=e\n"

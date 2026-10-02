@@ -143,16 +143,20 @@ pub struct HuntExecutor {
     pub alerts: Arc<dyn AlertSink>,
 }
 
-/// YouTube Music lyrics, through the hunter.
+/// The platforms' lyrics, through the hunter.
 pub struct HunterLyrics(pub Arc<Hunter>);
 
 impl PlatformLyrics for HunterLyrics {
     fn lyrics<'a>(&'a self, key: &'a SourceKey) -> BoxFuture<'a, Option<(String, String)>> {
         Box::pin(async move {
-            match self.0.ytmusic().lyrics(key.id()).await {
+            let lyrics = match self.0.platforms().of(key) {
+                Ok(source) => source.lyrics(key.id()).await,
+                Err(error) => Err(error),
+            };
+            match lyrics {
                 Ok(lyrics) => lyrics,
                 Err(error) => {
-                    tracing::debug!(%error, %key, "no lyrics from YouTube Music");
+                    tracing::debug!(%error, %key, "no lyrics from the platform");
                     None
                 }
             }
@@ -381,7 +385,7 @@ impl HuntExecutor {
             Ok(payload) => payload,
             Err(error) => return Outcome::Failed(format!("invalid job: {error}")),
         };
-        let catalog = YtMusicCatalog {
+        let catalog = PlatformCatalog {
             hunter: Arc::clone(&self.hunter),
             wardens: Arc::clone(&self.wardens),
             owner: job.user_id,
@@ -411,8 +415,8 @@ async fn watch_exists(hunter: &Hunter, watch_id: u64) -> bool {
     )
 }
 
-/// YouTube Music, as the catalog of a user's watches.
-pub struct YtMusicCatalog {
+/// The platforms, as the catalog of a user's watches.
+pub struct PlatformCatalog {
     pub hunter: Arc<Hunter>,
     pub wardens: Arc<Wardens>,
     /// Whose watches: their login sees their liked music and private
@@ -420,26 +424,29 @@ pub struct YtMusicCatalog {
     pub owner: u64,
 }
 
-fn catalog_error(error: &HuntError) -> CatalogError {
+fn catalog_error(key: &SourceKey, error: &HuntError) -> CatalogError {
     if error.needs_login() {
-        CatalogError::NeedsLogin(format!("YouTube Music wants a login: {error}"))
+        CatalogError::NeedsLogin(format!("{} wants a login: {error}", key.platform().name()))
     } else {
         CatalogError::Failed(error.to_string())
     }
 }
 
-impl Catalog for YtMusicCatalog {
+impl Catalog for PlatformCatalog {
     fn playlist<'a>(
         &'a self,
         key: &'a SourceKey,
     ) -> BoxFuture<'a, Result<RemotePlaylist, CatalogError>> {
         Box::pin(async move {
-            self.hunter
-                .clients()
-                .client(self.owner)
-                .playlist(key.id())
+            let source = self
+                .hunter
+                .platforms()
+                .of(key)
+                .map_err(|error| catalog_error(key, &error))?;
+            source
+                .playlist(self.owner, key.id())
                 .await
-                .map_err(|error| catalog_error(&error))
+                .map_err(|error| catalog_error(key, &error))
         })
     }
 
@@ -448,11 +455,15 @@ impl Catalog for YtMusicCatalog {
         key: &'a SourceKey,
     ) -> BoxFuture<'a, Result<Discography, CatalogError>> {
         Box::pin(async move {
-            self.hunter
-                .ytmusic()
+            let source = self
+                .hunter
+                .platforms()
+                .of(key)
+                .map_err(|error| catalog_error(key, &error))?;
+            source
                 .discography(key.id())
                 .await
-                .map_err(|error| catalog_error(&error))
+                .map_err(|error| catalog_error(key, &error))
         })
     }
 

@@ -1,19 +1,13 @@
-//! What the admin pastes: YouTube Music and YouTube links, or bare ids.
+//! YouTube Music's links and ids, as people paste them: what each points
+//! at, as keys.
 
+use pixiu_db::{Platform, SourceKey};
 use reqwest::Url;
 
-/// What a link points at on YouTube Music.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Link {
-    Playlist(String),
-    /// The account's liked music.
-    LikedMusic,
-    /// A channel id.
-    Artist(String),
-    /// An album browse id.
-    Album(String),
-    /// A video id.
-    Track(String),
+use crate::source::Link;
+
+fn key(id: String) -> SourceKey {
+    SourceKey::youtube_music(id)
 }
 
 /// Platform ids are short and use a URL-safe alphabet.
@@ -30,20 +24,20 @@ fn id(candidate: &str) -> Option<String> {
 fn bare(candidate: &str) -> Option<Link> {
     let candidate = id(candidate)?;
     Some(if candidate == crate::LIKED_MUSIC {
-        Link::LikedMusic
+        Link::LikedMusic(key(candidate))
     } else if let Some(playlist) = candidate.strip_prefix("VL") {
         playlist_link(playlist)?
     } else if candidate.starts_with("UC") && candidate.len() == 24 {
-        Link::Artist(candidate)
+        Link::Artist(key(candidate))
     } else if candidate.starts_with("MPREb_") {
-        Link::Album(candidate)
+        Link::Album(key(candidate))
     } else if ["PL", "OLAK5uy_", "RDCLAK", "RD", "FL", "UU", "LL"]
         .iter()
         .any(|prefix| candidate.starts_with(prefix))
     {
-        Link::Playlist(candidate)
+        Link::Playlist(key(candidate))
     } else if candidate.len() == 11 {
-        Link::Track(candidate)
+        Link::Track(key(candidate))
     } else {
         return None;
     })
@@ -52,17 +46,23 @@ fn bare(candidate: &str) -> Option<Link> {
 fn playlist_link(list: &str) -> Option<Link> {
     let list = id(list)?;
     Some(if list == crate::LIKED_MUSIC {
-        Link::LikedMusic
+        Link::LikedMusic(key(list))
     } else {
-        Link::Playlist(list)
+        Link::Playlist(key(list))
     })
 }
 
-/// Reads a link or an id; `None` when it is not something YouTube Music
-/// knows.
+/// Reads a link, an id or a key; `None` when it is not something YouTube
+/// Music knows.
 #[must_use]
-pub fn parse(input: &str) -> Option<Link> {
+pub(crate) fn parse(input: &str) -> Option<Link> {
     let input = input.trim();
+    if let Some(id) = input
+        .strip_prefix(Platform::YouTubeMusic.as_str())
+        .and_then(|rest| rest.strip_prefix(':'))
+    {
+        return bare(id);
+    }
     let Ok(url) = Url::parse(input) else {
         return bare(input);
     };
@@ -77,11 +77,13 @@ pub fn parse(input: &str) -> Option<Link> {
     };
     let segments: Vec<&str> = url.path_segments()?.filter(|s| !s.is_empty()).collect();
     match (host, segments.as_slice()) {
-        ("youtu.be", [video]) => id(video).map(Link::Track),
+        ("youtu.be", [video]) => id(video).map(|id| Link::Track(key(id))),
         ("music.youtube.com" | "youtube.com", ["playlist"]) => playlist_link(&query("list")?),
-        ("music.youtube.com" | "youtube.com", ["watch"]) => id(&query("v")?).map(Link::Track),
+        ("music.youtube.com" | "youtube.com", ["watch"]) => {
+            id(&query("v")?).map(|id| Link::Track(key(id)))
+        }
         ("music.youtube.com" | "youtube.com", ["channel", channel, ..]) => {
-            id(channel).map(Link::Artist)
+            id(channel).map(|id| Link::Artist(key(id)))
         }
         ("music.youtube.com", ["browse", browse]) => bare(browse),
         _ => None,
@@ -94,22 +96,24 @@ mod tests {
 
     #[test]
     fn links_and_ids_are_understood() {
-        let playlist = Link::Playlist("PLx1y2".to_owned());
+        let playlist = Link::Playlist(key("PLx1y2".to_owned()));
         for input in [
             "https://music.youtube.com/playlist?list=PLx1y2",
             "https://www.youtube.com/playlist?list=PLx1y2&si=abc",
             "  PLx1y2 ",
             "https://music.youtube.com/browse/VLPLx1y2",
+            "youtube_music:PLx1y2",
         ] {
             assert_eq!(parse(input), Some(playlist.clone()), "{input}");
         }
+        let liked = Link::LikedMusic(key("LM".to_owned()));
         assert_eq!(
             parse("https://music.youtube.com/playlist?list=LM"),
-            Some(Link::LikedMusic)
+            Some(liked.clone())
         );
-        assert_eq!(parse("LM"), Some(Link::LikedMusic));
+        assert_eq!(parse("LM"), Some(liked));
 
-        let artist = Link::Artist("UCabcdefghijklmnopqrstuv".to_owned());
+        let artist = Link::Artist(key("UCabcdefghijklmnopqrstuv".to_owned()));
         for input in [
             "https://music.youtube.com/channel/UCabcdefghijklmnopqrstuv",
             "https://www.youtube.com/channel/UCabcdefghijklmnopqrstuv/videos",
@@ -120,9 +124,9 @@ mod tests {
 
         assert_eq!(
             parse("https://music.youtube.com/browse/MPREb_jwN9EIjDfPS"),
-            Some(Link::Album("MPREb_jwN9EIjDfPS".to_owned()))
+            Some(Link::Album(key("MPREb_jwN9EIjDfPS".to_owned())))
         );
-        let track = Link::Track("NPdgPZ0u3zQ".to_owned());
+        let track = Link::Track(key("NPdgPZ0u3zQ".to_owned()));
         for input in [
             "https://music.youtube.com/watch?v=NPdgPZ0u3zQ&list=RDAMVM",
             "https://youtu.be/NPdgPZ0u3zQ",
@@ -137,6 +141,7 @@ mod tests {
             "https://music.youtube.com/playlist?list=../etc",
             "not an id at all",
             "https://music.youtube.com/@someone",
+            "youtube_music:",
         ] {
             assert_eq!(parse(input), None, "{input}");
         }

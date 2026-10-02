@@ -328,6 +328,12 @@ impl From<tokio::task::JoinError> for ApiError {
     }
 }
 
+impl From<pixiu_hunt::HuntError> for ApiError {
+    fn from(error: pixiu_hunt::HuntError) -> Self {
+        Self::new(StatusCode::BAD_GATEWAY, error.to_string())
+    }
+}
+
 impl From<pixiu_treasury::IngestError> for ApiError {
     fn from(error: pixiu_treasury::IngestError) -> Self {
         Self::internal(error, "changing the treasure")

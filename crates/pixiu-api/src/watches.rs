@@ -14,10 +14,7 @@ use pixiu_db::{
     Job, JobKind, JobState, Library, Playlist, PlaylistEntry, SessionState, SourceKey, Watch,
     WatchKind,
 };
-use pixiu_hunt::{
-    LIKED_MUSIC,
-    link::{self, Link},
-};
+use pixiu_hunt::{Link, Page, Platforms};
 use pixiu_jobs::{
     queue::{TrackJob, wanted},
     watch::{self, NewWatch, WAITING_FOR_LOGIN, WatchError},
@@ -36,14 +33,14 @@ fn kind_name(kind: WatchKind) -> &'static str {
     }
 }
 
-fn remote_url(watch: &Watch) -> Option<String> {
+/// The page on its platform of what a watch follows.
+fn remote_url(platforms: &Platforms, watch: &Watch) -> Option<String> {
     let key: SourceKey = watch.source_key.parse().ok()?;
-    Some(match watch.kind {
-        WatchKind::Artist => format!("https://music.youtube.com/channel/{}", key.id()),
-        WatchKind::Playlist | WatchKind::LikedMusic => {
-            format!("https://music.youtube.com/playlist?list={}", key.id())
-        }
-    })
+    let page = match watch.kind {
+        WatchKind::Artist => Page::Artist,
+        WatchKind::Playlist | WatchKind::LikedMusic => Page::Playlist,
+    };
+    platforms.page_url(page, &key)
 }
 
 /// The library's tracks among `keys`.
@@ -158,7 +155,7 @@ pub(crate) async fn list(
             "kind": kind_name(watch.kind),
             "name": watch.name,
             "image": watch.image_url,
-            "link": remote_url(&watch),
+            "link": remote_url(state.hunter.platforms(), &watch),
             "include_singles": watch.include_singles,
             "only_new": watch.only_new,
             "releases_known": watch.seen.len(),
@@ -191,15 +188,16 @@ pub(crate) async fn add(
     Json(form): Json<AddWatch>,
 ) -> ApiResult<StatusCode> {
     let target = form.target.trim();
+    let platforms = state.hunter.platforms();
     let parsed = if target == "liked" {
-        Some(Link::LikedMusic)
+        platforms.liked_music().map(Link::LikedMusic)
     } else {
-        link::parse(target)
+        platforms.parse_link(target)
     };
     let (kind, key) = match parsed {
-        Some(Link::Playlist(id)) => (WatchKind::Playlist, SourceKey::youtube_music(id)),
-        Some(Link::LikedMusic) => (WatchKind::LikedMusic, SourceKey::youtube_music(LIKED_MUSIC)),
-        Some(Link::Artist(id)) => (WatchKind::Artist, SourceKey::youtube_music(id)),
+        Some(Link::Playlist(key)) => (WatchKind::Playlist, key),
+        Some(Link::LikedMusic(key)) => (WatchKind::LikedMusic, key),
+        Some(Link::Artist(key)) => (WatchKind::Artist, key),
         Some(Link::Album(_) | Link::Track(_)) => {
             return Err(ApiError::unprocessable(
                 "That is an album or a song; download it from Discover instead.",
@@ -409,7 +407,7 @@ pub(crate) async fn of_playlist(
             "id": watch.id,
             "kind": kind_name(watch.kind),
             "name": watch.name,
-            "link": remote_url(&watch),
+            "link": remote_url(state.hunter.platforms(), &watch),
             "last_synced_at": watch.last_synced_at,
         },
         "coming": coming,

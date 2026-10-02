@@ -8,6 +8,7 @@ use axum::{
     http::StatusCode,
 };
 use pixiu_db::{Album, Enrichment, Library, SourceKey, Track};
+use pixiu_hunt::Page;
 use pixiu_jobs::NewJob;
 use pixiu_subsonic::ids;
 use pixiu_treasury::{AlbumEdit, ArtistRef, TrackEdit};
@@ -66,7 +67,7 @@ pub(crate) async fn details(
         "source": if source.is_some() { "youtube_music" } else { "offering" },
         "youtube_url": source
             .as_ref()
-            .map(|key| format!("https://music.youtube.com/browse/{}", key.id())),
+            .and_then(|key| state.hunter.platforms().page_url(Page::Album, key)),
         "tracks": tracks.iter().map(|track| json!({
             "id": ids::track(track.id),
             "title": track.title,

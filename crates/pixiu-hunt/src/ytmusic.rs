@@ -18,7 +18,8 @@ use rustypipe::{
     param::StreamFilter,
 };
 
-use pixiu_db::SourceKey;
+use futures_util::future::BoxFuture;
+use pixiu_db::{Platform, SourceKey};
 
 use crate::{
     HuntError,
@@ -26,6 +27,7 @@ use crate::{
         AlbumKind, AlbumRef, Discography, RemoteAlbum, RemoteArtist, RemotePlaylist, RemoteTrack,
         SearchResults, SessionCheck, best_image_url,
     },
+    source::{Link, Page, Source, YtDlpTarget},
 };
 
 /// The playlist id of an account's liked music.
@@ -357,6 +359,95 @@ impl YtMusicPool {
     /// Forgets `owner`'s client.
     pub fn remove(&self, owner: u64) {
         self.users.lock().unwrap().remove(&owner);
+    }
+}
+
+/// YouTube Music as a [`Source`]: what everyone shares goes through the
+/// client without a login; playlists and streams through the user's own
+/// client when they have one.
+pub struct YouTubeMusicSource {
+    pool: Arc<YtMusicPool>,
+}
+
+impl YouTubeMusicSource {
+    #[must_use]
+    pub fn new(pool: Arc<YtMusicPool>) -> Self {
+        Self { pool }
+    }
+
+    /// Every user's client.
+    #[must_use]
+    pub fn pool(&self) -> &Arc<YtMusicPool> {
+        &self.pool
+    }
+}
+
+impl Source for YouTubeMusicSource {
+    fn platform(&self) -> Platform {
+        Platform::YouTubeMusic
+    }
+
+    fn parse_link(&self, input: &str) -> Option<Link> {
+        crate::link::parse(input)
+    }
+
+    fn search<'a>(&'a self, query: &'a str) -> BoxFuture<'a, Result<SearchResults, HuntError>> {
+        Box::pin(async move { self.pool.public().search(query).await })
+    }
+
+    fn track<'a>(&'a self, id: &'a str) -> BoxFuture<'a, Result<RemoteTrack, HuntError>> {
+        Box::pin(async move { self.pool.public().track(id).await })
+    }
+
+    fn album<'a>(&'a self, id: &'a str) -> BoxFuture<'a, Result<RemoteAlbum, HuntError>> {
+        Box::pin(async move { self.pool.public().album(id).await })
+    }
+
+    fn playlist<'a>(
+        &'a self,
+        owner: u64,
+        id: &'a str,
+    ) -> BoxFuture<'a, Result<RemotePlaylist, HuntError>> {
+        Box::pin(async move { self.pool.client(owner).playlist(id).await })
+    }
+
+    fn discography<'a>(&'a self, id: &'a str) -> BoxFuture<'a, Result<Discography, HuntError>> {
+        Box::pin(async move { self.pool.public().discography(id).await })
+    }
+
+    fn lyrics<'a>(
+        &'a self,
+        id: &'a str,
+    ) -> BoxFuture<'a, Result<Option<(String, String)>, HuntError>> {
+        Box::pin(async move { self.pool.public().lyrics(id).await })
+    }
+
+    fn audio<'a>(
+        &'a self,
+        owner: u64,
+        id: &'a str,
+    ) -> BoxFuture<'a, Result<AudioSource, HuntError>> {
+        Box::pin(async move { self.pool.client(owner).audio(id).await })
+    }
+
+    fn page_url(&self, page: Page, id: &str) -> String {
+        match page {
+            Page::Song => format!("https://music.youtube.com/watch?v={id}"),
+            Page::Album => format!("https://music.youtube.com/browse/{id}"),
+            Page::Artist => format!("https://music.youtube.com/channel/{id}"),
+            Page::Playlist => format!("https://music.youtube.com/playlist?list={id}"),
+        }
+    }
+
+    fn yt_dlp(&self, id: &str) -> Option<YtDlpTarget> {
+        Some(YtDlpTarget {
+            url: self.page_url(Page::Song, id),
+            cookie_domain: Some(".youtube.com"),
+        })
+    }
+
+    fn liked_music(&self) -> Option<&'static str> {
+        Some(LIKED_MUSIC)
     }
 }
 

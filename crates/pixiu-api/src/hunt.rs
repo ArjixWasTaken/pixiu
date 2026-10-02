@@ -7,7 +7,7 @@ use axum::{
     extract::{Query, State},
     http::StatusCode,
 };
-use pixiu_db::{Library, SourceKey};
+use pixiu_db::{Library, Platform, SourceKey};
 use pixiu_hunt::{AlbumKind, RemoteAlbum, RemoteTrack, SearchResults, image_url_at};
 use pixiu_jobs::NewJob;
 use pixiu_subsonic::ids;
@@ -128,12 +128,10 @@ pub(crate) async fn search(
             albums: Vec::new(),
         }));
     }
-    let results = state.hunter.ytmusic().search(q).await.map_err(|error| {
-        tracing::warn!(%error, "YouTube Music search failed");
-        ApiError::new(
-            StatusCode::BAD_GATEWAY,
-            format!("YouTube Music did not answer: {error}"),
-        )
+    let source = state.hunter.platforms().get(Platform::YouTubeMusic)?;
+    let results = source.search(q).await.map_err(|error| {
+        tracing::warn!(%error, "search failed");
+        ApiError::new(StatusCode::BAD_GATEWAY, error.to_string())
     })?;
     let (hoarded_tracks, hoarded_albums) = hoarded(&session.library(&state), &results).await?;
     let pending = pixiu_jobs::pending(&mut state.db.clone(), session.owner()).await?;

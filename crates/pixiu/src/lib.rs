@@ -12,7 +12,7 @@ use pixiu_accounts::{
 use pixiu_browser::LoginDesks;
 use pixiu_core::{Config, SecretBox, TranscodeFormat, config::PathsConfig, playing::NowPlaying};
 use pixiu_db::{Db, User};
-use pixiu_hunt::{Hunter, YtMusicPool};
+use pixiu_hunt::{Hunter, Platforms, YouTubeMusicSource, YtMusicPool};
 use pixiu_jobs::{
     Jobs, Wardens,
     adapters::{HuntExecutor, Sessions},
@@ -118,8 +118,12 @@ impl Services {
         // Its cache may still hold the login of before every user had a
         // client; each user's warden restores their own.
         pool.logout_public().await;
+        // The platforms music is downloaded from.
+        let platforms = Platforms::new([
+            Arc::new(YouTubeMusicSource::new(Arc::clone(&pool))) as Arc<dyn pixiu_hunt::Source>
+        ]);
         let hunter = Arc::new(
-            Hunter::new(Arc::clone(&pool), treasury.clone(), paths.staging_dir())
+            Hunter::new(platforms, treasury.clone(), paths.staging_dir())
                 .context("failed to set up the hunter")?,
         );
         let desks = LoginDesks::new(
