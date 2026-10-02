@@ -235,7 +235,14 @@ pub fn transcode(
                     rate,
                 )?),
             };
-            let mut resampled = frame::Audio::empty();
+            // Room for all the frame makes at the new rate, and for what the
+            // resampler held back. A frame sized for the input's samples
+            // (what `run` makes on its own) leaves the surplus of upsampling
+            // behind, more with every frame: the song would end early.
+            let room = decoded.samples() * usize::try_from(writer.rate).unwrap_or(48_000)
+                / usize::try_from(decoded.rate()).unwrap_or(1).max(1)
+                + 1024;
+            let mut resampled = frame::Audio::new(sample_format, room, layout);
             resampler.run(&decoded, &mut resampled)?;
             writer.fifo.push(&resampled, skip);
             writer.encode_whole_frames()?;
@@ -513,6 +520,19 @@ mod tests {
                 assert!((1900..=2100).contains(&millis), "{millis} ms");
             }
         }
+    }
+
+    #[test]
+    fn upsampled_streams_keep_their_ending() {
+        // 4 s at 44.1 kHz; Opus takes it as 48 kHz.
+        let target = Target {
+            codec: Codec::Opus,
+            bitrate: 96,
+        };
+        let (_dir, path) = transcoded("tone-44k.flac", target, Duration::ZERO);
+        let (file_type, millis) = probe(&path);
+        assert_eq!(file_type, FileType::Opus);
+        assert!((3950..=4050).contains(&millis), "{millis} ms");
     }
 
     #[test]

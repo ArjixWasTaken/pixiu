@@ -1,4 +1,4 @@
-//! Search YouTube Music and grab what the signed-in user's library lacks.
+//! Search a platform and grab what the signed-in user's library lacks.
 
 use std::collections::HashMap;
 
@@ -21,6 +21,9 @@ const COVER_SIZE: u32 = 400;
 #[derive(Deserialize)]
 pub(crate) struct SearchQuery {
     q: String,
+    /// The platform to search, as stored (`deezer`); YouTube Music when
+    /// unnamed.
+    platform: Option<String>,
 }
 
 /// Where a result stands: in the hoard, on its way, or neither.
@@ -115,12 +118,17 @@ fn cover(url: Option<&str>) -> Option<String> {
     url.map(|url| image_url_at(url, COVER_SIZE))
 }
 
-/// `GET /api/hunt?q=`.
+/// `GET /api/hunt?q=&platform=`.
 pub(crate) async fn search(
     State(state): State<ApiState>,
     session: Session,
     Query(query): Query<SearchQuery>,
 ) -> ApiResult<Json<Results>> {
+    let platform = match query.platform.as_deref() {
+        None | Some("") => Platform::YouTubeMusic,
+        Some(name) => Platform::from_name(name)
+            .ok_or_else(|| ApiError::unprocessable("píxiū doesn't download from there."))?,
+    };
     let q = query.q.trim();
     if q.is_empty() {
         return Ok(Json(Results {
@@ -128,7 +136,7 @@ pub(crate) async fn search(
             albums: Vec::new(),
         }));
     }
-    let source = state.hunter.platforms().get(Platform::YouTubeMusic)?;
+    let source = state.hunter.platforms().get(platform)?;
     let results = source.search(q).await.map_err(|error| {
         tracing::warn!(%error, "search failed");
         ApiError::new(StatusCode::BAD_GATEWAY, error.to_string())

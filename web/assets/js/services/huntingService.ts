@@ -1,5 +1,5 @@
 /**
- * píxiū's hunting API: searching YouTube Music and grabbing, watches, jobs,
+ * píxiū's hunting API: searching a platform and grabbing, watches, jobs,
  * orphans, offerings, the YouTube Music account, and settings.
  */
 import { http } from '@/services/http'
@@ -39,6 +39,8 @@ export interface Watch {
   kind: WatchKind
   name: string
   image: string | null
+  /** The platform it follows something on, like `deezer`. */
+  platform: string
   link: string
   include_singles: boolean
   only_new: boolean
@@ -64,7 +66,14 @@ export interface ExcludedSong {
 }
 
 export interface PlaylistWatch {
-  watch: { id: number; kind: WatchKind; name: string; link: string; last_synced_at: string | null }
+  watch: {
+    id: number
+    kind: WatchKind
+    name: string
+    platform: string
+    link: string
+    last_synced_at: string | null
+  }
   coming: Array<{
     key: string
     title: string | null
@@ -199,7 +208,10 @@ export interface HuntingSummary {
 export const huntingService = {
   summary: () => http.silently.get<HuntingSummary>('hunting'),
 
-  search: (q: string) => http.get<{ tracks: HuntTrack[]; albums: HuntAlbum[] }>(`hunt?q=${encodeURIComponent(q)}`),
+  search: (q: string, platform: string) =>
+    http.get<{ tracks: HuntTrack[]; albums: HuntAlbum[] }>(
+      `hunt?q=${encodeURIComponent(q)}&platform=${encodeURIComponent(platform)}`,
+    ),
   grabTrack: (track: HuntTrack) =>
     http.post('hunt/tracks', { id: track.id, title: `${track.artist} — ${track.title}` }),
   grabAlbum: (album: HuntAlbum) =>

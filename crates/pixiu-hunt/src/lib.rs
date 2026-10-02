@@ -1,6 +1,7 @@
 //! Hunting: finding music on streaming platforms and bringing it into the
 //! hoard.
 
+pub mod deezer;
 mod download;
 mod link;
 pub mod model;
@@ -18,6 +19,7 @@ use std::{
 use pixiu_db::{AudioFile, Platform, SourceKey, Track, toasty};
 use pixiu_treasury::{Claim, Cover, IngestError, Provenance, Treasury, tags};
 
+pub use deezer::DeezerSource;
 pub use model::{
     AlbumKind, AlbumRef, Discography, RemoteAlbum, RemoteArtist, RemotePlaylist, RemoteTrack,
     SearchResults, SessionCheck, image_url_at,
@@ -65,6 +67,10 @@ pub const SINGLES: &str = "Singles";
 
 /// How often yt-dlp is tried again when YouTube refuses it.
 const YT_DLP_RETRIES: u32 = 2;
+
+/// The bitrate lossless downloads are stored at, as Opus: transparent for
+/// nearly everyone, at a seventh of the size.
+const LOSSLESS_AS_OPUS_KBPS: u32 = 160;
 
 impl HuntError {
     /// Whether the platform wants a login for this, e.g. for liked music or
@@ -298,7 +304,13 @@ impl Hunter {
         info.album = Some(described.album_title.to_owned());
         info.album_artist = Some(described.album_artist.to_owned());
         info.track_number = described.track_number;
+        if described.disc_number.is_some() {
+            info.disc_number = described.disc_number;
+        }
         info.year = described.year.map(i32::from);
+        if let Some(isrc) = described.isrc {
+            info.isrc = Some(isrc.to_owned());
+        }
         info.artists.clone_from(&track.artists);
         let file_id = file.id;
         let stored = self
@@ -330,18 +342,30 @@ impl Hunter {
         let downloaded = self.fetch_audio(request, staging, progress).await?;
         progress(85);
 
-        // Opus in WebM becomes Ogg Opus; anything else is kept as served.
-        let is_webm = downloaded
+        // Opus in WebM becomes Ogg Opus, and lossless audio is encoded as
+        // Opus; anything else is kept as served.
+        let extension = downloaded
             .extension()
-            .is_some_and(|extension| extension == "webm");
-        let audio = if is_webm {
-            // Each job has its own staging directory.
-            let output = staging.join("audio.opus");
-            let (input, target) = (downloaded.clone(), output.clone());
-            tokio::task::spawn_blocking(move || pixiu_media::remux(&input, &target)).await??;
-            output
-        } else {
-            downloaded
+            .and_then(|extension| extension.to_str())
+            .map(str::to_ascii_lowercase);
+        // Each job has its own staging directory.
+        let output = staging.join("audio.opus");
+        let (input, target) = (downloaded.clone(), output.clone());
+        let audio = match extension.as_deref() {
+            Some("webm") => {
+                tokio::task::spawn_blocking(move || pixiu_media::remux(&input, &target)).await??;
+                output
+            }
+            Some("flac") => {
+                let opus = pixiu_media::Target {
+                    codec: pixiu_media::Codec::Opus,
+                    bitrate: LOSSLESS_AS_OPUS_KBPS,
+                };
+                tokio::task::spawn_blocking(move || pixiu_media::encode(&input, &target, opus))
+                    .await??;
+                output
+            }
+            _ => downloaded,
         };
         progress(90);
 
@@ -357,7 +381,9 @@ impl Hunter {
                 album: described.album_title,
                 album_artist: described.album_artist,
                 track_number: described.track_number,
+                disc_number: described.disc_number,
                 year: described.year,
+                isrc: described.isrc,
                 source_url: &described.source_url,
                 cover: cover.as_ref(),
             };
@@ -456,6 +482,9 @@ impl Hunter {
 
         match direct {
             Ok(path) => Ok(path),
+            // Without yt-dlp to fall back on, the platform's own reason is
+            // the one to give.
+            Err(error) if self.platforms.of(key)?.yt_dlp(key.id()).is_none() => Err(error),
             Err(error) => {
                 tracing::warn!(%error, %key, "direct download failed; trying yt-dlp");
                 let path = self.yt_dlp(request, staging).await?;
@@ -504,7 +533,9 @@ struct Described<'a> {
     album_title: &'a str,
     album_artist: &'a str,
     track_number: Option<u32>,
+    disc_number: Option<u32>,
     year: Option<u16>,
+    isrc: Option<&'a str>,
     source_url: String,
     cover_url: Option<&'a str>,
     provenance: Provenance,
@@ -543,7 +574,9 @@ fn describe<'a>(
         album_title,
         album_artist,
         track_number,
+        disc_number: track.disc_number.map(u32::from),
         year: album.and_then(|album| album.year),
+        isrc: track.isrc.as_deref(),
         source_url: source.page_url(Page::Song, key.id()),
         cover_url: album
             .and_then(|album| album.cover_url.as_deref())

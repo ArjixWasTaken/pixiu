@@ -483,6 +483,8 @@ fn track(item: TrackItem) -> RemoteTrack {
         }),
         duration_secs: item.duration,
         track_number: item.track_nr,
+        disc_number: None,
+        isrc: None,
         cover_url: image(&item.cover),
         is_video: item.track_type == TrackType::Video,
         title: item.name,

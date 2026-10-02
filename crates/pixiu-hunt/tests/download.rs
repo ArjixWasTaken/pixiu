@@ -79,6 +79,8 @@ fn song(id: &str) -> RemoteTrack {
         }),
         duration_secs: Some(1),
         track_number: Some(1),
+        disc_number: None,
+        isrc: None,
         cover_url: None,
         is_video: false,
     }
@@ -252,14 +254,14 @@ async fn another_library_shares_the_stored_file() {
 }
 
 #[tokio::test]
-async fn without_a_stream_yt_dlp_is_asked_for() {
+async fn without_yt_dlp_to_fall_back_on_the_platform_s_reason_stands() {
     let s = setup().await;
 
     let error = download(&s, 1, "broken").await.unwrap_err();
 
-    // The fake platform names no target for yt-dlp, so that is where it ends.
+    // The fake platform names no target for yt-dlp.
     assert!(
-        matches!(&error, HuntError::YtDlp(reason) if reason.contains("YouTube Music")),
+        matches!(&error, HuntError::NoAudio(id) if id == "broken"),
         "{error}"
     );
     assert_eq!(s.served.load(Ordering::SeqCst), 0);

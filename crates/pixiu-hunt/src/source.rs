@@ -3,7 +3,7 @@
 //! albums, playlists, artists, lyrics and audio. Everything after the audio
 //! arrives (tags, the store, claims) is the same for every platform.
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
 pub use futures_util::future::BoxFuture;
 use pixiu_db::{Platform, SourceKey};
@@ -73,6 +73,12 @@ pub trait Source: Send + Sync {
     /// What a link, or a bare id, points at on this platform.
     fn parse_link(&self, input: &str) -> Option<Link>;
 
+    /// Hosts of the platform's short links, as its share buttons give:
+    /// they redirect to links [`Source::parse_link`] reads.
+    fn short_link_hosts(&self) -> &'static [&'static str] {
+        &[]
+    }
+
     /// Songs, albums and artists matching `query`.
     fn search<'a>(&'a self, query: &'a str) -> BoxFuture<'a, Result<SearchResults, HuntError>>;
 
@@ -127,12 +133,23 @@ pub trait Source: Send + Sync {
 }
 
 /// The platforms píxiū downloads from, each with its source.
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct Platforms {
     sources: BTreeMap<Platform, Arc<dyn Source>>,
+    /// Follows short links.
+    http: reqwest::Client,
+}
+
+impl Default for Platforms {
+    fn default() -> Self {
+        Self::new([])
+    }
 }
 
 impl Platforms {
+    /// # Panics
+    ///
+    /// Panics when the HTTP client cannot be built (no TLS roots).
     #[must_use]
     pub fn new(sources: impl IntoIterator<Item = Arc<dyn Source>>) -> Self {
         Self {
@@ -140,6 +157,11 @@ impl Platforms {
                 .into_iter()
                 .map(|source| (source.platform(), source))
                 .collect(),
+            http: reqwest::Client::builder()
+                .redirect(reqwest::redirect::Policy::limited(5))
+                .timeout(Duration::from_secs(15))
+                .build()
+                .expect("the HTTP client builds"),
         }
     }
 
@@ -175,6 +197,25 @@ impl Platforms {
         self.all().find_map(|source| source.parse_link(input))
     }
 
+    /// What a link points at, following it first when it is a platform's
+    /// short link.
+    pub async fn resolve_link(&self, input: &str) -> Option<Link> {
+        if let Some(link) = self.parse_link(input) {
+            return Some(link);
+        }
+        let url = reqwest::Url::parse(input.trim()).ok()?;
+        let host = url.host_str()?;
+        let short = matches!(url.scheme(), "http" | "https")
+            && self
+                .all()
+                .any(|source| source.short_link_hosts().contains(&host));
+        if !short {
+            return None;
+        }
+        let response = self.http.get(url).send().await.ok()?;
+        self.parse_link(response.url().as_str())
+    }
+
     /// The account's liked songs, on the first platform that keeps them as
     /// a playlist.
     #[must_use]
@@ -195,7 +236,121 @@ impl Platforms {
 
 #[cfg(test)]
 mod tests {
+    use tokio::{
+        io::{AsyncReadExt, AsyncWriteExt},
+        net::TcpListener,
+    };
+
     use super::*;
+    use crate::{
+        AudioSource, Discography, RemoteAlbum, RemotePlaylist, RemoteTrack, SearchResults,
+    };
+
+    /// A platform whose links are `http://127.0.0.1:<port>/artist/<id>`, and
+    /// whose short links are any others on that host.
+    struct Local;
+
+    impl Source for Local {
+        fn platform(&self) -> Platform {
+            Platform::Deezer
+        }
+
+        fn parse_link(&self, input: &str) -> Option<Link> {
+            let url = reqwest::Url::parse(input).ok()?;
+            let id = url.path().strip_prefix("/artist/")?;
+            (url.host_str() == Some("127.0.0.1")).then(|| Link::Artist(SourceKey::deezer(id)))
+        }
+
+        fn short_link_hosts(&self) -> &'static [&'static str] {
+            &["127.0.0.1"]
+        }
+
+        fn search<'a>(&'a self, _: &'a str) -> BoxFuture<'a, Result<SearchResults, HuntError>> {
+            unimplemented!()
+        }
+
+        fn track<'a>(&'a self, _: &'a str) -> BoxFuture<'a, Result<RemoteTrack, HuntError>> {
+            unimplemented!()
+        }
+
+        fn album<'a>(&'a self, _: &'a str) -> BoxFuture<'a, Result<RemoteAlbum, HuntError>> {
+            unimplemented!()
+        }
+
+        fn playlist<'a>(
+            &'a self,
+            _: u64,
+            _: &'a str,
+        ) -> BoxFuture<'a, Result<RemotePlaylist, HuntError>> {
+            unimplemented!()
+        }
+
+        fn discography<'a>(&'a self, _: &'a str) -> BoxFuture<'a, Result<Discography, HuntError>> {
+            unimplemented!()
+        }
+
+        fn lyrics<'a>(
+            &'a self,
+            _: &'a str,
+        ) -> BoxFuture<'a, Result<Option<(String, String)>, HuntError>> {
+            unimplemented!()
+        }
+
+        fn audio<'a>(
+            &'a self,
+            _: u64,
+            _: &'a str,
+        ) -> BoxFuture<'a, Result<AudioSource, HuntError>> {
+            unimplemented!()
+        }
+
+        fn page_url(&self, _: Page, _: &str) -> String {
+            unimplemented!()
+        }
+
+        fn yt_dlp(&self, _: &str) -> Option<YtDlpTarget> {
+            None
+        }
+    }
+
+    #[tokio::test]
+    async fn short_links_are_followed() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let base = format!("http://{}", listener.local_addr().unwrap());
+        let target = format!("{base}/artist/42");
+        tokio::spawn(async move {
+            while let Ok((mut stream, _)) = listener.accept().await {
+                let mut request = [0_u8; 2048];
+                let read = stream.read(&mut request).await.unwrap_or(0);
+                let short = request[..read].starts_with(b"GET /s/abc ");
+                let head = if short {
+                    format!("HTTP/1.1 302 Found\r\nLocation: {target}\r\nContent-Length: 0\r\n\r\n")
+                } else {
+                    "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n".to_owned()
+                };
+                let _ = stream.write_all(head.as_bytes()).await;
+            }
+        });
+        let platforms = Platforms::new([Arc::new(Local) as Arc<dyn Source>]);
+
+        assert_eq!(
+            platforms.resolve_link(&format!("{base}/s/abc")).await,
+            Some(Link::Artist(SourceKey::deezer("42")))
+        );
+        assert_eq!(
+            platforms.resolve_link(&format!("{base}/artist/7")).await,
+            Some(Link::Artist(SourceKey::deezer("7"))),
+            "links that need no following"
+        );
+        assert_eq!(
+            platforms.resolve_link(&format!("{base}/s/gone")).await,
+            None
+        );
+        assert_eq!(
+            platforms.resolve_link("https://example.com/s/abc").await,
+            None
+        );
+    }
 
     #[test]
     fn logins_are_told_by_their_cookies() {

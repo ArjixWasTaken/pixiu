@@ -9,6 +9,7 @@ const mirror: PlaylistWatch = {
     id: 1,
     kind: 'liked_music',
     name: 'Liked music',
+    platform: 'youtube_music',
     link: 'https://music.youtube.com/playlist?list=LM',
     last_synced_at: null,
   },
@@ -41,5 +42,26 @@ describe('mirroredWatchPanel.vue', () => {
     screen.getByText('Somebody · failed: This video is unavailable')
     screen.getByText('Somebody · downloaded; waiting for the next sync')
     expect(screen.getByRole('link', { name: 'See the downloads on Jobs' }).getAttribute('href')).toMatch(/jobs$/)
+  })
+
+  it('names the platform the playlist is on', () => {
+    const deezer: PlaylistWatch = {
+      ...mirror,
+      watch: {
+        ...mirror.watch,
+        kind: 'playlist',
+        name: 'Morning',
+        platform: 'deezer',
+        link: 'https://www.deezer.com/playlist/908622995',
+      },
+    }
+    h.render(Component, { props: { mirror: deezer } })
+
+    expect(screen.getByText(/Mirrors the Deezer playlist/).textContent).toMatch(
+      /Mirrors the Deezer playlist\s+“Morning”/,
+    )
+    expect(screen.getByRole('link', { name: '“Morning”' }).getAttribute('href')).toBe(
+      'https://www.deezer.com/playlist/908622995',
+    )
   })
 })

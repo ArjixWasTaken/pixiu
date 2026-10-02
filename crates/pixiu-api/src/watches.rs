@@ -33,6 +33,12 @@ fn kind_name(kind: WatchKind) -> &'static str {
     }
 }
 
+/// The platform a watch follows something on, as stored (`deezer`).
+fn platform_name(watch: &Watch) -> Option<&'static str> {
+    let key: SourceKey = watch.source_key.parse().ok()?;
+    Some(key.platform().as_str())
+}
+
 /// The page on its platform of what a watch follows.
 fn remote_url(platforms: &Platforms, watch: &Watch) -> Option<String> {
     let key: SourceKey = watch.source_key.parse().ok()?;
@@ -155,6 +161,7 @@ pub(crate) async fn list(
             "kind": kind_name(watch.kind),
             "name": watch.name,
             "image": watch.image_url,
+            "platform": platform_name(&watch),
             "link": remote_url(state.hunter.platforms(), &watch),
             "include_singles": watch.include_singles,
             "only_new": watch.only_new,
@@ -192,7 +199,8 @@ pub(crate) async fn add(
     let parsed = if target == "liked" {
         platforms.liked_music().map(Link::LikedMusic)
     } else {
-        platforms.parse_link(target)
+        // Share buttons give short links, followed to the real one.
+        platforms.resolve_link(target).await
     };
     let (kind, key) = match parsed {
         Some(Link::Playlist(key)) => (WatchKind::Playlist, key),
@@ -205,7 +213,7 @@ pub(crate) async fn add(
         }
         None => {
             return Err(ApiError::unprocessable(
-                "That does not look like a YouTube Music playlist or artist link.",
+                "That does not look like a YouTube Music or Deezer playlist or artist link.",
             ));
         }
     };
@@ -407,6 +415,7 @@ pub(crate) async fn of_playlist(
             "id": watch.id,
             "kind": kind_name(watch.kind),
             "name": watch.name,
+            "platform": platform_name(&watch),
             "link": remote_url(state.hunter.platforms(), &watch),
             "last_synced_at": watch.last_synced_at,
         },

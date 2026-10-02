@@ -11,17 +11,19 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Platform {
     YouTubeMusic,
+    Deezer,
 }
 
 impl Platform {
     /// Every platform, in a stable order.
-    pub const ALL: &[Platform] = &[Platform::YouTubeMusic];
+    pub const ALL: &[Platform] = &[Platform::YouTubeMusic, Platform::Deezer];
 
     /// The platform as stored: in keys, and in `source_sessions.source`.
     #[must_use]
     pub fn as_str(self) -> &'static str {
         match self {
             Self::YouTubeMusic => "youtube_music",
+            Self::Deezer => "deezer",
         }
     }
 
@@ -30,6 +32,7 @@ impl Platform {
     pub fn name(self) -> &'static str {
         match self {
             Self::YouTubeMusic => "YouTube Music",
+            Self::Deezer => "Deezer",
         }
     }
 
@@ -86,6 +89,12 @@ impl SourceKey {
     #[must_use]
     pub fn platform(&self) -> Platform {
         self.platform
+    }
+
+    /// A Deezer song, album, artist or playlist.
+    #[must_use]
+    pub fn deezer(id: impl Into<String>) -> Self {
+        Self::new(Platform::Deezer, id)
     }
 
     /// The platform's own id.
@@ -161,6 +170,14 @@ mod tests {
         assert_eq!(key.platform(), Platform::YouTubeMusic);
         assert_eq!(key.id(), "dQw4w9WgXcQ");
         assert_eq!("youtube_music:dQw4w9WgXcQ".parse(), Ok(key));
+    }
+
+    #[test]
+    fn deezer_keys_read_back() {
+        let key = SourceKey::deezer("3135556");
+        assert_eq!(key.to_string(), "deezer:3135556");
+        assert_eq!("deezer:3135556".parse(), Ok(key));
+        assert_eq!(Platform::from_name("deezer"), Some(Platform::Deezer));
     }
 
     #[test]

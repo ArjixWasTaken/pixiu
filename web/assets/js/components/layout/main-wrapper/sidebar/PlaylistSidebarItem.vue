@@ -66,7 +66,7 @@ const active = computed(() => {
   )
 })
 
-/** Smart playlists, mirrors of watched YouTube Music playlists, and plain ones. */
+/** Smart playlists, mirrors of watched playlists, and plain ones. */
 const icon = computed(() => {
   if (isRecentlyPlayedList(list.value)) {
     return 'history'

@@ -1,7 +1,7 @@
 <template>
   <div class="top-bar">
     <M3IconButton v-if="isMobile" icon="menu" label="Open navigation" @click="openDrawer" />
-    <!-- Discover has its own search, of YouTube Music: one field is enough. -->
+    <!-- Discover has its own search, of a platform: one field is enough. -->
     <SearchForm v-if="!onDiscover" class="search">
       <template v-if="isMobile" #trailing>
         <ProfileDropdown :size="30" />

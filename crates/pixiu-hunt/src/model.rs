@@ -25,6 +25,12 @@ pub struct RemoteTrack {
     pub album: Option<AlbumRef>,
     pub duration_secs: Option<u32>,
     pub track_number: Option<u16>,
+    /// The disc of a release with several, when the platform says.
+    #[serde(default)]
+    pub disc_number: Option<u16>,
+    /// The recording's ISRC, when the platform says.
+    #[serde(default)]
+    pub isrc: Option<String>,
     pub cover_url: Option<String>,
     /// A music video rather than a studio track.
     pub is_video: bool,
@@ -122,18 +128,27 @@ pub(crate) fn best_image_url(candidates: &[(String, u32)]) -> Option<String> {
     Some(image_url_at(url, 1200))
 }
 
-/// The same image scaled to `size` pixels square, for images Google resizes
-/// on request; other URLs come back unchanged.
+/// The same image scaled to `size` pixels square, for images Google and
+/// Deezer resize on request; other URLs come back unchanged.
 #[must_use]
 pub fn image_url_at(url: &str, size: u32) -> String {
-    match url.rsplit_once('=') {
-        Some((base, options))
-            if url.contains("googleusercontent.com") && options.starts_with('w') =>
-        {
-            format!("{base}=w{size}-h{size}-l90-rj")
-        }
-        _ => url.to_owned(),
+    if url.contains("googleusercontent.com")
+        && let Some((base, options)) = url.rsplit_once('=')
+        && options.starts_with('w')
+    {
+        return format!("{base}=w{size}-h{size}-l90-rj");
     }
+    // `…/images/cover/<hash>/1000x1000-000000-80-0-0.jpg`
+    if url.contains(".dzcdn.net/images/")
+        && let Some((base, name)) = url.rsplit_once('/')
+        && let Some((dimensions, rest)) = name.split_once('-')
+        && let Some((width, height)) = dimensions.split_once('x')
+        && width.parse::<u32>().is_ok()
+        && height.parse::<u32>().is_ok()
+    {
+        return format!("{base}/{size}x{size}-{rest}");
+    }
+    url.to_owned()
 }
 
 #[cfg(test)]
@@ -172,6 +187,19 @@ mod tests {
     }
 
     #[test]
+    fn resizes_deezer_covers() {
+        assert_eq!(
+            image_url_at(
+                "https://cdn-images.dzcdn.net/images/cover/2fec34/1000x1000-000000-80-0-0.jpg",
+                400
+            ),
+            "https://cdn-images.dzcdn.net/images/cover/2fec34/400x400-000000-80-0-0.jpg"
+        );
+        let other = "https://cdn-images.dzcdn.net/images/misc/logo.png";
+        assert_eq!(image_url_at(other, 400), other);
+    }
+
+    #[test]
     fn credits_join_artists() {
         let track = RemoteTrack {
             id: SourceKey::youtube_music("x"),
@@ -181,6 +209,8 @@ mod tests {
             album: None,
             duration_secs: None,
             track_number: None,
+            disc_number: None,
+            isrc: None,
             cover_url: None,
             is_video: false,
         };

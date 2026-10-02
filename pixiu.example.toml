@@ -33,6 +33,8 @@ max_open = 2
 # fetches what the other clients cannot (today that is everything). The
 # Docker image does not include it: it is only built for glibc.
 # botguard = "/usr/local/bin/rustypipe-botguard"
+# Deezer's songs are downloaded from Monochrome, found by their ISRC.
+# monochrome = "https://tracks.monochrome.st"
 
 [enrich]
 # Albums are looked up on MusicBrainz (tags, covers from the Cover Art

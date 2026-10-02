@@ -216,7 +216,7 @@ const editPlaylist = () => {
 }
 
 const removeSelected = async () => {
-  // Mirrors of watched playlists change on YouTube Music only.
+  // Mirrors of watched playlists change on their platform only.
   if (playlist.value?.permissions.edit) {
     await removeFromPlaylist(playlist.value, selectedPlayables.value)
   }

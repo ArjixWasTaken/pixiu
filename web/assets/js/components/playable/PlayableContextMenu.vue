@@ -200,7 +200,7 @@ const viewOnMusicBrainz = () => trigger(() => window.open(musicBrainzUrl.value!,
 const firstSongPlaying = computed(() =>
   playables.value.length ? playables.value[0].playback_state === 'Playing' : false,
 )
-// Mirrors of watched playlists change on YouTube Music only.
+// Mirrors of watched playlists change on their platform only.
 const normalPlaylists = computed(() =>
   playlists.value.filter(({ is_smart, permissions }) => !is_smart && permissions.edit),
 )

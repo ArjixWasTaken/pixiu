@@ -14,6 +14,14 @@ describe('platformBadge.vue', () => {
     expect(badge.classList.contains('sm')).toBe(true)
   })
 
+  it('knows Deezer too', () => {
+    const { container } = h.render(Component, { props: { platform: 'deezer', size: 'lg' } })
+
+    const badge = container.querySelector('img')!
+    expect(badge.getAttribute('title')).toBe('From Deezer')
+    expect(badge.getAttribute('src')).toMatch(/deezer/)
+  })
+
   it('shows nothing for uploads and platforms it does not know', () => {
     for (const platform of [null, 'myspace']) {
       const { container, unmount } = h.render(Component, { props: { platform } })

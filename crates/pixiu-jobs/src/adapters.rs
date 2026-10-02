@@ -101,6 +101,23 @@ pub fn is_logged_in(login: &LoginSpec, cookies: &[Cookie]) -> bool {
     login.is_logged_in(cookies.iter().map(|cookie| cookie.name.as_str()))
 }
 
+/// The session of a platform without logins, which never holds one.
+struct NoLogins(Platform);
+
+impl Session for NoLogins {
+    fn apply<'a>(&'a self, _cookies: &'a str) -> BoxFuture<'a, SessionCheck> {
+        Box::pin(async move { SessionCheck::Invalid(format!("{} has no logins", self.0.name())) })
+    }
+
+    fn check(&self) -> BoxFuture<'_, SessionCheck> {
+        Box::pin(async move { SessionCheck::Invalid(format!("{} has no logins", self.0.name())) })
+    }
+
+    fn forget(&self) -> BoxFuture<'_, ()> {
+        Box::pin(async {})
+    }
+}
+
 /// Users' wardens work with their own clients and login browser: one
 /// browser profile holds a user's logins to every platform.
 pub struct Sessions {
@@ -117,6 +134,7 @@ impl SessionFactory for Sessions {
                 pool: Arc::clone(&self.pool),
                 owner,
             }),
+            platform @ Platform::Deezer => Box::new(NoLogins(platform)),
         }
     }
 
@@ -198,12 +216,24 @@ impl HuntExecutor {
         };
         let claim = payload.wanted.claim(payload.reference);
         let owner = job.user_id;
+        let platform = payload.key.platform();
+        // Only platforms with logins have sessions to lend cookies.
+        let has_logins = self
+            .hunter
+            .platforms()
+            .get(platform)
+            .is_ok_and(|source| source.login().is_some());
+        let cookies = if has_logins {
+            self.wardens.cookies(owner, platform).await
+        } else {
+            None
+        };
         let request = DownloadRequest {
             owner,
             job_id: job.id,
             key: payload.key.clone(),
             claim: claim.clone(),
-            cookies: self.wardens.cookies(owner, payload.key.platform()).await,
+            cookies,
         };
         let treasury = self.hunter.treasury();
         // Excluded from its playlist while this was queued or running.

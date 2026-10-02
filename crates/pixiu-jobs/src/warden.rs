@@ -410,12 +410,16 @@ impl Warden {
             )
             .await;
             let alert = match self.platform {
-                Platform::YouTubeMusic => Alert::YouTubeMusicExpired {
+                Platform::YouTubeMusic => Some(Alert::YouTubeMusicExpired {
                     expired_at,
                     reason: reason.to_owned(),
-                },
+                }),
+                // No logins, so no sessions to expire.
+                Platform::Deezer => None,
             };
-            self.alerts.alert(self.owner, alert).await;
+            if let Some(alert) = alert {
+                self.alerts.alert(self.owner, alert).await;
+            }
         }
         tracing::warn!(reason, platform = %self.platform, "session expired");
         self.publish().await

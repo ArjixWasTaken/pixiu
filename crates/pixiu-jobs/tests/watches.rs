@@ -59,6 +59,8 @@ impl Catalog for FakeCatalog {
                     album: None,
                     duration_secs: Some(180),
                     track_number: None,
+                    disc_number: None,
+                    isrc: None,
                     cover_url: None,
                     is_video: false,
                 })

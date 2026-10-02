@@ -1,12 +1,16 @@
-//! Tests against the real YouTube Music. They need network access and are
-//! skipped by default: `cargo test -p pixiu-hunt -- --ignored`.
+//! Tests against the real YouTube Music, and Deezer with Monochrome. They
+//! need network access and are skipped by default:
+//! `cargo test -p pixiu-hunt -- --ignored`.
 //!
 //! They use a Creative Commons track (Kevin MacLeod, CC BY) so no rights are
 //! at stake.
 
 use pixiu_core::SecretBox;
 use pixiu_db::{Platform, Track};
-use pixiu_hunt::{DownloadRequest, Hunter, Platforms, YouTubeMusicSource, YtMusic, YtMusicPool};
+use pixiu_hunt::{
+    DeezerSource, DownloadRequest, Hunter, Platforms, YouTubeMusicSource, YtMusic, YtMusicPool,
+    deezer::MONOCHROME_API,
+};
 use pixiu_treasury::{Claim, Treasury, tags};
 
 const QUERY: &str = "Kevin MacLeod Monkeys Spinning Monkeys";
@@ -149,4 +153,55 @@ async fn reads_playlists_and_discographies() {
     assert_eq!(playlist.tracks.len(), 1);
     let liked = ytm.playlist(pixiu_hunt::LIKED_MUSIC).await.unwrap_err();
     assert!(liked.needs_login(), "{liked}");
+}
+
+#[tokio::test]
+#[ignore = "needs network access to Deezer and Monochrome"]
+async fn downloads_a_deezer_song_through_monochrome() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = pixiu_db::open(&dir.path().join("pixiu.db")).await.unwrap();
+    let treasury = Treasury::new(db, dir.path().join("treasure"), dir.path().join("cache"));
+    let deezer = DeezerSource::new(MONOCHROME_API).unwrap();
+    let hunter = Hunter::new(
+        Platforms::new([std::sync::Arc::new(deezer) as _]),
+        treasury.clone(),
+        dir.path().join("staging"),
+    )
+    .unwrap();
+    let deezer = hunter.platforms().get(Platform::Deezer).unwrap();
+
+    let found = deezer.search(QUERY).await.unwrap();
+    let song = found.tracks.first().expect("a song").clone();
+    println!("{song:#?}");
+    assert!(song.title.to_lowercase().contains("monkeys"));
+    assert!(song.isrc.is_some(), "Deezer names ISRCs");
+    let album = deezer
+        .album(song.album.as_ref().expect("an album").id.id())
+        .await
+        .unwrap();
+    assert!(album.tracks.iter().any(|track| track.id == song.id));
+    let artist = deezer
+        .discography(song.artist_id.as_ref().expect("an artist").id())
+        .await
+        .unwrap();
+    assert!(artist.albums.len() > 10, "{} releases", artist.albums.len());
+
+    let track: Track = hunter
+        .download(
+            &DownloadRequest {
+                owner: 1,
+                job_id: 1,
+                key: song.id.clone(),
+                claim: Claim::offering(),
+                cookies: None,
+            },
+            &|percent| println!("{percent}%"),
+        )
+        .await
+        .unwrap();
+    assert_eq!(track.suffix, "opus");
+    let info = tags::read(&treasury.resolve(&track.path)).unwrap();
+    println!("{info:#?}");
+    assert_eq!(info.isrc, song.isrc);
+    assert!(info.duration_ms > 60_000);
 }

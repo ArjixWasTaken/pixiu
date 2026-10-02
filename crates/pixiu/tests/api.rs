@@ -441,6 +441,7 @@ async fn watches_are_added_listed_and_removed() {
     let watches = api.get(&token, "/api/watches").await;
     let watch = &watches[0];
     assert_eq!(watch["kind"], "playlist");
+    assert_eq!(watch["platform"], "youtube_music");
     assert_eq!(watch["link"], link);
     // Adding a watch queues its first sync.
     assert_eq!(watch["status"]["state"], "queued");
@@ -456,6 +457,48 @@ async fn watches_are_added_listed_and_removed() {
         .await;
     assert_eq!(status, StatusCode::NO_CONTENT);
     assert_eq!(api.get(&token, "/api/watches").await, json!([]));
+}
+
+#[tokio::test]
+async fn deezer_links_are_watched_too() {
+    let api = Api::new().await;
+    let token = api.claim().await;
+
+    api.send(
+        &token,
+        Method::POST,
+        "/api/watches",
+        json!({ "target": "https://www.deezer.com/en/artist/27?utm_source=x", "only_new": true }),
+        StatusCode::CREATED,
+    )
+    .await;
+
+    let watches = api.get(&token, "/api/watches").await;
+    assert_eq!(watches[0]["kind"], "artist");
+    assert_eq!(watches[0]["platform"], "deezer");
+    assert_eq!(watches[0]["link"], "https://www.deezer.com/artist/27");
+}
+
+#[tokio::test]
+async fn searches_name_a_platform_pixiu_knows() {
+    let api = Api::new().await;
+    let token = api.claim().await;
+
+    for platform in ["youtube_music", "deezer"] {
+        let found = api
+            .get(&token, &format!("/api/hunt?q=%20&platform={platform}"))
+            .await;
+        assert_eq!(found, json!({ "tracks": [], "albums": [] }), "{platform}");
+    }
+    let (status, _) = api
+        .request(
+            Method::GET,
+            "/api/hunt?q=x&platform=myspace",
+            Some(&token),
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
 }
 
 #[tokio::test]

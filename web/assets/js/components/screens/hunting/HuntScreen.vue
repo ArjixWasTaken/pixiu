@@ -5,12 +5,14 @@
     </template>
 
     <div class="flex flex-col gap-6 pt-1" data-vue="HuntScreen">
-      <form class="flex gap-3 items-center max-w-[720px]" @submit.prevent="handleSubmit">
+      <M3SegmentedButton v-model="platform" :segments class="self-start" />
+
+      <form class="flex gap-3 items-center max-w-[720px] -mt-2" @submit.prevent="handleSubmit">
         <M3TextField
           v-model="data.q"
           autofocus
           class="flex-1"
-          label="Search YouTube Music"
+          :label="`Search ${platformName}`"
           leading-icon="search"
           name="q"
           autocorrect="off"
@@ -24,7 +26,7 @@
 
       <div v-if="searching" class="flex items-center gap-3 text-(--schemes-on-surface-variant)">
         <M3ProgressIndicator :size="24" variant="circular" />
-        <span class="m3-body-large">Searching YouTube Music…</span>
+        <span class="m3-body-large">Searching {{ platformName }}…</span>
       </div>
 
       <template v-else-if="results">
@@ -55,7 +57,7 @@
         <template #icon>
           <M3Icon :size="64" name="travel_explore" />
         </template>
-        Find music on YouTube Music
+        Find music on {{ platformName }}
         <span class="secondary block">Downloads show up on Jobs, then in your library.</span>
       </ScreenEmptyState>
     </div>
@@ -63,18 +65,21 @@
 </template>
 
 <script lang="ts" setup>
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { huntingService } from '@/services/huntingService'
 import type { HuntAlbum, HuntTrack } from '@/services/huntingService'
 import { useForm } from '@/composables/useForm'
 import { useRouter } from '@/composables/useRouter'
 import { useMessageToaster } from '@/composables/useMessageToaster'
 import { useErrorHandler } from '@/composables/useErrorHandler'
+import { searchablePlatforms, useDiscoverPlatform } from '@/composables/useDiscoverPlatform'
+import { platforms } from '@/config/platforms'
 
 import M3Button from '@/components/m3/M3Button.vue'
 import M3Icon from '@/components/m3/M3Icon.vue'
 import M3List from '@/components/m3/M3List.vue'
 import M3ProgressIndicator from '@/components/m3/M3ProgressIndicator.vue'
+import M3SegmentedButton from '@/components/m3/M3SegmentedButton.vue'
 import M3TextField from '@/components/m3/M3TextField.vue'
 import ScreenBase from '@/components/screens/ScreenBase.vue'
 import ScreenHeader from '@/components/ui/ScreenHeader.vue'
@@ -84,6 +89,9 @@ import HuntTrackRow from '@/components/screens/hunting/HuntTrackRow.vue'
 
 const { toastSuccess } = useMessageToaster()
 const { handleHttpError } = useErrorHandler('dialog')
+
+const { platform, name: platformName } = useDiscoverPlatform()
+const segments = searchablePlatforms.map(id => ({ id, label: platforms[id].name }))
 
 const results = ref<{ tracks: HuntTrack[]; albums: HuntAlbum[] } | null>(null)
 const searching = ref(false)
@@ -98,13 +106,16 @@ const { data, handleSubmit } = useForm<{ q: string }>({
     lastQuery.value = q.trim()
 
     try {
-      return await huntingService.search(lastQuery.value)
+      return await huntingService.search(lastQuery.value, platform.value)
     } finally {
       searching.value = false
     }
   },
   onSuccess: found => (results.value = found),
 })
+
+// Switching platforms with results showing searches the other one.
+watch(platform, () => results.value && data.q.trim() && handleSubmit())
 
 const { getRouteParam, onScreenActivated } = useRouter()
 

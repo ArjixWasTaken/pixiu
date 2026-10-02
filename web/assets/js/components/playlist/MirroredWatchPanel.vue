@@ -4,10 +4,10 @@
       <template v-if="mirror.watch.kind === 'liked_music'">
         Mirrors your
         <a :href="mirror.watch.link" class="text-(--schemes-primary)" rel="noopener" target="_blank">liked music</a>
-        on YouTube Music, read-only.
+        on {{ platformName(mirror.watch.platform) }}, read-only.
       </template>
       <template v-else>
-        Mirrors the YouTube Music playlist
+        Mirrors the {{ platformName(mirror.watch.platform) }} playlist
         <a :href="mirror.watch.link" class="text-(--schemes-primary)" rel="noopener" target="_blank"
           >“{{ mirror.watch.name }}”</a
         >, read-only.
@@ -67,6 +67,7 @@ import { ref } from 'vue'
 import type { ExcludedSong, PlaylistWatch } from '@/services/huntingService'
 import { pluralize, timeAgo } from '@/utils/formatters'
 import { useRouter } from '@/composables/useRouter'
+import { platformName } from '@/config/platforms'
 
 import M3Button from '@/components/m3/M3Button.vue'
 import M3Card from '@/components/m3/M3Card.vue'
