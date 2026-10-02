@@ -138,6 +138,7 @@ impl Services {
             Box::new(Sessions {
                 pool,
                 desks: Arc::clone(&desks),
+                platforms: hunter.platforms().clone(),
             }),
             Arc::clone(&alerts) as _,
         );

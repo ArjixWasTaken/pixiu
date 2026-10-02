@@ -27,7 +27,7 @@ use crate::{
         AlbumKind, AlbumRef, Discography, RemoteAlbum, RemoteArtist, RemotePlaylist, RemoteTrack,
         SearchResults, SessionCheck, best_image_url,
     },
-    source::{Link, Page, Source, YtDlpTarget},
+    source::{Link, LoginSpec, Page, Source, YtDlpTarget},
 };
 
 /// The playlist id of an account's liked music.
@@ -448,6 +448,16 @@ impl Source for YouTubeMusicSource {
 
     fn liked_music(&self) -> Option<&'static str> {
         Some(LIKED_MUSIC)
+    }
+
+    fn login(&self) -> Option<LoginSpec> {
+        Some(LoginSpec {
+            // Google's sign-in, returning to YouTube Music.
+            start_url: "https://accounts.google.com/ServiceLogin?service=youtube&continue=https%3A%2F%2Fmusic.youtube.com%2F",
+            home_url: "https://music.youtube.com/",
+            cookie_domain: "youtube.com",
+            login_cookies: &["SAPISID", "__Secure-3PAPISID"],
+        })
     }
 }
 

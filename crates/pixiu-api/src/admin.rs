@@ -72,7 +72,12 @@ pub(crate) async fn list(
                 row["songs"] = json!(usage.songs);
                 row["bytes"] = json!(usage.bytes);
                 row["exclusive_bytes"] = json!(usage.exclusive_bytes);
-                row["youtube_music"] = json!(state_name(state.wardens.health(user.id).state));
+                row["youtube_music"] = json!(state_name(
+                    state
+                        .wardens
+                        .health(user.id, crate::sources::PLATFORM)
+                        .state
+                ));
                 row["sso"] = json!(linked.contains(&user.id));
                 row
             })

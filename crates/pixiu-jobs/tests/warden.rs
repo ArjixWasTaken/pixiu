@@ -9,9 +9,10 @@ use pixiu_core::{
     SecretBox,
     alerts::{Alert, AlertSink, NoAlerts},
 };
+use pixiu_db::Platform;
 use pixiu_db::{Db, SessionEventKind, SessionState};
 use pixiu_hunt::SessionCheck;
-use pixiu_jobs::warden::{BoxFuture, Platform, Refresher, Warden};
+use pixiu_jobs::warden::{BoxFuture, Refresher, Session, Warden};
 
 /// The user every test library and job belongs to.
 const OWNER: u64 = 1;
@@ -38,9 +39,9 @@ impl Script {
     }
 }
 
-struct FakePlatform(Arc<Script>);
+struct FakeSession(Arc<Script>);
 
-impl Platform for FakePlatform {
+impl Session for FakeSession {
     fn apply<'a>(&'a self, cookies: &'a str) -> BoxFuture<'a, SessionCheck> {
         self.0.applied.lock().unwrap().push(cookies.to_owned());
         let answer = self.0.applies.lock().unwrap().pop_front();
@@ -110,7 +111,8 @@ impl Setup {
             self.db.clone(),
             self.secrets.clone(),
             OWNER,
-            Box::new(FakePlatform(Arc::clone(&self.script))),
+            Platform::YouTubeMusic,
+            Box::new(FakeSession(Arc::clone(&self.script))),
             Box::new(FakeRefresher(Arc::clone(&self.script))),
             Arc::clone(&self.alerts) as Arc<dyn AlertSink>,
         )
@@ -369,11 +371,11 @@ struct FakeSessions {
 }
 
 impl pixiu_jobs::SessionFactory for FakeSessions {
-    fn platform(&self, owner: u64) -> Box<dyn Platform> {
-        Box::new(FakePlatform(Arc::clone(&self.scripts[&owner])))
+    fn session(&self, owner: u64, _platform: Platform) -> Box<dyn Session> {
+        Box::new(FakeSession(Arc::clone(&self.scripts[&owner])))
     }
 
-    fn refresher(&self, owner: u64) -> Box<dyn Refresher> {
+    fn refresher(&self, owner: u64, _platform: Platform) -> Box<dyn Refresher> {
         Box::new(FakeRefresher(Arc::clone(&self.scripts[&owner])))
     }
 
@@ -401,36 +403,51 @@ async fn every_user_has_a_warden_of_their_own() {
 
     mine.apply_answers([SessionCheck::Valid]);
     wardens
-        .get(OWNER)
+        .get(OWNER, Platform::YouTubeMusic)
         .await
         .unwrap()
         .connect("SAPISID=mine".to_owned())
         .await
         .unwrap();
-    assert_eq!(wardens.health(OWNER).state, Some(SessionState::Valid));
-    // The other user never connected: nothing to show, and no cookies.
-    assert_eq!(wardens.health(OTHER).state, None);
-    assert_eq!(wardens.cookies(OTHER).await, None);
     assert_eq!(
-        wardens.cookies(OWNER).await.as_deref(),
+        wardens.health(OWNER, Platform::YouTubeMusic).state,
+        Some(SessionState::Valid)
+    );
+    // The other user never connected: nothing to show, and no cookies.
+    assert_eq!(wardens.health(OTHER, Platform::YouTubeMusic).state, None);
+    assert_eq!(wardens.cookies(OTHER, Platform::YouTubeMusic).await, None);
+    assert_eq!(
+        wardens
+            .cookies(OWNER, Platform::YouTubeMusic)
+            .await
+            .as_deref(),
         Some("SAPISID=mine")
     );
 
     // Their session expiring leaves mine alone.
     theirs.apply_answers([SessionCheck::Valid]);
-    let other = wardens.get(OTHER).await.unwrap();
+    let other = wardens.get(OTHER, Platform::YouTubeMusic).await.unwrap();
     other.connect("SAPISID=theirs".to_owned()).await.unwrap();
     theirs.check_answers([SessionCheck::Invalid("signed out".to_owned())]);
     theirs.refresh_answers([Err("the profile is logged out".to_owned())]);
     other.validate().await;
-    assert_eq!(wardens.health(OTHER).state, Some(SessionState::Expired));
-    assert_eq!(wardens.health(OWNER).state, Some(SessionState::Valid));
+    assert_eq!(
+        wardens.health(OTHER, Platform::YouTubeMusic).state,
+        Some(SessionState::Expired)
+    );
+    assert_eq!(
+        wardens.health(OWNER, Platform::YouTubeMusic).state,
+        Some(SessionState::Valid)
+    );
     assert_eq!(*mine.applied.lock().unwrap(), ["SAPISID=mine"]);
 
     // Stopping one lets go of their client and browser only.
     wardens.stop(OTHER).await;
     assert_eq!(*forgotten.lock().unwrap(), [OTHER]);
-    assert_eq!(wardens.health(OWNER).state, Some(SessionState::Valid));
+    assert_eq!(
+        wardens.health(OWNER, Platform::YouTubeMusic).state,
+        Some(SessionState::Valid)
+    );
 }
 
 /// The queue runs jobs of active accounts; this is the tests' owner.

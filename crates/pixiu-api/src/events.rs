@@ -46,7 +46,7 @@ pub(crate) async fn stream(
     let jobs = state.jobs.subscribe();
     let health = state
         .wardens
-        .get(owner)
+        .get(owner, crate::sources::PLATFORM)
         .await
         .ok()
         .map(|warden| warden.subscribe());

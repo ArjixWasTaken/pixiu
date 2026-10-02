@@ -22,7 +22,7 @@ pub use model::{
     AlbumKind, AlbumRef, Discography, RemoteAlbum, RemoteArtist, RemotePlaylist, RemoteTrack,
     SearchResults, SessionCheck, image_url_at,
 };
-pub use source::{Link, Page, Platforms, Source, YtDlpTarget};
+pub use source::{Link, LoginSpec, Page, Platforms, Source, YtDlpTarget};
 pub use ytmusic::{AudioSource, LIKED_MUSIC, YouTubeMusicSource, YtMusic, YtMusicPool};
 
 #[derive(Debug, thiserror::Error)]

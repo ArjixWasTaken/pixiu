@@ -17,8 +17,9 @@ use std::{
 use jiff::{SignedDuration, Timestamp};
 use pixiu_core::alerts::{Alert, AlertSink};
 use pixiu_db::{
-    ClaimKind, Db, Job, JobKind, JobState, Playlist, PlaylistEntry, ReleaseReason, SessionState,
-    SourceKey, TrackClaim, User, UserStatus, Watch, WatchExclusion, WatchKind, keyed, now, toasty,
+    ClaimKind, Db, Job, JobKind, JobState, Platform, Playlist, PlaylistEntry, ReleaseReason,
+    SessionState, SourceKey, TrackClaim, User, UserStatus, Watch, WatchExclusion, WatchKind, keyed,
+    now, toasty,
 };
 use pixiu_hunt::{AlbumKind, Discography, LIKED_MUSIC, RemotePlaylist, RemoteTrack};
 use pixiu_treasury::{Release, Treasury};
@@ -57,8 +58,9 @@ pub trait Catalog: Send + Sync {
         key: &'a SourceKey,
     ) -> BoxFuture<'a, Result<Discography, CatalogError>>;
 
-    /// Whether a working login is at hand; liked music needs one.
-    fn logged_in(&self) -> bool;
+    /// Whether a working login to `platform` is at hand; liked music needs
+    /// one.
+    fn logged_in(&self, platform: Platform) -> bool;
 }
 
 /// How often each kind of watch is synced.
@@ -175,10 +177,10 @@ async fn sync_playlist(
 ) -> Result<Synced, String> {
     let owner = watch.user_id;
     let liked = watch.kind == WatchKind::LikedMusic;
-    if liked && !catalog.logged_in() {
+    let key = watch_key(watch)?;
+    if liked && !catalog.logged_in(key.platform()) {
         return Ok(Synced::NeedsLogin(WAITING_FOR_LOGIN.to_owned()));
     }
-    let key = watch_key(watch)?;
     let playlist = match catalog.playlist(&key).await {
         Ok(playlist) => playlist,
         Err(CatalogError::NeedsLogin(reason)) => return Ok(Synced::NeedsLogin(reason)),

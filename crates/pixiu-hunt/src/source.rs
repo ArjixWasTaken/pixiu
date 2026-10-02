@@ -41,6 +41,30 @@ pub struct YtDlpTarget {
     pub cookie_domain: Option<&'static str>,
 }
 
+/// How a platform's login works: users sign in through the login browser,
+/// and the session warden keeps the session's cookies fresh.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LoginSpec {
+    /// Where signing in starts.
+    pub start_url: &'static str,
+    /// The platform's home page, which the warden visits to refresh the
+    /// cookies.
+    pub home_url: &'static str,
+    /// The domain the session's cookies are for.
+    pub cookie_domain: &'static str,
+    /// Cookies that are only there while someone is signed in.
+    pub login_cookies: &'static [&'static str],
+}
+
+impl LoginSpec {
+    /// Whether cookies of these names carry a login.
+    pub fn is_logged_in<'a>(&self, names: impl IntoIterator<Item = &'a str>) -> bool {
+        names
+            .into_iter()
+            .any(|name| self.login_cookies.contains(&name))
+    }
+}
+
 /// A platform píxiū downloads from. Ids are the platform's own, the part of
 /// a key after its platform.
 pub trait Source: Send + Sync {
@@ -93,6 +117,11 @@ pub trait Source: Send + Sync {
     /// The playlist id of an account's liked songs, when the platform keeps
     /// them as one.
     fn liked_music(&self) -> Option<&'static str> {
+        None
+    }
+
+    /// How users sign in, when the platform has logins.
+    fn login(&self) -> Option<LoginSpec> {
         None
     }
 }
@@ -161,5 +190,37 @@ impl Platforms {
     #[must_use]
     pub fn page_url(&self, page: Page, key: &SourceKey) -> Option<String> {
         Some(self.of(key).ok()?.page_url(page, key.id()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn logins_are_told_by_their_cookies() {
+        let login = LoginSpec {
+            start_url: "https://example.com/login",
+            home_url: "https://example.com/",
+            cookie_domain: "example.com",
+            login_cookies: &["SID"],
+        };
+        assert!(login.is_logged_in(["PREF", "SID"]));
+        assert!(!login.is_logged_in(["PREF"]));
+    }
+
+    #[test]
+    fn platforms_without_a_source_say_so() {
+        let platforms = Platforms::default();
+        assert!(matches!(
+            platforms.get(Platform::YouTubeMusic),
+            Err(HuntError::NoSource(Platform::YouTubeMusic))
+        ));
+        assert_eq!(platforms.parse_link("https://example.com"), None);
+        assert_eq!(platforms.liked_music(), None);
+        assert_eq!(
+            platforms.page_url(Page::Song, &SourceKey::youtube_music("x")),
+            None
+        );
     }
 }

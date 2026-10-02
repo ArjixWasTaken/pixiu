@@ -102,7 +102,7 @@ impl Catalog for FakeCatalog {
         })
     }
 
-    fn logged_in(&self) -> bool {
+    fn logged_in(&self, _platform: pixiu_db::Platform) -> bool {
         *self.logged_in.lock().unwrap()
     }
 }

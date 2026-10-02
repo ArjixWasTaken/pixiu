@@ -1,15 +1,17 @@
-//! The production sides of the warden and the queue: YouTube Music, the
-//! browser profile, and the hunter.
+//! The production sides of the warden and the queue: the platforms'
+//! sessions, the browser profile, and the hunter.
 
 use std::sync::Arc;
 
 use pixiu_browser::{Cookie, LoginDesks, cookie_header};
 use pixiu_core::alerts::AlertSink;
-use pixiu_db::{Album, Job, JobKind, JobState, ReleaseReason, SessionState, SourceKey, Watch};
+use pixiu_db::{
+    Album, Job, JobKind, JobState, Platform, ReleaseReason, SessionState, SourceKey, Watch,
+};
 use pixiu_enrich::Sources;
 use pixiu_hunt::{
-    Discography, DownloadRequest, HuntError, Hunter, RemotePlaylist, SessionCheck, YtMusic,
-    YtMusicPool,
+    Discography, DownloadRequest, HuntError, Hunter, LoginSpec, Platforms, RemotePlaylist,
+    SessionCheck, YtMusic, YtMusicPool,
 };
 use pixiu_treasury::Release;
 
@@ -18,33 +20,18 @@ use crate::{
     queue::{
         self, AlbumJob, EnrichJob, Executor, NewJob, Outcome, SyncJob, TrackJob, enriched_album,
     },
-    warden::{BoxFuture, Platform, Refresher},
+    warden::{BoxFuture, Refresher, Session},
     wardens::{SessionFactory, Wardens},
     watch::{self, Catalog, CatalogError, Synced},
 };
 
-/// Where the login browser starts and the warden refreshes.
-pub const YOUTUBE_MUSIC_URL: &str = "https://music.youtube.com/";
-/// Google's sign-in page, returning to YouTube Music.
-pub const LOGIN_URL: &str = "https://accounts.google.com/ServiceLogin?service=youtube&continue=https%3A%2F%2Fmusic.youtube.com%2F";
-/// The cookies that matter live on this domain.
-pub const COOKIE_DOMAIN: &str = "youtube.com";
-
-/// Whether the cookies carry a Google login.
-#[must_use]
-pub fn is_logged_in(cookies: &[Cookie]) -> bool {
-    cookies
-        .iter()
-        .any(|cookie| matches!(cookie.name.as_str(), "SAPISID" | "__Secure-3PAPISID"))
-}
-
-/// A user's YouTube Music client, as their warden's platform.
-pub struct YtMusicPlatform {
+/// A user's YouTube Music client, as their warden's session.
+pub struct YtMusicSession {
     pub pool: Arc<YtMusicPool>,
     pub owner: u64,
 }
 
-impl YtMusicPlatform {
+impl YtMusicSession {
     fn client(&self) -> Result<Arc<YtMusic>, SessionCheck> {
         self.pool
             .for_user(self.owner)
@@ -52,7 +39,7 @@ impl YtMusicPlatform {
     }
 }
 
-impl Platform for YtMusicPlatform {
+impl Session for YtMusicSession {
     fn apply<'a>(&'a self, cookies: &'a str) -> BoxFuture<'a, SessionCheck> {
         Box::pin(async move {
             match self.client() {
@@ -80,22 +67,27 @@ impl Platform for YtMusicPlatform {
     }
 }
 
-/// Fresh cookies from a user's login browser profile.
+/// Fresh cookies for a platform from a user's login browser profile.
 pub struct BrowserRefresher {
     pub desks: Arc<LoginDesks>,
     pub owner: u64,
+    /// How the platform's login works; none when it has no logins.
+    pub login: Option<LoginSpec>,
 }
 
 impl Refresher for BrowserRefresher {
     fn refresh(&self) -> BoxFuture<'_, Result<String, String>> {
         Box::pin(async move {
+            let Some(login) = self.login else {
+                return Err("the platform has no logins".to_owned());
+            };
             let cookies = self
                 .desks
                 .desk(self.owner)
-                .harvest(YOUTUBE_MUSIC_URL, COOKIE_DOMAIN)
+                .harvest(login.home_url, login.cookie_domain)
                 .await
                 .map_err(|error| error.to_string())?;
-            if !is_logged_in(&cookies) {
+            if !is_logged_in(&login, &cookies) {
                 return Err("the browser profile is no longer logged in".to_owned());
             }
             Ok(cookie_header(&cookies))
@@ -103,25 +95,40 @@ impl Refresher for BrowserRefresher {
     }
 }
 
-/// Users' wardens work with their own YouTube Music client and login
-/// browser.
+/// Whether the browser's cookies carry a login to the platform.
+#[must_use]
+pub fn is_logged_in(login: &LoginSpec, cookies: &[Cookie]) -> bool {
+    login.is_logged_in(cookies.iter().map(|cookie| cookie.name.as_str()))
+}
+
+/// Users' wardens work with their own clients and login browser: one
+/// browser profile holds a user's logins to every platform.
 pub struct Sessions {
     pub pool: Arc<YtMusicPool>,
     pub desks: Arc<LoginDesks>,
+    /// How each platform's login works.
+    pub platforms: Platforms,
 }
 
 impl SessionFactory for Sessions {
-    fn platform(&self, owner: u64) -> Box<dyn Platform> {
-        Box::new(YtMusicPlatform {
-            pool: Arc::clone(&self.pool),
-            owner,
-        })
+    fn session(&self, owner: u64, platform: Platform) -> Box<dyn Session> {
+        match platform {
+            Platform::YouTubeMusic => Box::new(YtMusicSession {
+                pool: Arc::clone(&self.pool),
+                owner,
+            }),
+        }
     }
 
-    fn refresher(&self, owner: u64) -> Box<dyn Refresher> {
+    fn refresher(&self, owner: u64, platform: Platform) -> Box<dyn Refresher> {
         Box::new(BrowserRefresher {
             desks: Arc::clone(&self.desks),
             owner,
+            login: self
+                .platforms
+                .get(platform)
+                .ok()
+                .and_then(|source| source.login()),
         })
     }
 
@@ -196,7 +203,7 @@ impl HuntExecutor {
             job_id: job.id,
             key: payload.key.clone(),
             claim: claim.clone(),
-            cookies: self.wardens.cookies(owner).await,
+            cookies: self.wardens.cookies(owner, payload.key.platform()).await,
         };
         let treasury = self.hunter.treasury();
         // Excluded from its playlist while this was queued or running.
@@ -467,9 +474,9 @@ impl Catalog for PlatformCatalog {
         })
     }
 
-    fn logged_in(&self) -> bool {
+    fn logged_in(&self, platform: Platform) -> bool {
         matches!(
-            self.wardens.health(self.owner).state,
+            self.wardens.health(self.owner, platform).state,
             Some(SessionState::Valid | SessionState::Degraded)
         )
     }
