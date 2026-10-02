@@ -211,6 +211,7 @@ pub(crate) struct Exchange {
 /// `POST /api/auth/oidc/exchange`: trades a sign-in's code for its token.
 pub(crate) async fn exchange(
     State(state): State<ApiState>,
+    headers: axum::http::HeaderMap,
     Json(exchange): Json<Exchange>,
 ) -> ApiResult<Json<Tokens>> {
     let expired = || {
@@ -225,7 +226,7 @@ pub(crate) async fn exchange(
     if let Some(refusal) = inactive(user.status) {
         return Err(refusal);
     }
-    Ok(Json(Tokens::of(mint_key(&state, &user).await?)))
+    Ok(Json(Tokens::of(mint_key(&state, &user, &headers).await?)))
 }
 
 /// `GET /api/me/identities`: the user's linked accounts.

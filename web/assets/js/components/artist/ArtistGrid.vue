@@ -39,7 +39,7 @@ defineExpose({ scrollToTop })
   gap: 16px;
   padding: 12px 24px 24px;
 
-  @media (max-width: 768px) {
+  @media (max-width: 768px), (max-height: 500px) and (pointer: coarse) {
     gap: 12px;
     padding: 12px 16px 16px;
   }

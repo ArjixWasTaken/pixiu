@@ -30,7 +30,7 @@ import M3Card from '@/components/m3/M3Card.vue'
   gap: 16px;
   padding: var(--m3-group-padding);
 
-  @media (max-width: 768px) {
+  @media (max-width: 768px), (max-height: 500px) and (pointer: coarse) {
     padding: 16px;
   }
 }

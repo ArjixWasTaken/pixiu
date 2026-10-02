@@ -27,7 +27,7 @@
         label="Issuer"
         name="issuer"
         required
-        supporting-text="The provider's URL, like https://sso.example.com."
+        :supporting-text="`The provider’s address, like https://\u2060sso.example.com`"
         type="url"
       />
       <M3TextField v-model="data.client_id" autocomplete="off" label="Client ID" name="client_id" required />

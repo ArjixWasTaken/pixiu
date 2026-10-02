@@ -3,7 +3,7 @@
     <template #header>New artists</template>
     <Carousel>
       <template v-if="loading">
-        <ArtistCardSkeleton v-for="i in 6" :key="i" />
+        <ArtistCardSkeleton v-for="i in 6" :key="i" round />
       </template>
       <template v-else>
         <ArtistCard v-for="artist in artists" :key="artist.id" :artist />

@@ -103,8 +103,10 @@ watch([song, nowPlaying.about], load, { immediate: true })
 .entity-link {
   color: var(--schemes-on-surface);
 
-  &:hover {
-    text-decoration: underline;
+  @media (hover: hover) {
+    &:hover {
+      text-decoration: underline;
+    }
   }
 }
 

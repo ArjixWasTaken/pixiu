@@ -5,7 +5,7 @@
     <SettingGroup>
       <template #title>YouTube Music account</template>
       <template #subtitle>
-        A login lets píxiū watch your liked music and download at full quality. Everything else works without one.
+        Signed in, píxiū can watch your liked music and download at full quality. Everything else works without it.
       </template>
 
       <AlertBox :type="look.alert">
@@ -33,7 +33,7 @@
       <template #footer>
         <div class="flex flex-wrap gap-2">
           <M3Button @click.prevent="signIn">{{
-            sources.health.state === 'none' ? 'Connect' : 'Log in again'
+            sources.health.state === 'none' ? 'Connect' : 'Sign in again'
           }}</M3Button>
           <template v-if="sources.health.state !== 'none'">
             <M3Button variant="outlined" @click.prevent="check">Check now</M3Button>
@@ -109,7 +109,7 @@ const look = computed(() => {
       return {
         alert: 'danger' as const,
         title: 'Expired',
-        text: 'YouTube Music signed píxiū out. Log in again; downloads that need the login wait until then.',
+        text: 'YouTube Music signed píxiū out. Sign in again; downloads that need it wait until then.',
       }
     default:
       return { alert: 'info' as const, title: 'Not connected', text: 'Searching and downloading work without one.' }
@@ -153,7 +153,11 @@ const check = async () => {
 const refreshCookies = () => act(() => huntingService.refreshSession(), 'Refreshed.')
 
 const disconnect = async () => {
-  if (await showConfirmDialog('Disconnect YouTube Music? Watching liked music stops until you log in again.')) {
+  if (
+    await showConfirmDialog('Disconnect YouTube Music? Watching liked music stops until you sign in again.', {
+      action: 'Disconnect',
+    })
+  ) {
     await act(() => huntingService.disconnectSession(), 'Disconnected.')
   }
 }

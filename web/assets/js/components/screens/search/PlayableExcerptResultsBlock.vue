@@ -15,7 +15,8 @@
 
     <PlayableListSkeleton v-if="searching" role="status" aria-busy="true" aria-label="Loading" />
     <template v-else>
-      <PlayableList v-if="displayedPlayables.length" ref="playableList" class="-mx-3" @press:enter="onPressEnter" />
+      <!-- Out to the screen's edges, as the screens' own lists: the covers line up with the headings. -->
+      <PlayableList v-if="displayedPlayables.length" ref="playableList" class="bleed" @press:enter="onPressEnter" />
       <p v-else class="m3-body-medium text-(--schemes-on-surface-variant)">Nothing found.</p>
     </template>
   </ExcerptResultBlock>
@@ -63,5 +64,9 @@ const goToSongResults = () => go(`${url('search.playables')}/?q=${encodeURICompo
 @reference '@css/app.pcss';
 .results {
   @apply grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-3;
+}
+
+.bleed {
+  margin-inline: calc(-1 * var(--screen-pad-x, 24px));
 }
 </style>

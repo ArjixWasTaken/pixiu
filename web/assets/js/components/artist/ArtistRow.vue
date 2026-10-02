@@ -1,14 +1,14 @@
 <template>
   <article
-    class="artist-row group pl-5 flex items-center h-(--m3-row-height) border-b border-(--schemes-outline-variant) hover:bg-(--schemes-surface-container-high) transition-colors"
+    class="artist-row list-table-row group h-(--m3-row-height) border-b border-(--schemes-outline-variant) hover:bg-(--schemes-surface-container-high) transition-colors"
     data-testid="artist-row"
     :draggable="true"
     @contextmenu.prevent="onContextMenu"
     @dblclick.prevent.stop="goToArtist"
     @dragstart="onDragStart"
   >
-    <span class="name flex gap-3 items-center min-w-0">
-      <span class="size-[48px] flex-none">
+    <span class="name">
+      <span class="size-(--m3-row-cover) flex-none">
         <AlbumOrArtistThumbnail :entity="artist" size="sm" />
       </span>
       <a :href="url('artists.show', { id: artist.id })" class="truncate">{{ artist.name }}</a>
@@ -58,26 +58,3 @@ const goToArtist = () => go(url('artists.show', { id: props.artist.id }))
 
 const onDragStart = (event: DragEvent) => startDragging(event, props.artist)
 </script>
-
-<style lang="postcss" scoped>
-@reference '@css/app.pcss';
-.artist-row > span {
-  @apply text-left p-2 align-middle truncate;
-
-  &.name {
-    @apply flex-1 min-w-0 flex items-center;
-  }
-
-  &.rating {
-    @apply basis-32 flex items-center;
-  }
-
-  &.favorite {
-    @apply basis-16 text-center;
-  }
-
-  &.extra {
-    @apply basis-12 text-center;
-  }
-}
-</style>

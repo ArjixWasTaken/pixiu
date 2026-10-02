@@ -7,6 +7,7 @@ vi.mock('lodash-es', async importOriginal => {
   const mod = await importOriginal<typeof lodash>()
   return { ...mod, shuffle: vi.fn(mod.shuffle) }
 })
+import { useCommonStore } from '@/stores/commonStore'
 import { usePreferenceStore } from '@/stores/preferenceStore'
 import { useQueueStore } from '@/stores/queueStore'
 import { usePlayableStore } from '@/stores/playableStore'
@@ -257,6 +258,24 @@ describe('playbackService', () => {
     expect(useQueueStore().current?.playback_state).toEqual('Playing')
     expect(playMock).toHaveBeenCalled()
     expect(document.title).toEqual('Some song ♫ Koel')
+  })
+
+  it('starts a restored song where it was left, or where a seek before playing put it', async () => {
+    setCurrentSong(h.factory('song').make({ playback_state: 'Paused' }))
+    useCommonStore().state.queue_state.playback_position = 51
+    // Restored from the saved queue: nothing loaded yet.
+    playbackService.media.removeAttribute('src')
+    h.mock(window.HTMLMediaElement.prototype, 'play')
+
+    expect(playbackService.pendingStart).toBe(51)
+
+    playbackService.seekTo(90)
+    expect(playbackService.pendingStart).toBe(90)
+
+    await playbackService.resume()
+
+    expect(playbackService.pendingStart).toBeNull()
+    expect(playbackService.media.currentTime).toBe(90)
   })
 
   it('plays first in queue if toggled when there is no current playable', async () => {

@@ -762,6 +762,27 @@ async fn events_say_when_the_job_board_changes() {
     }
 }
 
+#[tokio::test]
+async fn events_end_when_the_server_shuts_down() {
+    use futures_util::StreamExt;
+
+    let api = Api::new().await;
+    let token = api.claim().await;
+    let request = Request::get(format!("/api/events?api_key={token}"))
+        .body(Body::empty())
+        .unwrap();
+    let response = api.router.clone().oneshot(request).await.unwrap();
+    let mut events = response.into_body().into_data_stream();
+
+    // A graceful shutdown waits for open responses: the stream must end.
+    api.services.shut_down();
+    let end = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        while events.next().await.is_some() {}
+    })
+    .await;
+    assert!(end.is_ok(), "the event stream ends within 5 s");
+}
+
 fn rules_json(model: &str, operator: &str, value: &[&str]) -> Value {
     json!([{ "id": "g", "rules": [{ "id": "r", "model": model, "operator": operator, "value": value }] }])
 }

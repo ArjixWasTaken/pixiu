@@ -4,7 +4,7 @@
 
     <Carousel>
       <template v-if="searching">
-        <ArtistCardSkeleton v-for="i in 6" :key="i" />
+        <ArtistCardSkeleton v-for="i in 6" :key="i" round />
       </template>
       <template v-else-if="artists.length">
         <ArtistCard v-for="artist in artists" :key="artist.id" :artist />

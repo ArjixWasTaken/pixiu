@@ -15,14 +15,21 @@
       />
     </div>
 
-    <ol>
-      <li
-        v-for="playable in playables"
+    <!-- Only the rows in view are drawn: a queue can run to hundreds of songs. -->
+    <VirtualScroller
+      v-slot="{ item: playable }: { item: Playable }"
+      :item-height="64"
+      :items="playables"
+      aria-label="Up next"
+      role="list"
+    >
+      <div
         :key="playable.id"
         :class="{ current: playable.id === current?.id }"
         class="row m3-state"
+        role="listitem"
+        @click="play(playable)"
         @contextmenu.prevent="openMenu(playable, $event)"
-        @dblclick="play(playable)"
       >
         <PlayableThumbnail :playable @clicked="play(playable)" />
         <div class="flex-1 min-w-0">
@@ -30,8 +37,9 @@
           <p class="m3-body-medium truncate muted">{{ artistOf(playable) }}</p>
         </div>
         <span class="m3-label-medium muted tabular-nums">{{ secondsToHis(playable.length) }}</span>
-      </li>
-    </ol>
+        <M3IconButton :icon-size="20" icon="more_vert" label="More actions" @click.stop="openMenu(playable, $event)" />
+      </div>
+    </VirtualScroller>
 
     <p v-if="!playables.length" class="m3-body-medium muted px-4 py-6">Nothing queued.</p>
   </div>
@@ -48,6 +56,7 @@ import { useModal } from '@/composables/useModal'
 
 import M3IconButton from '@/components/m3/M3IconButton.vue'
 import PlayableThumbnail from '@/components/playable/PlayableThumbnail.vue'
+import VirtualScroller from '@/components/ui/VirtualScroller.vue'
 
 const queueStore = useQueueStore()
 
@@ -79,7 +88,7 @@ const artistOf = (playable: Playable) => playable.artist_name
 const play = (playable: Playable) => playback().play(playable)
 
 const openMenu = (playable: Playable, event: MouseEvent) =>
-  openContextMenu<'PLAYABLES'>(PlayableContextMenu, event, { playables: [playable] })
+  openContextMenu<'PLAYABLES'>(PlayableContextMenu, event, { playables: [playable], fromQueue: true })
 
 const saveAsPlaylist = () =>
   openModal<'CREATE_PLAYLIST_FORM'>(CreatePlaylistForm, { folder: null, playables: queueStore.all })
@@ -104,7 +113,7 @@ const saveAsPlaylist = () =>
   align-items: center;
   gap: 16px;
   min-height: 64px;
-  padding: 8px 16px;
+  padding: 8px 4px 8px 16px;
   border-radius: 16px;
   color: var(--schemes-on-surface);
   cursor: pointer;

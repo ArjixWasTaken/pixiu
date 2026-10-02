@@ -95,7 +95,7 @@ const remove = () => uploadService.remove(file.value)
 const retry = () => uploadService.retry(file.value)
 
 const abort = async () => {
-  if ((await showConfirmDialog('Abort this upload?')) && file.value.status === 'Uploading') {
+  if ((await showConfirmDialog('Stop this upload?', { action: 'Stop upload' })) && file.value.status === 'Uploading') {
     uploadService.abort(file.value)
   }
 }

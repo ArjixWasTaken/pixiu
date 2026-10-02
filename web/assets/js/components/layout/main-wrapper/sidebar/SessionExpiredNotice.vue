@@ -1,7 +1,7 @@
 <template>
   <a v-if="expired" :href="url('settings')" class="notice">
     <M3Icon name="warning" />
-    <span>YouTube Music signed píxiū out. Log in again.</span>
+    <span>YouTube Music signed píxiū out. Sign in again.</span>
   </a>
 </template>
 

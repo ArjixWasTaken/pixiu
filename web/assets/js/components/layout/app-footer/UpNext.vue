@@ -19,12 +19,13 @@
 <script setup lang="ts">
 import { computed, toRefs } from 'vue'
 import { useBranding } from '@/composables/useBranding'
+import { coverOfSize } from '@/services/subsonic'
 
 const props = defineProps<{ playable: Playable }>()
 const { playable } = toRefs(props)
 
 const { cover: defaultCover } = useBranding()
 
-const src = computed(() => playable.value.album_cover)
+const src = computed(() => coverOfSize(playable.value.album_cover, 128))
 const author = computed(() => playable.value.artist_name)
 </script>

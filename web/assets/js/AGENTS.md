@@ -6,8 +6,16 @@
 - Icons are Material Symbols through `<M3Icon name="…" />` (`fill` for the filled style). Don't add icon packages.
 - Colors are the Material 3 roles, as `--schemes-*` variables (e.g. `text-(--schemes-on-surface-variant)`). Don't hard-code colors.
 - UI text is sentence case ("Add to queue", "New smart playlist"), and an action keeps one name across buttons, menus and toasts.
+- A confirmation names its action, which becomes its button: `showConfirmDialog('Delete “Mix”?', { action: 'Delete' })`, never "OK".
 - Menus, popovers, dialogs, toasts and tabs are Reka UI primitives inside our components: `useContextMenu` (its items: `MenuItem`, `Separator`), `M3MenuPopover` + `M3MenuItem`, `Popover`, `useModal`, `useDialogBox`, `useMessageToaster`, `M3Tabs`. Use those; don't hand-roll focus, keyboard or click-outside handling. Their contents render in a portal, so style them through what they take (`min-width`, a class on the panel), not `:deep()` from the caller.
 - Long lists go through `VirtualScroller` (rows measured; `itemHeight` is an estimate) and `VirtualGridScroller` (cards), on TanStack Virtual. Both say `scrolled-to-end` near their end.
+- Covers ask for the size they're shown at: `coverOfSize(url, px)` from `@/services/subsonic`.
+
+## Phones and touch
+
+- The phone layout follows one condition, `PHONE_QUERY` in `@/composables/useViewport` (`isMobile`): `(max-width: 768px), (max-height: 500px) and (pointer: coarse)`. CSS uses the same media condition, never `max-width: 768px` alone.
+- Hover styles sit inside `@media (hover: hover)` (Tailwind's `hover:` already does), so they don't stay on after a tap.
+- What opens over the screen (a sheet, a dialog, the full player, the drawer) closes on Back: `useBackToClose(isOpen, close)` from `@/composables/useBackToClose`.
 
 ## Routing
 
@@ -18,8 +26,8 @@
 
 - Stores are Pinia setup stores: `useXStore()`. A component calls it once at the top of its setup (`const albumStore = useAlbumStore()`); other code calls it where it needs it, never at a module's top level (no Pinia is active yet there).
 - Entity stores (songs, albums, artists, users) keep a vault: one reactive object per entity, shared by every list. Server data goes through the store's `syncWithVault` before it's shown.
-- What comes from the server is kept by TanStack Query (`queryClient` from `@/services/queryClient`): `useQuery` in components, `queryClient.fetchQuery` in stores, and `invalidateQueries` after a write. Keys nest from the entity down (`['album', id, 'songs']`), so invalidating the album covers all it holds. Paged lists use `useListPages`.
-- The service worker is `service-worker.ts` (vite-plugin-pwa, Workbox): it precaches the player, keeps the start-up requests, and plays the songs made available offline (`useOfflinePlayback`).
+- What comes from the server is kept by TanStack Query (`queryClient` from `@/services/queryClient`): `useQuery` in components, `queryClient.fetchQuery` in stores, and `invalidateQueries` after a write. Keys nest from the entity down (`['album', id, 'songs']`), so invalidating the album covers all it holds. Paged lists use `useListPages`; when one couldn't load and has nothing to show (`loadFailed`), the screen shows `LoadFailedState`.
+- The service worker is `service-worker.ts` (vite-plugin-pwa, Workbox): it precaches the player, keeps the start-up requests and the fonts, and plays the songs made available offline (`useOfflinePlayback`).
 
 ## TypeScript Conventions
 

@@ -17,6 +17,7 @@
 <script lang="ts" setup>
 import { computed, ref, toRefs, watch } from 'vue'
 import { useBranding } from '@/composables/useBranding'
+import { coverOfSize } from '@/services/subsonic'
 
 const props = defineProps<{ thumbnails: string[] }>()
 const { thumbnails } = toRefs(props)
@@ -31,9 +32,11 @@ watch(
     if (thumbnails.value.length === 0) {
       displayedThumbnails.value = [defaultCover]
     } else {
+      // A single cover fills the 128px stack; four share it.
+      const size = thumbnails.value.length < 4 ? 256 : 128
       displayedThumbnails.value = thumbnails.value
         .slice(0, thumbnails.value.length < 4 ? 1 : 4)
-        .map(url => url || defaultCover)
+        .map(url => coverOfSize(url, size) || defaultCover)
     }
   },
   { immediate: true },

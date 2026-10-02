@@ -3,7 +3,7 @@
     <label :class="{ unavailable: !mailReady }" class="flex items-center gap-3">
       <M3Checkbox
         :disabled="!mailReady"
-        :model-value="open && mailReady"
+        :model-value="open"
         name="registration_open"
         @update:model-value="$emit('toggle', $event)"
       />
@@ -17,7 +17,7 @@
     </label>
     <p v-if="!mailReady" class="m3-body-medium text-(--schemes-on-surface-variant)">
       Needs email, which tells people how their request went: set up a mail server under Email, and the public address
-      above.
+      above.{{ open ? ' It opens once email works.' : '' }}
     </p>
   </div>
 </template>

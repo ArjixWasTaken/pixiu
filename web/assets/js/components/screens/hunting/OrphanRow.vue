@@ -6,12 +6,13 @@
       class="cover"
     />
 
-    <div class="flex-1 min-w-0">
+    <div class="song flex-1 min-w-0">
       <p :title="orphan.song.title" class="m3-body-large truncate">{{ orphan.song.title }}</p>
       <p class="m3-body-medium truncate muted">{{ orphan.song.artist_name }} · {{ orphan.song.album_name }}</p>
     </div>
 
-    <div class="text-right shrink-0 max-w-[40%]">
+    <!-- Beside the song; on a phone, under it, so the song keeps its room. -->
+    <div class="why">
       <p :title="orphan.reason" class="m3-body-medium truncate">{{ orphan.reason }}</p>
       <p class="m3-body-small muted">
         <template v-if="orphan.released_at">{{ timeAgo(orphan.released_at) }} · </template
@@ -53,5 +54,30 @@ const selected = defineModel<boolean>({ default: false })
 
 .muted {
   color: var(--schemes-on-surface-variant);
+}
+
+.why {
+  flex-shrink: 0;
+  max-width: 40%;
+  text-align: right;
+}
+
+@media (max-width: 768px), (max-height: 500px) and (pointer: coarse) {
+  .orphan-row {
+    flex-wrap: wrap;
+    row-gap: 4px;
+  }
+
+  .song {
+    flex-basis: calc(100% - 120px);
+  }
+
+  .why {
+    /* Under the title: past the checkbox (40px), the cover (48px) and their gaps. */
+    max-width: none;
+    width: calc(100% - 120px);
+    margin-left: 120px;
+    text-align: left;
+  }
 }
 </style>

@@ -1,125 +1,28 @@
 <template>
   <div class="album-table-wrap relative flex flex-col flex-1 overflow-auto" data-testid="album-table">
-    <div class="album-table-header sortable flex z-2 bg-(--schemes-surface-container-high) pl-5 sticky top-0">
-      <span
-        class="name"
-        role="button"
-        tabindex="0"
-        title="Sort by name"
-        @click="onSort('name')"
-        @keydown.enter.space.prevent="onSort('name')"
-      >
-        Name
-        <M3Icon v-if="field === 'name' && order === 'asc'" name="arrow_drop_up" class="ml-2 text-(--schemes-primary)" />
-        <M3Icon
-          v-if="field === 'name' && order === 'desc'"
-          name="arrow_drop_down"
-          class="ml-2 text-(--schemes-primary)"
-        />
+    <div class="album-table-header list-table-row sticky top-0 z-2">
+      <span class="name cover-aligned">
+        <TableSortButton :active="field === 'name'" :order label="Name" @sort="onSort('name')" />
       </span>
-      <span
-        v-if="shouldShowColumn('artist')"
-        class="artist"
-        role="button"
-        tabindex="0"
-        title="Sort by artist"
-        @click="onSort('artist_name')"
-        @keydown.enter.space.prevent="onSort('artist_name')"
-      >
-        Artist
-        <M3Icon
-          v-if="field === 'artist_name' && order === 'asc'"
-          name="arrow_drop_up"
-          class="ml-2 text-(--schemes-primary)"
-        />
-        <M3Icon
-          v-if="field === 'artist_name' && order === 'desc'"
-          name="arrow_drop_down"
-          class="ml-2 text-(--schemes-primary)"
-        />
+      <span v-if="shouldShowColumn('artist')" class="artist">
+        <TableSortButton :active="field === 'artist_name'" :order label="Artist" @sort="onSort('artist_name')" />
       </span>
-      <span
-        v-if="shouldShowColumn('time')"
-        class="time"
-        role="button"
-        tabindex="0"
-        title="Sort by duration"
-        @click="onSort('length')"
-        @keydown.enter.space.prevent="onSort('length')"
-      >
-        Time
-        <M3Icon
-          v-if="field === 'length' && order === 'asc'"
-          name="arrow_drop_up"
-          class="ml-2 text-(--schemes-primary)"
-        />
-        <M3Icon
-          v-if="field === 'length' && order === 'desc'"
-          name="arrow_drop_down"
-          class="ml-2 text-(--schemes-primary)"
-        />
+      <span v-if="shouldShowColumn('time')" class="time">
+        <TableSortButton :active="field === 'length'" :order label="Time" @sort="onSort('length')" />
       </span>
-      <span
-        v-if="shouldShowColumn('year')"
-        class="year"
-        role="button"
-        tabindex="0"
-        title="Sort by year"
-        @click="onSort('year')"
-        @keydown.enter.space.prevent="onSort('year')"
-      >
-        Year
-        <M3Icon v-if="field === 'year' && order === 'asc'" name="arrow_drop_up" class="ml-2 text-(--schemes-primary)" />
-        <M3Icon
-          v-if="field === 'year' && order === 'desc'"
-          name="arrow_drop_down"
-          class="ml-2 text-(--schemes-primary)"
-        />
+      <span v-if="shouldShowColumn('year')" class="year">
+        <TableSortButton :active="field === 'year'" :order label="Year" @sort="onSort('year')" />
       </span>
-      <span
-        v-if="shouldShowColumn('rating')"
-        class="rating"
-        role="button"
-        tabindex="0"
-        title="Sort by rating"
-        @click="onSort('rating')"
-        @keydown.enter.space.prevent="onSort('rating')"
-      >
-        Rating
-        <M3Icon
-          v-if="field === 'rating' && order === 'asc'"
-          name="arrow_drop_up"
-          class="ml-2 text-(--schemes-primary)"
-        />
-        <M3Icon
-          v-if="field === 'rating' && order === 'desc'"
-          name="arrow_drop_down"
-          class="ml-2 text-(--schemes-primary)"
-        />
+      <span v-if="shouldShowColumn('rating')" class="rating">
+        <TableSortButton :active="field === 'rating'" :order label="Rating" @sort="onSort('rating')" />
       </span>
-      <span
-        v-if="shouldShowColumn('favorite')"
-        class="favorite"
-        role="button"
-        tabindex="0"
-        title="Sort by favorite"
-        @click="onSort('favorite')"
-        @keydown.enter.space.prevent="onSort('favorite')"
-      >
-        <M3Icon name="favorite" fill />
-        <M3Icon
-          v-if="field === 'favorite' && order === 'asc'"
-          name="arrow_drop_up"
-          class="ml-2 text-(--schemes-primary)"
-        />
-        <M3Icon
-          v-if="field === 'favorite' && order === 'desc'"
-          name="arrow_drop_down"
-          class="ml-2 text-(--schemes-primary)"
-        />
+      <span v-if="shouldShowColumn('favorite')" class="favorite">
+        <TableSortButton :active="field === 'favorite'" :order label="Favorite" @sort="onSort('favorite')">
+          <M3Icon :size="18" fill name="favorite" />
+        </TableSortButton>
       </span>
       <span class="extra">
-        <AlbumTableHeaderActionMenu :field :order @sort="onSort" />
+        <TableColumnsMenu :columns :config="albumTableColumnConfig" />
       </span>
     </div>
 
@@ -139,8 +42,9 @@ import { albumTableColumnConfig } from '@/config/tables'
 
 import VirtualScroller from '@/components/ui/VirtualScroller.vue'
 import AlbumRow from '@/components/album/AlbumRow.vue'
-import AlbumTableHeaderActionMenu from '@/components/album/AlbumTableHeaderActionMenu.vue'
 import M3Icon from '@/components/m3/M3Icon.vue'
+import TableColumnsMenu from '@/components/ui/TableColumnsMenu.vue'
+import TableSortButton from '@/components/ui/TableSortButton.vue'
 
 const props = defineProps<{
   albums: Album[]
@@ -158,53 +62,17 @@ const { shouldShowColumn } = useTableColumnVisibility(albumTableColumnConfig)
 const rowHeight = useSizeVariable('--m3-row-height', 72)
 const { field, order } = toRefs(props)
 
+const columns: { name: AlbumTableColumnName; label: string }[] = [
+  { name: 'name', label: 'Name' },
+  { name: 'artist', label: 'Artist' },
+  { name: 'time', label: 'Time' },
+  { name: 'year', label: 'Year' },
+  { name: 'rating', label: 'Rating' },
+  { name: 'favorite', label: 'Favorite' },
+]
+
 const onSort = (clicked: AlbumListSortField) => {
   const nextOrder: SortOrder = field.value === clicked && order.value === 'asc' ? 'desc' : 'asc'
   emit('sort', clicked, nextOrder)
 }
 </script>
-
-<style lang="postcss" scoped>
-@reference '@css/app.pcss';
-.album-table-wrap {
-  .album-table-header > span {
-    @apply text-left p-2 align-middle truncate;
-
-    &.name {
-      @apply flex-1 min-w-0 flex items-center;
-    }
-
-    &.artist {
-      @apply basis-48;
-    }
-
-    &.time {
-      @apply basis-24;
-    }
-
-    &.year {
-      @apply basis-24;
-    }
-
-    &.rating {
-      @apply basis-32 flex items-center;
-    }
-
-    &.favorite {
-      @apply basis-16 text-center;
-    }
-
-    &.extra {
-      @apply basis-12 text-center;
-    }
-  }
-
-  .album-table-header {
-    @apply tracking-widest uppercase cursor-pointer text-(--schemes-on-surface-variant);
-
-    .extra {
-      @apply px-0;
-    }
-  }
-}
-</style>

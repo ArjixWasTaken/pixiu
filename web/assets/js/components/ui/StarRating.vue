@@ -2,6 +2,7 @@
   <span
     role="radiogroup"
     :aria-label="`Rating: ${currentRating} of 5 stars`"
+    :class="size"
     class="inline-flex items-center gap-0.5"
     @mouseleave="hover = 0"
   >
@@ -22,7 +23,7 @@
         class="sr-only"
         @change="onChange(star)"
       />
-      <M3Icon :fill="(hover || currentRating) >= star" :size="size === 'xs' ? 16 : 20" name="star" />
+      <M3Icon :fill="(hover || currentRating) >= star" :size="{ xs: 16, sm: 20, lg: 24 }[size]" name="star" />
       <span class="sr-only">Rate {{ star }} of 5</span>
     </label>
   </span>
@@ -46,7 +47,8 @@ const props = withDefaults(
   defineProps<{
     rateable?: Rateable
     rating?: number
-    size?: 'xs' | 'sm'
+    /** `lg`: for a finger, each star a 40px target. */
+    size?: 'xs' | 'sm' | 'lg'
   }>(),
   { size: 'sm' },
 )
@@ -100,5 +102,14 @@ const onClick = (event: MouseEvent, star: number) => {
   &.lit {
     color: var(--schemes-primary);
   }
+}
+
+/* For a finger: 40px targets, side by side. */
+.lg .star {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
 }
 </style>

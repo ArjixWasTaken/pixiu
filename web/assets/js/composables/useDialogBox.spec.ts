@@ -28,7 +28,7 @@ describe('useDialogBox', () => {
     showSuccessDialog('Success!')
     expect(successMock).toHaveBeenCalledWith('Success!')
 
-    showConfirmDialog('Are you sure?')
-    expect(confirmMock).toHaveBeenCalledWith('Are you sure?')
+    showConfirmDialog('Are you sure?', { action: 'Delete' })
+    expect(confirmMock).toHaveBeenCalledWith('Are you sure?', { action: 'Delete' })
   })
 })

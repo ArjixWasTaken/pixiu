@@ -154,21 +154,42 @@ fn top_genre(genres: &[GenreJson]) -> Option<String> {
         .map(|genre| genre_name(&genre.name))
 }
 
-fn genre_name(name: &str) -> String {
+/// A genre as MusicBrainz names it (lowercase), named as a tag would: each
+/// word capitalized, hyphenated parts too ("J-Pop"), small words left alone
+/// ("Drum and Bass"), initials in capitals ("EDM", "R&B").
+#[must_use]
+pub fn genre_name(name: &str) -> String {
     name.split(' ')
-        .map(|word| {
-            // "r&b" and the like are initials.
-            if word.contains('&') {
-                return word.to_uppercase();
+        .enumerate()
+        .map(|(index, word)| {
+            if index > 0 && SMALL_WORDS.contains(&word) {
+                return word.to_owned();
             }
-            let mut chars = word.chars();
-            chars.next().map_or_else(String::new, |first| {
-                first.to_uppercase().chain(chars).collect()
-            })
+            word.split('-')
+                .map(|part| {
+                    if part.contains('&') || INITIALS.contains(&part) {
+                        part.to_uppercase()
+                    } else {
+                        let mut chars = part.chars();
+                        chars.next().map_or_else(String::new, |first| {
+                            first.to_uppercase().chain(chars).collect()
+                        })
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("-")
         })
         .collect::<Vec<_>>()
         .join(" ")
 }
+
+/// Words a genre's name keeps in lowercase, unless they start it.
+const SMALL_WORDS: &[&str] = &["and", "n", "of", "the", "in", "to", "a", "de", "y"];
+
+/// Genres' initials, written in capitals.
+const INITIALS: &[&str] = &[
+    "aor", "bgm", "ebm", "edm", "idm", "mpb", "nwobhm", "nyhc", "rnb", "uk", "us", "usa",
+];
 
 #[derive(Deserialize)]
 struct CoverArtJson {
@@ -445,9 +466,13 @@ mod tests {
 
     #[test]
     fn genres_are_named_like_tags() {
-        assert_eq!(genre_name("drum and bass"), "Drum And Bass");
+        assert_eq!(genre_name("drum and bass"), "Drum and Bass");
         assert_eq!(genre_name("r&b"), "R&B");
-        assert_eq!(genre_name("j-pop"), "J-pop");
+        assert_eq!(genre_name("j-pop"), "J-Pop");
+        assert_eq!(genre_name("dance-punk revival"), "Dance-Punk Revival");
+        assert_eq!(genre_name("edm"), "EDM");
+        assert_eq!(genre_name("uk garage"), "UK Garage");
+        assert_eq!(genre_name("the blues"), "The Blues");
         assert_eq!(top_genre(&[]), None);
     }
 }

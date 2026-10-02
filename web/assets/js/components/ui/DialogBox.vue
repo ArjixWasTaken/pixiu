@@ -13,7 +13,7 @@
           <AlertDialogCancel v-if="showCancelButton" as-child>
             <M3Button variant="text">Cancel</M3Button>
           </AlertDialogCancel>
-          <M3Button variant="text" @click="answer(true)">OK</M3Button>
+          <M3Button variant="text" @click="answer(true)">{{ action }}</M3Button>
         </footer>
       </AlertDialogContent>
     </AlertDialogPortal>
@@ -31,6 +31,8 @@ import {
   AlertDialogTitle,
 } from 'reka-ui'
 import { computed, onBeforeUnmount, ref } from 'vue'
+import { useViewport } from '@/composables/useViewport'
+import { useBackToClose } from '@/composables/useBackToClose'
 
 import M3Button from '@/components/m3/M3Button.vue'
 import M3Icon from '@/components/m3/M3Icon.vue'
@@ -64,6 +66,13 @@ const body = computed(() => (!title.value && type.value === 'confirm' ? '' : mes
 let resolveAnswer: ((ok: boolean) => void) | null = null
 let frame = 0
 
+// On a phone, Back is Cancel.
+const { isMobile } = useViewport()
+useBackToClose(
+  computed(() => open.value && isMobile.value),
+  () => answer(false),
+)
+
 const answer = (ok: boolean) => {
   cancelAnimationFrame(frame)
   resolveAnswer?.(ok)
@@ -71,13 +80,17 @@ const answer = (ok: boolean) => {
   open.value = false
 }
 
-const show = (_type: DialogType, _message: string, _title: string = '') => {
+/** What the answering button says: the question's action (Delete, Discard…), else OK. */
+const action = ref('OK')
+
+const show = (_type: DialogType, _message: string, _title: string = '', _action = 'OK') => {
   // One at a time: a question still open goes unanswered.
   answer(false)
 
   type.value = _type
   message.value = _message
   title.value = _title
+  action.value = _action
   // On the next frame: the key that asked (Escape in a form, "Discard all changes?") would answer it too.
   frame = requestAnimationFrame(() => (open.value = true))
 
@@ -90,7 +103,9 @@ const success = async (message: string, title: string = '') => show('success', m
 const info = async (message: string, title: string = '') => show('info', message, title)
 const warning = async (message: string, title: string = '') => show('warning', message, title)
 const error = async (message: string, title: string = '') => show('danger', message, title)
-const confirm = async (message: string, title: string = '') => show('confirm', message, title)
+/** A yes-or-no question; `action` names the yes ("Delete"), as the button that answers it. */
+const confirm = async (message: string, { title = '', action }: { title?: string; action: string }) =>
+  show('confirm', message, title, action)
 
 defineExpose({ success, info, warning, error, confirm })
 </script>

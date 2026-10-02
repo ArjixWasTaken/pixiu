@@ -9,25 +9,21 @@
         </template>
 
         <template v-if="playables.length" #meta>
-          <span>{{ pluralize(playables, 'song') }}</span>
+          <span>{{ songCount }}</span>
           <span>{{ duration }}</span>
-
-          <a
-            v-if="downloadable"
-            class="download"
-            role="button"
-            title="Download all favorites"
-            @click.prevent="download"
-          >
-            Download all
-          </a>
-          <a v-if="canToggleOffline" role="button" @click.prevent="toggleOffline">
-            {{ allCached ? 'Remove offline copies' : 'Make available offline' }}
-          </a>
         </template>
 
         <template #controls>
-          <PlayableListControls v-if="playables.length" :config @play-all="playAll" @play-selected="playSelected" />
+          <PlayableListControls v-if="playables.length" :config @play-all="playAll" @play-selected="playSelected">
+            <M3IconButton
+              v-if="canToggleOffline"
+              :fill="allCached"
+              :icon="allCached ? 'check_circle' : 'arrow_circle_down'"
+              :label="allCached ? 'Remove offline copies' : 'Make available offline'"
+              @click.prevent="toggleOffline"
+            />
+            <M3IconButton v-if="downloadable" icon="download" label="Download all" @click.prevent="download" />
+          </PlayableListControls>
         </template>
       </ScreenHeader>
     </template>
@@ -74,6 +70,7 @@ import ScreenEmptyState from '@/components/ui/ScreenEmptyState.vue'
 import ScreenBase from '@/components/screens/ScreenBase.vue'
 import PlayableListSkeleton from '@/components/playable/playable-list/PlayableListSkeleton.vue'
 import M3Icon from '@/components/m3/M3Icon.vue'
+import M3IconButton from '@/components/m3/M3IconButton.vue'
 
 const playableStore = usePlayableStore()
 
@@ -95,6 +92,7 @@ const {
   onSwipe,
   sort: baseSort,
   config: listConfig,
+  songCount,
 } = usePlayableList(allPlayables, { type: 'Favorites' })
 
 listConfig.reorderable = true

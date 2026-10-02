@@ -74,7 +74,7 @@ const statusLabel = computed(() => {
     case 'queued':
       return 'Sync queued'
     case 'waiting':
-      return 'Waiting for a YouTube Music login'
+      return 'Waiting for you to sign in to YouTube Music'
     case 'failed':
       return 'Last sync failed'
     case 'never_synced':

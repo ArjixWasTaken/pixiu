@@ -23,10 +23,10 @@
       </label>
     </div>
 
-    <p class="m3-body-small px-4 text-(--schemes-on-surface-variant)">
+    <p v-if="!likedWatched" class="m3-body-small px-4 text-(--schemes-on-surface-variant)">
       Or
       <a class="text-(--schemes-primary)" role="button" @click.prevent="watchLiked">watch your liked music</a>
-      (needs a YouTube Music login).
+      (you sign in to YouTube Music for it).
     </p>
   </form>
 </template>
@@ -41,6 +41,9 @@ import { useErrorHandler } from '@/composables/useErrorHandler'
 import M3Switch from '@/components/m3/M3Switch.vue'
 import M3Button from '@/components/m3/M3Button.vue'
 import M3TextField from '@/components/m3/M3TextField.vue'
+
+/** Whether liked music is watched already: then it isn't offered. */
+defineProps<{ likedWatched?: boolean }>()
 
 const emit = defineEmits<{ (e: 'added'): void }>()
 

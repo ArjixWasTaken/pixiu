@@ -51,6 +51,8 @@ pub struct Services {
     pub throttle: Arc<pixiu_api::Throttle>,
     /// See [`ServerConfig`](pixiu_core::config::ServerConfig).
     pub trust_proxy_headers: bool,
+    /// Tells the event streams the server is shutting down.
+    shutdown: Arc<tokio::sync::watch::Sender<bool>>,
 }
 
 impl Services {
@@ -161,7 +163,14 @@ impl Services {
             mailer,
             throttle: Arc::default(),
             trust_proxy_headers: config.server.trust_proxy_headers,
+            shutdown: Arc::new(tokio::sync::watch::Sender::new(false)),
         })
+    }
+
+    /// Ends the web player's event streams, which would otherwise keep a
+    /// graceful shutdown waiting for as long as a player is open.
+    pub fn shut_down(&self) {
+        self.shutdown.send_replace(true);
     }
 
     /// What the web player's API needs.
@@ -181,6 +190,7 @@ impl Services {
             sso: Arc::clone(&self.sso),
             throttle: Arc::clone(&self.throttle),
             trust_proxy_headers: self.trust_proxy_headers,
+            shutdown: self.shutdown.subscribe(),
         }
     }
 
@@ -205,6 +215,9 @@ impl Services {
             }
             if let Err(error) = pixiu_jobs::enrich::backfill_genres(&mut db, &jobs).await {
                 tracing::error!(%error, "cannot queue the genres of matched albums");
+            }
+            if let Err(error) = pixiu_jobs::enrich::repair_genre_names(&mut db).await {
+                tracing::error!(%error, "cannot rename genres");
             }
         });
     }

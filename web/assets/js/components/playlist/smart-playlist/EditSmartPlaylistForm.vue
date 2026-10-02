@@ -72,14 +72,14 @@ const { data, loading, isPristine, handleSubmit } = useForm<UpdatePlaylistData>(
     await playlistStore.update(playlist, formData)
   },
   onSuccess: () => {
-    toastSuccess(`Playlist "${playlist.name}" updated.`)
+    toastSuccess(`Playlist “${playlist.name}” updated.`)
     eventBus.emit('PLAYLIST_UPDATED', playlist)
     close()
   },
 })
 
 const maybeClose = async () => {
-  if (isPristine() || (await showConfirmDialog('Discard all changes?'))) {
+  if (isPristine() || (await showConfirmDialog('Discard all changes?', { action: 'Discard' }))) {
     close()
   }
 }

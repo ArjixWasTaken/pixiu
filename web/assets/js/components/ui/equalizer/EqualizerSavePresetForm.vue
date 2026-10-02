@@ -28,7 +28,7 @@ const { data, isPristine, handleSubmit } = useForm<{ name: string }>({
 })
 
 const maybeCancel = async () => {
-  if (isPristine() || (await showConfirmDialog('Discard preset name?'))) {
+  if (isPristine() || (await showConfirmDialog('Discard the preset’s name?', { action: 'Discard' }))) {
     emit('cancel')
   }
 }

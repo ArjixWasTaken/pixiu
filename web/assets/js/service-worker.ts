@@ -5,6 +5,7 @@
  * - the player itself, precached at each build, so it opens without the server;
  * - what the player asks for at start-up, network first, so it starts with
  *   the last of it when the server can't be reached;
+ * - the fonts and icons (from Google Fonts), so they show offline too;
  * - the songs made available offline, on the player's request (see
  *   useOfflinePlayback), answering the audio element from them, seeking
  *   (Range requests) included.
@@ -12,7 +13,7 @@
 
 import { cleanupOutdatedCaches, createHandlerBoundToURL, precacheAndRoute } from 'workbox-precaching'
 import { NavigationRoute, registerRoute } from 'workbox-routing'
-import { NetworkFirst } from 'workbox-strategies'
+import { CacheFirst, NetworkFirst, StaleWhileRevalidate } from 'workbox-strategies'
 import { createPartialResponse } from 'workbox-range-requests'
 import { isStreamUrl, streamCacheKey } from '@/utils/streamCache'
 
@@ -22,6 +23,8 @@ declare const self: ServiceWorkerGlobalScope & {
 
 const AUDIO_CACHE_NAME = 'pixiu-audio-v1'
 const START_UP_CACHE_NAME = 'pixiu-start-up-v1'
+const FONT_STYLES_CACHE_NAME = 'pixiu-font-styles-v1'
+const FONTS_CACHE_NAME = 'pixiu-fonts-v1'
 
 // ---- The player ----
 
@@ -39,6 +42,32 @@ const isStartUp = (url: URL) => /^\/(api\/(bootstrap|playlists)|rest\/getPlayQue
 registerRoute(
   ({ url, request }) => request.method === 'GET' && url.origin === self.location.origin && isStartUp(url),
   new NetworkFirst({ cacheName: START_UP_CACHE_NAME, networkTimeoutSeconds: 5 }),
+)
+
+// ---- Fonts and icons ----
+
+// The stylesheets are kept, and refreshed in the background.
+registerRoute(
+  ({ url }) => url.origin === 'https://fonts.googleapis.com',
+  new StaleWhileRevalidate({ cacheName: FONT_STYLES_CACHE_NAME }),
+)
+
+// A font file never changes at its address (a new version comes at a new one), so a kept one is used as it is.
+registerRoute(
+  ({ url }) => url.origin === 'https://fonts.gstatic.com',
+  new CacheFirst({
+    cacheName: FONTS_CACHE_NAME,
+    plugins: [
+      {
+        // Only the latest few: older versions are left behind as the stylesheets move on.
+        cacheDidUpdate: async ({ cacheName }) => {
+          const cache = await caches.open(cacheName)
+          const kept = await cache.keys()
+          await Promise.all(kept.slice(0, -30).map(request => cache.delete(request)))
+        },
+      },
+    ],
+  }),
 )
 
 // ---- Songs made available offline ----

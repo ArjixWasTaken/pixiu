@@ -1,33 +1,18 @@
 <template>
   <ul role="none">
+    <SheetHeader :cover="album.cover" :subtitle="album.artist_name" :title="album.name" />
     <MenuItem @click="play">Play all</MenuItem>
     <MenuItem @click="shuffle">Shuffle all</MenuItem>
     <Separator />
     <MenuItem @click="toggleFavorite">{{ album.favorite ? 'Remove from favorites' : 'Add to favorites' }}</MenuItem>
-    <Separator />
-    <li
-      tabindex="-1"
-      class="px-4 py-2 focus:outline-hidden"
-      @mouseover="($event.currentTarget as HTMLLIElement).focus()"
-    >
-      <StarRating :rateable="album" @rate="closeContextMenu" />
-    </li>
-    <Separator />
-    <template v-if="allowEdit">
-      <MenuItem @click="edit">Edit…</MenuItem>
-    </template>
-    <Separator />
-    <template v-if="isStandardAlbum && allowDownload">
-      <MenuItem @click="download">Download</MenuItem>
-    </template>
-    <template v-if="canToggleOffline">
-      <Separator />
-      <MenuItem @click="toggleOffline">{{ allCached ? 'Remove offline copies' : 'Make available offline' }}</MenuItem>
-    </template>
-    <template v-if="musicBrainzUrl">
-      <Separator />
-      <MenuItem @click="viewOnMusicBrainz">View on MusicBrainz</MenuItem>
-    </template>
+    <RatingItem :rateable="album" />
+    <Separator v-if="hasMore" />
+    <MenuItem v-if="allowEdit" @click="edit">Edit…</MenuItem>
+    <MenuItem v-if="isStandardAlbum && allowDownload" @click="download">Download</MenuItem>
+    <MenuItem v-if="canToggleOffline" @click="toggleOffline">
+      {{ allCached ? 'Remove offline copies' : 'Make available offline' }}
+    </MenuItem>
+    <MenuItem v-if="musicBrainzUrl" @click="viewOnMusicBrainz">View on MusicBrainz</MenuItem>
   </ul>
 </template>
 
@@ -48,7 +33,8 @@ import { useRouter } from '@/composables/useRouter'
 import { useThirdPartyServices } from '@/composables/useThirdPartyServices'
 import { playback } from '@/services/playbackManager'
 
-import StarRating from '@/components/ui/StarRating.vue'
+import RatingItem from '@/components/ui/context-menu/RatingItem.vue'
+import SheetHeader from '@/components/ui/context-menu/SheetHeader.vue'
 
 const albumStore = useAlbumStore()
 const commonStore = useCommonStore()
@@ -60,7 +46,7 @@ const { album } = toRefs(props)
 const EditAlbumForm = defineAsyncComponent(() => import('@/components/album/EditAlbumForm.vue'))
 
 const { go, url } = useRouter()
-const { MenuItem, Separator, closeContextMenu, trigger } = useContextMenu()
+const { MenuItem, Separator, trigger } = useContextMenu()
 const { openModal } = useModal()
 const { currentUserCan } = usePolicies()
 
@@ -99,6 +85,15 @@ const canToggleOffline = computed(() => swReady.value)
 const albumSongs = ref<Playable[]>([])
 const allCached = computed(() => allPlayablesCached(albumSongs.value))
 
+/** Whether the last group (editing, copies, MusicBrainz) has anything in it. */
+const hasMore = computed(
+  () =>
+    allowEdit.value ||
+    (isStandardAlbum.value && allowDownload.value) ||
+    canToggleOffline.value ||
+    Boolean(musicBrainzUrl.value),
+)
+
 const toggleOffline = () =>
   trigger(async () => {
     const { toastSuccess } = useMessageToaster()
@@ -106,7 +101,7 @@ const toggleOffline = () =>
 
     if (allCached.value) {
       removePlayablesOfflineCache(albumSongs.value)
-      toastSuccess(`Removed offline versions for "${album.value.name}".`)
+      toastSuccess(`Removed offline versions for “${album.value.name}”.`)
     } else {
       makePlayablesAvailableOffline(albumSongs.value)
       toastSuccess(`Making ${pluralize(albumSongs.value, 'song')} available offline…`)

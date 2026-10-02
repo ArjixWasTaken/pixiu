@@ -64,4 +64,27 @@ describe('playableList.vue', () => {
     const { html } = await renderComponent(h.factory('song').make(5))
     expect(html()).toMatchSnapshot()
   })
+
+  it('acts on Enter and Ctrl+A only when a song has focus', async () => {
+    const { container, emitted } = await renderComponent(h.factory('song').make(3))
+    const list = container.querySelector<HTMLElement>('[data-testid="song-list"]')!
+
+    // A field in the list keeps its keys: an "a" is typed, Enter is its own.
+    const field = document.createElement('input')
+    list.prepend(field)
+    const typed = new KeyboardEvent('keydown', { key: 'a', bubbles: true, cancelable: true })
+    field.dispatchEvent(typed)
+    field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
+
+    expect(typed.defaultPrevented).toBe(false)
+    expect(emitted()['press:enter']).toBeUndefined()
+
+    // A song row's Enter is the list's.
+    const row = document.createElement('article')
+    row.className = 'song-item'
+    list.append(row)
+    row.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
+
+    expect(emitted()['press:enter']).toHaveLength(1)
+  })
 })

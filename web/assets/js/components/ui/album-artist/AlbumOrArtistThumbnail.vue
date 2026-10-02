@@ -9,7 +9,7 @@
   >
     <img alt="Thumbnail" :src="image" class="w-full aspect-square object-cover" loading="lazy" />
     <span class="hidden">{{ buttonLabel }}</span>
-    <span class="absolute top-0 left-0 w-full h-full group-hover:bg-black/40 no-hover:bg-black/40 z-10" />
+    <span class="absolute top-0 left-0 w-full h-full group-hover:bg-black/40 z-10" />
     <PlayIcon :size />
   </button>
 </template>
@@ -23,6 +23,7 @@ import { useRouter } from '@/composables/useRouter'
 import { useMessageToaster } from '@/composables/useMessageToaster'
 import { playback } from '@/services/playbackManager'
 import { useBranding } from '@/composables/useBranding'
+import { coverOfSize } from '@/services/subsonic'
 
 import PlayIcon from '@/components/ui/PlayIcon.vue'
 
@@ -40,7 +41,9 @@ const forAlbum = computed(() => entity.value.type === 'albums')
 const sortFields = computed(() => (forAlbum.value ? ['disc', 'track'] : ['album_id', 'disc', 'track']))
 
 const image = computed(() => {
-  return forAlbum.value ? (entity.value as Album).cover || defaultCover : (entity.value as Artist).image || defaultCover
+  return (
+    coverOfSize(forAlbum.value ? (entity.value as Album).cover : (entity.value as Artist).image, 256) || defaultCover
+  )
 })
 
 const buttonLabel = computed(() =>

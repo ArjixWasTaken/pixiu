@@ -14,15 +14,21 @@
           · {{ job.state === 'done' ? 'finished' : 'queued' }} {{ timeAgo(job.finished_at ?? job.created_at) }}
         </p>
         <p v-if="job.state === 'paused'" class="m3-body-small text-(--schemes-tertiary)">
-          {{ job.error ?? 'Paused until you log in to YouTube Music' }}
+          {{ job.error ?? 'Paused until you sign in to YouTube Music' }}
         </p>
-        <p
-          v-else-if="job.error && job.state === 'failed'"
-          :title="job.error"
-          class="m3-body-small truncate text-(--schemes-error)"
-        >
-          {{ job.error }}
-        </p>
+        <!-- What went wrong: two lines, the rest when asked for (a phone can't hover for a tooltip). -->
+        <template v-else-if="job.error && job.state === 'failed'">
+          <p :class="{ clamped: !showingError }" class="m3-body-small error">{{ job.error }}</p>
+          <button
+            v-if="job.error.length > 80"
+            :aria-expanded="showingError"
+            class="m3-label-medium details"
+            type="button"
+            @click="showingError = !showingError"
+          >
+            {{ showingError ? 'Less' : 'Details' }}
+          </button>
+        </template>
         <M3ProgressIndicator
           v-if="job.state === 'running' && job.progress !== null"
           :value="job.progress"
@@ -30,25 +36,31 @@
         />
       </div>
 
-      <M3Button v-if="job.state === 'failed'" icon="refresh" variant="tonal" @click.prevent="emit('retry')"
-        >Retry</M3Button
-      >
+      <template v-if="job.state === 'failed'">
+        <M3IconButton v-if="isMobile" icon="refresh" label="Retry" variant="tonal" @click.prevent="emit('retry')" />
+        <M3Button v-else icon="refresh" variant="tonal" @click.prevent="emit('retry')">Retry</M3Button>
+      </template>
     </M3Card>
   </li>
 </template>
 
 <script lang="ts" setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import type { HuntJob } from '@/services/huntingService'
 import { timeAgo } from '@/utils/formatters'
+import { useViewport } from '@/composables/useViewport'
 
 import M3Button from '@/components/m3/M3Button.vue'
 import M3Card from '@/components/m3/M3Card.vue'
 import M3Icon from '@/components/m3/M3Icon.vue'
+import M3IconButton from '@/components/m3/M3IconButton.vue'
 import M3ProgressIndicator from '@/components/m3/M3ProgressIndicator.vue'
 
 const props = defineProps<{ job: HuntJob }>()
 const emit = defineEmits<{ (e: 'retry'): void }>()
+
+const { isMobile } = useViewport()
+const showingError = ref(false)
 
 const kindLabel = computed(
   () =>
@@ -86,5 +98,22 @@ const icon = computed(
 
 .muted {
   color: var(--schemes-on-surface-variant);
+}
+
+.error {
+  color: var(--schemes-error);
+  overflow-wrap: anywhere;
+
+  &.clamped {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+  }
+}
+
+.details {
+  align-self: flex-start;
+  color: var(--schemes-primary);
 }
 </style>

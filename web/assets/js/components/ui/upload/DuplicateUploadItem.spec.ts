@@ -56,7 +56,7 @@ describe('duplicateUploadItem', () => {
 
     await h.user.click(screen.getByRole('button', { name: 'Discard' }))
 
-    expect(mockShowConfirmDialog).toHaveBeenCalledWith('Discard this duplicate upload?')
+    expect(mockShowConfirmDialog).toHaveBeenCalledWith('Discard this duplicate upload?', { action: 'Discard' })
     expect(mock).toHaveBeenCalledWith('dup-1')
   })
 

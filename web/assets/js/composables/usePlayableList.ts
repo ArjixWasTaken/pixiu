@@ -6,6 +6,7 @@ import { useCommonStore } from '@/stores/commonStore'
 import { useQueueStore } from '@/stores/queueStore'
 import { usePlayableStore } from '@/stores/playableStore'
 import { arrayify, defineAsyncComponent, provideReadonly } from '@/utils/helpers'
+import { pluralize } from '@/utils/formatters'
 import { eventBus } from '@/utils/eventBus'
 import { useFuzzySearch } from '@/composables/useFuzzySearch'
 import { useRouter } from '@/composables/useRouter'
@@ -160,7 +161,19 @@ export const usePlayableList = (
 
     const sortFields = collectSortFields()
 
-    return sortFields ? orderBy(filtered, sortFields, sortOrder.value) : filtered
+    // Text sorts as people read it: "Absolute" before "ACID", not after "ANTHEM".
+    const byField = (field: string) => (playable: Playable) => {
+      const value = (playable as any)[field]
+      return typeof value === 'string' ? value.toLocaleLowerCase() : value
+    }
+
+    return sortFields ? orderBy(filtered, sortFields.map(byField), sortOrder.value) : filtered
+  })
+
+  /** "870 songs"; while filtering, how many match: "12 of 870 songs". */
+  const songCount = computed(() => {
+    const all = pluralize(playables.value, 'song')
+    return filterKeywords.value ? `${filteredPlayables.value.length} of ${all}` : all
   })
 
   const onPressEnter = async (event: KeyboardEvent) => {
@@ -208,6 +221,7 @@ export const usePlayableList = (
     ThumbnailStack,
     playables,
     filteredPlayables,
+    songCount,
     config,
     context,
     downloadable,

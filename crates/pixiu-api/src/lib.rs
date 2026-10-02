@@ -71,6 +71,9 @@ pub struct ApiState {
     pub throttle: Arc<Throttle>,
     /// Whether `X-Forwarded-For` names the client (behind a reverse proxy).
     pub trust_proxy_headers: bool,
+    /// Turns true when the server shuts down: event streams end then, as a
+    /// graceful shutdown waits for every open response.
+    pub shutdown: tokio::sync::watch::Receiver<bool>,
 }
 
 /// Builds the API router. Paths are absolute (`/api/...`), so mount it

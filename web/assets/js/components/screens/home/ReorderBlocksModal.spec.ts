@@ -137,6 +137,27 @@ describe('ReorderBlocksModal', () => {
     expect(usePreferenceStore().home_blocks_hidden).toEqual([])
   })
 
+  it('moves a block up and down without dragging', async () => {
+    const { container } = h.render(Component, { props: { blocks } })
+
+    await h.user.click(screen.getByRole('button', { name: 'Move Top albums up' }))
+
+    expect(rowIds(container)).toEqual(['Recently played', 'Top albums', 'Latest albums', 'Random songs'])
+    expect(usePreferenceStore().home_blocks_order).toEqual([
+      'recently-played-songs',
+      'most-played-albums',
+      'recently-added-albums',
+      'random-songs',
+    ])
+
+    await h.user.click(screen.getByRole('button', { name: 'Move Recently played down' }))
+    expect(rowIds(container)[0]).toBe('Top albums')
+
+    // The first can't go up, the last can't go down.
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Move Top albums up' }).disabled).toBe(true)
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Move Random songs down' }).disabled).toBe(true)
+  })
+
   it('emits close when the Close button is clicked', async () => {
     const { emitted } = h.render(Component, { props: { blocks } })
 

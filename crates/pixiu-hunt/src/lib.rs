@@ -33,7 +33,7 @@ pub enum HuntError {
     NoAudio(String),
     #[error("download failed: {0}")]
     Download(String),
-    #[error("yt-dlp failed: {0}")]
+    #[error("yt-dlp couldn't download it: {0}")]
     YtDlp(String),
     #[error("media: {0}")]
     Media(#[from] pixiu_media::MediaError),
@@ -48,6 +48,10 @@ pub enum HuntError {
     #[error("background task failed: {0}")]
     Join(#[from] tokio::task::JoinError),
 }
+
+/// The album songs without one are filed under, per artist. It is no
+/// release, so MusicBrainz is not asked about it.
+pub const SINGLES: &str = "Singles";
 
 /// How often yt-dlp is tried again when YouTube refuses it.
 const YT_DLP_RETRIES: u32 = 2;
@@ -488,7 +492,7 @@ fn describe<'a>(
             track
                 .album
                 .as_ref()
-                .map_or("Singles", |album| album.title.as_str())
+                .map_or(SINGLES, |album| album.title.as_str())
         },
         |album| album.title.as_str(),
     );

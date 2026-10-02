@@ -106,7 +106,11 @@ const keep = async () => {
 }
 
 const remove = async (songs: Song[] | 'all', count: number) => {
-  if (!(await showConfirmDialog(`Delete ${pluralize(count, 'song')} from disk? This cannot be undone.`))) {
+  if (
+    !(await showConfirmDialog(`Delete ${pluralize(count, 'song')} from disk? This cannot be undone.`, {
+      action: 'Delete',
+    }))
+  ) {
     return
   }
 

@@ -68,7 +68,7 @@ const { data, loading, handleSubmit, isPristine } = useForm<{
 })
 
 const maybeClose = async () => {
-  if (isPristine() || (await showConfirmDialog('Discard this account?'))) {
+  if (isPristine() || (await showConfirmDialog('Discard this account?', { action: 'Discard' }))) {
     emit('cancel')
   }
 }

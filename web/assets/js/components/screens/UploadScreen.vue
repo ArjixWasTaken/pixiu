@@ -20,10 +20,14 @@
     >
       <label class="drop-prompt">
         <M3Icon :size="36" name="upload" />
-        <span class="m3-title-medium text-(--schemes-on-surface)">
+        <!-- A finger chooses; a mouse can drop too. -->
+        <span v-if="isTouch" class="m3-title-medium text-(--schemes-on-surface)">Choose files or zip archives</span>
+        <span v-else class="m3-title-medium text-(--schemes-on-surface)">
           {{ canDropFolders ? 'Drop files, folders or zip archives' : 'Drop files or zip archives' }}
         </span>
-        <span class="m3-body-medium">Or click to choose. They wait here for review before joining your library.</span>
+        <span class="m3-body-medium">
+          {{ isTouch ? 'Tap here.' : 'Or click to choose.' }} They wait here for review before joining your library.
+        </span>
         <input
           :accept="acceptAttribute"
           class="sr-only"
@@ -78,6 +82,7 @@ import { useUpload } from '@/composables/useUpload'
 import { useDialogBox } from '@/composables/useDialogBox'
 import { useMessageToaster } from '@/composables/useMessageToaster'
 import { useErrorHandler } from '@/composables/useErrorHandler'
+import { useViewport } from '@/composables/useViewport'
 
 import M3Button from '@/components/m3/M3Button.vue'
 import M3Icon from '@/components/m3/M3Icon.vue'
@@ -87,6 +92,7 @@ import UploadItem from '@/components/ui/upload/UploadItem.vue'
 import UploadSummary from '@/components/ui/upload/UploadSummary.vue'
 import OfferingBatchCard from '@/components/screens/hunting/OfferingBatchCard.vue'
 
+const { isTouch } = useViewport()
 const huntingStore = useHuntingStore()
 
 const acceptAttribute = acceptedExtensions.map(ext => `.${ext}`).join(',')
@@ -139,6 +145,12 @@ const changed = async () => {
   await huntingStore.refresh()
 }
 
+/** Reviewed (accepted or discarded): the uploads that brought them have done their part. */
+const reviewed = async () => {
+  uploadService.removeUploaded()
+  await changed()
+}
+
 const accept = async (batch: OfferingBatch) => {
   try {
     const { failures } = await huntingService.acceptBatch(batch.batch)
@@ -149,20 +161,20 @@ const accept = async (batch: OfferingBatch) => {
       toastSuccess('Accepted. The new songs are in your library and being looked up on MusicBrainz.')
     }
 
-    await changed()
+    await reviewed()
   } catch (error: unknown) {
     handleHttpError(error)
   }
 }
 
 const discard = async (batch: OfferingBatch) => {
-  if (!(await showConfirmDialog(`Discard ${pluralize(batch.files, 'file')}?`))) {
+  if (!(await showConfirmDialog(`Discard ${pluralize(batch.files, 'file')}?`, { action: 'Discard' }))) {
     return
   }
 
   try {
     await huntingService.discardBatch(batch.batch)
-    await changed()
+    await reviewed()
   } catch (error: unknown) {
     handleHttpError(error)
   }
@@ -200,8 +212,10 @@ onBeforeUnmount(() => eventBus.off('OFFERINGS_UPLOADED', changed))
     border-color 150ms linear,
     background-color 150ms linear;
 
-  &:hover {
-    border-color: var(--schemes-outline);
+  @media (hover: hover) {
+    &:hover {
+      border-color: var(--schemes-outline);
+    }
   }
 }
 

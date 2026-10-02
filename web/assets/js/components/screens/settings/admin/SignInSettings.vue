@@ -68,7 +68,11 @@ const saveSingleSignOn = async (form: Form) => {
 }
 
 const removeSingleSignOn = async () => {
-  if (!(await showConfirmDialog('Remove single sign-on? People sign in with their passwords again.'))) {
+  if (
+    !(await showConfirmDialog('Remove single sign-on? People sign in with their passwords again.', {
+      action: 'Remove',
+    }))
+  ) {
     return
   }
 

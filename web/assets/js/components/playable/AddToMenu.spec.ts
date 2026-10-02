@@ -56,7 +56,7 @@ describe('addToMenu.vue', () => {
   })
 
   it.each<[keyof AddToMenuConfig, string | string[]]>([
-    ['queue', ['queue-after-current', 'queue-bottom', 'queue-top', 'queue']],
+    ['queue', ['queue-after-current', 'queue-bottom']],
     ['favorites', 'add-to-favorites'],
   ])('renders disabling %s config', (configKey: keyof AddToMenuConfig, testIds: string | string[]) => {
     renderComponent({ [configKey]: false })
@@ -65,7 +65,6 @@ describe('addToMenu.vue', () => {
 
   it.each<[string, string, MethodOf<Required<ReturnType<typeof useQueueStore>>>]>([
     ['after current', 'queue-after-current', 'queueAfterCurrent'],
-    ['to top', 'queue-top', 'queueToTop'],
     ['to bottom', 'queue-bottom', 'queue'],
   ])(
     'queues songs %s',

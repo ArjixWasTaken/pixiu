@@ -5,6 +5,7 @@ import type { RouteName } from '@/config/routes'
 import { routes } from '@/config/routes'
 import { forceReloadWindow } from '@/utils/helpers'
 import { basePath, toClientPath } from '@/utils/clientUrl'
+import { closeOnBack } from '@/composables/useBackToClose'
 
 /** A route as the screens know it (see `useRouter`). */
 export interface Route {
@@ -61,6 +62,8 @@ export const createAppRouter = (history?: RouterHistory) => {
   }
 
   const router = createRouter({ history, routes: [...routes] })
+
+  closeOnBack(router)
 
   router.afterEach((to, from, failure) => {
     if (failure) {

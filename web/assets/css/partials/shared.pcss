@@ -62,8 +62,10 @@ textarea,
 
   color: var(--schemes-on-surface);
 
-  &:hover {
-    color: var(--schemes-primary);
+  @media (hover: hover) {
+    &:hover {
+      color: var(--schemes-primary);
+    }
   }
 }
 
@@ -78,4 +80,58 @@ button,
   &::selection {
     @apply bg-(--schemes-primary) text-(--schemes-on-primary);
   }
+}
+
+/*
+ * The albums' and artists' tables: a heading row and the rows under it share
+ * their columns. The cover lines up with the screen's content; the name's
+ * heading with the names.
+ */
+.list-table-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px 0 var(--screen-pad-x, 24px);
+
+  > span {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  > .name {
+    flex: 1 1 0;
+    gap: 16px;
+  }
+
+  > .artist {
+    flex: 0 0 12rem;
+  }
+
+  > .time,
+  > .year {
+    flex: 0 0 5rem;
+  }
+
+  > .rating {
+    flex: 0 0 7rem;
+  }
+
+  > .favorite,
+  > .extra {
+    flex: 0 0 3rem;
+    justify-content: center;
+  }
+
+  > .cover-aligned {
+    padding-left: calc(var(--m3-row-cover) + 16px);
+  }
+}
+
+.album-table-header,
+.artist-table-header {
+  height: 48px;
+  border-bottom: 1px solid var(--schemes-outline-variant);
+  background: var(--schemes-surface);
 }

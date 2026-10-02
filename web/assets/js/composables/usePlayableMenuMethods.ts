@@ -18,7 +18,6 @@ export const usePlayableMenuMethods = (playables: Ref<Playable[]>, close: Closur
   return {
     queueAfterCurrent: () => trigger(() => useQueueStore().queueAfterCurrent(playables.value)),
     queueToBottom: () => trigger(() => useQueueStore().queue(playables.value)),
-    queueToTop: () => trigger(() => useQueueStore().queueToTop(playables.value)),
     addToFavorites: () => trigger(() => usePlayableStore().favorite(playables.value)),
     removeFromFavorites: () => trigger(() => usePlayableStore().undoFavorite(playables.value)),
     removeFromQueue: () => trigger(() => useQueueStore().unqueue(playables.value)),

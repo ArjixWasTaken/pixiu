@@ -14,9 +14,9 @@
       </button>
       <button
         v-else
-        :style="{ width: `${size}px`, height: `${size}px` }"
+        :style="{ width: `${Math.max(size, 40)}px`, height: `${Math.max(size, 40)}px` }"
         aria-label="Account"
-        class="rounded-full cursor-pointer overflow-hidden block"
+        class="rounded-full cursor-pointer grid place-items-center shrink-0"
         data-testid="profile-dropdown-trigger"
         type="button"
       >
@@ -28,8 +28,9 @@
       <span class="m3-title-small block truncate">{{ currentUser.name }}</span>
       <span v-if="secondary" class="m3-body-small block truncate who-secondary">{{ secondary }}</span>
     </div>
-    <template v-for="item in items" :key="item.id">
-      <M3Divider class="my-2" />
+    <!-- Dividers between groups: the account, about píxiū, signing out. -->
+    <template v-for="(item, index) in items" :key="item.id">
+      <M3Divider v-if="index === 0 || item.id === 'about' || item.id === 'logout'" class="my-2" />
       <M3MenuItem :data-testid="`profile-menu-${item.id}`" :label="item.label()" tag="div" @click="choose(item)" />
     </template>
   </M3MenuPopover>
@@ -87,12 +88,12 @@ const openAbout = () => openModal<'ABOUT_KOEL'>(AboutKoelModal)
 const items = computed<ContextMenuAction[]>(() => [
   { id: 'account', label: () => 'Account', action: () => go(`${url('settings')}#account`) },
   { id: 'profile', label: () => 'Preferences', action: () => go(`${url('settings')}#preferences`) },
-  { id: 'logout', label: () => 'Log out', action: () => eventBus.emit('LOG_OUT') },
   {
     id: 'about',
     label: () => (shouldNotifyNewVersion.value ? 'New version available!' : `About ${appName}`),
     action: openAbout,
   },
+  { id: 'logout', label: () => 'Sign out', action: () => eventBus.emit('LOG_OUT') },
 ])
 
 const choose = (item: ContextMenuAction) => {

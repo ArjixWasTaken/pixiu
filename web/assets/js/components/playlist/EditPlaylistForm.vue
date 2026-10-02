@@ -63,7 +63,7 @@ const { data, loading, isPristine, handleSubmit } = useForm<UpdatePlaylistData>(
 })
 
 const maybeClose = async () => {
-  if (isPristine() || (await showConfirmDialog('Discard all changes?'))) {
+  if (isPristine() || (await showConfirmDialog('Discard all changes?', { action: 'Discard' }))) {
     close()
   }
 }

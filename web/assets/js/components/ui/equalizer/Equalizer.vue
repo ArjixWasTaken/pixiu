@@ -108,7 +108,7 @@ const confirmDelete = async () => {
     return
   }
 
-  if (!(await showConfirmDialog('Delete this preset?'))) {
+  if (!(await showConfirmDialog('Delete this preset?', { action: 'Delete' }))) {
     return
   }
 

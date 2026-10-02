@@ -35,6 +35,8 @@
       <EmptyLibraryHint />
     </ScreenEmptyState>
 
+    <LoadFailedState v-else-if="loadFailed" what="albums" @retry="refetch" />
+
     <ScreenEmptyState v-else-if="noFavoriteAlbums">
       <template #icon>
         <M3Icon name="album" />
@@ -54,8 +56,8 @@
       </div>
       <div
         v-else-if="showSkeletons"
-        class="grid gap-5 p-6"
-        :style="{ gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }"
+        :style="{ gridTemplateColumns: `repeat(auto-fill, minmax(${isMobile ? 140 : 180}px, 1fr))` }"
+        class="screen-bleed virtual-card-grid grid"
         role="status"
         aria-busy="true"
         aria-label="Loading"
@@ -99,6 +101,7 @@ import AlbumTableRowSkeleton from '@/components/album/AlbumTableRowSkeleton.vue'
 import ScreenHeader from '@/components/ui/ScreenHeader.vue'
 import ViewModeSwitch from '@/components/ui/ViewModeSwitch.vue'
 import ScreenEmptyState from '@/components/ui/ScreenEmptyState.vue'
+import LoadFailedState from '@/components/ui/LoadFailedState.vue'
 import ScreenBase from '@/components/screens/ScreenBase.vue'
 import AlbumListSorter from '@/components/album/AlbumListSorter.vue'
 import M3Chip from '@/components/m3/M3Chip.vue'
@@ -119,6 +122,8 @@ const {
   isFetching: loading,
   hasNextPage: moreAlbumsAvailable,
   fetchMore: fetchAlbums,
+  loadFailed,
+  refetch,
 } = useListPages(
   () => [
     'albums',
@@ -135,7 +140,8 @@ const {
       sort: preferences.albums_sort_field,
       order: preferences.albums_sort_order,
     }),
-  { enabled: () => !libraryEmpty.value },
+  // Re-sorting keeps the grid (and the focus on the sort button) until the new order comes.
+  { enabled: () => !libraryEmpty.value, keepPrevious: true },
 )
 
 const displayedAlbums = computed(() =>

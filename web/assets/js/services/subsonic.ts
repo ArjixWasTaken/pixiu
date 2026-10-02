@@ -85,6 +85,21 @@ const call = async <T = Record<string, any>>(method: string, params: Params = {}
 /** A cover (album `al-…`, artist `ar-…`, playlist `pl-…`) at a given size. */
 const coverUrl = (id: string | null | undefined, size?: number) => (id ? url('getCoverArt', { id, size }) : '')
 
+/**
+ * `cover`, asked for `size` pixels wide (twice what it's shown at, for sharp
+ * screens): the server resizes it once and keeps the copy, so a list of
+ * 40px thumbnails doesn't load 1200px covers. Other images stay as they are.
+ */
+export const coverOfSize = (cover: string | null | undefined, size: number) => {
+  if (!cover || !cover.includes('/rest/getCoverArt')) {
+    return cover || ''
+  }
+
+  const sized = new URL(cover, location.origin)
+  sized.searchParams.set('size', String(size))
+  return sized.toString()
+}
+
 const basename = (path?: string) => path?.split('/').pop()
 
 /** Subsonic's `Child` (a song) as koel's `Song`. */

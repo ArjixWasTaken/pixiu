@@ -53,6 +53,17 @@ defineExpose({ focus: () => input.value?.focus() })
   background: var(--schemes-surface-container-high);
   color: var(--schemes-on-surface);
   min-width: 0;
+  transition: background 150ms linear;
+
+  /* Typing goes here: the bar lights up, and keyboard focus gets a ring too. */
+  &:focus-within {
+    background: var(--schemes-surface-container-highest);
+  }
+
+  &:has(input:focus-visible) {
+    outline: 2px solid var(--schemes-secondary);
+    outline-offset: 2px;
+  }
 }
 
 .icon {

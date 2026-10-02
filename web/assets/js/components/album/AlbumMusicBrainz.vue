@@ -4,8 +4,10 @@
 
     <p v-if="details.enrichment === 'matched'">
       Matched to
-      <a :href="`https://musicbrainz.org/release/${details.mbid}`" rel="noopener" target="_blank">a release</a
-      >{{ details.enriched_at ? ` ${timeAgo(details.enriched_at)}` : '' }}; its tags follow it.
+      <a :href="`https://musicbrainz.org/release/${details.mbid}`" class="release-link" rel="noopener" target="_blank"
+        >“{{ details.title }}” by {{ details.artist }}</a
+      >
+      on MusicBrainz{{ details.enriched_at ? ` ${timeAgo(details.enriched_at)}` : '' }}; its tags follow it.
     </p>
     <p v-else-if="details.enrichment === 'review'" class="text-(--schemes-tertiary)">
       píxiū isn’t sure which release this is. Pick one below, or paste a MusicBrainz release link.
@@ -44,7 +46,7 @@
         class="flex-1"
         label="MusicBrainz release link"
         name="release"
-        placeholder="https://musicbrainz.org/release/…"
+        placeholder="Paste a MusicBrainz release link"
         required
       />
       <M3Button class="mt-2" type="submit">Use it</M3Button>
@@ -100,3 +102,11 @@ const { data, handleSubmit } = useForm<{ release: string }>({
   },
 })
 </script>
+
+<style scoped>
+.release-link {
+  color: var(--schemes-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+</style>

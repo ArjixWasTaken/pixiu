@@ -204,7 +204,7 @@ const displayedAlbumName = computed(() =>
 )
 
 const maybeClose = async () => {
-  if (isPristine() || (await showConfirmDialog('Discard all changes?'))) {
+  if (isPristine() || (await showConfirmDialog('Discard all changes?', { action: 'Discard' }))) {
     close()
   }
 }

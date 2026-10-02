@@ -141,8 +141,11 @@ time,
     z-index: -1;
   }
 
-  &:hover::before {
-    opacity: 0.08;
+  /* Only where something can hover: a tap would leave the tint behind. */
+  @media (hover: hover) {
+    &:hover::before {
+      opacity: 0.08;
+    }
   }
 
   &:focus-visible::before,

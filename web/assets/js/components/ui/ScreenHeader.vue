@@ -1,11 +1,14 @@
 <template>
   <header :class="[layout, { disabled, round: isArtist }]" class="screen-header">
-    <aside v-if="$slots.thumbnail && layout === 'expanded'" class="thumbnail">
+    <div v-if="$slots.thumbnail && layout === 'expanded'" class="thumbnail">
       <slot name="thumbnail" />
-    </aside>
+    </div>
 
-    <main class="body">
-      <span v-if="layout === 'expanded' && label" class="m3-label-large overline-text">{{ label }}</span>
+    <div class="body">
+      <!-- Its line is kept without a label, so every header puts its title in the same place. -->
+      <span v-if="layout === 'expanded'" :aria-hidden="!label" class="m3-label-large overline-text">
+        {{ label || '\u00a0' }}
+      </span>
       <div class="title-row">
         <h1 :class="titleClass" class="name">
           <slot />
@@ -21,7 +24,7 @@
       <div v-if="$slots.controls" class="controls">
         <slot name="controls" />
       </div>
-    </main>
+    </div>
   </header>
 </template>
 
@@ -117,15 +120,25 @@ const titleClass = computed(() => {
     }
   }
 
-  @media (max-width: 768px) {
+  @media (max-width: 768px), (max-height: 500px) and (pointer: coarse) {
     padding: 4px 16px 16px;
+
+    /* The cover above, the title under it with room to wrap. */
+    &.expanded {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 16px;
+    }
+
+    .name {
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+      white-space: normal;
+    }
 
     &.collapsed {
       padding: 4px 16px 12px;
-
-      .name {
-        white-space: normal;
-      }
     }
   }
 }
@@ -143,7 +156,7 @@ const titleClass = computed(() => {
   }
 
   /* On phones, smaller: enough to recognize the album or artist by. */
-  @media (max-width: 768px) {
+  @media (max-width: 768px), (max-height: 500px) and (pointer: coarse) {
     width: 96px;
     height: 96px;
     border-radius: 16px;
@@ -198,14 +211,21 @@ const titleClass = computed(() => {
   :deep(a) {
     color: inherit;
 
-    &:hover {
-      color: var(--schemes-primary);
+    @media (hover: hover) {
+      &:hover {
+        color: var(--schemes-primary);
+      }
     }
   }
 
   :deep(> * + *)::before {
     content: '·';
     margin: 0 6px;
+  }
+
+  /* "4 min 6 sec" stays on one line; the items wrap between them. */
+  :deep(> *) {
+    white-space: nowrap;
   }
 }
 

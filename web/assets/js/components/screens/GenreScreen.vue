@@ -43,7 +43,8 @@
       @scrolled-to-end="fetch"
     />
 
-    <ScreenEmptyState v-if="!songs.length && !loading">
+    <LoadFailedState v-if="loadFailed" what="songs" @retry="refetch" />
+    <ScreenEmptyState v-else-if="!songs.length && !loading">
       <template #icon>
         <M3Icon name="category" :size="96" />
       </template>
@@ -74,6 +75,7 @@ import { useContextMenu } from '@/composables/useContextMenu'
 import M3IconButton from '@/components/m3/M3IconButton.vue'
 import ScreenHeader from '@/components/ui/ScreenHeader.vue'
 import ScreenEmptyState from '@/components/ui/ScreenEmptyState.vue'
+import LoadFailedState from '@/components/ui/LoadFailedState.vue'
 import PlayableListSkeleton from '@/components/playable/playable-list/PlayableListSkeleton.vue'
 import ScreenHeaderSkeleton from '@/components/ui/ScreenHeaderSkeleton.vue'
 import ScreenBase from '@/components/screens/ScreenBase.vue'
@@ -103,6 +105,8 @@ const {
   items: songs,
   isFetching: loading,
   fetchMore: fetch,
+  loadFailed,
+  refetch,
 } = useListPages(
   () => ['genre', id.value, 'songs', { sort: sortField.value, order: sortOrder.value }],
   cursor => playableStore.paginateSongsByGenre(id.value!, { sort: sortField.value, order: sortOrder.value, cursor }),

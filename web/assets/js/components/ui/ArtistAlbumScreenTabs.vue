@@ -38,7 +38,7 @@ header {
   border-bottom: 1px solid var(--schemes-outline-variant);
   background: var(--schemes-surface);
 
-  @media (max-width: 768px) {
+  @media (max-width: 768px), (max-height: 500px) and (pointer: coarse) {
     padding: 0 4px;
   }
 }

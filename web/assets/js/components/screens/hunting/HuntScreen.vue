@@ -13,8 +13,10 @@
           label="Search YouTube Music"
           leading-icon="search"
           name="q"
+          autocorrect="off"
           placeholder="Artist, album or song"
           required
+          spellcheck="false"
           type="search"
         />
         <M3Button :disabled="searching" type="submit">Search</M3Button>

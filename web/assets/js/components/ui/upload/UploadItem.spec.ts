@@ -65,7 +65,7 @@ describe('uploadItem.vue', () => {
 
     await h.user.click(screen.getByRole('button', { name: 'Abort' }))
 
-    expect(mockShowConfirmDialog).toHaveBeenCalledWith('Abort this upload?')
+    expect(mockShowConfirmDialog).toHaveBeenCalledWith('Stop this upload?', { action: 'Stop upload' })
     expect(mock).toHaveBeenCalled()
   })
 
@@ -76,7 +76,7 @@ describe('uploadItem.vue', () => {
 
     await h.user.click(screen.getByRole('button', { name: 'Abort' }))
 
-    expect(mockShowConfirmDialog).toHaveBeenCalledWith('Abort this upload?')
+    expect(mockShowConfirmDialog).toHaveBeenCalledWith('Stop this upload?', { action: 'Stop upload' })
     expect(mock).not.toHaveBeenCalled()
   })
 

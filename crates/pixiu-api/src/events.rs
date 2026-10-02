@@ -17,6 +17,13 @@ use crate::{ApiState, Session, sources::state_name};
 /// Job progress arrives in bursts; tell the player at most this often.
 const JOB_EVENT_GAP: Duration = Duration::from_millis(300);
 
+/// Resolves once the server shuts down; never, if nothing can tell it to.
+async fn shutting_down(shutdown: &mut tokio::sync::watch::Receiver<bool>) {
+    if shutdown.wait_for(|stopping| *stopping).await.is_err() {
+        std::future::pending::<()>().await;
+    }
+}
+
 /// The next change to one of `owner`'s jobs; a missed burst counts as one.
 async fn next_job_change(
     jobs: &mut tokio::sync::broadcast::Receiver<pixiu_jobs::JobUpdate>,
@@ -43,28 +50,33 @@ pub(crate) async fn stream(
         .await
         .ok()
         .map(|warden| warden.subscribe());
-    let events = stream::unfold((jobs, health), move |(mut jobs, mut health)| async move {
-        let session_changed = async {
-            match health.as_mut() {
-                Some(health) => {
-                    health.changed().await.ok()?;
-                    Some(health.borrow_and_update().state)
+    let shutdown = state.shutdown.clone();
+    let events = stream::unfold(
+        (jobs, health, shutdown),
+        move |(mut jobs, mut health, mut shutdown)| async move {
+            let session_changed = async {
+                match health.as_mut() {
+                    Some(health) => {
+                        health.changed().await.ok()?;
+                        Some(health.borrow_and_update().state)
+                    }
+                    None => std::future::pending().await,
                 }
-                None => std::future::pending().await,
-            }
-        };
-        let event = tokio::select! {
-            changed = next_job_change(&mut jobs, owner) => {
-                changed?;
-                tokio::time::sleep(JOB_EVENT_GAP).await;
-                while !matches!(jobs.try_recv(), Err(TryRecvError::Empty | TryRecvError::Closed)) {}
-                Event::default().event("jobs").data("changed")
-            },
-            current = session_changed => {
-                Event::default().event("session").data(state_name(current?))
-            },
-        };
-        Some((Ok(event), (jobs, health)))
-    });
+            };
+            let event = tokio::select! {
+                changed = next_job_change(&mut jobs, owner) => {
+                    changed?;
+                    tokio::time::sleep(JOB_EVENT_GAP).await;
+                    while !matches!(jobs.try_recv(), Err(TryRecvError::Empty | TryRecvError::Closed)) {}
+                    Event::default().event("jobs").data("changed")
+                },
+                current = session_changed => {
+                    Event::default().event("session").data(state_name(current?))
+                },
+                () = shutting_down(&mut shutdown) => return None,
+            };
+            Some((Ok(event), (jobs, health, shutdown)))
+        },
+    );
     Sse::new(events).keep_alive(KeepAlive::default())
 }

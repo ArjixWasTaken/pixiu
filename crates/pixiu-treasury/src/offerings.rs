@@ -17,9 +17,12 @@ use crate::{
     tags::{self, AudioInfo, Cover, TagError},
 };
 
-/// Extensions of the audio formats píxiū accepts.
+/// Extensions of the audio formats píxiū accepts. The format itself is read
+/// from the content: `ogx` is any Ogg file, as browsers sometimes save Opus
+/// downloads. The web player has a copy of this list, in `web/index.html`.
 pub const AUDIO_EXTENSIONS: &[&str] = &[
-    "mp3", "flac", "ogg", "oga", "opus", "m4a", "aac", "wav", "aif", "aiff", "wv", "ape", "mpc",
+    "mp3", "flac", "ogg", "oga", "ogx", "opus", "spx", "m4a", "aac", "wav", "aif", "aiff", "wv",
+    "ape", "mpc",
 ];
 
 /// Stems of image files treated as the album cover, like `folder.jpg`.

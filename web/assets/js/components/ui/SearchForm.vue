@@ -19,40 +19,55 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef } from 'vue'
+import { onBeforeUnmount, onMounted, ref, useTemplateRef } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import { eventBus } from '@/utils/eventBus'
 import { useRouter } from '@/composables/useRouter'
-import { useViewport } from '@/composables/useViewport'
 
 import M3SearchBar from '@/components/m3/M3SearchBar.vue'
 
 const props = withDefaults(defineProps<{ autofocus?: boolean }>(), { autofocus: false })
 const emit = defineEmits<{ (e: 'focus-change', focused: boolean): void }>()
 
-const { go, url, onRouteChanged } = useRouter()
-const { isMobile } = useViewport()
+const { go, replace, url, isCurrentScreen, getRouteParam, onRouteChanged } = useRouter()
 
 const placeholder = 'Search'
 
 const bar = useTemplateRef('bar')
-const q = ref('')
 
-let onInput = () => {
-  const trimmed = q.value.trim()
-  trimmed && eventBus.emit('SEARCH_KEYWORDS_CHANGED', trimmed)
+/** What the search screens are looking for: the `q` of their URL. */
+const searched = () => (isCurrentScreen('Search.Excerpt', 'Search.Playables') ? getRouteParam('q') || '' : '')
+
+const q = ref(searched())
+
+const resultsFor = (words: string) => (words ? `${url('search')}?q=${encodeURIComponent(words)}` : url('search'))
+
+/**
+ * The words go in the search screen's URL, so the results and the field agree,
+ * and Back and reloads bring both back. While on the results, the URL is
+ * replaced word by word; from elsewhere, the results open as a new page.
+ */
+const search = () => {
+  const words = q.value.trim()
+
+  if (isCurrentScreen('Search.Excerpt')) {
+    words !== searched() && replace(resultsFor(words))
+  } else if (words) {
+    go(resultsFor(words))
+  }
 }
 
-if (!window.RUNNING_UNIT_TESTS) {
-  onInput = useDebounceFn(onInput, 500)
+const debouncedSearch = window.RUNNING_UNIT_TESTS ? search : useDebounceFn(search, 400)
+
+const onInput = () => debouncedSearch()
+
+const onSubmit = () => {
+  const words = q.value.trim()
+  words && go(resultsFor(words))
 }
 
-const onSubmit = () => go(url('search'))
-
-const onFocus = () => {
-  emit('focus-change', true)
-  isMobile.value || go(url('search'))
-}
+// Focusing the field is not searching yet: Tab passes through it without leaving the page.
+const onFocus = () => emit('focus-change', true)
 
 const onBlur = () => emit('focus-change', false)
 
@@ -65,10 +80,10 @@ onMounted(() => {
 
 onBeforeUnmount(() => eventBus.off('FOCUS_SEARCH_FIELD', focus))
 
-// Leaving the results leaves the search behind too.
-onRouteChanged(route => {
-  if (!route.screen.startsWith('Search.')) {
-    q.value = ''
-  }
+// Leaving the results leaves the search behind; coming back to them (Back,
+// a link) brings their words back. Words still being typed stay as they are.
+onRouteChanged(() => {
+  const words = searched()
+  words !== q.value.trim() && (q.value = words)
 })
 </script>

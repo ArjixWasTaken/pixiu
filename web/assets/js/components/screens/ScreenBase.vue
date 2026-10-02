@@ -1,6 +1,6 @@
 <template>
   <section class="max-h-full min-h-full w-full flex flex-col transform-gpu overflow-hidden">
-    <main class="screen-body flex flex-col flex-1 place-content-start overflow-y-auto">
+    <main ref="body" class="screen-body flex flex-col flex-1 place-content-start overflow-y-auto">
       <!-- In the scroller, so the header scrolls away; what must stay in reach is sticky. -->
       <div v-if="$slots.header" :class="{ tinted: tint }" class="screen-head">
         <slot name="header" />
@@ -11,7 +11,8 @@
 </template>
 
 <script lang="ts" setup>
-import { toRef } from 'vue'
+import { useEventListener } from '@vueuse/core'
+import { onActivated, toRef, useTemplateRef } from 'vue'
 import { useCoverTint } from '@/composables/useCoverTheme'
 
 const props = withDefaults(
@@ -23,6 +24,26 @@ const props = withDefaults(
 )
 
 const tint = useCoverTint(toRef(props, 'tintFrom'))
+
+const body = useTemplateRef('body')
+
+// A screen kept alive while away loses its scroll position (the browser
+// resets it when the screen leaves the page): it comes back where it was.
+let scrollTop = 0
+useEventListener(body, 'scroll', () => (scrollTop = body.value?.scrollTop ?? 0), { passive: true })
+
+onActivated(() => {
+  const el = body.value
+
+  if (!el) {
+    return
+  }
+
+  el.scrollTop = scrollTop
+  // Virtual lists draw the rows for where the screen is now, even when that
+  // didn't change.
+  el.dispatchEvent(new Event('scroll'))
+})
 </script>
 
 <style lang="postcss" scoped>
@@ -37,7 +58,7 @@ main {
   position: relative;
   padding: 0 var(--screen-pad-x) var(--screen-pad-bottom);
 
-  @media (max-width: 768px) {
+  @media (max-width: 768px), (max-height: 500px) and (pointer: coarse) {
     --screen-pad-x: 16px;
     --screen-pad-bottom: 16px;
   }

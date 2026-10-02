@@ -196,6 +196,12 @@ async fn original(
                     .headers_mut()
                     .insert(header::CONTENT_DISPOSITION, disposition);
             }
+            // Browsers keep the name only if they take the content type as
+            // given: Firefox sniffs Ogg Opus as Ogg and saves it as `.ogx`.
+            response.headers_mut().insert(
+                header::X_CONTENT_TYPE_OPTIONS,
+                HeaderValue::from_static("nosniff"),
+            );
         }
     }
     response

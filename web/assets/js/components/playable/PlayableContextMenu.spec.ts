@@ -145,47 +145,37 @@ describe('playableContextMenu.vue', () => {
     expect(downloadMock).toHaveBeenCalledWith(playables)
   })
 
-  it('queues', async () => {
+  it('adds to the queue', async () => {
     const queueMock = h.mock(useQueueStore(), 'queue')
     const { playables } = await renderComponent()
 
-    await h.user.click(screen.getByText('Add to'))
-    await h.user.click(screen.getByText('Queue'))
+    // With nothing playing, nothing to play next.
+    expect(screen.queryByText('Play next')).toBeNull()
+    await h.user.click(screen.getByText('Add to queue'))
 
     expect(queueMock).toHaveBeenCalledWith(playables)
   })
 
-  it('queues after current', async () => {
+  it('plays next', async () => {
     fillQueue()
     const queueMock = h.mock(useQueueStore(), 'queueAfterCurrent')
     const { playables } = await renderComponent()
 
-    await h.user.click(screen.getByText('Add to'))
-    await h.user.click(screen.getByText('After current song'))
+    await h.user.click(screen.getByText('Play next'))
 
     expect(queueMock).toHaveBeenCalledWith(playables)
   })
 
-  it('queues to bottom', async () => {
-    fillQueue()
-    const queueMock = h.mock(useQueueStore(), 'queue')
-    const { playables } = await renderComponent()
+  it('has separators only between groups', async () => {
+    await renderComponent()
 
-    await h.user.click(screen.getByText('Add to'))
-    await h.user.click(screen.getByText('Bottom of queue'))
+    const items = [...document.querySelector('[role=menu] > ul')!.children]
+    const separators = items.map(item => item.getAttribute('role') === 'separator')
+    expect(separators).toContain(true)
 
-    expect(queueMock).toHaveBeenCalledWith(playables)
-  })
-
-  it('queues to top', async () => {
-    fillQueue()
-    const queueMock = h.mock(useQueueStore(), 'queueToTop')
-    const { playables } = await renderComponent()
-
-    await h.user.click(screen.getByText('Add to'))
-    await h.user.click(screen.getByText('Top of queue'))
-
-    expect(queueMock).toHaveBeenCalledWith(playables)
+    expect(separators[0]).toBe(false)
+    expect(separators.at(-1)).toBe(false)
+    expect(separators.some((separator, i) => separator && separators[i + 1])).toBe(false)
   })
 
   it('removes from queue', async () => {

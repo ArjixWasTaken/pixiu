@@ -20,43 +20,48 @@ describe('searchForm.vue', () => {
     expect(screen.getByRole('searchbox')).toBe(document.activeElement)
   })
 
-  it('goes to search screen when search box is focused', async () => {
+  it('stays put when the search box is only focused', async () => {
     const mock = h.mock(Router, 'go')
+    await h.visit('/albums')
     h.render(Component)
 
     await h.user.click(screen.getByRole('searchbox'))
 
-    expect(mock).toHaveBeenCalledWith('/search')
+    expect(mock).not.toHaveBeenCalled()
   })
 
-  it('emits an event when search query is changed', async () => {
-    const mock = h.mock(eventBus, 'emit')
+  it('opens the results for what is typed', async () => {
+    const mock = h.mock(Router, 'go')
+    await h.visit('/home')
     h.render(Component)
 
     await h.type(screen.getByRole('searchbox'), 'hey')
 
-    expect(mock).toHaveBeenCalledWith('SEARCH_KEYWORDS_CHANGED', 'hey')
+    expect(mock).toHaveBeenCalledWith('/search?q=hey')
   })
 
-  it('goes to the search screen if the form is submitted', async () => {
+  it('opens the results for the words when the form is submitted', async () => {
     const goMock = h.mock(Router, 'go')
     h.render(Component)
 
-    await h.type(screen.getByRole('searchbox'), 'hey{Enter}')
+    await h.type(screen.getByRole('searchbox'), 'lo & behold{Enter}')
 
-    expect(goMock).toHaveBeenCalledWith('/search')
+    expect(goMock).toHaveBeenLastCalledWith('/search?q=lo%20%26%20behold')
   })
 
-  it('leaves the search behind when leaving the results', async () => {
+  it('shows the words of the results it is on, and leaves them behind elsewhere', async () => {
     h.render(Component)
-    await h.visit('/search')
-    await h.type(screen.getByRole('searchbox'), 'coldplay')
-
-    await h.visit('/search')
+    await h.visit('/search?q=coldplay')
+    await h.tick()
     expect(screen.getByRole<HTMLInputElement>('searchbox').value).toBe('coldplay')
 
     await h.visit('/home')
     await h.tick()
     expect(screen.getByRole<HTMLInputElement>('searchbox').value).toBe('')
+
+    // Back to the results, as with the Back button.
+    await h.visit('/search?q=coldplay')
+    await h.tick()
+    expect(screen.getByRole<HTMLInputElement>('searchbox').value).toBe('coldplay')
   })
 })

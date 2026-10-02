@@ -41,19 +41,6 @@ describe('usePlayableMenuMethods', () => {
     expect(useQueueStore().queue).toHaveBeenCalledWith(songs)
   })
 
-  it('queues to top', async () => {
-    const songs = [h.factory('song').make()]
-    const playables = ref<Playable[]>(songs)
-    const close = vi.fn()
-
-    h.mock(useQueueStore(), 'queueToTop')
-
-    const { queueToTop } = usePlayableMenuMethods(playables, close)
-    await queueToTop()
-
-    expect(useQueueStore().queueToTop).toHaveBeenCalledWith(songs)
-  })
-
   it('adds to favorites', async () => {
     const songs = [h.factory('song').make()]
     const playables = ref<Playable[]>(songs)

@@ -67,7 +67,7 @@ const ssoProblem = computed(() => {
 
 onMounted(async () => {
   if (authService.hasRedirect()) {
-    toastWarning('Please log in first.')
+    toastWarning('Sign in first.')
   }
 
   if (ssoError) {

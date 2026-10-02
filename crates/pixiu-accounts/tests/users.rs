@@ -148,7 +148,12 @@ async fn new_passwords_sign_web_sessions_out() {
         .await
         .unwrap();
     let mut keys = Vec::new();
-    for name in [users::WEB_SESSION, users::WEB_SESSION, "Phone"] {
+    for name in [
+        users::WEB_SESSION,
+        "Web session: Firefox on Linux",
+        "Phone",
+        "Web sessions of mine",
+    ] {
         keys.push(
             toasty::create!(ApiKey {
                 user_id: alice.id,
@@ -173,8 +178,9 @@ async fn new_passwords_sign_web_sessions_out() {
         .iter()
         .map(|key| key.id)
         .collect();
-    // The session that made the change stays; so do app keys.
-    assert_eq!(left, [keys[0], keys[2]]);
+    // The session that made the change stays; so do app keys, whatever
+    // their name.
+    assert_eq!(left, [keys[0], keys[2], keys[3]]);
     let user = User::get_by_id(&mut db, &alice.id).await.unwrap();
     assert!(pixiu_core::password::verify(
         "a new one!",

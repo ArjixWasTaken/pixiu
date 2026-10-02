@@ -18,7 +18,7 @@
         </template>
 
         <template v-if="filteredPlayables.length" #meta>
-          <span>{{ pluralize(filteredPlayables, 'song') }}</span>
+          <span>{{ songCount }}</span>
           <span>{{ duration }}</span>
         </template>
 
@@ -63,9 +63,11 @@
           </p>
         </template>
         <template v-else>
-          The playlist is currently empty.
+          The playlist is empty.
           <span class="block secondary">
-            Drag content into its name in the sidebar or use the &quot;Add to…&quot; button to fill it up.
+            Add songs with “Add to” in a song’s menu{{
+              isTouch ? '' : ', or drag them onto the playlist in the sidebar'
+            }}.
           </span>
         </template>
       </ScreenEmptyState>
@@ -77,7 +79,6 @@
 import { differenceBy } from 'lodash-es'
 import { computed, ref, watch } from 'vue'
 import { eventBus } from '@/utils/eventBus'
-import { pluralize } from '@/utils/formatters'
 import { logger } from '@/utils/logger'
 import type { ExcludedSong } from '@/services/huntingService'
 import { useHuntingStore } from '@/stores/huntingStore'
@@ -93,6 +94,7 @@ import { usePlayableListControls } from '@/composables/usePlayableListControls'
 import { useUserStorage } from '@/composables/useUserStorage'
 import { useContextMenu } from '@/composables/useContextMenu'
 import { useModal } from '@/composables/useModal'
+import { useViewport } from '@/composables/useViewport'
 
 import M3IconButton from '@/components/m3/M3IconButton.vue'
 import ScreenHeader from '@/components/ui/ScreenHeader.vue'
@@ -104,6 +106,7 @@ import PlayableListSkeleton from '@/components/playable/playable-list/PlayableLi
 import MirroredWatchPanel from '@/components/playlist/MirroredWatchPanel.vue'
 import M3Icon from '@/components/m3/M3Icon.vue'
 
+const { isTouch } = useViewport()
 const huntingStore = useHuntingStore()
 const playlistStore = usePlaylistStore()
 const playableStore = usePlayableStore()
@@ -173,6 +176,7 @@ const {
   onSwipe,
   sort: baseSort,
   config: listConfig,
+  songCount,
 } = usePlayableList(allPlayables, { type: 'Playlist' })
 
 const { PlayableListControls, config: controlsConfig } = usePlayableListControls('Playlist')
@@ -233,18 +237,22 @@ const includeAgain = async (song: ExcludedSong) => {
 }
 
 const fetchDetails = async (refresh = false) => {
-  if (loading.value) {
-    return
-  }
+  const shown = playlist.value!
 
   try {
     loading.value = true
+    const songs = await playableStore.fetchForPlaylist(shown, refresh)
 
-    allPlayables.value = await playableStore.fetchForPlaylist(playlist.value!, refresh)
+    // Another playlist may have opened meanwhile: it shows its own songs, once they come.
+    if (playlist.value === shown) {
+      allPlayables.value = songs
+    }
   } catch (error: unknown) {
     useErrorHandler().handleHttpError(error)
   } finally {
-    loading.value = false
+    if (playlist.value === shown) {
+      loading.value = false
+    }
   }
 }
 
@@ -265,8 +273,9 @@ watch(playlistId, async id => {
 
   context.entity = playlist.value
 
-  // Make sure this value isn't shared among different playlists.
+  // Make sure these aren't shared among different playlists.
   selectedPlayables.value = []
+  allPlayables.value = []
 
   currentState = getState(id)
 
@@ -274,6 +283,12 @@ watch(playlistId, async id => {
   filterKeywords.value = currentState.filterKeywords
 
   await fetchDetails()
+
+  // Another playlist opened meanwhile: its own run takes over.
+  if (playlistId.value !== id) {
+    return
+  }
+
   fetchMirror()
 
   listConfig.reorderable = currentState.sortField === 'position' && playlist.value.permissions.edit
@@ -308,10 +323,3 @@ eventBus.on('PLAYLIST_CONTENT_REMOVED', async ({ playlist: { id }, playables: re
 })
 eventBus.on('PLAYLIST_DELETED', async ({ id }) => id === playlistId.value && go(url('home')))
 </script>
-
-<style lang="postcss" scoped>
-:deep(.meta) > *:not(:first-child)::before {
-  content: '•';
-  margin: 0 0.25em 0 0;
-}
-</style>

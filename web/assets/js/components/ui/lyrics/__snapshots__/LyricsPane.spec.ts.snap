@@ -1,7 +1,11 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
 exports[`lyricsPane.vue > renders 1`] = `
-<div data-v-948712e6="" class="group relative h-full">
-  <div data-v-948712e6="" class="lyrics absolute inset-0 px-4 py-3 overflow-y-auto scroll-mask-y whitespace-pre-wrap leading-relaxed text-(--schemes-on-surface)" data-testid="plain-text-lyrics">Foo bar baz qux</div><br data-v-948712e6="" data-testid="magnifier" class="absolute top-4 right-4 opacity-0 group-hover:opacity-50 hover:opacity-100! transition-opacity no-hover:opacity-100!">
+<div data-v-948712e6="" class="flex flex-col h-full">
+  <!-- Above the lyrics, never over them. -->
+  <div data-v-948712e6="" class="flex justify-end px-2 pt-1 shrink-0"><br data-v-948712e6="" data-testid="magnifier"></div>
+  <div data-v-948712e6="" class="relative flex-1 min-h-0">
+    <div data-v-948712e6="" class="lyrics absolute inset-0 px-4 py-3 overflow-y-auto scroll-mask-y whitespace-pre-wrap leading-relaxed text-(--schemes-on-surface)" data-testid="plain-text-lyrics">Foo bar baz qux</div>
+  </div>
 </div>
 `;

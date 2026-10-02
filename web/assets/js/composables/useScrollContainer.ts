@@ -1,10 +1,13 @@
-import { useEventListener, useResizeObserver } from '@vueuse/core'
-import { onBeforeUnmount, onMounted, ref, shallowRef, useTemplateRef } from 'vue'
+import { useEventListener, useMutationObserver, useResizeObserver } from '@vueuse/core'
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, useTemplateRef } from 'vue'
+
+const isHTMLElement = (el: Element): el is HTMLElement => el instanceof HTMLElement
 
 /**
  * What scrolls a virtual list (its element is the `list` template ref). On a
  * screen, the screen does (`.screen-body`), so the screen's header scrolls away
- * above it; anywhere else, the list scrolls itself.
+ * above it; so does a pane that scrolls its lists (`[data-scrolls-lists]`, as
+ * the now playing panes); anywhere else, the list scrolls itself.
  */
 export const useScrollContainer = () => {
   const list = useTemplateRef<HTMLElement>('list')
@@ -15,6 +18,8 @@ export const useScrollContainer = () => {
   const margin = ref(0)
   /** The list's own width. */
   const width = ref(0)
+  /** The screen's parts (header, panels, the list's own…), whose sizes move the list. */
+  const screenParts = shallowRef<HTMLElement[]>([])
 
   const measure = () => {
     if (!list.value || !scroller.value) {
@@ -27,22 +32,42 @@ export const useScrollContainer = () => {
     width.value = list.value.clientWidth
   }
 
+  // On the next frame: changing the list's size within the observer's own round is a loop.
+  let frame = 0
+  const measureSoon = () => {
+    cancelAnimationFrame(frame)
+    frame = requestAnimationFrame(measure)
+  }
+  onBeforeUnmount(() => cancelAnimationFrame(frame))
+
+  const collectScreenParts = () => {
+    screenParts.value = nested.value && scroller.value ? [...scroller.value.children].filter(isHTMLElement) : []
+  }
+
   onMounted(() => {
-    scroller.value = list.value!.parentElement?.closest<HTMLElement>('.screen-body') ?? list.value!
+    scroller.value =
+      list.value!.parentElement?.closest<HTMLElement>('.screen-body, [data-scrolls-lists]') ?? list.value!
     nested.value = scroller.value !== list.value
+    collectScreenParts()
     measure()
   })
 
   // What is above the list can change height as the screen scrolls (its header shrinks).
   useEventListener(scroller, 'scroll', measure, { passive: true })
 
-  // On the next frame: changing the list's size within the observer's own round is a loop.
-  let frame = 0
-  useResizeObserver(list, () => {
-    cancelAnimationFrame(frame)
-    frame = requestAnimationFrame(measure)
-  })
-  onBeforeUnmount(() => cancelAnimationFrame(frame))
+  useResizeObserver(list, measureSoon)
+
+  // On a screen, what comes before the list can grow, shrink, appear or go (a
+  // loading placeholder, a panel opening): the list moves without changing size.
+  useResizeObserver(screenParts, measureSoon)
+  useMutationObserver(
+    computed(() => (nested.value ? scroller.value : null)),
+    () => {
+      collectScreenParts()
+      measureSoon()
+    },
+    { childList: true },
+  )
 
   return { list, scroller, nested, margin, width }
 }

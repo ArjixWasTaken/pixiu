@@ -2,10 +2,14 @@
 
 exports[`addToMenu.vue > renders 1`] = `
 <div data-v-69d9940b="" class="add-to w-full max-w-[256px] min-w-[200px] p-3 space-y-3" data-testid="add-to-menu" showing="true">
+  <ul data-v-69d9940b="" class="space-y-1.5">
+    <!-- With nothing playing, there's nothing for them to come after. -->
+    <!--v-if-->
+    <li data-v-69d9940b="" data-testid="queue-bottom" tabindex="0">Add to queue</li>
+  </ul>
   <section data-v-69d9940b="" class="existing-playlists">
     <p data-v-69d9940b="" class="mb-2 text-[0.9rem]">Add 5 songs to</p>
     <ul data-v-69d9940b="" class="scroll-mask-y relative max-h-48 overflow-y-scroll space-y-1.5">
-      <li data-v-69d9940b="" data-testid="queue" tabindex="0">Queue</li>
       <li data-v-69d9940b="" class="favorites" data-testid="add-to-favorites" tabindex="0"> Favorites </li>
       <li data-v-69d9940b="" class="playlist" data-testid="add-to-playlist" tabindex="0">Foo</li>
       <li data-v-69d9940b="" class="playlist" data-testid="add-to-playlist" tabindex="0">Bar</li>

@@ -50,6 +50,14 @@ export class QueuePlaybackService extends BasePlaybackService {
     return usePreferenceStore().repeat_mode === 'REPEAT_ALL' ? useQueueStore().last : undefined
   }
 
+  /**
+   * Where the current song starts, when it's one restored from the saved queue
+   * and not started yet (its media isn't loaded; see `resume`); otherwise null.
+   */
+  public get pendingStart() {
+    return useQueueStore().current && !this.media?.src ? useCommonStore().state.queue_state.playback_position : null
+  }
+
   public registerPlay(playable: Playable) {
     useRecentlyPlayedStore().add(playable)
     usePlayableStore().registerPlay(playable)
@@ -437,6 +445,13 @@ export class QueuePlaybackService extends BasePlaybackService {
 
   public seekTo(position: number): void {
     this.cancelCrossfade()
+
+    if (this.pendingStart !== null) {
+      // Not started yet: it starts there.
+      useCommonStore().state.queue_state.playback_position = position || 0
+      return
+    }
+
     this.media.currentTime = position || 0
   }
 

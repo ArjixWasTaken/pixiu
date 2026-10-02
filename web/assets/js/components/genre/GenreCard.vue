@@ -46,6 +46,11 @@ const onDragStart = (event: DragEvent) => startDragging(event, props.genre)
   border-radius: 12px;
   color: var(--schemes-on-surface);
 
+  @media (max-width: 768px), (max-height: 500px) and (pointer: coarse) {
+    min-height: 88px;
+    padding: 12px;
+  }
+
   &.tone-0 {
     background: var(--schemes-primary-container);
   }

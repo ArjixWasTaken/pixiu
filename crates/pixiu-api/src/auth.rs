@@ -1,9 +1,14 @@
 //! Signing in and out. A successful sign-in (or setting up a fresh server)
-//! mints an API key named "Web session", which the player keeps and sends
+//! mints an API key named after the browser ("Web session: Firefox on
+//! Linux"), which the player keeps and sends
 //! as a bearer token here and as `apiKey` to the Subsonic API. Signing out
 //! revokes it. Forgotten passwords and email confirmations are here too.
 
-use axum::{Json, extract::State, http::StatusCode};
+use axum::{
+    Json,
+    extract::State,
+    http::{HeaderMap, StatusCode, header},
+};
 use pixiu_accounts::{links, registration, users};
 use pixiu_db::{ApiKey, User, UserStatus, now, toasty};
 use serde::{Deserialize, Serialize};
@@ -72,12 +77,69 @@ pub(crate) fn new_key() -> String {
     format!("pixiu_{}", hex::encode(rand::random::<[u8; 24]>()))
 }
 
-/// Makes a new web session key for `user`; returns it in the clear, once.
-pub(crate) async fn mint_key(state: &ApiState, user: &User) -> ApiResult<String> {
+/// What a browser calls itself, as "Firefox on Linux": its own name, then
+/// its system's, from the User-Agent. Either may be unknown.
+fn browser_name(headers: &HeaderMap) -> Option<String> {
+    let agent = headers.get(header::USER_AGENT)?.to_str().ok()?;
+    let has = |needle: &str| agent.contains(needle);
+    // Order matters: Edge and Opera say Chrome, Chrome says Safari.
+    let browser = if has("Edg/") {
+        Some("Edge")
+    } else if has("OPR/") {
+        Some("Opera")
+    } else if has("Firefox/") || has("FxiOS/") {
+        Some("Firefox")
+    } else if has("Chromium/") {
+        Some("Chromium")
+    } else if has("Chrome/") || has("CriOS/") {
+        Some("Chrome")
+    } else if has("Safari/") {
+        Some("Safari")
+    } else {
+        None
+    };
+    let system = if has("Android") {
+        Some("Android")
+    } else if has("iPhone") || has("iPad") {
+        Some("iOS")
+    } else if has("Windows") {
+        Some("Windows")
+    } else if has("Macintosh") || has("Mac OS X") {
+        Some("macOS")
+    } else if has("CrOS") {
+        Some("ChromeOS")
+    } else if has("Linux") {
+        Some("Linux")
+    } else {
+        None
+    };
+    match (browser, system) {
+        (Some(browser), Some(system)) => Some(format!("{browser} on {system}")),
+        (Some(name), None) | (None, Some(name)) => Some(name.to_owned()),
+        (None, None) => None,
+    }
+}
+
+/// A web session's name: "Web session: Firefox on Linux", so people can
+/// tell their browsers apart in the API keys.
+fn session_name(headers: &HeaderMap) -> String {
+    browser_name(headers).map_or_else(
+        || users::WEB_SESSION.to_owned(),
+        |browser| format!("{}: {browser}", users::WEB_SESSION),
+    )
+}
+
+/// Makes a new web session key for `user`, named after the browser asking;
+/// returns it in the clear, once.
+pub(crate) async fn mint_key(
+    state: &ApiState,
+    user: &User,
+    headers: &HeaderMap,
+) -> ApiResult<String> {
     let key = new_key();
     toasty::create!(ApiKey {
         user_id: user.id,
-        name: users::WEB_SESSION,
+        name: session_name(headers),
         key_hash: ApiKey::hash(&key),
         created_at: now(),
     })
@@ -122,6 +184,7 @@ pub(crate) fn inactive(status: UserStatus) -> Option<ApiError> {
 pub(crate) async fn login(
     State(state): State<ApiState>,
     ClientIp(ip): ClientIp,
+    headers: HeaderMap,
     Json(credentials): Json<Credentials>,
 ) -> ApiResult<Json<Tokens>> {
     if state.throttle.blocked(Action::FailedLogin, &ip) {
@@ -153,7 +216,7 @@ pub(crate) async fn login(
         .exec(&mut db)
         .await?;
     }
-    Ok(Json(Tokens::of(mint_key(&state, &user).await?)))
+    Ok(Json(Tokens::of(mint_key(&state, &user, &headers).await?)))
 }
 
 #[derive(Deserialize)]
@@ -166,6 +229,7 @@ pub(crate) struct Claim {
 /// is none.
 pub(crate) async fn setup(
     State(state): State<ApiState>,
+    headers: HeaderMap,
     Json(claim): Json<Claim>,
 ) -> ApiResult<Json<Tokens>> {
     let user = users::create_first(
@@ -176,7 +240,7 @@ pub(crate) async fn setup(
     )
     .await?;
     tracing::info!(username = %user.username, "admin account created");
-    Ok(Json(Tokens::of(mint_key(&state, &user).await?)))
+    Ok(Json(Tokens::of(mint_key(&state, &user, &headers).await?)))
 }
 
 /// `DELETE /api/auth/session`: revokes the key this request came with.
@@ -240,6 +304,7 @@ pub(crate) struct Reset {
 /// password (when the account works).
 pub(crate) async fn reset(
     State(state): State<ApiState>,
+    headers: HeaderMap,
     Json(reset): Json<Reset>,
 ) -> ApiResult<Json<Tokens>> {
     let user = links::reset_password(
@@ -252,7 +317,7 @@ pub(crate) async fn reset(
     if let Some(refusal) = inactive(user.status) {
         return Err(refusal);
     }
-    Ok(Json(Tokens::of(mint_key(&state, &user).await?)))
+    Ok(Json(Tokens::of(mint_key(&state, &user, &headers).await?)))
 }
 
 #[derive(Deserialize)]
@@ -301,4 +366,46 @@ pub(crate) async fn register(
     )
     .await?;
     Ok(StatusCode::ACCEPTED)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn named(agent: &str) -> String {
+        let mut headers = HeaderMap::new();
+        headers.insert(header::USER_AGENT, agent.parse().unwrap());
+        session_name(&headers)
+    }
+
+    #[test]
+    fn web_sessions_are_named_after_the_browser() {
+        assert_eq!(
+            named("Mozilla/5.0 (X11; Linux x86_64; rv:156.0) Gecko/20100101 Firefox/156.0"),
+            "Web session: Firefox on Linux"
+        );
+        assert_eq!(
+            named(
+                "Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) \
+                 Chrome/153.0.0.0 Mobile Safari/537.36"
+            ),
+            "Web session: Chrome on Android"
+        );
+        assert_eq!(
+            named(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) \
+                 Chrome/153.0.0.0 Safari/537.36 Edg/153.0.0.0"
+            ),
+            "Web session: Edge on Windows"
+        );
+        assert_eq!(
+            named(
+                "Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) AppleWebKit/605.1.15 \
+                 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1"
+            ),
+            "Web session: Safari on iOS"
+        );
+        assert_eq!(named("curl/8.0"), "Web session");
+        assert_eq!(session_name(&HeaderMap::new()), "Web session");
+    }
 }

@@ -99,7 +99,7 @@ const copy = async () => {
 }
 
 const revoke = async (key: ApiKeyInfo) => {
-  if (!(await showConfirmDialog(`Revoke “${key.name}”? Whatever uses it is signed out.`))) {
+  if (!(await showConfirmDialog(`Revoke “${key.name}”? Whatever uses it is signed out.`, { action: 'Revoke' }))) {
     return
   }
 

@@ -10,8 +10,10 @@
       :max
       :min
       :step
+      :aria-valuetext="valueText"
       type="range"
       @change="emit('commit', value)"
+      @keydown="onKeydown"
     />
   </div>
 </template>
@@ -25,11 +27,23 @@ import { computed } from 'vue'
  * screen readers behave as usual.
  */
 const props = withDefaults(
-  defineProps<{ min?: number; max?: number; step?: number | 'any'; label?: string; disabled?: boolean }>(),
+  defineProps<{
+    min?: number
+    max?: number
+    step?: number | 'any'
+    /** How far an arrow key moves the handle; `step` when unset. Dragging keeps `step`. */
+    keyStep?: number
+    label?: string
+    /** What a screen reader says for the value ("1:05 of 3:18"). */
+    valueText?: string
+    disabled?: boolean
+  }>(),
   {
     min: 0,
     max: 100,
     step: 'any',
+    keyStep: undefined,
+    valueText: undefined,
     disabled: false,
   },
 )
@@ -37,6 +51,19 @@ const props = withDefaults(
 const emit = defineEmits<{ (e: 'commit', value: number): void }>()
 
 const value = defineModel<number>({ default: 0 })
+
+/** Arrow keys move by `keyStep`, where the native step would be too fine (seeking by 0.1 s). */
+const onKeydown = (event: KeyboardEvent) => {
+  const by = { ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1 }[event.key]
+
+  if (!props.keyStep || !by || props.disabled) {
+    return
+  }
+
+  event.preventDefault()
+  value.value = Math.min(props.max, Math.max(props.min, value.value + by * props.keyStep))
+  emit('commit', value.value)
+}
 
 const fraction = computed(() => {
   const span = props.max - props.min

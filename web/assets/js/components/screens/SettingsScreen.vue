@@ -78,7 +78,7 @@ const allTabs: SettingsTab[] = [
     icon: 'login',
     component: SignInSettings,
     group: 'Server',
-    columns: true,
+    // One column: a short card beside a long one left a hole.
     visible: () => currentUserCan.manageUsers(),
   },
   {
@@ -120,7 +120,7 @@ watch(currentTabId, () =>
   padding: 0 24px;
   border-bottom: 1px solid var(--schemes-outline-variant);
 
-  @media (max-width: 768px) {
+  @media (max-width: 768px), (max-height: 500px) and (pointer: coarse) {
     margin: 0 -16px;
     padding: 0 16px;
   }

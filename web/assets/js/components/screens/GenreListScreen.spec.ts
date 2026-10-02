@@ -3,6 +3,7 @@ import { screen, waitFor } from '@testing-library/vue'
 import { createHarness } from '@/__tests__/TestHarness'
 import { useCommonStore } from '@/stores/commonStore'
 import { useGenreStore } from '@/stores/genreStore'
+import { logger } from '@/utils/logger'
 import Component from './GenreListScreen.vue'
 
 describe('genreListScreen', () => {
@@ -47,5 +48,21 @@ describe('genreListScreen', () => {
     await renderComponent([])
 
     await screen.findByText('No genres yet.')
+  })
+
+  it('says when the genres couldn’t load, and tries again', async () => {
+    useCommonStore().state.song_length = 10
+    h.mock(logger, 'error')
+    const genres = h.factory('genre').make(2)
+    const fetchMock = h.mock(useGenreStore(), 'fetchAll').mockRejectedValueOnce(new Error('offline'))
+    fetchMock.mockResolvedValueOnce(genres)
+    h.render(Component, { global: { stubs: { GenreCard: h.stub('genre-card') } } })
+
+    await screen.findByText(/Couldn’t load the genres\./)
+    expect(screen.queryByText('No genres yet.')).toBeNull()
+
+    await h.user.click(screen.getByRole('button', { name: 'Try again' }))
+
+    await waitFor(() => expect(screen.queryAllByTestId('genre-card')).toHaveLength(2))
   })
 })

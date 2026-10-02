@@ -12,7 +12,7 @@
 
         <template #meta>
           <span>{{ pluralize(albumCount, 'album') }}</span>
-          <span>{{ pluralize(songs, 'song') }}</span>
+          <span>{{ songCount }}</span>
           <span>{{ duration }}</span>
         </template>
 
@@ -147,6 +147,7 @@ const {
   playAll,
   playSelected,
   onSwipe,
+  songCount,
 } = usePlayableList(songs, { type: 'Artist' })
 
 const useEncyclopedia = useMusicBrainz

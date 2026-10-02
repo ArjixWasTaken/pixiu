@@ -1,7 +1,15 @@
 <template>
   <div :class="{ loading }" class="audio-player" data-vue="AudioPlayer">
     <span class="time m3-label-medium text-right">{{ current }}</span>
-    <M3Slider v-model="position" :max="duration || 1" :step="0.1" class="slider" label="Seek" />
+    <M3Slider
+      v-model="position"
+      :key-step="5"
+      :max="duration || 1"
+      :step="0.1"
+      :value-text="`${current} of ${total}`"
+      class="slider"
+      label="Seek"
+    />
     <span class="time m3-label-medium">{{ total }}</span>
   </div>
 </template>

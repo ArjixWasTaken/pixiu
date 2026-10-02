@@ -50,7 +50,11 @@ const save = async (form: Form) => {
 }
 
 const remove = async () => {
-  if (!(await showConfirmDialog('Remove the mail server? píxiū stops sending email, password resets included.'))) {
+  if (
+    !(await showConfirmDialog('Remove the mail server? píxiū stops sending email, password resets included.', {
+      action: 'Remove',
+    }))
+  ) {
     return
   }
 

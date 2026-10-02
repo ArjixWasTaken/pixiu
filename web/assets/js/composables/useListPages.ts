@@ -1,8 +1,9 @@
 import type { InfiniteData } from '@tanstack/vue-query'
-import { useInfiniteQuery } from '@tanstack/vue-query'
+import { keepPreviousData, useInfiniteQuery } from '@tanstack/vue-query'
 import type { MaybeRefOrGetter } from 'vue'
 import { computed, toValue, watch } from 'vue'
 import { queryClient } from '@/services/queryClient'
+import { logger } from '@/utils/logger'
 import { useErrorHandler } from '@/composables/useErrorHandler'
 
 /** A page of a long list, and where the next one starts (`null`: there is none). */
@@ -32,7 +33,17 @@ export const dropFromListPages = (key: readonly unknown[], ids: Iterable<string>
 export const useListPages = <T extends { id: string }>(
   key: MaybeRefOrGetter<readonly unknown[]>,
   fetchPage: (cursor: string) => Promise<ListPage<T>>,
-  { enabled = true }: { enabled?: MaybeRefOrGetter<boolean> } = {},
+  {
+    enabled = true,
+    keepPrevious = false,
+  }: {
+    enabled?: MaybeRefOrGetter<boolean>
+    /**
+     * Whether the list shows what it had while another key (a new sort) loads,
+     * rather than nothing: for one list in another order, not for another list.
+     */
+    keepPrevious?: boolean
+  } = {},
 ) => {
   const queryKey = computed(() => toValue(key))
 
@@ -42,10 +53,8 @@ export const useListPages = <T extends { id: string }>(
     initialPageParam: '',
     getNextPageParam: page => page.nextCursor ?? undefined,
     enabled: computed(() => toValue(enabled)),
+    placeholderData: keepPrevious ? keepPreviousData : undefined,
   })
-
-  const { handleHttpError } = useErrorHandler()
-  watch(query.error, error => error && handleHttpError(error))
 
   /**
    * What came so far, page after page. Set to fewer (some were deleted, say),
@@ -62,6 +71,13 @@ export const useListPages = <T extends { id: string }>(
     },
   })
 
+  /** Whether the list couldn't load, with nothing to show: the screen says so, and offers to try again. */
+  const loadFailed = computed(() => query.isError.value && !query.isFetching.value && items.value.length === 0)
+
+  // Only a later page failing needs a toast; with nothing to show, the screen tells it (`loadFailed`).
+  const { handleHttpError } = useErrorHandler()
+  watch(query.error, error => error && (items.value.length ? handleHttpError(error) : logger.error(error)))
+
   /** The next page, unless it's on its way or there is none. */
   const fetchMore = async () => {
     if (query.hasNextPage.value && !query.isFetchingNextPage.value) {
@@ -69,5 +85,5 @@ export const useListPages = <T extends { id: string }>(
     }
   }
 
-  return { ...query, items, fetchMore }
+  return { ...query, items, loadFailed, fetchMore }
 }

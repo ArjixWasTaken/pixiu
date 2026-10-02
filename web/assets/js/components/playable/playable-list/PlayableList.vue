@@ -3,9 +3,7 @@
     ref="wrapper"
     class="playable-list-wrap relative flex flex-col flex-1 py-0"
     data-testid="song-list"
-    @keydown.delete.prevent.stop="handleDelete"
-    @keydown.enter.prevent.stop="handleEnter"
-    @keydown.a.prevent="selectAllWithKeyboard"
+    @keydown="onKeydown"
   >
     <PlayableListHeader v-if="config.hasHeader" @sort="sort" />
 
@@ -25,7 +23,7 @@
         @dragleave="onDragLeave"
         @dragstart="onDragStart(item, $event)"
         @play="onPlay(item.playable)"
-        @contextmenu.prevent="onContextMenu(item, $event)"
+        @contextmenu.prevent="isTouch || onContextMenu(item, $event)"
         @request-context-menu="onContextMenu(item, $event)"
         @dragover.prevent="onDragOver"
         @drop.prevent="onDrop(item, $event)"
@@ -163,6 +161,30 @@ const handleEnter = (event: KeyboardEvent) => {
   clearSelection()
 }
 
+/**
+ * Enter, Delete and Ctrl/Cmd+A act on the songs, when a song has focus: a
+ * field or button in the list (the filter, the sort menu, a row's buttons)
+ * keeps its keys ("a" types an "a", Enter opens a menu).
+ */
+const onKeydown = (event: KeyboardEvent) => {
+  if (!(event.target instanceof Element) || !event.target.matches('.song-item')) {
+    return
+  }
+
+  if (event.key === 'Enter') {
+    event.preventDefault()
+    event.stopPropagation()
+    handleEnter(event)
+  } else if (event.key === 'Delete' || event.key === 'Backspace') {
+    event.preventDefault()
+    event.stopPropagation()
+    handleDelete()
+  } else if (event.key.toLowerCase() === 'a' && (event.ctrlKey || event.metaKey)) {
+    event.preventDefault()
+    selectAllWithKeyboard(event)
+  }
+}
+
 const onDragStart = async (row: PlayableRow, event: DragEvent) => {
   // If the user is dragging an unselected row, clear the current selection.
   if (!isSelected(row)) {
@@ -247,9 +269,9 @@ const onDragEnd = () => {
 }
 
 const onClick = (row: PlayableRow, event: MouseEvent) => {
-  // If we're on a touch device, or if Ctrl/Cmd key is pressed, just toggle selection.
+  // A finger plays what it taps; its long press (or ⋮) opens the song's menu.
   if (isTouch.value) {
-    toggleSelected(row)
+    onPlay(row.playable)
     return
   }
 
@@ -270,6 +292,12 @@ const onClick = (row: PlayableRow, event: MouseEvent) => {
 }
 
 const onContextMenu = async (row: PlayableRow, event: MouseEvent) => {
+  // On a phone, the menu is for the song it was opened on; nothing gets selected.
+  if (isTouch.value) {
+    openContextMenu<'PLAYABLES'>(PlayableContextMenu, event, { playables: [row.playable] })
+    return
+  }
+
   if (!isSelected(row)) {
     clearSelection()
     toggleSelected(row)

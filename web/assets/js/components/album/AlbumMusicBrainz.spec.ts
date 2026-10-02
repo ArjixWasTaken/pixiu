@@ -27,10 +27,10 @@ describe('albumMusicBrainz.vue', () => {
     h.mock(huntingService, 'albumDetails').mockResolvedValue(details({ enriched_at: enrichedAt }))
     h.render(Component, { props: { album: h.factory('album').make() } })
 
-    const link = await screen.findByRole('link', { name: 'a release' })
+    const link = await screen.findByRole('link', { name: '“Groovy” by Kevin MacLeod' })
     expect(link.getAttribute('href')).toBe('https://musicbrainz.org/release/f00')
     expect(link.parentElement!.textContent!.replace(/\s+/g, ' ').trim()).toBe(
-      'Matched to a release 3 days ago; its tags follow it.',
+      'Matched to “Groovy” by Kevin MacLeod on MusicBrainz 3 days ago; its tags follow it.',
     )
   })
 })

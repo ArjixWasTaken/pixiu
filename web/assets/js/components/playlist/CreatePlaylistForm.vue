@@ -62,13 +62,13 @@ const { data, loading, isPristine, handleSubmit } = useForm<CreatePlaylistData>(
   onSubmit: async data => await playlistStore.store(data, playables),
   onSuccess: (playlist: Playlist) => {
     close()
-    toastSuccess(`Playlist "${playlist.name}" created.`)
+    toastSuccess(`Playlist “${playlist.name}” created.`)
     go(url('playlists.show', { id: playlist.id }))
   },
 })
 
 const maybeClose = async () => {
-  if (isPristine() || (await showConfirmDialog('Discard all changes?'))) {
+  if (isPristine() || (await showConfirmDialog('Discard all changes?', { action: 'Discard' }))) {
     close()
   }
 }

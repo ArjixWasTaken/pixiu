@@ -9,7 +9,7 @@
       playlists as read-only playlists.
     </p>
 
-    <AddWatchForm class="mb-5" @added="refetch" />
+    <AddWatchForm :liked-watched class="mb-5" @added="refetch" />
 
     <ScreenEmptyState v-if="loaded && !watches.length">
       <template #icon>
@@ -55,6 +55,7 @@ const {
 watchRef(error, error => error && handleHttpError(error))
 
 const watches = computed(() => data.value ?? [])
+const likedWatched = computed(() => watches.value.some(({ kind }) => kind === 'liked_music'))
 
 const sync = async (watch: Watch) => {
   try {
@@ -69,7 +70,7 @@ const sync = async (watch: Watch) => {
 const remove = async (watch: Watch) => {
   const confirmed = await showConfirmDialog(
     `Stop watching “${watch.name}”? What it kept becomes orphans, unless something else keeps it.`,
-    'Stop watching',
+    { title: 'Stop watching', action: 'Stop watching' },
   )
 
   if (!confirmed) {

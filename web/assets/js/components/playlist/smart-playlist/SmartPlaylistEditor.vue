@@ -3,14 +3,20 @@
     <M3Tabs v-model="tab" :tabs class="tabs" secondary />
     <div class="panels">
       <PlaylistDetails
-        v-show="tab === 'details'"
         v-model:description="description"
+        :class="{ away: tab !== 'details' }"
+        :inert="tab !== 'details'"
         v-model:folder-id="folderId"
         v-model:folder-name="folderName"
         v-model:name="name"
         data-tab="details"
       />
-      <SmartPlaylistRules v-show="tab === 'rules'" v-model="ruleGroups" data-tab="rules" />
+      <SmartPlaylistRules
+        v-model="ruleGroups"
+        :class="{ away: tab !== 'rules' }"
+        :inert="tab !== 'rules'"
+        data-tab="rules"
+      />
     </div>
   </div>
 </template>
@@ -38,10 +44,20 @@ const ruleGroups = defineModel<SmartPlaylistRuleGroup[]>('ruleGroups', { require
   border-bottom: 1px solid var(--schemes-outline-variant);
 }
 
-/* One size for both tabs: switching does not resize the dialog. */
+/* Both tabs in one place, the one away hidden but still taking room: the dialog
+   is as tall as the longer of them (no jump when switching, no empty half). */
 .panels {
-  height: min(440px, calc(100dvh - 280px));
+  display: grid;
+  max-height: calc(100dvh - 280px);
   overflow-y: auto;
   padding-top: 8px;
+
+  > * {
+    grid-area: 1 / 1;
+  }
+
+  .away {
+    visibility: hidden;
+  }
 }
 </style>
