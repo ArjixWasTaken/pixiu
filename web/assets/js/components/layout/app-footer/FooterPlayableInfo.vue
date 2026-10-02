@@ -12,7 +12,9 @@
       class="album-thumb"
       type="button"
       @click="nowPlaying.toggle"
-    />
+    >
+      <PlatformBadge :platform="playable?.source_platform" />
+    </button>
     <div v-if="playable" class="meta">
       <p class="title m3-title-medium" @click="nowPlaying.toggle">{{ playable.title }}</p>
       <a :href="artistUri" class="artist m3-body-medium">{{ artistName }}</a>
@@ -35,6 +37,7 @@ import { useNowPlaying } from '@/composables/useNowPlaying'
 import { coverOfSize } from '@/services/subsonic'
 
 import FavoriteButton from '@/components/ui/FavoriteButton.vue'
+import PlatformBadge from '@/components/ui/PlatformBadge.vue'
 
 const playableStore = usePlayableStore()
 
@@ -75,6 +78,7 @@ const toggleFavorite = () => use(playable.value, p => playableStore.toggleFavori
 }
 
 .album-thumb {
+  position: relative;
   width: 56px;
   height: 56px;
   flex-shrink: 0;

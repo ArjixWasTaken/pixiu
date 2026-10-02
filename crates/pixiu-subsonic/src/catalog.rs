@@ -6,7 +6,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use pixiu_db::{Album, Annotation, Artist, Library, Track, owned::as_u64, toasty};
+use pixiu_db::{Album, Annotation, Artist, Library, SourceKey, Track, owned::as_u64, toasty};
 
 use crate::{annotations::annotate, ids, response::Element};
 
@@ -174,6 +174,12 @@ fn display_path(track: &Track, album: Option<&Album>, album_artist: Option<&Arti
     .into_owned()
 }
 
+/// The platform a song or album was downloaded from (`sourcePlatform`, a
+/// píxiū extension that apps ignore); none for uploads.
+fn platform_of(stored: Option<&str>) -> Option<&'static str> {
+    SourceKey::from_stored(stored).map(|key| key.platform().as_str())
+}
+
 /// A song (the Subsonic `Child` type).
 pub(crate) fn song(
     name: &'static str,
@@ -215,6 +221,7 @@ pub(crate) fn song(
         .attr("mediaType", "song")
         .attr("isVideo", false)
         .attr_opt("musicBrainzId", track.mbid.as_deref())
+        .attr_opt("sourcePlatform", platform_of(track.source_key.as_deref()))
         .attr("displayArtist", track.artist_credit.as_str())
         .attr_opt(
             "displayAlbumArtist",
@@ -261,6 +268,7 @@ pub(crate) fn album_id3(
         .attr_opt("year", album.year)
         .attr_opt("genre", album.genre.as_deref())
         .attr_opt("musicBrainzId", album.mbid.as_deref())
+        .attr_opt("sourcePlatform", platform_of(album.source_key.as_deref()))
         .attr_opt("displayArtist", artist.map(|artist| artist.name.as_str()))
         .attr("sortName", album.title.as_str())
         .attr("isCompilation", false)
@@ -306,6 +314,7 @@ pub(crate) fn album_child(
         .attr("created", album.created_at.to_string())
         .attr("albumId", ids::album(album.id))
         .attr("artistId", ids::artist(album.artist_id))
+        .attr_opt("sourcePlatform", platform_of(album.source_key.as_deref()))
         .attr("mediaType", "album");
     annotate(element, plays)
 }

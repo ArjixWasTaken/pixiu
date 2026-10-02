@@ -8,6 +8,7 @@
     @click.prevent="playOrQueue"
   >
     <img alt="Thumbnail" :src="image" class="w-full aspect-square object-cover" loading="lazy" />
+    <PlatformBadge :platform :size />
     <span class="hidden">{{ buttonLabel }}</span>
     <span class="absolute top-0 left-0 w-full h-full group-hover:bg-black/40 z-10" />
     <PlayIcon :size />
@@ -25,6 +26,7 @@ import { playback } from '@/services/playbackManager'
 import { useBranding } from '@/composables/useBranding'
 import { coverOfSize } from '@/services/subsonic'
 
+import PlatformBadge from '@/components/ui/PlatformBadge.vue'
 import PlayIcon from '@/components/ui/PlayIcon.vue'
 
 const queueStore = useQueueStore()
@@ -38,6 +40,8 @@ const { go, url } = useRouter()
 const { cover: defaultCover } = useBranding()
 
 const forAlbum = computed(() => entity.value.type === 'albums')
+/** Where an album was downloaded from; artists come from anywhere. */
+const platform = computed(() => (forAlbum.value ? (entity.value as Album).source_platform : null))
 const sortFields = computed(() => (forAlbum.value ? ['disc', 'track'] : ['album_id', 'disc', 'track']))
 
 const image = computed(() => {

@@ -13,7 +13,7 @@ use axum::{
 use md5::{Digest, Md5};
 use pixiu_core::SecretBox;
 use pixiu_db::{
-    ApiKey, Artist, ClaimKind, Db, Lyrics, LyricsSource, Playlist, PlaylistEntry, Track,
+    Album, ApiKey, Artist, ClaimKind, Db, Lyrics, LyricsSource, Playlist, PlaylistEntry, Track,
     TrackClaim, User, now, toasty,
 };
 use pixiu_subsonic::SubsonicState;
@@ -445,6 +445,46 @@ async fn streaming_supports_ranges() {
     assert_eq!(download.headers[header::X_CONTENT_TYPE_OPTIONS], "nosniff");
 
     assert_eq!(api.call("stream", "id=tr-999").await.error_code(), 70);
+}
+
+#[tokio::test]
+async fn downloads_name_their_platform() {
+    let api = Api::new().await;
+    let mut db = api.db.clone();
+    let songs = songs_by_suffix(&api).await;
+    let (flac, mp3) = (&songs["flac"], &songs["mp3"]);
+
+    // As if the FLAC had been downloaded from YouTube Music, with its album.
+    let mut track = Track::get_by_id(&mut db, &flac[3..].parse::<u64>().unwrap())
+        .await
+        .unwrap();
+    let album_id = track.album_id;
+    toasty::update!(track {
+        source_key: Some("youtube_music:vid".to_owned())
+    })
+    .exec(&mut db)
+    .await
+    .unwrap();
+    let mut album = Album::get_by_id(&mut db, &album_id).await.unwrap();
+    toasty::update!(album {
+        source_key: Some("youtube_music:MPREb_album".to_owned())
+    })
+    .exec(&mut db)
+    .await
+    .unwrap();
+
+    let downloaded = api.call("getSong", &format!("id={flac}")).await.ok();
+    assert_eq!(downloaded["song"]["sourcePlatform"], "youtube_music");
+    let uploaded = api.call("getSong", &format!("id={mp3}")).await.ok();
+    assert!(uploaded["song"].get("sourcePlatform").is_none());
+    let json = api
+        .call(
+            "getAlbum",
+            &format!("id={}", api.album_id("Test Album").await),
+        )
+        .await
+        .ok();
+    assert_eq!(json["album"]["sourcePlatform"], "youtube_music");
 }
 
 /// The song ids of the library by file extension.

@@ -38,6 +38,7 @@ describe('subsonic', () => {
       discNumber: 1,
       year: 2016,
       path: 'Kevin MacLeod/2016 - Groovy/01 Funky Chunk.opus',
+      sourcePlatform: 'youtube_music',
     })
 
     expect(song).toMatchObject({
@@ -52,9 +53,18 @@ describe('subsonic', () => {
       artist_id: 'ar-1',
       album_artist_id: 'ar-1',
       basename: '01 Funky Chunk.opus',
+      source_platform: 'youtube_music',
     })
     expect(song.album_cover).toContain('/rest/getCoverArt?')
     expect(song.album_cover).toContain('id=al-3')
+  })
+
+  it('says where an album was downloaded from; uploads come from nowhere', () => {
+    expect(subsonic.toAlbum({ id: 'al-3', name: 'Groovy', sourcePlatform: 'youtube_music' }).source_platform).toBe(
+      'youtube_music',
+    )
+    expect(subsonic.toAlbum({ id: 'al-4', name: 'Uploaded' }).source_platform).toBeNull()
+    expect(subsonic.toSong({ id: 'tr-4', title: 'Uploaded' }).source_platform).toBeNull()
   })
 
   it('counts an artist’s albums', () => {

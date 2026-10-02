@@ -7,7 +7,9 @@
       data-vue="NowPlaying"
     >
       <div class="stage">
-        <div :style="{ backgroundImage: `url(${cover}), url(${defaultCover})` }" class="art" />
+        <div :style="{ backgroundImage: `url(${cover}), url(${defaultCover})` }" class="art">
+          <PlatformBadge :platform="song?.source_platform" size="xl" />
+        </div>
         <div class="caption">
           <div class="flex-1 min-w-0">
             <p class="m3-headline-small truncate text-(--schemes-on-surface)">{{ song.title }}</p>
@@ -51,6 +53,7 @@ import M3Tabs from '@/components/m3/M3Tabs.vue'
 import NowPlayingAbout from '@/components/layout/now-playing/NowPlayingAbout.vue'
 import NowPlayingLyrics from '@/components/layout/now-playing/NowPlayingLyrics.vue'
 import NowPlayingQueue from '@/components/layout/now-playing/NowPlayingQueue.vue'
+import PlatformBadge from '@/components/ui/PlatformBadge.vue'
 
 const playableStore = usePlayableStore()
 
@@ -110,6 +113,7 @@ onRouteChanged(() => nowPlaying.close())
 }
 
 .art {
+  position: relative;
   width: min(100%, 640px, 100cqh - 96px);
   aspect-ratio: 1 / 1;
   border-radius: 28px;

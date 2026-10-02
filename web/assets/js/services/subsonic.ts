@@ -129,6 +129,7 @@ const toSong = (child: Record<string, any>): Song => ({
   is_public: true,
   is_external: false,
   mbid: child.musicBrainzId ?? null,
+  source_platform: child.sourcePlatform ?? null,
   file_size: child.size ?? null,
   basename: basename(child.path),
 })
@@ -144,6 +145,7 @@ const toAlbum = (album: Record<string, any>): Album => ({
   thumbnail: coverUrl(album.coverArt, 300),
   created_at: album.created ?? '',
   mbid: album.musicBrainzId ?? null,
+  source_platform: album.sourcePlatform ?? null,
   year: album.year ?? null,
   length: album.duration ?? 0,
   is_external: false,

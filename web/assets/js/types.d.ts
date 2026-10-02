@@ -132,6 +132,8 @@ interface Album {
   thumbnail?: string | null
   created_at: string
   mbid?: string | null
+  /** The platform it was downloaded from (`config/platforms.ts`); none for uploads. */
+  source_platform?: string | null
   year: number | null
   length: number
   is_external: boolean
@@ -181,6 +183,8 @@ interface Song extends BasePlayable {
   is_public: boolean
   is_external: boolean
   mbid?: string | null
+  /** The platform it was downloaded from (`config/platforms.ts`); none for uploads. */
+  source_platform?: string | null
   file_size?: number | null
   basename?: string
   deleted?: boolean

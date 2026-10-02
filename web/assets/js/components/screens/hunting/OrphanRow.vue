@@ -1,10 +1,9 @@
 <template>
   <li class="orphan-row" data-vue="OrphanRow">
     <M3Checkbox v-model="selected" :aria-label="`Select ${orphan.song.title}`" :name="`orphan-${orphan.song.id}`" />
-    <span
-      :style="orphan.song.album_cover ? { backgroundImage: `url(${orphan.song.album_cover})` } : {}"
-      class="cover"
-    />
+    <span :style="orphan.song.album_cover ? { backgroundImage: `url(${orphan.song.album_cover})` } : {}" class="cover">
+      <PlatformBadge :platform="orphan.song.source_platform" />
+    </span>
 
     <div class="song flex-1 min-w-0">
       <p :title="orphan.song.title" class="m3-body-large truncate">{{ orphan.song.title }}</p>
@@ -27,6 +26,7 @@ import type { Orphan } from '@/services/huntingService'
 import { formatBytes, timeAgo } from '@/utils/formatters'
 
 import M3Checkbox from '@/components/m3/M3Checkbox.vue'
+import PlatformBadge from '@/components/ui/PlatformBadge.vue'
 
 defineProps<{ orphan: Orphan }>()
 const selected = defineModel<boolean>({ default: false })
@@ -43,6 +43,7 @@ const selected = defineModel<boolean>({ default: false })
 }
 
 .cover {
+  position: relative;
   width: 48px;
   height: 48px;
   flex-shrink: 0;
