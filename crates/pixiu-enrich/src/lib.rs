@@ -14,7 +14,9 @@ use std::{future::Future, pin::Pin, time::Duration};
 use reqwest::StatusCode;
 
 pub use lyrics::{FoundLyrics, Line, LyricsQuery, looks_synced, parse_lrc, plain_from_lrc};
-pub use matching::{Candidate, Credit, LocalAlbum, LocalTrack, Pairing, Release, ReleaseTrack};
+pub use matching::{
+    Candidate, Credit, LocalAlbum, LocalTrack, Pairing, Recording, Release, ReleaseTrack,
+};
 pub use musicbrainz::genre_name;
 pub use wiki::ArtistInfo;
 
@@ -89,6 +91,15 @@ pub trait Sources: Send + Sync {
     /// A MusicBrainz release with its tracks.
     fn release<'a>(&'a self, id: &'a str) -> BoxFuture<'a, Result<Release, EnrichError>>;
 
+    /// Recordings that might be `track`, most promising first.
+    fn recordings<'a>(
+        &'a self,
+        track: &'a LocalTrack,
+    ) -> BoxFuture<'a, Result<Vec<Recording>, EnrichError>>;
+
+    /// A recording, with its genre.
+    fn recording<'a>(&'a self, id: &'a str) -> BoxFuture<'a, Result<Recording, EnrichError>>;
+
     /// A release's front cover from the Cover Art Archive.
     fn front_cover<'a>(
         &'a self,
@@ -155,6 +166,17 @@ impl Sources for Online {
 
     fn release<'a>(&'a self, id: &'a str) -> BoxFuture<'a, Result<Release, EnrichError>> {
         Box::pin(self.musicbrainz.release(id))
+    }
+
+    fn recordings<'a>(
+        &'a self,
+        track: &'a LocalTrack,
+    ) -> BoxFuture<'a, Result<Vec<Recording>, EnrichError>> {
+        Box::pin(self.musicbrainz.recordings(track))
+    }
+
+    fn recording<'a>(&'a self, id: &'a str) -> BoxFuture<'a, Result<Recording, EnrichError>> {
+        Box::pin(self.musicbrainz.recording(id))
     }
 
     fn front_cover<'a>(

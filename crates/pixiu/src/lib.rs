@@ -12,7 +12,7 @@ use pixiu_accounts::{
 use pixiu_browser::LoginDesks;
 use pixiu_core::{Config, SecretBox, TranscodeFormat, config::PathsConfig, playing::NowPlaying};
 use pixiu_db::{Db, User};
-use pixiu_hunt::{Hunter, YtMusicPool};
+use pixiu_hunt::{DeezerSource, Hunter, Platforms, YouTubeMusicSource, YtMusicPool};
 use pixiu_jobs::{
     Jobs, Wardens,
     adapters::{HuntExecutor, Sessions},
@@ -100,6 +100,10 @@ impl Services {
             .collect_garbage()
             .await
             .context("failed to clean up the store")?;
+        treasury
+            .mark_singles()
+            .await
+            .context("failed to mark the library's singles")?;
         let offerings = Offerings::new(paths.offerings_dir(), treasury.clone());
         offerings
             .relocate_legacy()
@@ -118,8 +122,16 @@ impl Services {
         // Its cache may still hold the login of before every user had a
         // client; each user's warden restores their own.
         pool.logout_public().await;
+        // The platforms music is downloaded from.
+        let platforms = Platforms::new([
+            Arc::new(YouTubeMusicSource::new(Arc::clone(&pool))) as Arc<dyn pixiu_hunt::Source>,
+            Arc::new(
+                DeezerSource::new(&config.hunt.monochrome)
+                    .context("failed to set up the Deezer client")?,
+            ),
+        ]);
         let hunter = Arc::new(
-            Hunter::new(Arc::clone(&pool), treasury.clone(), paths.staging_dir())
+            Hunter::new(platforms, treasury.clone(), paths.staging_dir())
                 .context("failed to set up the hunter")?,
         );
         let desks = LoginDesks::new(
@@ -134,6 +146,7 @@ impl Services {
             Box::new(Sessions {
                 pool,
                 desks: Arc::clone(&desks),
+                platforms: hunter.platforms().clone(),
             }),
             Arc::clone(&alerts) as _,
         );

@@ -125,6 +125,16 @@ describe('playableContextMenu.vue', () => {
     expect(goMock).toHaveBeenCalledWith(`/albums/${song.album_id}`)
   })
 
+  it('offers no album to go to for a single', async () => {
+    const song = h.factory('song').make({ is_single: true })
+    await renderComponent(song)
+
+    await h.user.click(screen.getByText('Go to'))
+
+    screen.getByText(`Artist: ${song.artist_name}`)
+    expect(screen.queryByText(`Album: ${song.album_name}`)).toBeNull()
+  })
+
   it('goes to artist details screen', async () => {
     const goMock = h.mock(Router, 'go')
     const song = h.factory('song').make()

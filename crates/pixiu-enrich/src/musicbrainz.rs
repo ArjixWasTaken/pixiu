@@ -12,7 +12,9 @@ use tokio::sync::Mutex;
 
 use crate::{
     EnrichError,
-    matching::{Candidate, Credit, LocalAlbum, Release, ReleaseTrack, prescore},
+    matching::{
+        Candidate, Credit, LocalAlbum, LocalTrack, Recording, Release, ReleaseTrack, prescore,
+    },
 };
 
 const API: &str = "https://musicbrainz.org/ws/2/";
@@ -133,8 +135,46 @@ struct ReleaseJson {
 #[derive(Deserialize)]
 struct ReleaseGroupJson {
     id: String,
+    #[serde(rename = "primary-type")]
+    primary_type: Option<String>,
     #[serde(default)]
     genres: Vec<GenreJson>,
+}
+
+#[derive(Deserialize)]
+struct RecordingSearchJson {
+    #[serde(default)]
+    recordings: Vec<FoundRecordingJson>,
+}
+
+/// A recording, as searches find it and lookups give it.
+#[derive(Deserialize)]
+struct FoundRecordingJson {
+    id: String,
+    title: String,
+    length: Option<u64>,
+    #[serde(rename = "artist-credit", default)]
+    artist_credit: Vec<ArtistCreditJson>,
+    #[serde(default)]
+    isrcs: Vec<String>,
+    #[serde(rename = "first-release-date")]
+    first_release_date: Option<String>,
+    #[serde(default)]
+    genres: Vec<GenreJson>,
+}
+
+impl From<FoundRecordingJson> for Recording {
+    fn from(json: FoundRecordingJson) -> Self {
+        Self {
+            id: json.id,
+            title: json.title,
+            artist: credit(&json.artist_credit),
+            length_ms: json.length,
+            isrcs: json.isrcs,
+            first_released: json.first_release_date.filter(|date| !date.is_empty()),
+            genre: top_genre(&json.genres),
+        }
+    }
 }
 
 #[derive(Deserialize)]
@@ -279,6 +319,10 @@ impl From<ReleaseJson> for Release {
             artist: release_credit,
             date: json.date.filter(|date| !date.is_empty()),
             country: json.country,
+            primary_type: json
+                .release_group
+                .as_ref()
+                .and_then(|group| group.primary_type.clone()),
             release_group_id: json.release_group.map(|group| group.id),
             genre,
             has_front_cover: json.cover_art_archive.is_some_and(|art| art.front),
@@ -389,6 +433,58 @@ impl MusicBrainz {
     }
 
     /// An artist's Wikidata item id (`Q…`), when MusicBrainz links one.
+    /// Recordings that might be `track`: those with its ISRC, else those
+    /// named like it by its artist.
+    pub(crate) async fn recordings(
+        &self,
+        track: &LocalTrack,
+    ) -> Result<Vec<Recording>, EnrichError> {
+        let mut queries = Vec::new();
+        if let Some(isrc) = track
+            .isrc
+            .as_deref()
+            .map(words)
+            .filter(|isrc| !isrc.is_empty())
+        {
+            queries.push(format!("isrc:{isrc}"));
+        }
+        // Lowercase, so no word reads as an operator.
+        let (title, artist) = (
+            words(&track.title).to_lowercase(),
+            words(&track.artist).to_lowercase(),
+        );
+        if !title.is_empty() {
+            queries.push(if artist.is_empty() {
+                format!("recording:({title})")
+            } else {
+                format!("recording:({title}) AND artist:({artist})")
+            });
+        }
+        for query in queries {
+            let found: RecordingSearchJson = self
+                .get(Self::url(
+                    "recording",
+                    &[("query", &query), ("limit", "10")],
+                ))
+                .await?;
+            if !found.recordings.is_empty() {
+                return Ok(found.recordings.into_iter().map(Into::into).collect());
+            }
+        }
+        Ok(Vec::new())
+    }
+
+    /// A recording with its genres.
+    pub(crate) async fn recording(&self, id: &str) -> Result<Recording, EnrichError> {
+        let found: FoundRecordingJson = self
+            .get(Self::url(
+                &format!("recording/{id}"),
+                &[("inc", "artist-credits+isrcs+genres")],
+            ))
+            .await?;
+        Ok(found.into())
+    }
+
     pub(crate) async fn wikidata(&self, artist_id: &str) -> Result<Option<String>, EnrichError> {
         let json: ArtistJson = self
             .get(Self::url(
@@ -431,6 +527,8 @@ mod tests {
         assert_eq!(release.year(), Some(2023));
         assert!(release.has_front_cover);
         assert_eq!(release.release_group_id.as_deref(), Some("rg-august"));
+        assert_eq!(release.primary_type.as_deref(), Some("Album"));
+        assert!(!release.is_single());
         assert_eq!(release.tracks.len(), 2);
         let second = &release.tracks[1];
         assert_eq!((second.position, second.disc), (2, 1));
@@ -457,6 +555,7 @@ mod tests {
             genres: genres(&[("pop rock", 1)]),
             release_group: Some(ReleaseGroupJson {
                 id: "rg".to_owned(),
+                primary_type: None,
                 genres: genres(&[("rock", 9)]),
             }),
             ..serde_json::from_str(include_str!("../fixtures/release.json")).unwrap()
@@ -474,5 +573,23 @@ mod tests {
         assert_eq!(genre_name("uk garage"), "UK Garage");
         assert_eq!(genre_name("the blues"), "The Blues");
         assert_eq!(top_genre(&[]), None);
+    }
+
+    #[test]
+    fn recordings_are_read() {
+        let found: RecordingSearchJson =
+            serde_json::from_str(include_str!("../fixtures/recordings.json")).unwrap();
+        let recordings: Vec<Recording> = found.recordings.into_iter().map(Into::into).collect();
+        assert_eq!(recordings.len(), 2);
+        let dawn = &recordings[0];
+        assert_eq!(dawn.id, "rec-dawn");
+        assert_eq!(dawn.artist.name, "Main Artist feat. Guest");
+        assert_eq!(dawn.artist.artists[0].0, "art-main");
+        assert_eq!(dawn.length_ms, Some(211_000));
+        assert_eq!(dawn.isrcs, ["ZZXX12100003"]);
+        assert_eq!(dawn.year(), Some(2021));
+        let live = &recordings[1];
+        assert!(live.isrcs.is_empty());
+        assert_eq!(live.first_released, None);
     }
 }

@@ -236,11 +236,115 @@ async fn upgrade_from_0008() {
     }
     // Their liked-music watch and its mirror are found per user.
     assert!(
-        Watch::filter_by_user_id_and_remote_id(owner, "LM")
+        Watch::filter_by_user_id_and_source_key(owner, "youtube_music:LM")
             .first()
             .exec(&mut db)
             .await
             .unwrap()
             .is_some()
+    );
+}
+
+/// A library from before keys (schema 0014) upgrades with every platform
+/// id becoming a YouTube Music key: songs, files, aliases, albums, artists,
+/// watches and what artist watches saw, mirror entries, exclusions and the
+/// albums album grabs name. What came from no platform stays without one.
+#[tokio::test]
+async fn upgrade_from_0014() {
+    use pixiu_db::{
+        Album, Artist, AudioFile, PlaylistEntry, SourceKey, Track, TrackAlias, TrackClaim, Watch,
+        WatchExclusion, keyed,
+    };
+
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = pixiu_db::open(&fixture_db("v0014.db", dir.path()))
+        .await
+        .unwrap();
+
+    let mut tracks = Track::all().exec(&mut db).await.unwrap();
+    tracks.sort_by_key(|track| track.id);
+    let keys: Vec<_> = tracks
+        .iter()
+        .map(|track| track.source_key.clone())
+        .collect();
+    assert_eq!(keys, [Some("youtube_music:video-1".to_owned()), None]);
+
+    let mut files = AudioFile::all().exec(&mut db).await.unwrap();
+    files.sort_by_key(|file| file.id);
+    let keys: Vec<_> = files.iter().map(|file| file.source_key.clone()).collect();
+    assert_eq!(keys, [Some("youtube_music:video-1".to_owned()), None]);
+
+    let aliases = TrackAlias::all().exec(&mut db).await.unwrap();
+    assert_eq!(aliases[0].source_key, "youtube_music:video-1b");
+    // The alias still finds its track.
+    let found = keyed::track_of_key(&mut db, 1, &SourceKey::youtube_music("video-1b"))
+        .await
+        .unwrap();
+    assert_eq!(found.map(|track| track.id), Some(1));
+
+    let mut albums = Album::all().exec(&mut db).await.unwrap();
+    albums.sort_by_key(|album| album.id);
+    let keys: Vec<_> = albums
+        .iter()
+        .map(|album| album.source_key.clone())
+        .collect();
+    assert_eq!(keys, [Some("youtube_music:MPREb_album".to_owned()), None]);
+
+    let mut artists = Artist::all().exec(&mut db).await.unwrap();
+    artists.sort_by_key(|artist| artist.id);
+    let keys: Vec<_> = artists
+        .iter()
+        .map(|artist| artist.source_key.clone())
+        .collect();
+    assert_eq!(keys, [Some("youtube_music:UCartist".to_owned()), None]);
+
+    let mut watches = Watch::all().exec(&mut db).await.unwrap();
+    watches.sort_by_key(|watch| watch.id);
+    let keys: Vec<_> = watches
+        .iter()
+        .map(|watch| watch.source_key.as_str())
+        .collect();
+    assert_eq!(
+        keys,
+        [
+            "youtube_music:PLtest",
+            "youtube_music:LM",
+            "youtube_music:UCartist"
+        ]
+    );
+    assert!(watches[0].seen.is_empty());
+    assert_eq!(
+        watches[2].seen,
+        ["youtube_music:MPREb_album", "youtube_music:MPREb_single"]
+    );
+
+    let mut entries = PlaylistEntry::all().exec(&mut db).await.unwrap();
+    entries.sort_by_key(|entry| entry.position);
+    let keys: Vec<_> = entries
+        .iter()
+        .map(|entry| entry.source_key.clone())
+        .collect();
+    assert_eq!(
+        keys,
+        [
+            Some("youtube_music:video-1".to_owned()),
+            Some("youtube_music:video-2".to_owned())
+        ]
+    );
+
+    let exclusions = WatchExclusion::all().exec(&mut db).await.unwrap();
+    assert_eq!(exclusions[0].source_key, "youtube_music:video-3");
+
+    let mut claims = TrackClaim::all().exec(&mut db).await.unwrap();
+    claims.sort_by_key(|claim| claim.id);
+    let references: Vec<_> = claims.iter().map(|claim| claim.reference.clone()).collect();
+    assert_eq!(
+        references,
+        [
+            Some("youtube_music:MPREb_album".to_owned()),
+            Some("1".to_owned()),
+            None,
+            None
+        ]
     );
 }

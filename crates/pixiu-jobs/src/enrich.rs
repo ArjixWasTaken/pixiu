@@ -8,13 +8,15 @@
 use std::time::Duration;
 
 use jiff::SignedDuration;
-use pixiu_db::{Album, Artist, Db, Enrichment, Lyrics, LyricsSource, Setting, Track, now, toasty};
+use pixiu_db::{
+    Album, Artist, Db, Enrichment, Lyrics, LyricsSource, Setting, SourceKey, Track, now, toasty,
+};
 use pixiu_enrich::{
     Candidate, EnrichError, LocalAlbum, LocalTrack, LyricsQuery, Pairing, Release, Sources,
     looks_synced,
-    matching::{PLAUSIBLE, is_certain, pair},
+    matching::{PLAUSIBLE, is_certain, pair, recording_match},
 };
-use pixiu_treasury::{AlbumEdit, ArtistRef, Cover, TrackEdit, Treasury, covers, tags};
+use pixiu_treasury::{AlbumEdit, ArtistRef, Cover, SongEdit, TrackEdit, Treasury, covers, tags};
 
 use crate::{
     queue::{Jobs, NewJob},
@@ -30,15 +32,15 @@ const RECHECK_AFTER: Duration = Duration::from_secs(30 * 24 * 60 * 60);
 
 /// Lyrics a streaming platform has for its tracks.
 pub trait PlatformLyrics: Send + Sync {
-    /// Plain lyrics of a YouTube video, with their credit line.
-    fn lyrics<'a>(&'a self, video_id: &'a str) -> BoxFuture<'a, Option<(String, String)>>;
+    /// Plain lyrics of a song on a platform, with their credit line.
+    fn lyrics<'a>(&'a self, key: &'a SourceKey) -> BoxFuture<'a, Option<(String, String)>>;
 }
 
 /// No platform lyrics: for albums nobody downloaded, and for tests.
 pub struct NoPlatformLyrics;
 
 impl PlatformLyrics for NoPlatformLyrics {
-    fn lyrics<'a>(&'a self, _video_id: &'a str) -> BoxFuture<'a, Option<(String, String)>> {
+    fn lyrics<'a>(&'a self, _key: &'a SourceKey) -> BoxFuture<'a, Option<(String, String)>> {
         Box::pin(async { None })
     }
 }
@@ -101,7 +103,11 @@ pub async fn enrich(
         ));
     }
 
-    let mut summary = identify(treasury, sources, &mut db, album, request).await?;
+    let mut summary = if album.single {
+        identify_songs(treasury, sources, &mut db, &album, request.fresh).await?
+    } else {
+        identify(treasury, sources, &mut db, album, request).await?
+    };
     // A lookup the admin asked for may have fixed the titles: look again.
     let asked = request.fresh || request.release.is_some();
     let found = find_lyrics(
@@ -119,6 +125,25 @@ pub async fn enrich(
     Ok(summary)
 }
 
+/// How a lookup of `album` is named on the job board: singles are looked
+/// up as songs, so they are named by their song, or as an artist's singles.
+pub async fn lookup_title(db: &mut Db, album: &Album) -> String {
+    if !album.single {
+        return format!("Look up {}", album.title);
+    }
+    let tracks = Track::filter_by_album_id(album.id)
+        .exec(&mut *db)
+        .await
+        .unwrap_or_default();
+    match tracks.as_slice() {
+        [track] => format!("Look up {}", track.title),
+        _ => match Artist::get_by_id(&mut *db, &album.artist_id).await {
+            Ok(artist) => format!("Look up singles by {}", artist.name),
+            Err(_) => format!("Look up {}", album.title),
+        },
+    }
+}
+
 /// The album as the matching rules see it.
 async fn local_album(db: &mut Db, album: &Album) -> Result<LocalAlbum, toasty::Error> {
     let artist = Artist::get_by_id(&mut *db, &album.artist_id).await?;
@@ -128,18 +153,122 @@ async fn local_album(db: &mut Db, album: &Album) -> Result<LocalAlbum, toasty::E
         artist: artist.name,
         year: album.year,
         mbid: album.mbid.clone(),
-        tracks: tracks
-            .into_iter()
-            .map(|track| LocalTrack {
-                id: track.id,
-                title: track.title,
-                artist: track.artist_credit,
-                duration_ms: track.duration_ms,
-                track_number: track.track_number,
-                disc_number: track.disc_number,
-                isrc: track.isrc,
-            })
-            .collect(),
+        tracks: tracks.iter().map(local_track).collect(),
+    })
+}
+
+/// A track as the matching rules see it.
+fn local_track(track: &Track) -> LocalTrack {
+    LocalTrack {
+        id: track.id,
+        title: track.title.clone(),
+        artist: track.artist_credit.clone(),
+        duration_ms: track.duration_ms,
+        track_number: track.track_number,
+        disc_number: track.disc_number,
+        isrc: track.isrc.clone(),
+    }
+}
+
+/// Looks a single's songs up on MusicBrainz one by one, as recordings, and
+/// applies what is certain: a single, or an artist's songs that came with
+/// no album, is no release to look up as a whole. Songs matched before are
+/// skipped unless `fresh`.
+async fn identify_songs(
+    treasury: &Treasury,
+    sources: &dyn Sources,
+    db: &mut Db,
+    album: &Album,
+    fresh: bool,
+) -> Result<String, String> {
+    let tracks = Track::filter_by_album_id(album.id)
+        .exec(&mut *db)
+        .await
+        .map_err(failed)?;
+    if tracks.is_empty() {
+        return Ok("The album has no tracks.".to_owned());
+    }
+    let mut edits = Vec::new();
+    let mut known = 0;
+    for track in &tracks {
+        if track.mbid.is_some() && !fresh {
+            known += 1;
+            continue;
+        }
+        let local = local_track(track);
+        let found = sources.recordings(&local).await.map_err(failed)?;
+        let Some(best) = recording_match(&local, &found) else {
+            continue;
+        };
+        // Its genres come with a lookup of its own.
+        let recording = match sources.recording(&best.id).await {
+            Ok(recording) => recording,
+            Err(error) => {
+                tracing::warn!(%error, recording = %best.id, "cannot look the recording up");
+                best.clone()
+            }
+        };
+        let credited = !recording.artist.name.trim().is_empty();
+        edits.push(SongEdit {
+            track_id: track.id,
+            title: recording.title.clone(),
+            artist_credit: if credited {
+                recording.artist.name.clone()
+            } else {
+                track.artist_credit.clone()
+            },
+            artist: if credited {
+                primary(&recording.artist)
+            } else {
+                ArtistRef {
+                    name: track.artist_credit.clone(),
+                    mbid: None,
+                }
+            },
+            mbid: recording.id.clone(),
+            // The song's own ISRC stays.
+            isrc: track
+                .isrc
+                .is_none()
+                .then(|| recording.isrcs.first().cloned())
+                .flatten(),
+            year: recording.year(),
+            genre: recording.genre.clone(),
+        });
+    }
+    if !edits.is_empty() {
+        treasury.edit_songs(&edits).await.map_err(failed)?;
+    }
+    let matched = known + edits.len();
+    let state = if matched == tracks.len() {
+        Enrichment::Matched
+    } else {
+        Enrichment::Unmatched
+    };
+    record(db, album.id, state, None).await.map_err(failed)?;
+
+    // Biographies of the artists MusicBrainz named.
+    let mut artists: Vec<u64> = Vec::new();
+    for edit in &edits {
+        if let Ok(track) = Track::get_by_id(&mut *db, &edit.track_id).await
+            && !artists.contains(&track.artist_id)
+        {
+            artists.push(track.artist_id);
+        }
+    }
+    for artist_id in artists {
+        artist_info(treasury, sources, db, artist_id).await;
+    }
+
+    Ok(match (tracks.len(), matched) {
+        (1, 1) => format!(
+            "Matched to “{}”.",
+            edits
+                .first()
+                .map_or(tracks[0].title.as_str(), |edit| edit.title.as_str())
+        ),
+        (_, 0) => "MusicBrainz knows none of its songs.".to_owned(),
+        (total, matched) => format!("Found {matched} of {total} songs on MusicBrainz."),
     })
 }
 
@@ -308,6 +437,18 @@ async fn apply(
     record(db, album_id, Enrichment::Matched, None)
         .await
         .map_err(failed)?;
+    // MusicBrainz says whether it is a single, shown as songs.
+    let mut matched = Album::get_by_id(&mut *db, &album_id)
+        .await
+        .map_err(failed)?;
+    if matched.single != release.is_single() {
+        toasty::update!(matched {
+            single: release.is_single()
+        })
+        .exec(&mut *db)
+        .await
+        .map_err(failed)?;
+    }
     set_genre(db, album_id, release.genre.as_deref())
         .await
         .map_err(failed)?;
@@ -520,8 +661,8 @@ async fn lyrics_for(
         Err(error) => tracing::warn!(%error, track = track.id, "cannot ask LRCLIB for lyrics"),
     }
 
-    if let Some(video_id) = &track.ytm_video_id
-        && let Some((body, _credit)) = platform.lyrics(video_id).await
+    if let Some(key) = SourceKey::from_stored(track.source_key.as_deref())
+        && let Some((body, _credit)) = platform.lyrics(&key).await
     {
         return (LyricsSource::YouTubeMusic, None, Some(body));
     }

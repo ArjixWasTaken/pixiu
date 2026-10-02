@@ -11,19 +11,19 @@
 > it is ready to be run, and no support is offered.
 
 An [OpenSubsonic](https://opensubsonic.netlify.app/) server with a web player
-that downloads music from YouTube Music into a library it owns.
+that downloads music from YouTube Music and Deezer into a library it owns.
 
 ## Features
 
 | | |
 |---|---|
 | **Web player** | Material 3, colored from the cover playing, light and dark; compact with a mouse, touch-sized on phones: library, search, queue synced across devices, likes, ratings, synced lyrics, equalizer, playlists, smart playlists, folders. |
-| **Discover** | Search YouTube Music; download songs or albums. Opus remuxed losslessly, tagged, filed with its cover; `yt-dlp` as fallback. |
-| **Watches** | Playlists (mirrored read-only), liked music, and artists' new releases, synced one-way on a schedule. |
+| **Discover** | Search YouTube Music or Deezer; download songs or albums, tagged and filed with their cover. YouTube Music's Opus is remuxed losslessly, with `yt-dlp` as fallback; Deezer's songs come from [Monochrome](https://github.com/monochrome-music/monochrome), found by ISRC, and are stored as Opus. |
+| **Watches** | Playlists (mirrored read-only), liked music on YouTube Music, and artists' new releases, synced one-way on a schedule; Deezer share links work too. |
 | **Jobs** | Downloads, syncs and lookups, live. |
 | **Uploads** | Audio files or zip archives, reviewed before they join the library. |
 | **Orphans** | Songs nothing keeps any more (left a playlist, excluded, unwatched); kept or deleted by hand, never automatically. |
-| **Tagging** | [MusicBrainz](https://musicbrainz.org/) lookups, Cover Art Archive covers, Wikipedia bios; pick a release when unsure; edit albums by hand. |
+| **Tagging** | [MusicBrainz](https://musicbrainz.org/) lookups, Cover Art Archive covers, Wikipedia bios; pick a release when unsure; edit albums by hand. Singles, and songs that came with no album, stand alone: the player lists them as songs, Subsonic marks them `releaseTypes: ["Single"]`, and MusicBrainz looks them up song by song. |
 | **Lyrics** | From the file, [LRCLIB](https://lrclib.net) or YouTube Music; instrumentals recognized. |
 | **YouTube Music login** | A real browser on the server, shown in the player (two-factor works; password managers via [HTML-in-Canvas](https://github.com/WICG/html-in-canvas) where available). Cookies checked and refreshed automatically. |
 | **Accounts** | A library, YouTube Music login and settings per account; admins make accounts, turn them off, reset passwords, promote admins, and see what each library takes up on disk. |
@@ -82,6 +82,7 @@ Defaults, then `pixiu.toml` (or `PIXIU_CONFIG`), then `PIXIU_` environment varia
 | `stream.max_transcodes` | `4` | Concurrent transcodes |
 | `enrich.contact` | unset | Your email or URL, sent only in the `User-Agent` of lookups |
 | `hunt.botguard` | unset | [`rustypipe-botguard`](https://codeberg.org/ThetaDev/rustypipe-botguard) path (glibc only, not in Docker) |
+| `hunt.monochrome` | `https://tracks.monochrome.st` | [Monochrome](https://github.com/monochrome-music/monochrome)'s API, which serves Deezer's songs |
 
 ## Files
 
@@ -105,7 +106,7 @@ Defaults, then `pixiu.toml` (or `PIXIU_CONFIG`), then `PIXIU_` environment varia
 | Command | |
 |---|---|
 | `cargo test --workspace` | Unit and end-to-end tests |
-| `cargo test --workspace -- --ignored` | Also Chromium, YouTube Music, MusicBrainz, LRCLIB |
+| `cargo test --workspace -- --ignored` | Also Chromium, YouTube Music, Deezer, Monochrome, MusicBrainz, LRCLIB |
 | `cargo clippy --workspace --all-targets` | Lints |
 | `cd web && nub run dev` | Player with live reload; proxies `/api` and `/rest` to `PIXIU_URL` (`http://127.0.0.1:4600`) |
 | `nub run typecheck` / `nub run check` / `nub run test` | Player types, lint and format, unit tests |
@@ -120,7 +121,7 @@ Defaults, then `pixiu.toml` (or `PIXIU_CONFIG`), then `PIXIU_` environment varia
 | `pixiu-core` | Config, secrets, passwords, alerts |
 | `pixiu-db` | [Toasty](https://github.com/tokio-rs/toasty) models and migrations (SQLite) |
 | `pixiu-enrich` | MusicBrainz, Cover Art Archive, LRCLIB, Wikipedia |
-| `pixiu-hunt` | YouTube Music ([rustypipe](https://codeberg.org/ThetaDev/rustypipe)), downloads |
+| `pixiu-hunt` | Downloads, from a `Source` per platform; YouTube Music's through [rustypipe](https://codeberg.org/ThetaDev/rustypipe), Deezer's through its public API and Monochrome |
 | `pixiu-jobs` | Job queue, session wardens |
 | `pixiu-media` | Remuxing and transcoding (FFmpeg) |
 | `pixiu-subsonic` | OpenSubsonic API (`/rest`) |

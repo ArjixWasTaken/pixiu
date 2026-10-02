@@ -218,6 +218,7 @@ async fn deleting_takes_the_library_along() {
         title_key: "album",
         artist_id: artist.id,
         created_at: now(),
+        single: false,
     })
     .exec(&mut db)
     .await

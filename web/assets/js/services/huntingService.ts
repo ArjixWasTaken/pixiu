@@ -1,5 +1,5 @@
 /**
- * píxiū's hunting API: searching YouTube Music and grabbing, watches, jobs,
+ * píxiū's hunting API: searching a platform and grabbing, watches, jobs,
  * orphans, offerings, the YouTube Music account, and settings.
  */
 import { http } from '@/services/http'
@@ -39,6 +39,8 @@ export interface Watch {
   kind: WatchKind
   name: string
   image: string | null
+  /** The platform it follows something on, like `deezer`. */
+  platform: string
   link: string
   include_singles: boolean
   only_new: boolean
@@ -56,16 +58,24 @@ export interface Watch {
 }
 
 export interface ExcludedSong {
-  video_id: string
+  /** The song on its platform, like `youtube_music:dQw4w9WgXcQ`. */
+  key: string
   title: string | null
   artist: string | null
   excluded_at: string
 }
 
 export interface PlaylistWatch {
-  watch: { id: number; kind: WatchKind; name: string; link: string; last_synced_at: string | null }
+  watch: {
+    id: number
+    kind: WatchKind
+    name: string
+    platform: string
+    link: string
+    last_synced_at: string | null
+  }
   coming: Array<{
-    video_id: string
+    key: string
     title: string | null
     artist: string | null
     /** Its download, when there is one. */
@@ -139,13 +149,22 @@ export interface Settings {
   albums_not_looked_up: number
 }
 
+/** The platform something was downloaded from, and its page there. */
+export interface SourceLink {
+  platform: string
+  /** The platform's name, like "YouTube Music". */
+  name: string
+  url: string | null
+}
+
 export interface SongInfo {
   format: string
   size: number
   origin: 'offering' | 'download'
   source_name: string | null
   source_archive: string | null
-  youtube_url: string | null
+  /** Where it was downloaded from; `null` for uploads. */
+  source: SourceLink | null
   mbid: string | null
   isrc: string | null
   added_at: string
@@ -172,8 +191,8 @@ export interface AlbumDetails {
   enriched_at: string | null
   mbid: string | null
   candidates: ReleaseCandidate[]
-  source: 'youtube_music' | 'offering'
-  youtube_url: string | null
+  /** Where it was downloaded from; `null` for uploads. */
+  source: SourceLink | null
   tracks: Array<{ id: string; title: string; track: number | null; disc: number | null }>
 }
 
@@ -189,7 +208,10 @@ export interface HuntingSummary {
 export const huntingService = {
   summary: () => http.silently.get<HuntingSummary>('hunting'),
 
-  search: (q: string) => http.get<{ tracks: HuntTrack[]; albums: HuntAlbum[] }>(`hunt?q=${encodeURIComponent(q)}`),
+  search: (q: string, platform: string) =>
+    http.get<{ tracks: HuntTrack[]; albums: HuntAlbum[] }>(
+      `hunt?q=${encodeURIComponent(q)}&platform=${encodeURIComponent(platform)}`,
+    ),
   grabTrack: (track: HuntTrack) =>
     http.post('hunt/tracks', { id: track.id, title: `${track.artist} — ${track.title}` }),
   grabAlbum: (album: HuntAlbum) =>
@@ -201,8 +223,7 @@ export const huntingService = {
   removeWatch: (id: number) => http.delete(`watches/${id}`),
   syncWatch: (id: number) => http.post(`watches/${id}/sync`),
   exclude: (watchId: number, song: string) => http.post(`watches/${watchId}/exclusions`, { song }),
-  include: (watchId: number, videoId: string) =>
-    http.delete(`watches/${watchId}/exclusions/${encodeURIComponent(videoId)}`),
+  include: (watchId: number, key: string) => http.delete(`watches/${watchId}/exclusions/${encodeURIComponent(key)}`),
   playlistWatch: (playlistId: string) => http.get<PlaylistWatch | null>(`playlists/${playlistId}/watch`),
 
   jobs: () => http.silently.get<HuntJob[]>('jobs'),

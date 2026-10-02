@@ -82,7 +82,8 @@ const offlineIdle = computed(
 
 const fmtLength = secondsToHis(playable.value.length)
 const artist = computed(() => playable.value.artist_name)
-const album = computed(() => playable.value.album_name)
+/** A single's song stands alone: no album to name. */
+const album = computed(() => (playable.value.is_single ? 'Single' : playable.value.album_name))
 
 const { isMobile, isTouch } = useViewport()
 

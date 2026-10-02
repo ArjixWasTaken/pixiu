@@ -15,7 +15,7 @@
       <div class="current-version m3-title-medium text-(--schemes-on-surface)">{{ appName }} {{ currentVersion }}</div>
 
       <p>
-        A music server that downloads from YouTube Music, with a library for each of its users.
+        A music server that downloads from YouTube Music and Deezer, with a library for each of its users.
         <a href="https://github.com/ArjixWasTaken/pixiu" rel="noopener" target="_blank">Source code</a>
       </p>
     </main>

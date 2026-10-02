@@ -25,7 +25,12 @@ pub(crate) async fn album_list(
     let offset = params.number("offset", 0_u32)?;
 
     let mut sql = cx.lib.sql("SELECT albums.id FROM albums");
-    let owned = "albums.user_id = ?1";
+    // píxiū's own `singles=false`, which its web player sends: albums only.
+    let owned = if params.get("singles") == Some("false") {
+        "albums.user_id = ?1 AND NOT albums.single"
+    } else {
+        "albums.user_id = ?1"
+    };
     match kind {
         "random" => sql.push(&format!(" WHERE {owned} ORDER BY RANDOM()")),
         "newest" => sql.push(&format!(

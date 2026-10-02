@@ -5,7 +5,7 @@ use std::{
     time::Duration,
 };
 
-use pixiu_db::{Job, JobKind, JobState, now, toasty};
+use pixiu_db::{Job, JobKind, JobState, SourceKey, now, toasty};
 use pixiu_jobs::{
     Executor, JobUpdate, Jobs, NewJob, Outcome,
     queue::{AlbumJob, TrackJob},
@@ -15,7 +15,11 @@ use pixiu_jobs::{
 /// The user every test library and job belongs to.
 const OWNER: u64 = 1;
 
-/// Succeeds, fails or expands depending on the video id, and records
+fn key(id: &str) -> SourceKey {
+    SourceKey::youtube_music(id)
+}
+
+/// Succeeds, fails or expands depending on the song's id, and records
 /// what ran.
 #[derive(Default)]
 struct FakeExecutor {
@@ -38,15 +42,15 @@ impl Executor for Shared {
             progress(50);
             if job.kind == JobKind::GrabAlbum {
                 let payload: AlbumJob = serde_json::from_str(&job.payload).unwrap();
-                let album = payload.browse_id;
-                let second = if album == "stuck" { "hold" } else { "a2" };
+                let album = payload.key;
+                let second = if album.id() == "stuck" { "hold" } else { "a2" };
                 return Outcome::Expand(vec![
-                    NewJob::track("a1", "Album track 1", Some(album.clone())),
-                    NewJob::track(second, "Album track 2", Some(album)),
+                    NewJob::track(&key("a1"), "Album track 1", Some(album.as_stored())),
+                    NewJob::track(&key(second), "Album track 2", Some(album.as_stored())),
                 ]);
             }
             let payload: TrackJob = serde_json::from_str(&job.payload).unwrap();
-            match payload.video_id.as_str() {
+            match payload.key.id() {
                 "flaky" => {
                     let mut left = fake.failures_left.lock().unwrap();
                     if *left > 0 {
@@ -111,16 +115,16 @@ async fn jobs_run_expand_fail_and_retry() {
     let mut updates = jobs.subscribe();
     jobs.start();
 
-    jobs.enqueue(OWNER, NewJob::track("ok", "Good track", None))
+    jobs.enqueue(OWNER, NewJob::track(&key("ok"), "Good track", None))
         .await
         .unwrap();
-    jobs.enqueue(OWNER, NewJob::track("known", "Hoarded track", None))
+    jobs.enqueue(OWNER, NewJob::track(&key("known"), "Hoarded track", None))
         .await
         .unwrap();
-    jobs.enqueue(OWNER, NewJob::track("flaky", "Flaky track", None))
+    jobs.enqueue(OWNER, NewJob::track(&key("flaky"), "Flaky track", None))
         .await
         .unwrap();
-    jobs.enqueue(OWNER, NewJob::album("album", "An album"))
+    jobs.enqueue(OWNER, NewJob::album(&key("album"), "An album"))
         .await
         .unwrap();
 
@@ -196,7 +200,7 @@ async fn album_grabs_stay_whole_until_their_tracks_finish() {
     );
     jobs.start();
     let album = jobs
-        .enqueue(OWNER, NewJob::album("stuck", "Stuck album"))
+        .enqueue(OWNER, NewJob::album(&key("stuck"), "Stuck album"))
         .await
         .unwrap();
 
@@ -221,8 +225,8 @@ async fn album_grabs_stay_whole_until_their_tracks_finish() {
 
     // The album is still being grabbed, through its tracks.
     let pending = pixiu_jobs::pending(&mut db.clone(), OWNER).await.unwrap();
-    assert!(pending.has_album("stuck"));
-    assert!(pending.tracks.contains("hold"));
+    assert!(pending.has_album(&key("stuck")));
+    assert!(pending.tracks.contains(&key("hold")));
 
     // Clearing keeps the family while a track waits.
     jobs.clear_finished(OWNER).await.unwrap();
@@ -237,10 +241,10 @@ async fn interrupted_jobs_run_again_after_a_restart() {
     // A job that was running when píxiū stopped, saved before payloads
     // said who wanted them.
     let payload = r#"{"video_id":"ok","reference":null}"#;
-    assert_eq!(
-        serde_json::from_str::<TrackJob>(payload).unwrap().wanted,
-        pixiu_jobs::Wanted::Grab
-    );
+    let old = serde_json::from_str::<TrackJob>(payload).unwrap();
+    assert_eq!(old.wanted, pixiu_jobs::Wanted::Grab);
+    // From before keys too: its video id is a YouTube Music key.
+    assert_eq!(old.key, key("ok"));
     toasty::create!(Job {
         user_id: OWNER,
         kind: JobKind::DownloadTrack,
@@ -275,12 +279,12 @@ async fn users_take_turns() {
     for n in 1..=3 {
         jobs.enqueue(
             OWNER,
-            NewJob::track(&format!("a{n}"), &format!("A{n}"), None),
+            NewJob::track(&key(&format!("a{n}")), &format!("A{n}"), None),
         )
         .await
         .unwrap();
     }
-    jobs.enqueue(OTHER, NewJob::track("b1", "B1", None))
+    jobs.enqueue(OTHER, NewJob::track(&key("b1"), "B1", None))
         .await
         .unwrap();
     let mut updates = jobs.subscribe();

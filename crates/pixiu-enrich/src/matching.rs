@@ -75,6 +75,8 @@ pub struct Release {
     pub date: Option<String>,
     pub country: Option<String>,
     pub release_group_id: Option<String>,
+    /// The release group's primary type: "Album", "Single", "EP"…
+    pub primary_type: Option<String>,
     /// The genre MusicBrainz users voted for most: the release's, else its
     /// release group's.
     pub genre: Option<String>,
@@ -82,7 +84,37 @@ pub struct Release {
     pub tracks: Vec<ReleaseTrack>,
 }
 
+/// A recording: a song as recorded, whichever releases carry it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Recording {
+    pub id: String,
+    pub title: String,
+    pub artist: Credit,
+    pub length_ms: Option<u64>,
+    pub isrcs: Vec<String>,
+    /// When it first came out: `YYYY`, `YYYY-MM` or `YYYY-MM-DD`.
+    pub first_released: Option<String>,
+    /// The genre MusicBrainz users voted for most, once looked up.
+    pub genre: Option<String>,
+}
+
+impl Recording {
+    /// The year it first came out, when known.
+    #[must_use]
+    pub fn year(&self) -> Option<i32> {
+        self.first_released.as_deref()?.get(..4)?.parse().ok()
+    }
+}
+
 impl Release {
+    /// Whether MusicBrainz files it as a single.
+    #[must_use]
+    pub fn is_single(&self) -> bool {
+        self.primary_type
+            .as_deref()
+            .is_some_and(|kind| kind.eq_ignore_ascii_case("single"))
+    }
+
     /// The release year, when the date has one.
     #[must_use]
     pub fn year(&self) -> Option<i32> {
@@ -245,6 +277,74 @@ pub fn pair(album: &LocalAlbum, release: &Release) -> Pairing {
     }
 }
 
+/// The main artist of a credit like "A feat. B" or "A, B".
+fn first_artist(credit: &str) -> &str {
+    let lower = credit.to_lowercase();
+    let cut = [",", " & ", " feat", " ft.", " x ", " with "]
+        .iter()
+        .filter_map(|marker| lower.find(marker))
+        .min()
+        .unwrap_or(credit.len());
+    credit.get(..cut).unwrap_or(credit).trim()
+}
+
+/// The title without the "Artist - " music videos are often named with,
+/// when that artist is the song's.
+fn without_artist_prefix<'a>(title: &'a str, artist: &str) -> &'a str {
+    match title.split_once(" - ") {
+        Some((prefix, rest))
+            if !rest.trim().is_empty()
+                && similarity(first_artist(prefix), first_artist(artist)) >= 0.85 =>
+        {
+            rest.trim()
+        }
+        _ => title,
+    }
+}
+
+/// The recording `local` is, when one of `candidates` certainly is: the
+/// same ISRC and a like title, or a very like title, the same artist and
+/// the same length. An ISRC match comes first, then the recording first
+/// released earliest.
+#[must_use]
+pub fn recording_match<'a>(
+    local: &LocalTrack,
+    candidates: &'a [Recording],
+) -> Option<&'a Recording> {
+    let same_isrc = |recording: &Recording| {
+        local.isrc.as_ref().is_some_and(|isrc| {
+            recording
+                .isrcs
+                .iter()
+                .any(|other| other.eq_ignore_ascii_case(isrc))
+        })
+    };
+    let bare_title = without_artist_prefix(&local.title, &local.artist);
+    let certain = |recording: &&Recording| {
+        let title = similarity(&local.title, &recording.title)
+            .max(similarity(bare_title, &recording.title));
+        if same_isrc(recording) {
+            return title >= 0.6;
+        }
+        let artist = similarity(&local.artist, &recording.artist.name).max(
+            recording.artist.artists.first().map_or(0.0, |(_, name)| {
+                similarity(first_artist(&local.artist), name)
+            }),
+        );
+        title >= 0.9
+            && artist >= 0.85
+            && recording.length_ms.is_some()
+            && durations_agree(local.duration_ms, recording.length_ms)
+    };
+    candidates.iter().filter(certain).min_by_key(|recording| {
+        (
+            !same_isrc(recording),
+            recording.first_released.is_none(),
+            recording.first_released.clone(),
+        )
+    })
+}
+
 /// Whether a pairing is good enough to apply without asking.
 #[must_use]
 pub fn is_certain(pairing: &Pairing) -> bool {
@@ -293,6 +393,7 @@ mod tests {
             date: Some("2023-08-01".to_owned()),
             country: Some("XW".to_owned()),
             release_group_id: Some("rg-1".to_owned()),
+            primary_type: Some("Album".to_owned()),
             genre: None,
             has_front_cover: true,
             tracks: vec![
@@ -388,5 +489,100 @@ mod tests {
         let wrong = prescore(&wanted, "Greatest Hits", "Kevin MacLeod", 40, 90);
         assert!(right > wrong);
         assert_eq!(august().year(), Some(2023));
+    }
+
+    fn song(title: &str, artist: &str, seconds: u64, isrc: Option<&str>) -> LocalTrack {
+        LocalTrack {
+            id: 1,
+            title: title.to_owned(),
+            artist: artist.to_owned(),
+            duration_ms: seconds * 1000,
+            track_number: None,
+            disc_number: None,
+            isrc: isrc.map(str::to_owned),
+        }
+    }
+
+    fn recording(id: &str, title: &str, artist: &str, seconds: u64, isrc: &str) -> Recording {
+        Recording {
+            id: id.to_owned(),
+            title: title.to_owned(),
+            artist: Credit {
+                name: artist.to_owned(),
+                artists: vec![(format!("art-{id}"), artist.to_owned())],
+            },
+            length_ms: Some(seconds * 1000),
+            isrcs: vec![isrc.to_owned()],
+            first_released: None,
+            genre: None,
+        }
+    }
+
+    #[test]
+    fn recordings_are_matched_by_isrc_first() {
+        let candidates = [
+            recording("a", "Dawn Chorus", "Main Artist", 211, "ZZ1"),
+            recording("b", "Dawn Chorus (Radio Edit)", "Main Artist", 180, "ZZ2"),
+        ];
+        let local = song("Dawn Chorus", "Main Artist", 211, Some("zz2"));
+        assert_eq!(recording_match(&local, &candidates).unwrap().id, "b");
+        // A wrong ISRC on a different song is not enough.
+        let other = [recording(
+            "c",
+            "Something Else Entirely",
+            "Main Artist",
+            211,
+            "ZZ2",
+        )];
+        assert_eq!(recording_match(&local, &other), None);
+    }
+
+    #[test]
+    fn recordings_are_matched_by_name_artist_and_length() {
+        let candidates = [recording("a", "Dawn Chorus", "Main Artist", 212, "ZZ1")];
+        for local in [
+            song("Dawn Chorus", "Main Artist", 211, None),
+            song("Dawn chorus", "Main Artist, Guest", 210, None),
+            song("Dawn Chorus", "Main Artist feat. Guest", 213, Some("XX9")),
+            // As music videos are named.
+            song("Main Artist - Dawn Chorus", "Main Artist", 211, None),
+            song(
+                "Main Artist & Guest - Dawn Chorus",
+                "Main Artist",
+                211,
+                None,
+            ),
+        ] {
+            assert_eq!(
+                recording_match(&local, &candidates).map(|r| r.id.as_str()),
+                Some("a"),
+                "{local:?}"
+            );
+        }
+        for local in [
+            song("Dawn Chorus", "Main Artist", 240, None),
+            song("Dusk Chorus", "Main Artist", 211, None),
+            song("Dawn Chorus", "Somebody Else", 211, None),
+            song("Somebody Else - Dawn Chorus", "Main Artist", 211, None),
+        ] {
+            assert_eq!(recording_match(&local, &candidates), None, "{local:?}");
+        }
+    }
+
+    #[test]
+    fn the_first_release_wins_among_equals() {
+        let mut early = recording("early", "Dawn Chorus", "Main Artist", 211, "ZZ1");
+        early.first_released = Some("2019-01-01".to_owned());
+        let mut late = early.clone();
+        late.id = "late".to_owned();
+        late.first_released = Some("2021-01-01".to_owned());
+        let mut undated = early.clone();
+        undated.id = "undated".to_owned();
+        undated.first_released = None;
+        let local = song("Dawn Chorus", "Main Artist", 211, Some("ZZ1"));
+        assert_eq!(
+            recording_match(&local, &[undated, late, early]).unwrap().id,
+            "early"
+        );
     }
 }

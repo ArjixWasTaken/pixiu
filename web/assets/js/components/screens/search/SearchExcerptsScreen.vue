@@ -18,7 +18,7 @@
       <AlbumResultsBlock :albums="excerpt.albums" :searching data-testid="album-excerpts" />
 
       <M3Button :href="discoverUrl" icon="travel_explore" variant="tonal">
-        Search YouTube Music for “{{ q }}”
+        Search {{ platformName }} for “{{ q }}”
       </M3Button>
     </div>
 
@@ -40,6 +40,7 @@ import { eventBus } from '@/utils/eventBus'
 import { queryClient } from '@/services/queryClient'
 import { useSearchStore } from '@/stores/searchStore'
 import { useRouter } from '@/composables/useRouter'
+import { useDiscoverPlatform } from '@/composables/useDiscoverPlatform'
 
 import ScreenHeader from '@/components/ui/ScreenHeader.vue'
 import ScreenEmptyState from '@/components/ui/ScreenEmptyState.vue'
@@ -71,6 +72,8 @@ const { data, isFetching: searching } = useQuery({
 const excerpt = computed(() => data.value ?? { playables: [], albums: [], artists: [] })
 
 const discoverUrl = computed(() => `${url('hunt')}?q=${encodeURIComponent(q.value)}`)
+// Discover searches the platform last chosen there.
+const { name: platformName } = useDiscoverPlatform()
 
 eventBus.on('SONGS_DELETED', songs => {
   if (intersectionBy(songs, excerpt.value.playables, 'id').length !== 0) {

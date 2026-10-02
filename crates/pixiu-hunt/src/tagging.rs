@@ -20,7 +20,9 @@ pub(crate) struct TrackTags<'a> {
     pub album: &'a str,
     pub album_artist: &'a str,
     pub track_number: Option<u32>,
+    pub disc_number: Option<u32>,
     pub year: Option<u16>,
+    pub isrc: Option<&'a str>,
     /// Where the track came from, written as a comment.
     pub source_url: &'a str,
     pub cover: Option<&'a Cover>,
@@ -38,8 +40,14 @@ pub(crate) fn write(path: &Path, tags: &TrackTags<'_>) -> Result<(), HuntError> 
     if let Some(number) = tags.track_number {
         tag.set_track(number);
     }
+    if let Some(number) = tags.disc_number {
+        tag.set_disk(number);
+    }
     if let Some(year) = tags.year {
         tag.insert_text(ItemKey::RecordingDate, year.to_string());
+    }
+    if let Some(isrc) = tags.isrc {
+        tag.insert_text(ItemKey::Isrc, isrc.to_owned());
     }
     tag.set_comment(tags.source_url.to_owned());
     if let Some(cover) = tags.cover {
@@ -88,7 +96,9 @@ mod tests {
                 album: "Morning",
                 album_artist: "Main Artist",
                 track_number: Some(3),
+                disc_number: Some(2),
                 year: Some(2021),
+                isrc: Some("ZZXX12100003"),
                 source_url: "https://music.youtube.com/watch?v=abc",
                 cover: Some(&cover),
             },
@@ -101,7 +111,9 @@ mod tests {
         assert_eq!(info.album.as_deref(), Some("Morning"));
         assert_eq!(info.album_artist.as_deref(), Some("Main Artist"));
         assert_eq!(info.track_number, Some(3));
+        assert_eq!(info.disc_number, Some(2));
         assert_eq!(info.year, Some(2021));
+        assert_eq!(info.isrc.as_deref(), Some("ZZXX12100003"));
         assert_eq!(info.suffix, "opus");
         assert_eq!(info.cover.map(|cover| cover.data), Some(cover.data));
     }

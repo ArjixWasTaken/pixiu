@@ -1,28 +1,36 @@
 //! Platform-neutral descriptions of remote music, so the rest of píxiū does
 //! not depend on any platform client's types.
 
+use pixiu_db::SourceKey;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AlbumRef {
-    pub id: String,
+    pub id: SourceKey,
     pub title: String,
 }
 
 /// A track on a platform.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RemoteTrack {
-    /// The platform's id (a YouTube video id).
-    pub id: String,
+    /// The song on the platform (a YouTube Music video).
+    pub id: SourceKey,
     pub title: String,
     /// Artist names, primary first.
     pub artists: Vec<String>,
-    /// The primary artist's channel (`UC…`), when the platform names one.
+    /// The primary artist on the platform (a YouTube Music channel), when it
+    /// names one.
     #[serde(default)]
-    pub artist_id: Option<String>,
+    pub artist_id: Option<SourceKey>,
     pub album: Option<AlbumRef>,
     pub duration_secs: Option<u32>,
     pub track_number: Option<u16>,
+    /// The disc of a release with several, when the platform says.
+    #[serde(default)]
+    pub disc_number: Option<u16>,
+    /// The recording's ISRC, when the platform says.
+    #[serde(default)]
+    pub isrc: Option<String>,
     pub cover_url: Option<String>,
     /// A music video rather than a studio track.
     pub is_video: bool,
@@ -47,13 +55,14 @@ pub enum AlbumKind {
 /// An album on a platform.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RemoteAlbum {
-    /// The platform's id (a YouTube Music browse id).
-    pub id: String,
+    /// The album on the platform (a YouTube Music browse id).
+    pub id: SourceKey,
     pub title: String,
     pub artists: Vec<String>,
-    /// The primary artist's channel (`UC…`), when the platform names one.
+    /// The primary artist on the platform (a YouTube Music channel), when it
+    /// names one.
     #[serde(default)]
-    pub artist_id: Option<String>,
+    pub artist_id: Option<SourceKey>,
     pub year: Option<u16>,
     pub kind: AlbumKind,
     pub cover_url: Option<String>,
@@ -65,7 +74,7 @@ pub struct RemoteAlbum {
 /// An artist on a platform.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RemoteArtist {
-    pub id: String,
+    pub id: SourceKey,
     pub name: String,
     pub image_url: Option<String>,
 }
@@ -73,7 +82,7 @@ pub struct RemoteArtist {
 /// A playlist on a platform, with all its tracks in order.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RemotePlaylist {
-    pub id: String,
+    pub id: SourceKey,
     pub name: String,
     #[serde(default)]
     pub image_url: Option<String>,
@@ -83,8 +92,8 @@ pub struct RemotePlaylist {
 /// An artist and their releases, newest first.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Discography {
-    /// The artist's channel id.
-    pub id: String,
+    /// The artist on the platform (a YouTube Music channel).
+    pub id: SourceKey,
     pub name: String,
     #[serde(default)]
     pub image_url: Option<String>,
@@ -119,18 +128,27 @@ pub(crate) fn best_image_url(candidates: &[(String, u32)]) -> Option<String> {
     Some(image_url_at(url, 1200))
 }
 
-/// The same image scaled to `size` pixels square, for images Google resizes
-/// on request; other URLs come back unchanged.
+/// The same image scaled to `size` pixels square, for images Google and
+/// Deezer resize on request; other URLs come back unchanged.
 #[must_use]
 pub fn image_url_at(url: &str, size: u32) -> String {
-    match url.rsplit_once('=') {
-        Some((base, options))
-            if url.contains("googleusercontent.com") && options.starts_with('w') =>
-        {
-            format!("{base}=w{size}-h{size}-l90-rj")
-        }
-        _ => url.to_owned(),
+    if url.contains("googleusercontent.com")
+        && let Some((base, options)) = url.rsplit_once('=')
+        && options.starts_with('w')
+    {
+        return format!("{base}=w{size}-h{size}-l90-rj");
     }
+    // `…/images/cover/<hash>/1000x1000-000000-80-0-0.jpg`
+    if url.contains(".dzcdn.net/images/")
+        && let Some((base, name)) = url.rsplit_once('/')
+        && let Some((dimensions, rest)) = name.split_once('-')
+        && let Some((width, height)) = dimensions.split_once('x')
+        && width.parse::<u32>().is_ok()
+        && height.parse::<u32>().is_ok()
+    {
+        return format!("{base}/{size}x{size}-{rest}");
+    }
+    url.to_owned()
 }
 
 #[cfg(test)]
@@ -169,15 +187,30 @@ mod tests {
     }
 
     #[test]
+    fn resizes_deezer_covers() {
+        assert_eq!(
+            image_url_at(
+                "https://cdn-images.dzcdn.net/images/cover/2fec34/1000x1000-000000-80-0-0.jpg",
+                400
+            ),
+            "https://cdn-images.dzcdn.net/images/cover/2fec34/400x400-000000-80-0-0.jpg"
+        );
+        let other = "https://cdn-images.dzcdn.net/images/misc/logo.png";
+        assert_eq!(image_url_at(other, 400), other);
+    }
+
+    #[test]
     fn credits_join_artists() {
         let track = RemoteTrack {
-            id: "x".to_owned(),
+            id: SourceKey::youtube_music("x"),
             title: "t".to_owned(),
             artists: vec!["A".to_owned(), "B".to_owned()],
             artist_id: None,
             album: None,
             duration_secs: None,
             track_number: None,
+            disc_number: None,
+            isrc: None,
             cover_url: None,
             is_video: false,
         };

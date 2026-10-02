@@ -70,8 +70,8 @@ export const useHuntingStore = defineStore('hunting', () => {
     await exclusionsChanged()
   }
 
-  const include = async (watchId: number, videoId: string) => {
-    await huntingService.include(watchId, videoId)
+  const include = async (watchId: number, key: string) => {
+    await huntingService.include(watchId, key)
     await exclusionsChanged()
   }
 

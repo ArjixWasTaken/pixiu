@@ -9,20 +9,21 @@ const mirror: PlaylistWatch = {
     id: 1,
     kind: 'liked_music',
     name: 'Liked music',
+    platform: 'youtube_music',
     link: 'https://music.youtube.com/playlist?list=LM',
     last_synced_at: null,
   },
   coming: [
-    { video_id: 'a', title: 'Unsynced', artist: 'Somebody', job: null },
-    { video_id: 'b', title: 'Queued', artist: 'Somebody', job: { state: 'queued', error: null } },
-    { video_id: 'c', title: 'Running', artist: 'Somebody', job: { state: 'running', error: null } },
+    { key: 'youtube_music:a', title: 'Unsynced', artist: 'Somebody', job: null },
+    { key: 'youtube_music:b', title: 'Queued', artist: 'Somebody', job: { state: 'queued', error: null } },
+    { key: 'youtube_music:c', title: 'Running', artist: 'Somebody', job: { state: 'running', error: null } },
     {
-      video_id: 'd',
+      key: 'youtube_music:d',
       title: 'Broken',
       artist: 'Somebody',
       job: { state: 'failed', error: 'This video is unavailable' },
     },
-    { video_id: 'e', title: 'Landed', artist: 'Somebody', job: { state: 'done', error: null } },
+    { key: 'youtube_music:e', title: 'Landed', artist: 'Somebody', job: { state: 'done', error: null } },
   ],
   excluded: [],
 }
@@ -41,5 +42,26 @@ describe('mirroredWatchPanel.vue', () => {
     screen.getByText('Somebody · failed: This video is unavailable')
     screen.getByText('Somebody · downloaded; waiting for the next sync')
     expect(screen.getByRole('link', { name: 'See the downloads on Jobs' }).getAttribute('href')).toMatch(/jobs$/)
+  })
+
+  it('names the platform the playlist is on', () => {
+    const deezer: PlaylistWatch = {
+      ...mirror,
+      watch: {
+        ...mirror.watch,
+        kind: 'playlist',
+        name: 'Morning',
+        platform: 'deezer',
+        link: 'https://www.deezer.com/playlist/908622995',
+      },
+    }
+    h.render(Component, { props: { mirror: deezer } })
+
+    expect(screen.getByText(/Mirrors the Deezer playlist/).textContent).toMatch(
+      /Mirrors the Deezer playlist\s+“Morning”/,
+    )
+    expect(screen.getByRole('link', { name: '“Morning”' }).getAttribute('href')).toBe(
+      'https://www.deezer.com/playlist/908622995',
+    )
   })
 })

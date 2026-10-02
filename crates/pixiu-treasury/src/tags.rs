@@ -28,6 +28,9 @@ pub struct AudioInfo {
     pub mbid: Option<String>,
     /// MusicBrainz release id.
     pub album_mbid: Option<String>,
+    /// The release's type as tagged (`single`, `album`, `ep`…), primary
+    /// type first.
+    pub release_type: Option<String>,
     pub isrc: Option<String>,
     pub duration_ms: u64,
     /// Kilobits per second.
@@ -153,6 +156,7 @@ fn read_tag(tag: &Tag, info: &mut AudioInfo) {
         .filter(|year| *year > 0);
     info.mbid = item(ItemKey::MusicBrainzRecordingId);
     info.album_mbid = item(ItemKey::MusicBrainzReleaseId);
+    info.release_type = item(ItemKey::MusicBrainzReleaseType);
     info.isrc = item(ItemKey::Isrc);
 
     let pictures = tag.pictures();

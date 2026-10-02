@@ -11,9 +11,10 @@ use axum::{
 };
 use jiff::Timestamp;
 use pixiu_db::{
-    Job, JobKind, JobState, Library, Playlist, PlaylistEntry, SessionState, Watch, WatchKind,
+    Job, JobKind, JobState, Library, Playlist, PlaylistEntry, SessionState, SourceKey, Watch,
+    WatchKind,
 };
-use pixiu_hunt::link::{self, Link};
+use pixiu_hunt::{Link, Page, Platforms};
 use pixiu_jobs::{
     queue::{TrackJob, wanted},
     watch::{self, NewWatch, WAITING_FOR_LOGIN, WatchError},
@@ -32,41 +33,45 @@ fn kind_name(kind: WatchKind) -> &'static str {
     }
 }
 
-fn remote_url(watch: &Watch) -> String {
-    match watch.kind {
-        WatchKind::Artist => format!("https://music.youtube.com/channel/{}", watch.remote_id),
-        WatchKind::Playlist | WatchKind::LikedMusic => format!(
-            "https://music.youtube.com/playlist?list={}",
-            watch.remote_id
-        ),
-    }
+/// The platform a watch follows something on, as stored (`deezer`).
+fn platform_name(watch: &Watch) -> Option<&'static str> {
+    let key: SourceKey = watch.source_key.parse().ok()?;
+    Some(key.platform().as_str())
 }
 
-/// The library's tracks among `videos`, by video id.
-async fn videos_held(lib: &Library, videos: &[String]) -> ApiResult<HashSet<String>> {
-    Ok(lib
-        .tracks_of_videos(videos)
-        .await?
-        .videos()
-        .map(str::to_owned)
-        .collect())
+/// The page on its platform of what a watch follows.
+fn remote_url(platforms: &Platforms, watch: &Watch) -> Option<String> {
+    let key: SourceKey = watch.source_key.parse().ok()?;
+    let page = match watch.kind {
+        WatchKind::Artist => Page::Artist,
+        WatchKind::Playlist | WatchKind::LikedMusic => Page::Playlist,
+    };
+    platforms.page_url(page, &key)
+}
+
+/// The library's tracks among `keys`.
+async fn keys_held(lib: &Library, keys: &[SourceKey]) -> ApiResult<HashSet<SourceKey>> {
+    Ok(lib.tracks_of_keys(keys).await?.keys().collect())
+}
+
+/// The keys of a mirror's entries, in order.
+fn entry_keys<'a>(entries: impl IntoIterator<Item = &'a PlaylistEntry>) -> Vec<SourceKey> {
+    entries
+        .into_iter()
+        .filter_map(|entry| SourceKey::from_stored(entry.source_key.as_deref()))
+        .collect()
 }
 
 /// The songs of a watched playlist's mirror that the library holds, of all.
 async fn progress(lib: &Library, mirror: &Playlist) -> ApiResult<(usize, usize)> {
     let mut db = lib.db();
-    let videos: Vec<String> = PlaylistEntry::filter_by_playlist_id(mirror.id)
+    let entries = PlaylistEntry::filter_by_playlist_id(mirror.id)
         .exec(&mut db)
-        .await?
-        .into_iter()
-        .filter_map(|entry| entry.ytm_video_id)
-        .collect();
-    let downloaded = videos_held(lib, &videos).await?;
-    let have = videos
-        .iter()
-        .filter(|video| downloaded.contains(*video))
-        .count();
-    Ok((have, videos.len()))
+        .await?;
+    let keys = entry_keys(&entries);
+    let downloaded = keys_held(lib, &keys).await?;
+    let have = keys.iter().filter(|key| downloaded.contains(*key)).count();
+    Ok((have, keys.len()))
 }
 
 #[derive(Serialize)]
@@ -156,7 +161,8 @@ pub(crate) async fn list(
             "kind": kind_name(watch.kind),
             "name": watch.name,
             "image": watch.image_url,
-            "link": remote_url(&watch),
+            "platform": platform_name(&watch),
+            "link": remote_url(state.hunter.platforms(), &watch),
             "include_singles": watch.include_singles,
             "only_new": watch.only_new,
             "releases_known": watch.seen.len(),
@@ -189,15 +195,17 @@ pub(crate) async fn add(
     Json(form): Json<AddWatch>,
 ) -> ApiResult<StatusCode> {
     let target = form.target.trim();
+    let platforms = state.hunter.platforms();
     let parsed = if target == "liked" {
-        Some(Link::LikedMusic)
+        platforms.liked_music().map(Link::LikedMusic)
     } else {
-        link::parse(target)
+        // Share buttons give short links, followed to the real one.
+        platforms.resolve_link(target).await
     };
-    let (kind, remote_id) = match parsed {
-        Some(Link::Playlist(id)) => (WatchKind::Playlist, id),
-        Some(Link::LikedMusic) => (WatchKind::LikedMusic, String::new()),
-        Some(Link::Artist(id)) => (WatchKind::Artist, id),
+    let (kind, key) = match parsed {
+        Some(Link::Playlist(key)) => (WatchKind::Playlist, key),
+        Some(Link::LikedMusic(key)) => (WatchKind::LikedMusic, key),
+        Some(Link::Artist(key)) => (WatchKind::Artist, key),
         Some(Link::Album(_) | Link::Track(_)) => {
             return Err(ApiError::unprocessable(
                 "That is an album or a song; download it from Discover instead.",
@@ -205,13 +213,13 @@ pub(crate) async fn add(
         }
         None => {
             return Err(ApiError::unprocessable(
-                "That does not look like a YouTube Music playlist or artist link.",
+                "That does not look like a YouTube Music or Deezer playlist or artist link.",
             ));
         }
     };
     let new = NewWatch {
         kind,
-        remote_id,
+        key,
         include_singles: form.singles,
         only_new: form.only_new,
     };
@@ -250,7 +258,8 @@ pub(crate) async fn sync(
 
 #[derive(Serialize)]
 struct Excluded {
-    video_id: String,
+    /// The song on its platform.
+    key: String,
     title: Option<String>,
     artist: Option<String>,
     excluded_at: Timestamp,
@@ -269,7 +278,7 @@ async fn excluded(lib: &Library, watch_id: u64) -> ApiResult<Vec<Excluded>> {
         .await?
         .into_iter()
         .map(|exclusion| Excluded {
-            video_id: exclusion.ytm_video_id,
+            key: exclusion.source_key,
             title: exclusion.title,
             artist: exclusion.artist,
             excluded_at: exclusion.excluded_at,
@@ -290,7 +299,7 @@ pub(crate) async fn exclusions(
 
 #[derive(Deserialize)]
 pub(crate) struct Exclude {
-    /// The song, by its Subsonic id (`tr-…`) or its YouTube video id.
+    /// The song, by its Subsonic id (`tr-…`) or its key.
     song: String,
 }
 
@@ -304,36 +313,43 @@ pub(crate) async fn exclude(
 ) -> ApiResult<StatusCode> {
     let lib = session.library(&state);
     let id = load(&lib, id).await?.id;
-    let video = match ids::Id::parse(&form.song) {
+    let key = match ids::Id::parse(&form.song) {
         Some(ids::Id::Track(track_id)) => lib
             .track(track_id)
             .await?
-            .and_then(|track| track.ytm_video_id)
-            .ok_or_else(|| ApiError::unprocessable("That song did not come from YouTube Music."))?,
-        _ => form.song,
+            .and_then(|track| SourceKey::from_stored(track.source_key.as_deref())),
+        _ => form.song.parse().ok(),
     };
-    if watch::exclude(&state.treasury, &state.jobs, id, &video).await? {
+    let Some(key) = key else {
+        return Err(ApiError::unprocessable(
+            "That song was not downloaded from the watched playlist's platform.",
+        ));
+    };
+    if watch::exclude(&state.treasury, &state.jobs, id, &key).await? {
         Ok(StatusCode::NO_CONTENT)
     } else {
         Err(ApiError::not_found("watched playlist"))
     }
 }
 
-/// `DELETE /api/watches/{id}/exclusions/{video}`: lets the watch fetch the
+/// `DELETE /api/watches/{id}/exclusions/{key}`: lets the watch fetch the
 /// song again.
 pub(crate) async fn include(
     State(state): State<ApiState>,
     session: Session,
-    Path((id, video)): Path<(u64, String)>,
+    Path((id, key)): Path<(u64, String)>,
 ) -> ApiResult<StatusCode> {
     let watch = load(&session.library(&state), id).await?;
-    watch::include(&state.treasury, &state.jobs, watch.id, &video).await?;
+    let key: SourceKey = key
+        .parse()
+        .map_err(|_| ApiError::not_found("excluded song"))?;
+    watch::include(&state.treasury, &state.jobs, watch.id, &key).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
-/// The latest download job of each video the user asked for, among the
+/// The latest download job of each song the user asked for, among the
 /// unfinished and the recent.
-async fn latest_downloads(state: &ApiState, owner: u64) -> ApiResult<HashMap<String, Job>> {
+async fn latest_downloads(state: &ApiState, owner: u64) -> ApiResult<HashMap<SourceKey, Job>> {
     let mut jobs = state.jobs.unfinished(owner).await?;
     jobs.extend(state.jobs.recent(owner, 500).await?);
     jobs.sort_by_key(|job| job.id);
@@ -343,7 +359,7 @@ async fn latest_downloads(state: &ApiState, owner: u64) -> ApiResult<HashMap<Str
             continue;
         }
         if let Ok(payload) = serde_json::from_str::<TrackJob>(&job.payload) {
-            latest.insert(payload.video_id, job);
+            latest.insert(payload.key, job);
         }
     }
     Ok(latest)
@@ -375,26 +391,22 @@ pub(crate) async fn of_playlist(
         .exec(&mut db)
         .await?;
     entries.sort_by_key(|entry| entry.position);
-    let videos: Vec<String> = entries
-        .iter()
-        .filter_map(|entry| entry.ytm_video_id.clone())
-        .collect();
-    let hoarded = videos_held(&lib, &videos).await?;
+    let hoarded = keys_held(&lib, &entry_keys(&entries)).await?;
     let downloads = latest_downloads(&state, session.owner()).await?;
     let coming: Vec<JsonValue> = entries
         .into_iter()
         .filter(|entry| entry.track_id.is_none())
         .filter_map(|entry| {
-            let video = entry.ytm_video_id?;
-            (!hoarded.contains(&video)).then(|| {
+            let key = SourceKey::from_stored(entry.source_key.as_deref())?;
+            (!hoarded.contains(&key)).then(|| {
                 // How its download is doing, when there is one.
-                let job = downloads.get(&video).map(|job| {
+                let job = downloads.get(&key).map(|job| {
                     json!({
                         "state": crate::jobs::state_name(job.state),
                         "error": job.error,
                     })
                 });
-                json!({ "video_id": video, "title": entry.title, "artist": entry.artist, "job": job })
+                json!({ "key": key, "title": entry.title, "artist": entry.artist, "job": job })
             })
         })
         .collect();
@@ -403,7 +415,8 @@ pub(crate) async fn of_playlist(
             "id": watch.id,
             "kind": kind_name(watch.kind),
             "name": watch.name,
-            "link": remote_url(&watch),
+            "platform": platform_name(&watch),
+            "link": remote_url(state.hunter.platforms(), &watch),
             "last_synced_at": watch.last_synced_at,
         },
         "coming": coming,

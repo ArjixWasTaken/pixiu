@@ -11,8 +11,8 @@ use pixiu_db::{
     Album, Artist, Db, Enrichment, Job, JobKind, Lyrics, LyricsSource, Track, now, toasty,
 };
 use pixiu_enrich::{
-    ArtistInfo, BoxFuture, Candidate, Credit, EnrichError, FoundLyrics, LocalAlbum, LyricsQuery,
-    Release, ReleaseTrack, Sources,
+    ArtistInfo, BoxFuture, Candidate, Credit, EnrichError, FoundLyrics, LocalAlbum, LocalTrack,
+    LyricsQuery, Recording, Release, ReleaseTrack, Sources,
 };
 use pixiu_jobs::{
     Executor, Jobs, Outcome,
@@ -35,7 +35,10 @@ struct FakeSources {
     candidates: Vec<Candidate>,
     releases: HashMap<String, Release>,
     lyrics: HashMap<String, FoundLyrics>,
+    /// Recordings any song search finds.
+    recordings: Vec<Recording>,
     searches: Mutex<u32>,
+    recording_searches: Mutex<u32>,
 }
 
 impl Sources for FakeSources {
@@ -49,6 +52,24 @@ impl Sources for FakeSources {
 
     fn release<'a>(&'a self, id: &'a str) -> BoxFuture<'a, Result<Release, EnrichError>> {
         Box::pin(async move { self.releases.get(id).cloned().ok_or(EnrichError::NotFound) })
+    }
+
+    fn recordings<'a>(
+        &'a self,
+        _track: &'a LocalTrack,
+    ) -> BoxFuture<'a, Result<Vec<Recording>, EnrichError>> {
+        *self.recording_searches.lock().unwrap() += 1;
+        Box::pin(async move { Ok(self.recordings.clone()) })
+    }
+
+    fn recording<'a>(&'a self, id: &'a str) -> BoxFuture<'a, Result<Recording, EnrichError>> {
+        Box::pin(async move {
+            let found = self.recordings.iter().find(|recording| recording.id == id);
+            let mut recording = found.cloned().ok_or(EnrichError::NotFound)?;
+            // A lookup brings the genre a search leaves out.
+            recording.genre = Some("Ambient Pop".to_owned());
+            Ok(recording)
+        })
     }
 
     fn front_cover<'a>(
@@ -88,7 +109,7 @@ struct YouTubeLyrics;
 impl PlatformLyrics for YouTubeLyrics {
     fn lyrics<'a>(
         &'a self,
-        _video_id: &'a str,
+        _key: &'a pixiu_db::SourceKey,
     ) -> pixiu_jobs::warden::BoxFuture<'a, Option<(String, String)>> {
         Box::pin(async { Some(("Sung words".to_owned(), "Source: Somebody".to_owned())) })
     }
@@ -157,6 +178,7 @@ fn release(id: &str, title: &str, tracks: &[(&str, u64)]) -> Release {
         date: Some("2024-05-01".to_owned()),
         country: None,
         release_group_id: Some(format!("rg-{id}")),
+        primary_type: Some("Album".to_owned()),
         genre: Some("Electronic".to_owned()),
         has_front_cover: true,
         tracks: tracks
@@ -391,9 +413,9 @@ async fn instrumentals_are_known_as_such() {
     let mut hoard = hoard().await;
     // As if downloaded from YouTube Music, which has lyrics for everything.
     for mut track in tracks(&mut hoard.db, hoard.album_id).await {
-        let video = format!("video-{}", track.id);
+        let key = format!("youtube_music:video-{}", track.id);
         toasty::update!(track {
-            ytm_video_id: Some(video)
+            source_key: Some(key)
         })
         .exec(&mut hoard.db)
         .await
@@ -720,4 +742,170 @@ async fn genres_named_the_old_way_are_renamed_once() {
     assert_eq!(after[1].genre.as_deref(), Some("UKG"));
     // It runs once per hoard.
     assert_eq!(enrich::repair_genre_names(&mut hoard.db).await.unwrap(), 0);
+}
+
+/// Marks the test album a single (or a catch-all of songs without one).
+async fn make_single(hoard: &mut Hoard) {
+    let mut album = Album::get_by_id(&mut hoard.db, &hoard.album_id)
+        .await
+        .unwrap();
+    toasty::update!(album { single: true })
+        .exec(&mut hoard.db)
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn singles_are_looked_up_song_by_song() {
+    let mut hoard = hoard().await;
+    make_single(&mut hoard).await;
+    let before = tracks(&mut hoard.db, hoard.album_id).await;
+    let sources = FakeSources {
+        recordings: vec![Recording {
+            id: "rec-first".to_owned(),
+            title: "First Light (Original Mix)".to_owned(),
+            artist: credit("Test Artist", &[("art-test", "Test Artist")]),
+            length_ms: Some(before[0].duration_ms),
+            isrcs: vec!["ZZXX12100001".to_owned()],
+            first_released: Some("2019-06-01".to_owned()),
+            genre: None,
+        }],
+        ..FakeSources::default()
+    };
+    let request = Request {
+        album_id: hoard.album_id,
+        release: None,
+        fresh: false,
+        genres_only: false,
+    };
+
+    let summary = enrich::enrich(&hoard.treasury, &sources, &NoPlatformLyrics, &request)
+        .await
+        .unwrap();
+
+    assert_eq!(summary, "Found 1 of 2 songs on MusicBrainz.");
+    assert_eq!(*sources.searches.lock().unwrap(), 0, "no release search");
+    let after = tracks(&mut hoard.db, hoard.album_id).await;
+    let first = &after[0];
+    assert_eq!(first.mbid.as_deref(), Some("rec-first"));
+    assert_eq!(first.title, "First Light (Original Mix)");
+    assert_eq!(first.isrc.as_deref(), Some("ZZXX12100001"));
+    // The file's year and genre stand.
+    assert_eq!(
+        (first.year, first.genre.as_deref()),
+        (Some(2024), Some("Ambient"))
+    );
+    assert_eq!(after[1].mbid, None, "nothing like the second song");
+    let album = Album::get_by_id(&mut hoard.db, &hoard.album_id)
+        .await
+        .unwrap();
+    assert_eq!(album.title, "Test Album", "the album stays as it was");
+    assert!(album.single);
+    assert_eq!(album.enrichment, Some(Enrichment::Unmatched));
+    // The artist learned their id and a biography.
+    let artist = Artist::get_by_id(&mut hoard.db, &first.artist_id)
+        .await
+        .unwrap();
+    assert_eq!(artist.mbid.as_deref(), Some("art-test"));
+    assert_eq!(artist.bio.as_deref(), Some("Test Artist makes test music."));
+
+    // Again: only the song not found yet is looked for.
+    enrich::enrich(&hoard.treasury, &sources, &NoPlatformLyrics, &request)
+        .await
+        .unwrap();
+    assert_eq!(*sources.recording_searches.lock().unwrap(), 3);
+}
+
+#[tokio::test]
+async fn songs_without_year_or_genre_take_musicbrainz_s() {
+    let mut hoard = hoard().await;
+    make_single(&mut hoard).await;
+    let before = tracks(&mut hoard.db, hoard.album_id).await;
+    let durations: Vec<u64> = before.iter().map(|track| track.duration_ms).collect();
+    for mut track in before {
+        toasty::update!(track {
+            year: None,
+            genre: None
+        })
+        .exec(&mut hoard.db)
+        .await
+        .unwrap();
+    }
+    let recording = |id: &str, title: &str, duration_ms: u64| Recording {
+        id: id.to_owned(),
+        title: title.to_owned(),
+        artist: credit("Test Artist", &[("art-test", "Test Artist")]),
+        length_ms: Some(duration_ms),
+        isrcs: Vec::new(),
+        first_released: Some("2019-06-01".to_owned()),
+        genre: None,
+    };
+    let sources = FakeSources {
+        recordings: vec![
+            recording("rec-first", "First Light", durations[0]),
+            recording("rec-second", "Second Wind", durations[1]),
+        ],
+        ..FakeSources::default()
+    };
+    let request = Request {
+        album_id: hoard.album_id,
+        release: None,
+        fresh: false,
+        genres_only: false,
+    };
+
+    enrich::enrich(&hoard.treasury, &sources, &NoPlatformLyrics, &request)
+        .await
+        .unwrap();
+
+    let after = tracks(&mut hoard.db, hoard.album_id).await;
+    for track in &after {
+        assert_eq!(track.year, Some(2019), "{}", track.title);
+        assert_eq!(
+            track.genre.as_deref(),
+            Some("Ambient Pop"),
+            "{}",
+            track.title
+        );
+    }
+    assert_eq!(after[1].mbid.as_deref(), Some("rec-second"));
+    let album = Album::get_by_id(&mut hoard.db, &hoard.album_id)
+        .await
+        .unwrap();
+    assert_eq!(album.enrichment, Some(Enrichment::Matched));
+}
+
+#[tokio::test]
+async fn musicbrainz_says_which_releases_are_singles() {
+    let mut hoard = hoard().await;
+    let durations: Vec<u64> = tracks(&mut hoard.db, hoard.album_id)
+        .await
+        .iter()
+        .map(|track| track.duration_ms)
+        .collect();
+    let mut single = release(
+        "rel-single",
+        "Test Album",
+        &[("First Light", durations[0]), ("Second Wind", durations[1])],
+    );
+    single.primary_type = Some("Single".to_owned());
+    let sources = FakeSources {
+        releases: HashMap::from([("rel-single".to_owned(), single)]),
+        ..FakeSources::default()
+    };
+    let request = Request {
+        album_id: hoard.album_id,
+        release: Some("rel-single".to_owned()),
+        fresh: false,
+        genres_only: false,
+    };
+
+    enrich::enrich(&hoard.treasury, &sources, &NoPlatformLyrics, &request)
+        .await
+        .unwrap();
+
+    let album = Album::get_by_id(&mut hoard.db, &hoard.album_id)
+        .await
+        .unwrap();
+    assert!(album.single, "shown as songs from now on");
 }

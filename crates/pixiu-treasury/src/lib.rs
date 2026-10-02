@@ -11,13 +11,15 @@ mod edit;
 mod ingest;
 pub mod layout;
 pub mod offerings;
+mod singles;
 pub mod store;
 pub mod tags;
 
 pub use claims::Release;
-pub use edit::{AlbumEdit, ArtistRef, TrackEdit};
+pub use edit::{AlbumEdit, ArtistRef, SongEdit, TrackEdit};
 pub use ingest::{Claim, IngestError, Provenance, Treasury};
 pub use offerings::{BatchOutcome, OfferingError, Offerings};
+pub use singles::SINGLES;
 pub use store::Adoption;
 pub use tags::{AudioInfo, Cover, TagError};
 

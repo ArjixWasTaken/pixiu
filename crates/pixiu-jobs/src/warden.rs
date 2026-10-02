@@ -1,5 +1,5 @@
-//! The session warden: keeps the YouTube Music login alive, and says so
-//! when it cannot.
+//! The session warden: keeps a user's login to a platform alive, and says
+//! so when it cannot.
 //!
 //! Every [`VALIDATE_EVERY`] it asks the platform whether the session still
 //! works. Every [`REFRESH_EVERY`], and at once when a check fails, it
@@ -16,20 +16,19 @@ use pixiu_core::{
     SecretBox,
     alerts::{Alert, AlertSink},
 };
-use pixiu_db::{Db, SessionEvent, SessionEventKind, SessionState, SourceSession, now, toasty};
+use pixiu_db::{
+    Db, Platform, SessionEvent, SessionEventKind, SessionState, SourceSession, now, toasty,
+};
 use pixiu_hunt::SessionCheck;
 use tokio::sync::watch;
-
-/// The platform the warden guards.
-pub const SOURCE: &str = "youtube_music";
 
 pub const VALIDATE_EVERY: Duration = Duration::from_secs(30 * 60);
 pub const REFRESH_EVERY: Duration = Duration::from_secs(12 * 60 * 60);
 
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
-/// The platform side of a session: YouTube Music in production.
-pub trait Platform: Send + Sync {
+/// The platform side of a session: the user's client of the platform.
+pub trait Session: Send + Sync {
     /// Logs in with a `Cookie` header.
     fn apply<'a>(&'a self, cookies: &'a str) -> BoxFuture<'a, SessionCheck>;
     /// Asks whether the current login still works.
@@ -78,7 +77,9 @@ pub struct Warden {
     secrets: SecretBox,
     /// The user whose session this is.
     owner: u64,
-    platform: Box<dyn Platform>,
+    /// The platform the session is with.
+    platform: Platform,
+    session: Box<dyn Session>,
     refresher: Box<dyn Refresher>,
     health: watch::Sender<Health>,
     /// Tells the owner when their session expires.
@@ -95,17 +96,19 @@ impl Warden {
         db: Db,
         secrets: SecretBox,
         owner: u64,
-        platform: Box<dyn Platform>,
+        platform: Platform,
+        session: Box<dyn Session>,
         refresher: Box<dyn Refresher>,
         alerts: Arc<dyn AlertSink>,
     ) -> Result<Arc<Self>, toasty::Error> {
-        let session = load(&mut db.clone(), owner).await?;
-        let (health, _) = watch::channel(Health::of(session.as_ref()));
+        let stored = load(&mut db.clone(), owner, platform).await?;
+        let (health, _) = watch::channel(Health::of(stored.as_ref()));
         Ok(Arc::new(Self {
             db,
             secrets,
             owner,
             platform,
+            session,
             refresher,
             health,
             alerts,
@@ -117,6 +120,12 @@ impl Warden {
     #[must_use]
     pub fn owner(&self) -> u64 {
         self.owner
+    }
+
+    /// The platform the session is with.
+    #[must_use]
+    pub fn platform(&self) -> Platform {
+        self.platform
     }
 
     #[must_use]
@@ -131,7 +140,9 @@ impl Warden {
 
     /// The session cookies, for tools that need them directly (`yt-dlp`).
     pub async fn cookies(&self) -> Option<String> {
-        let session = load(&mut self.db.clone(), self.owner).await.ok()??;
+        let session = load(&mut self.db.clone(), self.owner, self.platform)
+            .await
+            .ok()??;
         (session.state != SessionState::Expired)
             .then(|| self.secrets.open_str(&session.cookies).ok())
             .flatten()
@@ -143,9 +154,10 @@ impl Warden {
     ///
     /// Fails on database errors.
     pub async fn events(&self, limit: usize) -> Result<Vec<SessionEvent>, toasty::Error> {
-        let mut events = SessionEvent::filter_by_user_id_and_source(self.owner, SOURCE)
-            .exec(&mut self.db.clone())
-            .await?;
+        let mut events =
+            SessionEvent::filter_by_user_id_and_source(self.owner, self.platform.as_str())
+                .exec(&mut self.db.clone())
+                .await?;
         events.sort_by_key(|event| std::cmp::Reverse(event.id));
         events.truncate(limit);
         Ok(events)
@@ -159,7 +171,7 @@ impl Warden {
     /// the message is meant for the admin.
     pub async fn connect(&self, cookies: String) -> Result<Health, String> {
         let _guard = self.lock.lock().await;
-        match self.platform.apply(&cookies).await {
+        match self.session.apply(&cookies).await {
             SessionCheck::Valid => {}
             SessionCheck::Invalid(reason) | SessionCheck::Unreachable(reason) => {
                 return Err(reason);
@@ -168,7 +180,7 @@ impl Warden {
         let mut db = self.db.clone();
         let sealed = self.secrets.seal_str(&cookies);
         let result = async {
-            match load(&mut db, self.owner).await? {
+            match load(&mut db, self.owner, self.platform).await? {
                 Some(mut session) => {
                     toasty::update!(session {
                         cookies: sealed,
@@ -184,7 +196,7 @@ impl Warden {
                 None => {
                     toasty::create!(SourceSession {
                         user_id: self.owner,
-                        source: SOURCE,
+                        source: self.platform.as_str(),
                         cookies: sealed,
                         state: SessionState::Valid,
                         connected_at: now(),
@@ -197,6 +209,7 @@ impl Warden {
             record(
                 &mut db,
                 self.owner,
+                self.platform,
                 SessionEventKind::Connected,
                 "Connected",
             )
@@ -210,13 +223,14 @@ impl Warden {
     /// Logs out and forgets the session.
     pub async fn disconnect(&self) {
         let _guard = self.lock.lock().await;
-        self.platform.forget().await;
+        self.session.forget().await;
         let mut db = self.db.clone();
-        if let Ok(Some(session)) = load(&mut db, self.owner).await {
+        if let Ok(Some(session)) = load(&mut db, self.owner, self.platform).await {
             let _ = session.delete().exec(&mut db).await;
             let _ = record(
                 &mut db,
                 self.owner,
+                self.platform,
                 SessionEventKind::Disconnected,
                 "Disconnected",
             )
@@ -232,14 +246,14 @@ impl Warden {
             return self.publish().await;
         };
         let _guard = self.lock.lock().await;
-        let check = self.platform.apply(&cookies).await;
+        let check = self.session.apply(&cookies).await;
         self.handle_check(check).await
     }
 
     /// Asks the platform whether the session still works.
     pub async fn validate(&self) -> Health {
         let _guard = self.lock.lock().await;
-        if load(&mut self.db.clone(), self.owner)
+        if load(&mut self.db.clone(), self.owner, self.platform)
             .await
             .ok()
             .flatten()
@@ -247,14 +261,14 @@ impl Warden {
         {
             return self.publish().await;
         }
-        let check = self.platform.check().await;
+        let check = self.session.check().await;
         self.handle_check(check).await
     }
 
     /// Fetches fresh cookies from the browser profile.
     pub async fn refresh(&self) -> Health {
         let _guard = self.lock.lock().await;
-        if load(&mut self.db.clone(), self.owner)
+        if load(&mut self.db.clone(), self.owner, self.platform)
             .await
             .ok()
             .flatten()
@@ -291,10 +305,10 @@ impl Warden {
                 };
             }
         };
-        match self.platform.apply(&fresh).await {
+        match self.session.apply(&fresh).await {
             SessionCheck::Valid => {
                 let mut db = self.db.clone();
-                if let Ok(Some(mut session)) = load(&mut db, self.owner).await {
+                if let Ok(Some(mut session)) = load(&mut db, self.owner, self.platform).await {
                     let sealed = self.secrets.seal_str(&fresh);
                     let _ = toasty::update!(session {
                         cookies: sealed,
@@ -312,7 +326,7 @@ impl Warden {
 
     async fn mark_valid(&self, refreshed: bool) -> Health {
         let mut db = self.db.clone();
-        if let Ok(Some(mut session)) = load(&mut db, self.owner).await {
+        if let Ok(Some(mut session)) = load(&mut db, self.owner, self.platform).await {
             let recovered = session.state != SessionState::Valid;
             let _ = toasty::update!(session {
                 state: SessionState::Valid,
@@ -326,6 +340,7 @@ impl Warden {
                 let _ = record(
                     &mut db,
                     self.owner,
+                    self.platform,
                     SessionEventKind::Recovered,
                     "Session working again",
                 )
@@ -334,6 +349,7 @@ impl Warden {
                 let _ = record(
                     &mut db,
                     self.owner,
+                    self.platform,
                     SessionEventKind::Refreshed,
                     "Cookies refreshed",
                 )
@@ -345,7 +361,7 @@ impl Warden {
 
     async fn mark_degraded(&self, reason: &str) -> Health {
         let mut db = self.db.clone();
-        if let Ok(Some(mut session)) = load(&mut db, self.owner).await {
+        if let Ok(Some(mut session)) = load(&mut db, self.owner, self.platform).await {
             // An expired session stays expired until the admin logs in.
             if session.state != SessionState::Expired {
                 let worsened = session.state == SessionState::Valid;
@@ -360,6 +376,7 @@ impl Warden {
                     let _ = record(
                         &mut db,
                         self.owner,
+                        self.platform,
                         SessionEventKind::Degraded,
                         &format!("Check failed: {reason}"),
                     )
@@ -367,13 +384,13 @@ impl Warden {
                 }
             }
         }
-        tracing::warn!(reason, "YouTube Music session check inconclusive");
+        tracing::warn!(reason, platform = %self.platform, "session check inconclusive");
         self.publish().await
     }
 
     async fn expire(&self, reason: &str) -> Health {
         let mut db = self.db.clone();
-        if let Ok(Some(mut session)) = load(&mut db, self.owner).await
+        if let Ok(Some(mut session)) = load(&mut db, self.owner, self.platform).await
             && session.state != SessionState::Expired
         {
             let expired_at = now();
@@ -387,26 +404,32 @@ impl Warden {
             let _ = record(
                 &mut db,
                 self.owner,
+                self.platform,
                 SessionEventKind::Expired,
                 &format!("Session expired: {reason}"),
             )
             .await;
-            self.alerts
-                .alert(
-                    self.owner,
-                    Alert::YouTubeMusicExpired {
-                        expired_at,
-                        reason: reason.to_owned(),
-                    },
-                )
-                .await;
+            let alert = match self.platform {
+                Platform::YouTubeMusic => Some(Alert::YouTubeMusicExpired {
+                    expired_at,
+                    reason: reason.to_owned(),
+                }),
+                // No logins, so no sessions to expire.
+                Platform::Deezer => None,
+            };
+            if let Some(alert) = alert {
+                self.alerts.alert(self.owner, alert).await;
+            }
         }
-        tracing::warn!(reason, "YouTube Music session expired");
+        tracing::warn!(reason, platform = %self.platform, "session expired");
         self.publish().await
     }
 
     async fn publish(&self) -> Health {
-        let session = load(&mut self.db.clone(), self.owner).await.ok().flatten();
+        let session = load(&mut self.db.clone(), self.owner, self.platform)
+            .await
+            .ok()
+            .flatten();
         let health = Health::of(session.as_ref());
         self.health.send_replace(health.clone());
         health
@@ -435,8 +458,12 @@ impl Warden {
     }
 }
 
-async fn load(db: &mut Db, owner: u64) -> Result<Option<SourceSession>, toasty::Error> {
-    SourceSession::filter_by_user_id_and_source(owner, SOURCE)
+async fn load(
+    db: &mut Db,
+    owner: u64,
+    platform: Platform,
+) -> Result<Option<SourceSession>, toasty::Error> {
+    SourceSession::filter_by_user_id_and_source(owner, platform.as_str())
         .first()
         .exec(db)
         .await
@@ -445,12 +472,13 @@ async fn load(db: &mut Db, owner: u64) -> Result<Option<SourceSession>, toasty::
 async fn record(
     db: &mut Db,
     owner: u64,
+    platform: Platform,
     kind: SessionEventKind,
     message: &str,
 ) -> Result<(), toasty::Error> {
     toasty::create!(SessionEvent {
         user_id: owner,
-        source: SOURCE,
+        source: platform.as_str(),
         kind,
         message,
         created_at: now(),

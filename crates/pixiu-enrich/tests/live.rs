@@ -4,7 +4,7 @@
 
 use pixiu_enrich::{
     LocalAlbum, LocalTrack, LyricsQuery, Online, Sources,
-    matching::{is_certain, pair},
+    matching::{is_certain, pair, recording_match},
 };
 
 fn track(id: u64, title: &str, seconds: u64, number: u32) -> LocalTrack {
@@ -79,4 +79,23 @@ async fn lyrics_are_looked_up() {
     assert!(found.is_none_or(|found| {
         found.instrumental && found.synced.is_none() && found.plain.is_none()
     }));
+}
+
+#[tokio::test]
+#[ignore = "needs network access"]
+async fn a_single_s_song_is_found_as_a_recording() {
+    let online = Online::new(None).unwrap();
+    for isrc in [Some("USUAN1400011".to_owned()), None] {
+        let song = LocalTrack {
+            isrc: isrc.clone(),
+            ..track(1, "Monkeys Spinning Monkeys", 125, 1)
+        };
+        let found = online.recordings(&song).await.unwrap();
+        let best = recording_match(&song, &found).expect("a certain match");
+        println!("{best:#?}");
+        assert_eq!(best.title, "Monkeys Spinning Monkeys", "{isrc:?}");
+        assert!(best.isrcs.iter().any(|isrc| isrc == "USUAN1400011"));
+        let looked_up = online.recording(&best.id).await.unwrap();
+        assert_eq!(looked_up.artist.artists[0].1, "Kevin MacLeod");
+    }
 }

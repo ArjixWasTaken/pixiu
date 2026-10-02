@@ -6,7 +6,7 @@
         class="flex-[1_1_240px] min-w-0"
         label="Playlist or artist link"
         name="target"
-        placeholder="https://music.youtube.com/…"
+        placeholder="A YouTube Music or Deezer link"
         required
       />
       <M3Button class="mt-2" type="submit">Watch</M3Button>
@@ -61,8 +61,8 @@ const { data, handleSubmit } = useForm<{ target: string; onlyNew: boolean; singl
   },
 })
 
-/** Artist links (channels) get a choice of what to follow. */
-const isArtist = computed(() => /\/channel\/|browse\/UC/.test(data.target))
+/** Artist links (channels on YouTube Music) get a choice of what to follow. */
+const isArtist = computed(() => /\/channel\/|browse\/UC|deezer\.com\/(?:[\w-]+\/)?artist\//.test(data.target))
 
 const watchLiked = async () => {
   try {

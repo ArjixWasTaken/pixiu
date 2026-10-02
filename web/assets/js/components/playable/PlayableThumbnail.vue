@@ -8,7 +8,8 @@
     @click.prevent.stop="emit('clicked')"
   >
     <span v-if="numbered" class="number m3-body-medium">{{ playable.track || '–' }}</span>
-    <img v-else-if="src" :src alt="Cover image" loading="lazy" />
+    <img v-else-if="src" :src alt="Cover image" class="cover" loading="lazy" />
+    <PlatformBadge v-if="!numbered" :platform="playable.source_platform" />
     <span v-if="current" class="now">
       <template v-if="playable.playback_state === 'Playing'">
         <span
@@ -32,6 +33,7 @@ import { useBranding } from '@/composables/useBranding'
 import { coverOfSize } from '@/services/subsonic'
 
 import M3Icon from '@/components/m3/M3Icon.vue'
+import PlatformBadge from '@/components/ui/PlatformBadge.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -75,7 +77,7 @@ const title = computed(() => {
   background-size: cover;
   background-position: center;
 
-  img {
+  .cover {
     width: 100%;
     height: 100%;
     object-fit: cover;

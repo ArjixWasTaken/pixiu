@@ -8,7 +8,7 @@ use std::{
 use pixiu_core::alerts::{Alert, AlertSink, NoAlerts};
 use pixiu_db::{
     Album, Artist, ClaimKind, Db, Job, JobKind, JobState, Playlist, PlaylistEntry, ReleaseReason,
-    ReleasedClaim, Track, TrackClaim, TrackOrigin, Watch, WatchKind, now, toasty, videos,
+    ReleasedClaim, SourceKey, Track, TrackClaim, TrackOrigin, Watch, WatchKind, keyed, now, toasty,
 };
 use pixiu_hunt::{AlbumKind, Discography, RemoteAlbum, RemotePlaylist, RemoteTrack};
 use pixiu_jobs::{
@@ -22,6 +22,10 @@ use pixiu_treasury::{Claim, Treasury};
 /// The user every test library and job belongs to.
 const OWNER: u64 = 1;
 
+fn key(id: &str) -> SourceKey {
+    SourceKey::youtube_music(id)
+}
+
 #[derive(Default)]
 struct FakeCatalog {
     /// Video ids of the playlist, in order.
@@ -34,7 +38,10 @@ struct FakeCatalog {
 }
 
 impl Catalog for FakeCatalog {
-    fn playlist<'a>(&'a self, id: &'a str) -> BoxFuture<'a, Result<RemotePlaylist, CatalogError>> {
+    fn playlist<'a>(
+        &'a self,
+        id: &'a SourceKey,
+    ) -> BoxFuture<'a, Result<RemotePlaylist, CatalogError>> {
         Box::pin(async move {
             if let Some(error) = *self.failing.lock().unwrap() {
                 return Err(CatalogError::Failed(error.to_owned()));
@@ -45,19 +52,21 @@ impl Catalog for FakeCatalog {
                 .unwrap()
                 .iter()
                 .map(|video_id| RemoteTrack {
-                    id: (*video_id).to_owned(),
+                    id: key(video_id),
                     title: format!("Song {video_id}"),
                     artists: vec!["Somebody".to_owned()],
                     artist_id: None,
                     album: None,
                     duration_secs: Some(180),
                     track_number: None,
+                    disc_number: None,
+                    isrc: None,
                     cover_url: None,
                     is_video: false,
                 })
                 .collect();
             Ok(RemotePlaylist {
-                id: id.to_owned(),
+                id: id.clone(),
                 name: "Test playlist".to_owned(),
                 image_url: Some("https://example.com/playlist.jpg".to_owned()),
                 tracks,
@@ -67,7 +76,7 @@ impl Catalog for FakeCatalog {
 
     fn discography<'a>(
         &'a self,
-        channel_id: &'a str,
+        channel_id: &'a SourceKey,
     ) -> BoxFuture<'a, Result<Discography, CatalogError>> {
         Box::pin(async move {
             let albums = self
@@ -76,10 +85,10 @@ impl Catalog for FakeCatalog {
                 .unwrap()
                 .iter()
                 .map(|(id, kind)| RemoteAlbum {
-                    id: (*id).to_owned(),
+                    id: key(id),
                     title: format!("Release {id}"),
                     artists: vec!["The Band".to_owned()],
-                    artist_id: Some(channel_id.to_owned()),
+                    artist_id: Some(channel_id.clone()),
                     year: Some(2026),
                     kind: *kind,
                     cover_url: None,
@@ -87,7 +96,7 @@ impl Catalog for FakeCatalog {
                 })
                 .collect();
             Ok(Discography {
-                id: channel_id.to_owned(),
+                id: channel_id.clone(),
                 name: "The Band".to_owned(),
                 image_url: Some("https://example.com/band.jpg".to_owned()),
                 albums,
@@ -95,7 +104,7 @@ impl Catalog for FakeCatalog {
         })
     }
 
-    fn logged_in(&self) -> bool {
+    fn logged_in(&self, _platform: pixiu_db::Platform) -> bool {
         *self.logged_in.lock().unwrap()
     }
 }
@@ -167,6 +176,7 @@ async fn hoard(db: &mut Db, video_id: &str) -> u64 {
         title_key: format!("album {video_id}"),
         artist_id: artist.id,
         created_at: now(),
+        single: false,
     })
     .exec(db)
     .await
@@ -183,7 +193,7 @@ async fn hoard(db: &mut Db, video_id: &str) -> u64 {
         size: 1_u64,
         suffix: "opus",
         content_type: "audio/ogg",
-        ytm_video_id: Some(video_id.to_owned()),
+        source_key: Some(key(video_id).as_stored()),
         origin: TrackOrigin::Download,
         added_at: now(),
     })
@@ -203,6 +213,7 @@ async fn claims_of(db: &mut Db, track_id: u64) -> Vec<(ClaimKind, Option<String>
         .collect()
 }
 
+/// A mirror's name, and its songs' ids in order.
 async fn mirror_of(db: &mut Db, watch_id: u64) -> (String, Vec<String>) {
     let playlist = Playlist::filter_by_watch_id(Some(watch_id))
         .first()
@@ -217,7 +228,10 @@ async fn mirror_of(db: &mut Db, watch_id: u64) -> (String, Vec<String>) {
     entries.sort_by_key(|entry| entry.position);
     let order = entries
         .into_iter()
-        .map(|entry| entry.ytm_video_id.unwrap())
+        .map(|entry| {
+            let key = SourceKey::from_stored(entry.source_key.as_deref()).unwrap();
+            key.id().to_owned()
+        })
         .collect();
     (playlist.name, order)
 }
@@ -234,7 +248,7 @@ fn videos(jobs: &[NewJob]) -> Vec<(String, Wanted)> {
         .map(|job| {
             assert_eq!(job.kind, JobKind::DownloadTrack);
             let payload: TrackJob = serde_json::from_str(&job.payload).unwrap();
-            (payload.video_id, payload.wanted)
+            (payload.key.id().to_owned(), payload.wanted)
         })
         .collect()
 }
@@ -244,15 +258,15 @@ fn albums(jobs: &[NewJob]) -> Vec<(String, Wanted)> {
         .map(|job| {
             assert_eq!(job.kind, JobKind::GrabAlbum);
             let payload: AlbumJob = serde_json::from_str(&job.payload).unwrap();
-            (payload.browse_id, payload.wanted)
+            (payload.key.id().to_owned(), payload.wanted)
         })
         .collect()
 }
 
-fn playlist_watch(remote_id: &str) -> NewWatch {
+fn playlist_watch(id: &str) -> NewWatch {
     NewWatch {
         kind: WatchKind::Playlist,
-        remote_id: remote_id.to_owned(),
+        key: key(id),
         include_singles: false,
         only_new: false,
     }
@@ -304,7 +318,7 @@ async fn playlists_are_mirrored_and_claims_follow_them() {
         .await
         .unwrap()
         .into_iter()
-        .filter(|entry| entry.ytm_video_id.as_deref() == Some("c"))
+        .filter(|entry| entry.source_key.as_deref() == Some("youtube_music:c"))
         .map(|entry| (entry.title, entry.artist))
         .collect();
     assert_eq!(
@@ -375,7 +389,7 @@ async fn songs_held_under_another_video_are_not_fetched_again() {
     // download of "b2" turned out to be it.
     let b = hoard(&mut db, "b").await;
     let track = Track::get_by_id(&mut db, &b).await.unwrap();
-    videos::alias(&mut db, &track, "b2").await.unwrap();
+    keyed::alias(&mut db, &track, &key("b2")).await.unwrap();
     *s.catalog.playlist.lock().unwrap() = vec!["a", "b2"];
 
     let watch = watch::add(&s.treasury, &s.jobs, OWNER, playlist_watch("PLtest"))
@@ -406,7 +420,7 @@ async fn liked_music_waits_for_a_login() {
         OWNER,
         NewWatch {
             kind: WatchKind::LikedMusic,
-            remote_id: String::new(),
+            key: key("ignored"),
             include_singles: false,
             only_new: false,
         },
@@ -414,8 +428,8 @@ async fn liked_music_waits_for_a_login() {
     .await
     .unwrap();
     assert_eq!(
-        (watch.remote_id.as_str(), watch.name.as_str()),
-        ("LM", "Liked music")
+        (watch.source_key.as_str(), watch.name.as_str()),
+        ("youtube_music:LM", "Liked music")
     );
 
     assert_eq!(
@@ -468,7 +482,7 @@ async fn watches_that_keep_failing_raise_an_alert() {
         OWNER,
         NewWatch {
             kind: WatchKind::Playlist,
-            remote_id: "PL1".to_owned(),
+            key: key("PL1"),
             include_singles: false,
             only_new: false,
         },
@@ -543,7 +557,7 @@ async fn artists_bring_their_releases() {
         OWNER,
         NewWatch {
             kind: WatchKind::Artist,
-            remote_id: "UCnew".to_owned(),
+            key: key("UCnew"),
             include_singles: false,
             only_new: true,
         },
@@ -559,7 +573,7 @@ async fn artists_bring_their_releases() {
         .is_empty()
     );
     let noted = Watch::get_by_id(&mut db, &newcomer.id).await.unwrap();
-    assert_eq!(noted.seen, ["old"]);
+    assert_eq!(noted.seen, ["youtube_music:old"]);
     assert_eq!(noted.name, "The Band");
     assert_eq!(
         noted.image_url.as_deref(),
@@ -567,7 +581,7 @@ async fn artists_bring_their_releases() {
     );
     // Now the hoard's artist knows its channel.
     let band = Artist::get_by_id(&mut db, &band.id).await.unwrap();
-    assert_eq!(band.ytm_channel_id.as_deref(), Some("UCnew"));
+    assert_eq!(band.source_key.as_deref(), Some("youtube_music:UCnew"));
 
     *s.catalog.albums.lock().unwrap() = vec![
         ("fresh", AlbumKind::Album),
@@ -600,7 +614,7 @@ async fn artists_bring_their_releases() {
         OWNER,
         NewWatch {
             kind: WatchKind::Artist,
-            remote_id: "UCall".to_owned(),
+            key: key("UCall"),
             include_singles: true,
             only_new: false,
         },
@@ -634,7 +648,7 @@ async fn removing_a_watch_lets_go() {
     }
     // An unrelated grab stays queued.
     s.jobs
-        .enqueue(OWNER, NewJob::track("mine", "A grab", None))
+        .enqueue(OWNER, NewJob::track(&key("mine"), "A grab", None))
         .await
         .unwrap();
 
@@ -742,14 +756,14 @@ async fn excluded_songs_are_orphaned_and_skipped() {
     // queued download is forgotten.
     for video in ["a", "b", "c"] {
         assert!(
-            watch::exclude(&s.treasury, &s.jobs, watch.id, video)
+            watch::exclude(&s.treasury, &s.jobs, watch.id, &key(video))
                 .await
                 .unwrap()
         );
     }
     // Twice is the same as once.
     assert!(
-        watch::exclude(&s.treasury, &s.jobs, watch.id, "a")
+        watch::exclude(&s.treasury, &s.jobs, watch.id, &key("a"))
             .await
             .unwrap()
     );
@@ -784,10 +798,10 @@ async fn excluded_songs_are_orphaned_and_skipped() {
         .await
         .unwrap()
         .into_iter()
-        .map(|exclusion| (exclusion.ytm_video_id, exclusion.title))
+        .map(|exclusion| (exclusion.source_key, exclusion.title))
         .collect();
     assert_eq!(listed.len(), 3);
-    assert!(listed.contains(&("c".to_owned(), Some("Song c".to_owned()))));
+    assert!(listed.contains(&("youtube_music:c".to_owned(), Some("Song c".to_owned()))));
 
     // Later syncs neither list, claim nor fetch them.
     let jobs = done(
@@ -800,7 +814,7 @@ async fn excluded_songs_are_orphaned_and_skipped() {
     assert_eq!(mirror_of(&mut db, watch.id).await.1, Vec::<String>::new());
 
     // Taking it back queues a sync, which lists and claims it again.
-    watch::include(&s.treasury, &s.jobs, watch.id, "a")
+    watch::include(&s.treasury, &s.jobs, watch.id, &key("a"))
         .await
         .unwrap();
     assert!(

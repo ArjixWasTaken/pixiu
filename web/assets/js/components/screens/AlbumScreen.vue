@@ -222,7 +222,8 @@ const fetchOtherAlbums = async () => {
 
     // Another album may have opened meanwhile.
     if (album.value === shown) {
-      otherAlbums.value = albums.filter(({ id }) => id !== shown.id)
+      // Albums only: singles show as songs.
+      otherAlbums.value = albums.filter(({ id, is_single }) => id !== shown.id && !is_single)
     }
   } catch (error: unknown) {
     useErrorHandler('dialog').handleHttpError(error)

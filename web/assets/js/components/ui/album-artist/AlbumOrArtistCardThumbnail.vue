@@ -5,7 +5,8 @@
     class="card-thumbnail"
     data-testid="album-artist-card-thumbnail"
   >
-    <img v-if="image" :alt="entity.name" :src="image" loading="lazy" />
+    <img v-if="image" :alt="entity.name" :src="image" class="cover" loading="lazy" />
+    <PlatformBadge :platform size="md" />
 
     <M3IconButton :label="playLabel" class="play" fill icon="play_arrow" variant="filled" @click.stop="playOrQueue" />
   </div>
@@ -23,6 +24,7 @@ import { useBranding } from '@/composables/useBranding'
 import { coverOfSize } from '@/services/subsonic'
 
 import M3IconButton from '@/components/m3/M3IconButton.vue'
+import PlatformBadge from '@/components/ui/PlatformBadge.vue'
 
 const queueStore = useQueueStore()
 const playableStore = usePlayableStore()
@@ -40,6 +42,8 @@ const { go, url } = useRouter()
 const { cover: defaultCover } = useBranding()
 
 const forAlbum = computed(() => entity.value.type === 'albums')
+/** Where an album was downloaded from; artists come from anywhere. */
+const platform = computed(() => (forAlbum.value ? (entity.value as Album).source_platform : null))
 
 const image = computed(
   () =>
@@ -82,7 +86,7 @@ const playOrQueue = async (event: MouseEvent) => {
     border-radius: 50%;
   }
 
-  img {
+  .cover {
     position: absolute;
     inset: 0;
     width: 100%;

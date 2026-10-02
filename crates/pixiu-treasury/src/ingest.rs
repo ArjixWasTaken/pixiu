@@ -7,7 +7,8 @@ use std::{
 };
 
 use pixiu_db::{
-    Album, Artist, AudioFile, ClaimKind, Db, Track, TrackClaim, TrackOrigin, now, toasty, videos,
+    Album, Artist, AudioFile, ClaimKind, Db, SourceKey, Track, TrackClaim, TrackOrigin, keyed, now,
+    toasty,
 };
 use tokio::sync::Mutex;
 
@@ -19,23 +20,26 @@ use crate::{
 };
 
 const UNKNOWN_ARTIST: &str = "Unknown Artist";
-const UNKNOWN_ALBUM: &str = "Unknown Album";
+pub(crate) const UNKNOWN_ALBUM: &str = "Unknown Album";
 const UNTITLED: &str = "Untitled";
 
 /// Where a track comes from.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Provenance {
     pub origin: TrackOrigin,
-    /// The YouTube Music video id, for downloads from there.
-    pub ytm_video_id: Option<String>,
-    /// The YouTube Music album browse id, for downloads from there.
-    pub ytm_browse_id: Option<String>,
-    /// The album artist's YouTube Music channel, for downloads from there.
-    pub ytm_artist_id: Option<String>,
+    /// For downloads, the song on the platform.
+    pub source_key: Option<SourceKey>,
+    /// For downloads, its album on the platform.
+    pub album_key: Option<SourceKey>,
+    /// For downloads, its album artist on the platform.
+    pub artist_key: Option<SourceKey>,
     /// For uploads, the file name it was offered under.
     pub source_name: Option<String>,
     /// For uploads, the zip archive it was unpacked from.
     pub source_archive: Option<String>,
+    /// For downloads, whether the platform calls its album a single, or it
+    /// came with no album.
+    pub single: bool,
 }
 
 impl Provenance {
@@ -44,28 +48,31 @@ impl Provenance {
     pub fn offering(file_name: impl Into<String>, archive: Option<String>) -> Self {
         Self {
             origin: TrackOrigin::Offering,
-            ytm_video_id: None,
-            ytm_browse_id: None,
-            ytm_artist_id: None,
+            source_key: None,
+            album_key: None,
+            artist_key: None,
             source_name: Some(file_name.into()),
             source_archive: archive,
+            single: false,
         }
     }
 
-    /// A download from YouTube Music.
+    /// A download of `song`, from its album and album artist on the same
+    /// platform, when they are known.
     #[must_use]
-    pub fn youtube_music(
-        video_id: impl Into<String>,
-        browse_id: Option<String>,
-        artist_id: Option<String>,
+    pub fn download(
+        song: SourceKey,
+        album: Option<SourceKey>,
+        album_artist: Option<SourceKey>,
     ) -> Self {
         Self {
             origin: TrackOrigin::Download,
-            ytm_video_id: Some(video_id.into()),
-            ytm_browse_id: browse_id,
-            ytm_artist_id: artist_id,
+            source_key: Some(song),
+            album_key: album,
+            artist_key: album_artist,
             source_name: None,
             source_archive: None,
+            single: false,
         }
     }
 }
@@ -182,7 +189,7 @@ impl Treasury {
             )
             .await?
         {
-            return Err(note_video(&mut db, existing, &provenance).await?);
+            return Err(note_key(&mut db, existing, &provenance).await?);
         }
 
         let (album, artist_id) = self.place(&mut db, owner, info, &provenance).await?;
@@ -254,7 +261,7 @@ impl Treasury {
             .duplicate(&mut db, owner, &provenance, Some(file.id))
             .await?
         {
-            return Err(note_video(&mut db, existing, &provenance).await?);
+            return Err(note_key(&mut db, existing, &provenance).await?);
         }
         let (album, artist_id) = self.place(&mut db, owner, info, &provenance).await?;
         self.record(
@@ -279,8 +286,8 @@ impl Treasury {
         provenance: &Provenance,
         file_id: Option<u64>,
     ) -> Result<Option<Track>, toasty::Error> {
-        if let Some(video_id) = &provenance.ytm_video_id
-            && let Some(existing) = videos::track_of_video(db, owner, video_id).await?
+        if let Some(key) = &provenance.source_key
+            && let Some(existing) = keyed::track_of_key(db, owner, key).await?
         {
             return Ok(Some(existing));
         }
@@ -312,7 +319,7 @@ impl Treasury {
         match self.find_place(db, owner, info, provenance).await {
             Err(IngestError::Duplicate { track_id }) => {
                 match Track::filter_by_id(track_id).first().exec(&mut *db).await? {
-                    Some(existing) => Err(note_video(db, existing, provenance).await?),
+                    Some(existing) => Err(note_key(db, existing, provenance).await?),
                     None => Err(IngestError::Duplicate { track_id }),
                 }
             }
@@ -341,21 +348,28 @@ impl Treasury {
         let album_artist_name = info.album_artist.as_deref().unwrap_or(primary);
         let title = info.title.as_deref().unwrap_or(UNTITLED);
 
-        let album_artist = find_or_create_artist(
-            db,
-            owner,
-            album_artist_name,
-            provenance.ytm_artist_id.as_deref(),
-        )
-        .await?;
+        let album_artist =
+            find_or_create_artist(db, owner, album_artist_name, provenance.artist_key.as_ref())
+                .await?;
         let artist_id = if name_key(primary) == album_artist.name_key {
             album_artist.id
         } else {
             find_or_create_artist(db, owner, primary, None).await?.id
         };
-        let album =
-            find_or_create_album(db, &album_artist, info, provenance.ytm_browse_id.as_deref())
-                .await?;
+        // Songs without an album stand alone too: they gather in a catch-all.
+        let catch_all = info
+            .album
+            .as_deref()
+            .is_none_or(|album| album == UNKNOWN_ALBUM);
+        let single = provenance.single || catch_all || tagged_single(info);
+        let album = find_or_create_album(
+            db,
+            &album_artist,
+            info,
+            provenance.album_key.as_ref(),
+            single,
+        )
+        .await?;
 
         let title_key = name_key(title);
         if let Some(duplicate) = Track::filter_by_album_id(album.id)
@@ -414,7 +428,7 @@ impl Treasury {
                     sample_rate: info.sample_rate,
                     channels: info.channels,
                     bit_depth: info.bit_depth,
-                    ytm_video_id: provenance.ytm_video_id.clone(),
+                    source_key: provenance.source_key.as_ref().map(SourceKey::as_stored),
                     created_at: now(),
                 })
                 .exec(&mut tx)
@@ -443,7 +457,7 @@ impl Treasury {
             content_type: file.content_type.clone(),
             mbid: info.mbid.clone(),
             isrc: info.isrc.clone(),
-            ytm_video_id: provenance.ytm_video_id,
+            source_key: provenance.source_key.as_ref().map(SourceKey::as_stored),
             origin: provenance.origin,
             source_name: provenance.source_name,
             source_archive: provenance.source_archive,
@@ -478,21 +492,20 @@ enum StoredFile {
     New { sha256: String, relative: String },
 }
 
-/// The artist with YouTube Music channel `channel`, else the one named
-/// `name`, which learns the channel if it did not know one; else a new
-/// artist.
+/// The artist known on a platform as `source`, else the one named `name`,
+/// which learns that key if it did not know one; else a new artist.
 pub(crate) async fn find_or_create_artist(
     db: &mut Db,
     owner: u64,
     name: &str,
-    channel: Option<&str>,
+    source: Option<&SourceKey>,
 ) -> Result<Artist, toasty::Error> {
-    if let Some(channel) = channel
-        && let Some(artist) =
-            Artist::filter_by_user_id_and_ytm_channel_id(owner, Some(channel.to_owned()))
-                .first()
-                .exec(db)
-                .await?
+    let source = source.map(SourceKey::as_stored);
+    if let Some(stored) = &source
+        && let Some(artist) = Artist::filter_by_user_id_and_source_key(owner, Some(stored.clone()))
+            .first()
+            .exec(db)
+            .await?
     {
         return Ok(artist);
     }
@@ -502,11 +515,11 @@ pub(crate) async fn find_or_create_artist(
         .exec(db)
         .await?
     {
-        if artist.ytm_channel_id.is_none()
-            && let Some(channel) = channel
+        if artist.source_key.is_none()
+            && let Some(stored) = source
         {
             toasty::update!(artist {
-                ytm_channel_id: Some(channel.to_owned()),
+                source_key: Some(stored),
             })
             .exec(db)
             .await?;
@@ -517,7 +530,7 @@ pub(crate) async fn find_or_create_artist(
         user_id: owner,
         name,
         name_key: key,
-        ytm_channel_id: channel.map(str::to_owned),
+        source_key: source,
         created_at: now(),
     })
     .exec(db)
@@ -525,20 +538,21 @@ pub(crate) async fn find_or_create_artist(
 }
 
 impl Treasury {
-    /// Tells `owner`'s artist named `name` its YouTube Music channel, if it
-    /// has none yet and no other artist of theirs has that channel.
+    /// Tells `owner`'s artist named `name` who it is on a platform (`key`),
+    /// if it knows no key yet and no other artist of theirs has that one.
     ///
     /// # Errors
     ///
     /// Fails on database errors.
-    pub async fn learn_artist_channel(
+    pub async fn learn_artist_key(
         &self,
         owner: u64,
         name: &str,
-        channel: &str,
+        key: &SourceKey,
     ) -> Result<(), toasty::Error> {
         let mut db = self.db.clone();
-        if Artist::filter_by_user_id_and_ytm_channel_id(owner, Some(channel.to_owned()))
+        let stored = key.as_stored();
+        if Artist::filter_by_user_id_and_source_key(owner, Some(stored.clone()))
             .first()
             .exec(&mut db)
             .await?
@@ -550,10 +564,10 @@ impl Treasury {
             .first()
             .exec(&mut db)
             .await?
-            && artist.ytm_channel_id.is_none()
+            && artist.source_key.is_none()
         {
             toasty::update!(artist {
-                ytm_channel_id: Some(channel.to_owned()),
+                source_key: Some(stored),
             })
             .exec(&mut db)
             .await?;
@@ -562,36 +576,53 @@ impl Treasury {
     }
 }
 
-/// A download that turned out to be `existing`: its video is the track's
-/// too, so it is not fetched again.
-async fn note_video(
+/// A download that turned out to be `existing`: its key is the track's too,
+/// so it is not fetched again.
+async fn note_key(
     db: &mut Db,
     existing: Track,
     provenance: &Provenance,
 ) -> Result<IngestError, toasty::Error> {
-    if let Some(video_id) = &provenance.ytm_video_id {
-        videos::alias(db, &existing, video_id).await?;
+    if let Some(key) = &provenance.source_key {
+        keyed::alias(db, &existing, key).await?;
     }
     Ok(IngestError::Duplicate {
         track_id: existing.id,
     })
 }
 
-/// The album a track belongs to: by platform id when known (names can
-/// differ between releases), then by artist and title.
+/// Whether the file's tags call its release a single (`RELEASETYPE`, as
+/// MusicBrainz Picard writes it: the primary type first).
+fn tagged_single(info: &AudioInfo) -> bool {
+    info.release_type.as_deref().is_some_and(|kind| {
+        kind.split([';', '/', ','])
+            .next()
+            .is_some_and(|primary| primary.trim().eq_ignore_ascii_case("single"))
+    })
+}
+
+/// The album a track belongs to: by its key on the platform when known
+/// (names can differ between releases), then by artist and title. A new
+/// album is `single` as asked; one found by its key becomes single when
+/// the platform says so (one found by title may be a namesake album).
 async fn find_or_create_album(
     db: &mut Db,
     album_artist: &Artist,
     info: &AudioInfo,
-    ytm_browse_id: Option<&str>,
+    source: Option<&SourceKey>,
+    single: bool,
 ) -> Result<Album, toasty::Error> {
-    if let Some(browse_id) = ytm_browse_id
-        && let Some(album) =
-            Album::filter_by_user_id_and_ytm_browse_id(album_artist.user_id, browse_id)
+    let source = source.map(SourceKey::as_stored);
+    if let Some(stored) = &source
+        && let Some(mut album) =
+            Album::filter_by_user_id_and_source_key(album_artist.user_id, stored)
                 .first()
                 .exec(db)
                 .await?
     {
+        if single && !album.single {
+            toasty::update!(album { single: true }).exec(db).await?;
+        }
         return Ok(album);
     }
 
@@ -603,11 +634,11 @@ async fn find_or_create_album(
         .into_iter()
         .find(|album| album.title_key == key);
     if let Some(mut album) = existing {
-        if album.ytm_browse_id.is_none()
-            && let Some(browse_id) = ytm_browse_id
+        if album.source_key.is_none()
+            && let Some(stored) = source
         {
             toasty::update!(album {
-                ytm_browse_id: Some(browse_id.to_owned())
+                source_key: Some(stored)
             })
             .exec(db)
             .await?;
@@ -622,7 +653,8 @@ async fn find_or_create_album(
         year: info.year,
         genre: info.genre.clone(),
         mbid: info.album_mbid.clone(),
-        ytm_browse_id: ytm_browse_id.map(str::to_owned),
+        source_key: source,
+        single,
         created_at: now(),
     })
     .exec(db)

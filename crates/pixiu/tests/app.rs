@@ -337,6 +337,7 @@ async fn songs_are_excluded_from_watched_playlists() {
             title_key: "road songs",
             artist_id: artist.id,
             created_at: now(),
+            single: false,
         })
         .exec(db)
         .await
@@ -353,7 +354,7 @@ async fn songs_are_excluded_from_watched_playlists() {
             size: 1_u64,
             suffix: "opus",
             content_type: "audio/ogg",
-            ytm_video_id: Some("vidA".to_owned()),
+            source_key: Some("youtube_music:vidA".to_owned()),
             origin: TrackOrigin::Download,
             added_at: now(),
         })
@@ -364,7 +365,7 @@ async fn songs_are_excluded_from_watched_playlists() {
             failures: 0_u32,
             user_id: 1_u64,
             kind: WatchKind::Playlist,
-            remote_id: "PLroad",
+            source_key: "youtube_music:PLroad",
             name: "Road trip",
             include_singles: false,
             only_new: false,
@@ -403,7 +404,7 @@ async fn songs_are_excluded_from_watched_playlists() {
             toasty::create!(PlaylistEntry {
                 playlist_id: playlist.id,
                 position: u32::try_from(position).unwrap(),
-                ytm_video_id: Some(video.to_owned()),
+                source_key: Some(format!("youtube_music:{video}")),
                 title: Some(title.to_owned()),
                 artist: Some("Somebody".to_owned()),
             })
@@ -411,7 +412,8 @@ async fn songs_are_excluded_from_watched_playlists() {
             .await
             .unwrap();
         }
-        // The coming song's download failed.
+        // The coming song's download failed; queued before keys, its
+        // payload names a bare video id.
         toasty::create!(Job {
             user_id: 1_u64,
             kind: JobKind::DownloadTrack,
@@ -446,6 +448,14 @@ async fn songs_are_excluded_from_watched_playlists() {
     let info = server
         .api_json(&format!("/api/songs/tr-{track}/info"))
         .await;
+    assert_eq!(
+        info["source"],
+        json!({
+            "platform": "youtube_music",
+            "name": "YouTube Music",
+            "url": "https://music.youtube.com/watch?v=vidA",
+        })
+    );
     assert_eq!(info["kept"][0]["why"], "Watched playlist “Road trip”");
     assert_eq!(info["kept"][0]["excludable_from"], watch);
 

@@ -60,12 +60,23 @@ impl Default for BrowserConfig {
     }
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct HuntConfig {
     /// `rustypipe-botguard`, which answers YouTube's proof-of-origin
     /// challenges. Not used when unset.
     pub botguard: Option<PathBuf>,
+    /// Monochrome's API, which serves the audio of Deezer's songs.
+    pub monochrome: String,
+}
+
+impl Default for HuntConfig {
+    fn default() -> Self {
+        Self {
+            botguard: None,
+            monochrome: "https://tracks.monochrome.st".to_owned(),
+        }
+    }
 }
 
 /// Looking music up on MusicBrainz, LRCLIB and Wikipedia.

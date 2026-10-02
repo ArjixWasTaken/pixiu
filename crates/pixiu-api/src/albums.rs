@@ -8,6 +8,7 @@ use axum::{
     http::StatusCode,
 };
 use pixiu_db::{Album, Enrichment, Library, Track};
+use pixiu_hunt::Page;
 use pixiu_jobs::NewJob;
 use pixiu_subsonic::ids;
 use pixiu_treasury::{AlbumEdit, ArtistRef, TrackEdit};
@@ -62,11 +63,7 @@ pub(crate) async fn details(
         "enriched_at": album.enriched_at,
         "mbid": album.mbid,
         "candidates": candidates,
-        "source": if album.ytm_browse_id.is_some() { "youtube_music" } else { "offering" },
-        "youtube_url": album
-            .ytm_browse_id
-            .as_ref()
-            .map(|browse| format!("https://music.youtube.com/browse/{browse}")),
+        "source": crate::source_json(&state, Page::Album, album.source_key.as_deref()),
         "tracks": tracks.iter().map(|track| json!({
             "id": ids::track(track.id),
             "title": track.title,
@@ -183,7 +180,8 @@ pub(crate) async fn lookup(
     Path(id): Path<String>,
     body: Option<Json<Lookup>>,
 ) -> ApiResult<StatusCode> {
-    let album = load(&session.library(&state), album_id(&id)?).await?;
+    let lib = session.library(&state);
+    let album = load(&lib, album_id(&id)?).await?;
     let release =
         match body.and_then(|Json(lookup)| lookup.release) {
             Some(given) => Some(release_id(&given).ok_or_else(|| {
@@ -192,7 +190,7 @@ pub(crate) async fn lookup(
             None => None,
         };
     let fresh = release.is_none();
-    let title = format!("Look up {}", album.title);
+    let title = pixiu_jobs::enrich::lookup_title(&mut lib.db(), &album).await;
     state
         .jobs
         .enqueue(

@@ -106,7 +106,8 @@ const stage = computed(() => {
   return {
     cover: streamable.album_cover || defaultCover,
     title: streamable.title,
-    subtitle: [streamable.artist_name, streamable.album_name].filter(Boolean).join(' · '),
+    // A single's song stands alone: no album to name.
+    subtitle: [streamable.artist_name, streamable.is_single ? null : streamable.album_name].filter(Boolean).join(' · '),
   }
 })
 

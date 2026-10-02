@@ -170,7 +170,7 @@ export const usePlaylistStore = defineStore('playlist', () => {
   }
 
   const addContent = async (playlist: Playlist, playables: Playable[]) => {
-    // Smart playlists pick their own songs; mirrors of watched playlists follow YouTube Music.
+    // Smart playlists pick their own songs; mirrors of watched playlists follow their platform.
     if (playlist.is_smart || !playlist.permissions.edit) {
       return playlist
     }

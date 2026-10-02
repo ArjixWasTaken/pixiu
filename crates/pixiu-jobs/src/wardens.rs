@@ -1,7 +1,7 @@
-//! Every user's session warden. Each user with a YouTube Music session has
-//! a warden of their own, keeping their login alive with their own client
-//! and browser profile; wardens of users without one are made when first
-//! asked about, e.g. when they connect an account.
+//! Every user's session wardens. Each session a user has with a platform
+//! has a warden of its own, keeping their login alive with their own client
+//! and browser profile; wardens of sessions not connected yet are made when
+//! first asked about, e.g. when they connect an account.
 
 use std::{
     collections::HashMap,
@@ -9,25 +9,28 @@ use std::{
 };
 
 use pixiu_core::{SecretBox, alerts::AlertSink};
-use pixiu_db::{Db, SourceSession, toasty};
+use pixiu_db::{Db, Platform, SourceSession, toasty};
 use tokio::task::JoinHandle;
 
 use crate::{
     Jobs,
-    warden::{BoxFuture, Health, Platform, Refresher, SOURCE, Warden},
+    warden::{BoxFuture, Health, Refresher, Session, Warden},
     watch,
 };
 
-/// What a user's warden works with.
+/// What a user's wardens work with.
 pub trait SessionFactory: Send + Sync {
-    /// The user's platform client.
-    fn platform(&self, owner: u64) -> Box<dyn Platform>;
-    /// The user's browser profile, for fresh cookies.
-    fn refresher(&self, owner: u64) -> Box<dyn Refresher>;
-    /// Lets go of what the user's warden worked with (their client and
+    /// The user's client of a platform.
+    fn session(&self, owner: u64, platform: Platform) -> Box<dyn Session>;
+    /// The user's browser profile, for fresh cookies from a platform.
+    fn refresher(&self, owner: u64, platform: Platform) -> Box<dyn Refresher>;
+    /// Lets go of what the user's wardens worked with (their clients and
     /// login browser).
     fn forget(&self, owner: u64) -> BoxFuture<'_, ()>;
 }
+
+/// A user's session with a platform.
+type SessionOf = (u64, Platform);
 
 struct Running {
     warden: Arc<Warden>,
@@ -39,12 +42,12 @@ pub struct Wardens {
     secrets: SecretBox,
     factory: Box<dyn SessionFactory>,
     alerts: Arc<dyn AlertSink>,
-    wardens: tokio::sync::Mutex<HashMap<u64, Running>>,
+    wardens: tokio::sync::Mutex<HashMap<SessionOf, Running>>,
     /// Once started, new wardens run at once and resume their owner's
     /// paused jobs when their login works again.
     jobs: OnceLock<Arc<Jobs>>,
     /// Health of wardens already made, readable without waiting.
-    health: Mutex<HashMap<u64, tokio::sync::watch::Receiver<Health>>>,
+    health: Mutex<HashMap<SessionOf, tokio::sync::watch::Receiver<Health>>>,
 }
 
 impl Wardens {
@@ -66,22 +69,24 @@ impl Wardens {
         })
     }
 
-    /// `owner`'s warden, made (and, once started, run) on first use.
+    /// `owner`'s warden of their session with `platform`, made (and, once
+    /// started, run) on first use.
     ///
     /// # Errors
     ///
     /// Fails when the stored session cannot be read.
-    pub async fn get(&self, owner: u64) -> Result<Arc<Warden>, toasty::Error> {
+    pub async fn get(&self, owner: u64, platform: Platform) -> Result<Arc<Warden>, toasty::Error> {
         let mut wardens = self.wardens.lock().await;
-        if let Some(running) = wardens.get(&owner) {
+        if let Some(running) = wardens.get(&(owner, platform)) {
             return Ok(Arc::clone(&running.warden));
         }
         let warden = Warden::new(
             self.db.clone(),
             self.secrets.clone(),
             owner,
-            self.factory.platform(owner),
-            self.factory.refresher(owner),
+            platform,
+            self.factory.session(owner, platform),
+            self.factory.refresher(owner, platform),
             Arc::clone(&self.alerts),
         )
         .await?;
@@ -92,9 +97,9 @@ impl Wardens {
         self.health
             .lock()
             .unwrap()
-            .insert(owner, warden.subscribe());
+            .insert((owner, platform), warden.subscribe());
         wardens.insert(
-            owner,
+            (owner, platform),
             Running {
                 warden: Arc::clone(&warden),
                 tasks,
@@ -110,12 +115,11 @@ impl Wardens {
     ///
     /// Fails when the stored sessions cannot be read.
     pub async fn start(&self, jobs: Arc<Jobs>) -> Result<(), toasty::Error> {
-        let owners: Vec<u64> = SourceSession::all()
+        let sessions: Vec<SessionOf> = SourceSession::all()
             .exec(&mut self.db.clone())
             .await?
             .into_iter()
-            .filter(|session| session.source == SOURCE)
-            .map(|session| session.user_id)
+            .filter_map(|session| Some((session.user_id, Platform::from_name(&session.source)?)))
             .collect();
         {
             let mut wardens = self.wardens.lock().await;
@@ -126,35 +130,50 @@ impl Wardens {
             }
         }
         let _ = self.jobs.set(jobs);
-        for owner in owners {
-            self.get(owner).await?;
+        for (owner, platform) in sessions {
+            self.get(owner, platform).await?;
         }
         Ok(())
     }
 
-    /// `owner`'s session health; nothing when they never connected one.
+    /// The health of `owner`'s session with `platform`; nothing when they
+    /// never connected one.
     #[must_use]
-    pub fn health(&self, owner: u64) -> Health {
+    pub fn health(&self, owner: u64, platform: Platform) -> Health {
         self.health
             .lock()
             .unwrap()
-            .get(&owner)
+            .get(&(owner, platform))
             .map(|health| health.borrow().clone())
             .unwrap_or_default()
     }
 
-    /// `owner`'s session cookies, for tools that need them directly
-    /// (`yt-dlp`).
-    pub async fn cookies(&self, owner: u64) -> Option<String> {
-        self.get(owner).await.ok()?.cookies().await
+    /// The cookies of `owner`'s session with `platform`, for tools that
+    /// need them directly (`yt-dlp`).
+    pub async fn cookies(&self, owner: u64, platform: Platform) -> Option<String> {
+        self.get(owner, platform).await.ok()?.cookies().await
     }
 
-    /// Stops `owner`'s warden and lets go of their client and browser.
-    /// Their stored session stays unless disconnected first.
+    /// Stops `owner`'s wardens and lets go of their clients and browser.
+    /// Their stored sessions stay unless disconnected first.
     pub async fn stop(&self, owner: u64) {
-        let running = self.wardens.lock().await.remove(&owner);
-        self.health.lock().unwrap().remove(&owner);
-        if let Some(running) = running {
+        let stopped: Vec<Running> = {
+            let mut wardens = self.wardens.lock().await;
+            let theirs: Vec<SessionOf> = wardens
+                .keys()
+                .filter(|(user, _)| *user == owner)
+                .copied()
+                .collect();
+            theirs
+                .iter()
+                .filter_map(|session| wardens.remove(session))
+                .collect()
+        };
+        self.health
+            .lock()
+            .unwrap()
+            .retain(|(user, _), _| *user != owner);
+        for running in stopped {
             for task in running.tasks {
                 task.abort();
             }

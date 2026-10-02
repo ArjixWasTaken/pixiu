@@ -60,7 +60,7 @@
       <MenuItem v-if="onlyOneSelected">
         Go to
         <template #subMenuItems>
-          <MenuItem :title="playables[0].album_name" @click="viewAlbum(playables[0])">
+          <MenuItem v-if="!playables[0].is_single" :title="playables[0].album_name" @click="viewAlbum(playables[0])">
             <template #icon>
               <M3Icon name="album" />
             </template>
@@ -200,7 +200,7 @@ const viewOnMusicBrainz = () => trigger(() => window.open(musicBrainzUrl.value!,
 const firstSongPlaying = computed(() =>
   playables.value.length ? playables.value[0].playback_state === 'Playing' : false,
 )
-// Mirrors of watched playlists change on YouTube Music only.
+// Mirrors of watched playlists change on their platform only.
 const normalPlaylists = computed(() =>
   playlists.value.filter(({ is_smart, permissions }) => !is_smart && permissions.edit),
 )

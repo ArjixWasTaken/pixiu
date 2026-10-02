@@ -6,6 +6,7 @@ use axum::{
     extract::{Path, State},
 };
 use pixiu_db::{ClaimKind, Library, Lyrics, LyricsSource, Track, TrackClaim, TrackOrigin};
+use pixiu_hunt::Page;
 use pixiu_subsonic::ids;
 use serde_json::{Value as JsonValue, json};
 
@@ -81,7 +82,7 @@ async fn kept(lib: &Library, track: &Track) -> ApiResult<Vec<JsonValue>> {
                 }
             }
         };
-        let excludable = (claim.kind == ClaimKind::WatchPlaylist && track.ytm_video_id.is_some())
+        let excludable = (claim.kind == ClaimKind::WatchPlaylist && track.source_key.is_some())
             .then_some(reference)
             .flatten();
         reasons.push((why, excludable));
@@ -119,10 +120,7 @@ pub(crate) async fn info(
         },
         "source_name": track.source_name,
         "source_archive": track.source_archive,
-        "youtube_url": track
-            .ytm_video_id
-            .as_ref()
-            .map(|video| format!("https://music.youtube.com/watch?v={video}")),
+        "source": crate::source_json(&state, Page::Song, track.source_key.as_deref()),
         "mbid": track.mbid,
         "isrc": track.isrc,
         "added_at": track.added_at,

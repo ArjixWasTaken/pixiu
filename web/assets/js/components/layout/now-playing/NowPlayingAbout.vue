@@ -1,10 +1,11 @@
 <template>
   <div class="now-playing-about">
-    <M3SegmentedButton v-model="nowPlaying.about.value" :segments class="self-start" />
+    <!-- A single's song has no album to tell about. -->
+    <M3SegmentedButton v-if="!song.is_single" v-model="nowPlaying.about.value" :segments class="self-start" />
 
     <div v-if="entity" class="flex gap-4 items-center">
       <div
-        :class="{ round: nowPlaying.about.value === 'Artist' }"
+        :class="{ round: about === 'Artist' }"
         :style="{ backgroundImage: `url(${image}), url(${defaultCover})` }"
         class="art"
       />
@@ -54,7 +55,10 @@ const artistInfo = ref<ArtistInfo | null>(null)
 const albumInfo = ref<AlbumInfo | null>(null)
 const loading = ref(false)
 
-const entity = computed(() => (nowPlaying.about.value === 'Artist' ? artist.value : album.value))
+/** What the panel tells about: always the artist for a single's song. */
+const about = computed(() => (song.value.is_single ? 'Artist' : nowPlaying.about.value))
+
+const entity = computed(() => (about.value === 'Artist' ? artist.value : album.value))
 
 const { url } = useRouter()
 
@@ -63,28 +67,26 @@ const entityUrl = computed(() => {
   if (!entity.value) {
     return undefined
   }
-  return nowPlaying.about.value === 'Artist'
+  return about.value === 'Artist'
     ? url('artists.show', { id: entity.value.id })
     : url('albums.show', { id: entity.value.id })
 })
 
 const image = computed(() =>
-  nowPlaying.about.value === 'Artist'
+  about.value === 'Artist'
     ? artistInfo.value?.image || artist.value?.image || defaultCover
     : albumInfo.value?.cover || album.value?.cover || defaultCover,
 )
 
-const text = computed(() =>
-  nowPlaying.about.value === 'Artist' ? artistInfo.value?.bio?.full : albumInfo.value?.wiki?.full,
-)
+const text = computed(() => (about.value === 'Artist' ? artistInfo.value?.bio?.full : albumInfo.value?.wiki?.full))
 
-const source = computed(() => (nowPlaying.about.value === 'Artist' ? artistInfo.value?.url : albumInfo.value?.url))
+const source = computed(() => (about.value === 'Artist' ? artistInfo.value?.url : albumInfo.value?.url))
 
 const load = async () => {
   loading.value = true
 
   try {
-    if (nowPlaying.about.value === 'Artist') {
+    if (about.value === 'Artist') {
       artist.value = await artistStore.resolve(song.value.artist_id)
       artistInfo.value = artist.value ? await encyclopediaService.fetchForArtist(artist.value) : null
     } else {
@@ -96,7 +98,7 @@ const load = async () => {
   }
 }
 
-watch([song, nowPlaying.about], load, { immediate: true })
+watch([song, about], load, { immediate: true })
 </script>
 
 <style scoped>

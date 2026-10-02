@@ -47,6 +47,23 @@ use pixiu_jobs::{Jobs, Wardens};
 use pixiu_treasury::{Offerings, Treasury};
 use serde::Serialize;
 
+/// Where something in the library came from, for the player: the platform
+/// and the page there (`page` of the stored key); `null` for uploads.
+pub(crate) fn source_json(
+    state: &ApiState,
+    page: pixiu_hunt::Page,
+    stored: Option<&str>,
+) -> serde_json::Value {
+    let Some(key) = pixiu_db::SourceKey::from_stored(stored) else {
+        return serde_json::Value::Null;
+    };
+    serde_json::json!({
+        "platform": key.platform().as_str(),
+        "name": key.platform().name(),
+        "url": state.hunter.platforms().page_url(page, &key),
+    })
+}
+
 /// Shared state for API handlers.
 #[derive(Clone)]
 pub struct ApiState {
@@ -56,7 +73,7 @@ pub struct ApiState {
     pub treasury: Treasury,
     pub offerings: Offerings,
     pub hunter: Arc<Hunter>,
-    /// Every user's YouTube Music session warden.
+    /// Every user's session wardens, one per platform they signed in to.
     pub wardens: Arc<Wardens>,
     pub jobs: Arc<Jobs>,
     /// Every user's login browser.
@@ -325,6 +342,12 @@ impl From<pixiu_accounts::AccountError> for ApiError {
 impl From<tokio::task::JoinError> for ApiError {
     fn from(error: tokio::task::JoinError) -> Self {
         Self::internal(error, "a background task")
+    }
+}
+
+impl From<pixiu_hunt::HuntError> for ApiError {
+    fn from(error: pixiu_hunt::HuntError) -> Self {
+        Self::new(StatusCode::BAD_GATEWAY, error.to_string())
     }
 }
 

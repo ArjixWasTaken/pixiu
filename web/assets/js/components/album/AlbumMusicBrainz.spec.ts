@@ -13,8 +13,7 @@ const details = (changes: Partial<AlbumDetails>): AlbumDetails => ({
   enriched_at: null,
   mbid: 'f00',
   candidates: [],
-  source: 'youtube_music',
-  youtube_url: null,
+  source: { platform: 'youtube_music', name: 'YouTube Music', url: null },
   tracks: [],
   ...changes,
 })

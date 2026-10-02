@@ -1,15 +1,17 @@
-//! The production sides of the warden and the queue: YouTube Music, the
-//! browser profile, and the hunter.
+//! The production sides of the warden and the queue: the platforms'
+//! sessions, the browser profile, and the hunter.
 
 use std::sync::Arc;
 
 use pixiu_browser::{Cookie, LoginDesks, cookie_header};
 use pixiu_core::alerts::AlertSink;
-use pixiu_db::{Album, Job, JobKind, JobState, ReleaseReason, SessionState, Watch};
+use pixiu_db::{
+    Album, Job, JobKind, JobState, Platform, ReleaseReason, SessionState, SourceKey, Watch,
+};
 use pixiu_enrich::Sources;
 use pixiu_hunt::{
-    Discography, DownloadRequest, HuntError, Hunter, RemotePlaylist, SessionCheck, YtMusic,
-    YtMusicPool,
+    Discography, DownloadRequest, HuntError, Hunter, LoginSpec, Platforms, RemotePlaylist,
+    SessionCheck, YtMusic, YtMusicPool,
 };
 use pixiu_treasury::Release;
 
@@ -18,33 +20,18 @@ use crate::{
     queue::{
         self, AlbumJob, EnrichJob, Executor, NewJob, Outcome, SyncJob, TrackJob, enriched_album,
     },
-    warden::{BoxFuture, Platform, Refresher},
+    warden::{BoxFuture, Refresher, Session},
     wardens::{SessionFactory, Wardens},
     watch::{self, Catalog, CatalogError, Synced},
 };
 
-/// Where the login browser starts and the warden refreshes.
-pub const YOUTUBE_MUSIC_URL: &str = "https://music.youtube.com/";
-/// Google's sign-in page, returning to YouTube Music.
-pub const LOGIN_URL: &str = "https://accounts.google.com/ServiceLogin?service=youtube&continue=https%3A%2F%2Fmusic.youtube.com%2F";
-/// The cookies that matter live on this domain.
-pub const COOKIE_DOMAIN: &str = "youtube.com";
-
-/// Whether the cookies carry a Google login.
-#[must_use]
-pub fn is_logged_in(cookies: &[Cookie]) -> bool {
-    cookies
-        .iter()
-        .any(|cookie| matches!(cookie.name.as_str(), "SAPISID" | "__Secure-3PAPISID"))
-}
-
-/// A user's YouTube Music client, as their warden's platform.
-pub struct YtMusicPlatform {
+/// A user's YouTube Music client, as their warden's session.
+pub struct YtMusicSession {
     pub pool: Arc<YtMusicPool>,
     pub owner: u64,
 }
 
-impl YtMusicPlatform {
+impl YtMusicSession {
     fn client(&self) -> Result<Arc<YtMusic>, SessionCheck> {
         self.pool
             .for_user(self.owner)
@@ -52,7 +39,7 @@ impl YtMusicPlatform {
     }
 }
 
-impl Platform for YtMusicPlatform {
+impl Session for YtMusicSession {
     fn apply<'a>(&'a self, cookies: &'a str) -> BoxFuture<'a, SessionCheck> {
         Box::pin(async move {
             match self.client() {
@@ -80,22 +67,27 @@ impl Platform for YtMusicPlatform {
     }
 }
 
-/// Fresh cookies from a user's login browser profile.
+/// Fresh cookies for a platform from a user's login browser profile.
 pub struct BrowserRefresher {
     pub desks: Arc<LoginDesks>,
     pub owner: u64,
+    /// How the platform's login works; none when it has no logins.
+    pub login: Option<LoginSpec>,
 }
 
 impl Refresher for BrowserRefresher {
     fn refresh(&self) -> BoxFuture<'_, Result<String, String>> {
         Box::pin(async move {
+            let Some(login) = self.login else {
+                return Err("the platform has no logins".to_owned());
+            };
             let cookies = self
                 .desks
                 .desk(self.owner)
-                .harvest(YOUTUBE_MUSIC_URL, COOKIE_DOMAIN)
+                .harvest(login.home_url, login.cookie_domain)
                 .await
                 .map_err(|error| error.to_string())?;
-            if !is_logged_in(&cookies) {
+            if !is_logged_in(&login, &cookies) {
                 return Err("the browser profile is no longer logged in".to_owned());
             }
             Ok(cookie_header(&cookies))
@@ -103,25 +95,58 @@ impl Refresher for BrowserRefresher {
     }
 }
 
-/// Users' wardens work with their own YouTube Music client and login
-/// browser.
+/// Whether the browser's cookies carry a login to the platform.
+#[must_use]
+pub fn is_logged_in(login: &LoginSpec, cookies: &[Cookie]) -> bool {
+    login.is_logged_in(cookies.iter().map(|cookie| cookie.name.as_str()))
+}
+
+/// The session of a platform without logins, which never holds one.
+struct NoLogins(Platform);
+
+impl Session for NoLogins {
+    fn apply<'a>(&'a self, _cookies: &'a str) -> BoxFuture<'a, SessionCheck> {
+        Box::pin(async move { SessionCheck::Invalid(format!("{} has no logins", self.0.name())) })
+    }
+
+    fn check(&self) -> BoxFuture<'_, SessionCheck> {
+        Box::pin(async move { SessionCheck::Invalid(format!("{} has no logins", self.0.name())) })
+    }
+
+    fn forget(&self) -> BoxFuture<'_, ()> {
+        Box::pin(async {})
+    }
+}
+
+/// Users' wardens work with their own clients and login browser: one
+/// browser profile holds a user's logins to every platform.
 pub struct Sessions {
     pub pool: Arc<YtMusicPool>,
     pub desks: Arc<LoginDesks>,
+    /// How each platform's login works.
+    pub platforms: Platforms,
 }
 
 impl SessionFactory for Sessions {
-    fn platform(&self, owner: u64) -> Box<dyn Platform> {
-        Box::new(YtMusicPlatform {
-            pool: Arc::clone(&self.pool),
-            owner,
-        })
+    fn session(&self, owner: u64, platform: Platform) -> Box<dyn Session> {
+        match platform {
+            Platform::YouTubeMusic => Box::new(YtMusicSession {
+                pool: Arc::clone(&self.pool),
+                owner,
+            }),
+            platform @ Platform::Deezer => Box::new(NoLogins(platform)),
+        }
     }
 
-    fn refresher(&self, owner: u64) -> Box<dyn Refresher> {
+    fn refresher(&self, owner: u64, platform: Platform) -> Box<dyn Refresher> {
         Box::new(BrowserRefresher {
             desks: Arc::clone(&self.desks),
             owner,
+            login: self
+                .platforms
+                .get(platform)
+                .ok()
+                .and_then(|source| source.login()),
         })
     }
 
@@ -143,16 +168,20 @@ pub struct HuntExecutor {
     pub alerts: Arc<dyn AlertSink>,
 }
 
-/// YouTube Music lyrics, through the hunter.
+/// The platforms' lyrics, through the hunter.
 pub struct HunterLyrics(pub Arc<Hunter>);
 
 impl PlatformLyrics for HunterLyrics {
-    fn lyrics<'a>(&'a self, video_id: &'a str) -> BoxFuture<'a, Option<(String, String)>> {
+    fn lyrics<'a>(&'a self, key: &'a SourceKey) -> BoxFuture<'a, Option<(String, String)>> {
         Box::pin(async move {
-            match self.0.ytmusic().lyrics(video_id).await {
+            let lyrics = match self.0.platforms().of(key) {
+                Ok(source) => source.lyrics(key.id()).await,
+                Err(error) => Err(error),
+            };
+            match lyrics {
                 Ok(lyrics) => lyrics,
                 Err(error) => {
-                    tracing::debug!(%error, video_id, "no lyrics from YouTube Music");
+                    tracing::debug!(%error, %key, "no lyrics from the platform");
                     None
                 }
             }
@@ -187,17 +216,29 @@ impl HuntExecutor {
         };
         let claim = payload.wanted.claim(payload.reference);
         let owner = job.user_id;
+        let platform = payload.key.platform();
+        // Only platforms with logins have sessions to lend cookies.
+        let has_logins = self
+            .hunter
+            .platforms()
+            .get(platform)
+            .is_ok_and(|source| source.login().is_some());
+        let cookies = if has_logins {
+            self.wardens.cookies(owner, platform).await
+        } else {
+            None
+        };
         let request = DownloadRequest {
             owner,
             job_id: job.id,
-            video_id: payload.video_id.clone(),
+            key: payload.key.clone(),
             claim: claim.clone(),
-            cookies: self.wardens.cookies(owner).await,
+            cookies,
         };
         let treasury = self.hunter.treasury();
         // Excluded from its playlist while this was queued or running.
         let excluded = async || match payload.wanted.watch_id() {
-            Some(watch_id) => watch::is_excluded(&mut treasury.db(), watch_id, &payload.video_id)
+            Some(watch_id) => watch::is_excluded(&mut treasury.db(), watch_id, &payload.key)
                 .await
                 .unwrap_or(false),
             None => false,
@@ -268,20 +309,20 @@ impl HuntExecutor {
             Ok(payload) => payload,
             Err(error) => return Outcome::Failed(format!("invalid job: {error}")),
         };
-        let album = match self.hunter.album(&payload.browse_id).await {
+        let album = match self.hunter.album(&payload.key).await {
             Ok(album) => album,
             Err(error) => return Outcome::Failed(error.to_string()),
         };
         let mut jobs = Vec::new();
         let treasury = self.hunter.treasury();
         let mut db = treasury.db();
-        let claim = payload.wanted.claim(Some(album.id.clone()));
+        let claim = payload.wanted.claim(Some(album.id.as_stored()));
         for track in &album.tracks {
-            let hoarded =
-                match pixiu_db::videos::track_of_video(&mut db, job.user_id, &track.id).await {
-                    Ok(hoarded) => hoarded,
-                    Err(error) => return Outcome::Failed(error.to_string()),
-                };
+            let hoarded = match pixiu_db::keyed::track_of_key(&mut db, job.user_id, &track.id).await
+            {
+                Ok(hoarded) => hoarded,
+                Err(error) => return Outcome::Failed(error.to_string()),
+            };
             match hoarded {
                 // Already here: whoever wants the album keeps it too.
                 Some(hoarded) => {
@@ -292,7 +333,7 @@ impl HuntExecutor {
                 None => jobs.push(NewJob::wanted_track(
                     &track.id,
                     &format!("{} — {}", track.artist_credit(), track.title),
-                    Some(album.id.clone()),
+                    Some(album.id.as_stored()),
                     payload.wanted,
                 )),
             }
@@ -300,8 +341,7 @@ impl HuntExecutor {
         Outcome::Expand(jobs)
     }
 
-    /// An enrich job for `owner`'s album, unless one is already waiting or
-    /// the album is the artist's singles.
+    /// An enrich job for `owner`'s album, unless one is already waiting.
     async fn enrich_later(&self, owner: u64, album_id: u64) -> Vec<NewJob> {
         let mut db = self.hunter.treasury().db();
         let waiting = queue::unfinished(&mut db, owner).await.is_ok_and(|jobs| {
@@ -311,16 +351,11 @@ impl HuntExecutor {
         let Ok(Some(album)) = Album::filter_by_id(album_id).first().exec(&mut db).await else {
             return Vec::new();
         };
-        // Songs without an album are no release MusicBrainz could know.
-        if waiting || album.title == pixiu_hunt::SINGLES {
+        if waiting {
             return Vec::new();
         }
-        vec![NewJob::enrich(
-            album_id,
-            &format!("Look up {}", album.title),
-            None,
-            false,
-        )]
+        let title = enrich::lookup_title(&mut db, &album).await;
+        vec![NewJob::enrich(album_id, &title, None, false)]
     }
 
     async fn enrich(&self, job: &Job) -> Outcome {
@@ -362,7 +397,7 @@ impl HuntExecutor {
         let Ok(Some(album)) = Album::filter_by_id(album_id).first().exec(&mut db).await else {
             return false;
         };
-        let Some(browse_id) = album.ytm_browse_id else {
+        let Some(key) = SourceKey::from_stored(album.source_key.as_deref()) else {
             return false;
         };
         queue::unfinished(&mut db, owner).await.is_ok_and(|jobs| {
@@ -370,7 +405,7 @@ impl HuntExecutor {
                 matches!(job.state, JobState::Queued | JobState::Running)
                     && job.kind == JobKind::DownloadTrack
                     && serde_json::from_str::<TrackJob>(&job.payload).is_ok_and(|payload| {
-                        payload.reference.as_deref() == Some(browse_id.as_str())
+                        SourceKey::from_stored(payload.reference.as_deref()).as_ref() == Some(&key)
                     })
             })
         })
@@ -381,7 +416,7 @@ impl HuntExecutor {
             Ok(payload) => payload,
             Err(error) => return Outcome::Failed(format!("invalid job: {error}")),
         };
-        let catalog = YtMusicCatalog {
+        let catalog = PlatformCatalog {
             hunter: Arc::clone(&self.hunter),
             wardens: Arc::clone(&self.wardens),
             owner: job.user_id,
@@ -411,8 +446,8 @@ async fn watch_exists(hunter: &Hunter, watch_id: u64) -> bool {
     )
 }
 
-/// YouTube Music, as the catalog of a user's watches.
-pub struct YtMusicCatalog {
+/// The platforms, as the catalog of a user's watches.
+pub struct PlatformCatalog {
     pub hunter: Arc<Hunter>,
     pub wardens: Arc<Wardens>,
     /// Whose watches: their login sees their liked music and private
@@ -420,42 +455,52 @@ pub struct YtMusicCatalog {
     pub owner: u64,
 }
 
-fn catalog_error(error: &HuntError) -> CatalogError {
+fn catalog_error(key: &SourceKey, error: &HuntError) -> CatalogError {
     if error.needs_login() {
-        CatalogError::NeedsLogin(format!("YouTube Music wants a login: {error}"))
+        CatalogError::NeedsLogin(format!("{} wants a login: {error}", key.platform().name()))
     } else {
         CatalogError::Failed(error.to_string())
     }
 }
 
-impl Catalog for YtMusicCatalog {
-    fn playlist<'a>(&'a self, id: &'a str) -> BoxFuture<'a, Result<RemotePlaylist, CatalogError>> {
+impl Catalog for PlatformCatalog {
+    fn playlist<'a>(
+        &'a self,
+        key: &'a SourceKey,
+    ) -> BoxFuture<'a, Result<RemotePlaylist, CatalogError>> {
         Box::pin(async move {
-            self.hunter
-                .clients()
-                .client(self.owner)
-                .playlist(id)
+            let source = self
+                .hunter
+                .platforms()
+                .of(key)
+                .map_err(|error| catalog_error(key, &error))?;
+            source
+                .playlist(self.owner, key.id())
                 .await
-                .map_err(|error| catalog_error(&error))
+                .map_err(|error| catalog_error(key, &error))
         })
     }
 
     fn discography<'a>(
         &'a self,
-        channel_id: &'a str,
+        key: &'a SourceKey,
     ) -> BoxFuture<'a, Result<Discography, CatalogError>> {
         Box::pin(async move {
-            self.hunter
-                .ytmusic()
-                .discography(channel_id)
+            let source = self
+                .hunter
+                .platforms()
+                .of(key)
+                .map_err(|error| catalog_error(key, &error))?;
+            source
+                .discography(key.id())
                 .await
-                .map_err(|error| catalog_error(&error))
+                .map_err(|error| catalog_error(key, &error))
         })
     }
 
-    fn logged_in(&self) -> bool {
+    fn logged_in(&self, platform: Platform) -> bool {
         matches!(
-            self.wardens.health(self.owner).state,
+            self.wardens.health(self.owner, platform).state,
             Some(SessionState::Valid | SessionState::Degraded)
         )
     }

@@ -13,7 +13,7 @@ use axum::{
 use md5::{Digest, Md5};
 use pixiu_core::SecretBox;
 use pixiu_db::{
-    ApiKey, Artist, ClaimKind, Db, Lyrics, LyricsSource, Playlist, PlaylistEntry, Track,
+    Album, ApiKey, Artist, ClaimKind, Db, Lyrics, LyricsSource, Playlist, PlaylistEntry, Track,
     TrackClaim, User, now, toasty,
 };
 use pixiu_subsonic::SubsonicState;
@@ -445,6 +445,88 @@ async fn streaming_supports_ranges() {
     assert_eq!(download.headers[header::X_CONTENT_TYPE_OPTIONS], "nosniff");
 
     assert_eq!(api.call("stream", "id=tr-999").await.error_code(), 70);
+}
+
+#[tokio::test]
+async fn downloads_name_their_platform() {
+    let api = Api::new().await;
+    let mut db = api.db.clone();
+    let songs = songs_by_suffix(&api).await;
+    let (flac, mp3) = (&songs["flac"], &songs["mp3"]);
+
+    // As if the FLAC had been downloaded from YouTube Music, with its album.
+    let mut track = Track::get_by_id(&mut db, &flac[3..].parse::<u64>().unwrap())
+        .await
+        .unwrap();
+    let album_id = track.album_id;
+    toasty::update!(track {
+        source_key: Some("youtube_music:vid".to_owned())
+    })
+    .exec(&mut db)
+    .await
+    .unwrap();
+    let mut album = Album::get_by_id(&mut db, &album_id).await.unwrap();
+    toasty::update!(album {
+        source_key: Some("youtube_music:MPREb_album".to_owned())
+    })
+    .exec(&mut db)
+    .await
+    .unwrap();
+
+    let downloaded = api.call("getSong", &format!("id={flac}")).await.ok();
+    assert_eq!(downloaded["song"]["sourcePlatform"], "youtube_music");
+    let uploaded = api.call("getSong", &format!("id={mp3}")).await.ok();
+    assert!(uploaded["song"].get("sourcePlatform").is_none());
+    let json = api
+        .call(
+            "getAlbum",
+            &format!("id={}", api.album_id("Test Album").await),
+        )
+        .await
+        .ok();
+    assert_eq!(json["album"]["sourcePlatform"], "youtube_music");
+}
+
+#[tokio::test]
+async fn singles_are_marked_and_may_be_left_out() {
+    let api = Api::new().await;
+    let mut db = api.db.clone();
+    let id = api.album_id("Test Album").await;
+    let album_list = |singles: &'static str| {
+        let api = &api;
+        async move {
+            let json = api
+                .call(
+                    "getAlbumList2",
+                    &format!("type=alphabeticalByName&size=500{singles}"),
+                )
+                .await
+                .ok();
+            names(&json["albumList2"]["album"], "name")
+        }
+    };
+    let albums = album_list("").await;
+    assert!(albums.contains(&"Test Album".to_owned()));
+    let json = api.call("getAlbum", &format!("id={id}")).await.ok();
+    assert_eq!(json["album"]["releaseTypes"], serde_json::json!([]));
+    assert!(json["album"]["song"][0].get("single").is_none());
+
+    let mut album = Album::get_by_id(&mut db, &id[3..].parse::<u64>().unwrap())
+        .await
+        .unwrap();
+    toasty::update!(album { single: true })
+        .exec(&mut db)
+        .await
+        .unwrap();
+
+    let json = api.call("getAlbum", &format!("id={id}")).await.ok();
+    assert_eq!(json["album"]["releaseTypes"], serde_json::json!(["Single"]));
+    assert_eq!(json["album"]["song"][0]["single"], true);
+    // Apps see singles as before; píxiū's player asks for albums only.
+    assert_eq!(album_list("").await, albums);
+    // The untagged upload's "Unknown Album" stands alone too.
+    assert_eq!(albums, ["Test Album", "Unknown Album"]);
+    assert_eq!(album_list("&singles=false").await, Vec::<String>::new());
 }
 
 /// The song ids of the library by file extension.
@@ -1034,7 +1116,7 @@ async fn playlists_are_made_changed_and_mirrored() {
     let mut track = Track::all().exec(&mut db).await.unwrap().remove(0);
     let track_id = track.id;
     toasty::update!(track {
-        ytm_video_id: Some("vid-here".to_owned())
+        source_key: Some("youtube_music:vid-here".to_owned())
     })
     .exec(&mut db)
     .await
@@ -1054,7 +1136,7 @@ async fn playlists_are_made_changed_and_mirrored() {
         toasty::create!(PlaylistEntry {
             playlist_id: mirror.id,
             position: position as u32,
-            ytm_video_id: Some(video.to_owned()),
+            source_key: Some(format!("youtube_music:{video}")),
         })
         .exec(&mut db)
         .await

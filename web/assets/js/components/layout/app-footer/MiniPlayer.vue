@@ -7,7 +7,9 @@
     @pointerup="onPointerUp"
   >
     <div class="row">
-      <span :style="{ backgroundImage: `url(${cover}), url(${defaultCover})` }" aria-hidden="true" class="art" />
+      <span :style="{ backgroundImage: `url(${cover}), url(${defaultCover})` }" aria-hidden="true" class="art">
+        <PlatformBadge :platform="playable?.source_platform" />
+      </span>
       <div class="flex-1 min-w-0 pl-1">
         <p class="m3-title-small truncate text-(--schemes-on-surface)">{{ playable?.title ?? 'Nothing playing' }}</p>
         <p class="m3-body-small truncate text-(--schemes-on-surface-variant)">{{ artist }}</p>
@@ -39,6 +41,7 @@ import { coverOfSize } from '@/services/subsonic'
 import FavoriteButton from '@/components/ui/FavoriteButton.vue'
 import M3IconButton from '@/components/m3/M3IconButton.vue'
 import PlayButton from '@/components/ui/FooterPlayButton.vue'
+import PlatformBadge from '@/components/ui/PlatformBadge.vue'
 
 const playableStore = usePlayableStore()
 
@@ -92,6 +95,7 @@ const expand = () => swiped || (playable.value && nowPlaying.show())
 }
 
 .art {
+  position: relative;
   width: 48px;
   height: 48px;
   flex-shrink: 0;

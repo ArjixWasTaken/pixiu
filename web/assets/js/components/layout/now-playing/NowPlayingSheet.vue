@@ -27,7 +27,9 @@
           @pointermove="onPointerMove"
           @pointerup="onPointerUp"
         >
-          <div :style="{ backgroundImage: `url(${cover}), url(${defaultCover})` }" class="art" />
+          <div :style="{ backgroundImage: `url(${cover}), url(${defaultCover})` }" class="art">
+            <PlatformBadge :platform="song?.source_platform" size="xl" />
+          </div>
         </div>
         <div class="flex flex-col gap-3 shrink-0">
           <div class="flex items-center gap-2">
@@ -88,6 +90,7 @@ import NowPlayingAbout from '@/components/layout/now-playing/NowPlayingAbout.vue
 import NowPlayingLyrics from '@/components/layout/now-playing/NowPlayingLyrics.vue'
 import NowPlayingControls from '@/components/layout/now-playing/NowPlayingControls.vue'
 import NowPlayingQueue from '@/components/layout/now-playing/NowPlayingQueue.vue'
+import PlatformBadge from '@/components/ui/PlatformBadge.vue'
 
 const playableStore = usePlayableStore()
 
@@ -216,6 +219,7 @@ const onPointerUp = () => {
 }
 
 .art {
+  position: relative;
   height: 100%;
   max-height: 340px;
   max-width: 100%;

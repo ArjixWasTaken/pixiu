@@ -17,8 +17,9 @@ use std::{
 use jiff::{SignedDuration, Timestamp};
 use pixiu_core::alerts::{Alert, AlertSink};
 use pixiu_db::{
-    ClaimKind, Db, Job, JobKind, JobState, Playlist, PlaylistEntry, ReleaseReason, SessionState,
-    TrackClaim, User, UserStatus, Watch, WatchExclusion, WatchKind, now, toasty, videos,
+    ClaimKind, Db, Job, JobKind, JobState, Platform, Playlist, PlaylistEntry, ReleaseReason,
+    SessionState, SourceKey, TrackClaim, User, UserStatus, Watch, WatchExclusion, WatchKind, keyed,
+    now, toasty,
 };
 use pixiu_hunt::{AlbumKind, Discography, LIKED_MUSIC, RemotePlaylist, RemoteTrack};
 use pixiu_treasury::{Release, Treasury};
@@ -44,16 +45,22 @@ pub enum CatalogError {
 
 /// The platform side of watches.
 pub trait Catalog: Send + Sync {
-    /// A playlist with all its tracks; [`LIKED_MUSIC`] for liked music.
-    fn playlist<'a>(&'a self, id: &'a str) -> BoxFuture<'a, Result<RemotePlaylist, CatalogError>>;
+    /// A playlist with all its tracks; the key of [`LIKED_MUSIC`] for liked
+    /// music.
+    fn playlist<'a>(
+        &'a self,
+        key: &'a SourceKey,
+    ) -> BoxFuture<'a, Result<RemotePlaylist, CatalogError>>;
 
+    /// An artist's releases.
     fn discography<'a>(
         &'a self,
-        channel_id: &'a str,
+        key: &'a SourceKey,
     ) -> BoxFuture<'a, Result<Discography, CatalogError>>;
 
-    /// Whether a working login is at hand; liked music needs one.
-    fn logged_in(&self) -> bool;
+    /// Whether a working login to `platform` is at hand; liked music needs
+    /// one.
+    fn logged_in(&self, platform: Platform) -> bool;
 }
 
 /// How often each kind of watch is synced.
@@ -170,15 +177,11 @@ async fn sync_playlist(
 ) -> Result<Synced, String> {
     let owner = watch.user_id;
     let liked = watch.kind == WatchKind::LikedMusic;
-    if liked && !catalog.logged_in() {
+    let key = watch_key(watch)?;
+    if liked && !catalog.logged_in(key.platform()) {
         return Ok(Synced::NeedsLogin(WAITING_FOR_LOGIN.to_owned()));
     }
-    let remote_id = if liked {
-        LIKED_MUSIC
-    } else {
-        watch.remote_id.as_str()
-    };
-    let playlist = match catalog.playlist(remote_id).await {
+    let playlist = match catalog.playlist(&key).await {
         Ok(playlist) => playlist,
         Err(CatalogError::NeedsLogin(reason)) => return Ok(Synced::NeedsLogin(reason)),
         Err(CatalogError::Failed(reason)) => return Err(reason),
@@ -194,15 +197,15 @@ async fn sync_playlist(
         .map_err(failed)?;
 
     // Excluded songs count as gone from the playlist.
-    let excluded = excluded_videos(&mut db, watch.id).await.map_err(failed)?;
+    let excluded = excluded_keys(&mut db, watch.id).await.map_err(failed)?;
     let tracks: Vec<RemoteTrack> = playlist
         .tracks
         .into_iter()
-        .filter(|track| !excluded.contains(&track.id))
+        .filter(|track| !excluded.contains(&track.id.as_stored()))
         .collect();
 
     // The mirror follows the playlist, order included.
-    let order: Vec<String> = tracks.iter().map(|track| track.id.clone()).collect();
+    let order: Vec<SourceKey> = tracks.iter().map(|track| track.id.clone()).collect();
     let mirror = mirror(&mut db, owner, watch.id, &name)
         .await
         .map_err(failed)?;
@@ -223,14 +226,14 @@ async fn sync_playlist(
             },
             |track| {
                 !track
-                    .ytm_video_id
+                    .source_key
                     .as_ref()
-                    .is_some_and(|id| excluded.contains(id))
+                    .is_some_and(|key| excluded.contains(key))
             },
         )
         .await
         .map_err(failed)?;
-    let listed: HashSet<&str> = order.iter().map(String::as_str).collect();
+    let listed: HashSet<String> = order.iter().map(SourceKey::as_stored).collect();
     treasury
         .release(
             owner,
@@ -242,9 +245,9 @@ async fn sync_playlist(
             },
             |track| {
                 track
-                    .ytm_video_id
-                    .as_deref()
-                    .is_some_and(|id| listed.contains(id))
+                    .source_key
+                    .as_ref()
+                    .is_some_and(|key| listed.contains(key))
             },
         )
         .await
@@ -289,7 +292,7 @@ async fn sync_artist(
     catalog: &dyn Catalog,
     watch: &Watch,
 ) -> Result<Synced, String> {
-    let discography = match catalog.discography(&watch.remote_id).await {
+    let discography = match catalog.discography(&watch_key(watch)?).await {
         Ok(discography) => discography,
         Err(CatalogError::NeedsLogin(reason)) => return Ok(Synced::NeedsLogin(reason)),
         Err(CatalogError::Failed(reason)) => return Err(reason),
@@ -297,7 +300,13 @@ async fn sync_artist(
     let wanted = Wanted::Artist { watch_id: watch.id };
     // A watch of new releases only takes note of the old ones at first.
     let skip_old = watch.only_new && watch.last_synced_at.is_none();
-    let known: HashSet<&str> = watch.seen.iter().map(String::as_str).collect();
+    // Releases seen before keys were bare YouTube Music ids; they read as
+    // keys all the same.
+    let known: HashSet<SourceKey> = watch
+        .seen
+        .iter()
+        .filter_map(|seen| seen.parse().ok())
+        .collect();
     let pending = pending(db, watch.user_id).await.map_err(failed)?;
     let mut seen = watch.seen.clone();
     let mut jobs = Vec::new();
@@ -306,10 +315,11 @@ async fn sync_artist(
             AlbumKind::Album | AlbumKind::Other => true,
             AlbumKind::Ep | AlbumKind::Single => watch.include_singles,
         };
-        if !wanted_kind || known.contains(album.id.as_str()) || seen.contains(&album.id) {
+        let stored = album.id.as_stored();
+        if !wanted_kind || known.contains(&album.id) || seen.contains(&stored) {
             continue;
         }
-        seen.push(album.id.clone());
+        seen.push(stored);
         if skip_old || pending.has_album(&album.id) {
             continue;
         }
@@ -323,9 +333,9 @@ async fn sync_artist(
         .await
         .map_err(failed)?
     {
-        // The library's artist of that name is this channel.
+        // The library's artist of that name is this one.
         treasury
-            .learn_artist_channel(watch.user_id, &discography.name, &discography.id)
+            .learn_artist_key(watch.user_id, &discography.name, &discography.id)
             .await
             .map_err(failed)?;
         toasty::update!(watch {
@@ -405,7 +415,7 @@ async fn set_entries(
     entries.sort_by_key(|entry| entry.position);
     let unchanged = entries.len() == tracks.len()
         && entries.iter().zip(tracks).all(|(entry, track)| {
-            entry.ytm_video_id.as_deref() == Some(track.id.as_str())
+            entry.source_key.as_deref() == Some(track.id.as_stored().as_str())
                 && entry.title.as_deref() == Some(track.title.as_str())
                 && entry.artist.as_deref() == Some(track.artist_credit().as_str())
         });
@@ -422,7 +432,7 @@ async fn set_entries(
         toasty::create!(PlaylistEntry {
             playlist_id,
             position: u32::try_from(position).unwrap_or(u32::MAX),
-            ytm_video_id: Some(track.id.clone()),
+            source_key: Some(track.id.as_stored()),
             title: Some(track.title.clone()),
             artist: Some(track.artist_credit()),
         })
@@ -441,17 +451,28 @@ async fn set_entries(
     tx.commit().await
 }
 
-/// The tracks `owner`'s library holds among these videos, by video id.
+/// The tracks `owner`'s library holds among these songs, by key.
 async fn hoarded(
     db: &mut Db,
     owner: u64,
-    video_ids: &[String],
-) -> Result<HashMap<String, u64>, toasty::Error> {
-    let held = videos::tracks_of_videos(db, owner, video_ids).await?;
+    keys: &[SourceKey],
+) -> Result<HashMap<SourceKey, u64>, toasty::Error> {
+    let held = keyed::tracks_of_keys(db, owner, keys).await?;
     Ok(held
-        .videos()
-        .filter_map(|video_id| Some((video_id.to_owned(), held.track(video_id)?.id)))
+        .keys()
+        .filter_map(|key| {
+            let track = held.track(&key)?.id;
+            Some((key, track))
+        })
         .collect())
+}
+
+/// What a watch follows, by key.
+fn watch_key(watch: &Watch) -> Result<SourceKey, String> {
+    watch
+        .source_key
+        .parse()
+        .map_err(|error| format!("cannot read what the watch follows: {error}"))
 }
 
 /// The tracks that hold a claim of `kind` on `reference`.
@@ -481,8 +502,8 @@ pub fn synced_watch(job: &Job) -> Option<u64> {
 #[derive(Debug, Clone)]
 pub struct NewWatch {
     pub kind: WatchKind,
-    /// The playlist or channel id; ignored for liked music.
-    pub remote_id: String,
+    /// The playlist or artist; ignored for liked music.
+    pub key: SourceKey,
     pub include_singles: bool,
     pub only_new: bool,
 }
@@ -514,11 +535,14 @@ pub async fn add(
     new: NewWatch,
 ) -> Result<Watch, WatchError> {
     let mut db = treasury.db();
-    let (remote_id, name) = match new.kind {
-        WatchKind::LikedMusic => (LIKED_MUSIC.to_owned(), "Liked music".to_owned()),
-        _ => (new.remote_id.clone(), new.remote_id),
+    let (key, name) = match new.kind {
+        WatchKind::LikedMusic => (
+            SourceKey::youtube_music(LIKED_MUSIC),
+            "Liked music".to_owned(),
+        ),
+        _ => (new.key.clone(), new.key.id().to_owned()),
     };
-    if Watch::filter_by_user_id_and_remote_id(owner, &remote_id)
+    if Watch::filter_by_user_id_and_source_key(owner, key.as_stored())
         .first()
         .exec(&mut db)
         .await?
@@ -531,7 +555,7 @@ pub async fn add(
         failures: 0_u32,
         user_id: owner,
         kind: new.kind,
-        remote_id,
+        source_key: key.as_stored(),
         name,
         include_singles: new.include_singles,
         only_new: new.only_new,
@@ -542,7 +566,7 @@ pub async fn add(
     })
     .exec(&mut db)
     .await?;
-    tracing::info!(watch = watch.id, remote_id = %watch.remote_id, "watch added");
+    tracing::info!(watch = watch.id, key = %watch.source_key, "watch added");
     queue_sync(jobs, &watch).await?;
     Ok(watch)
 }
@@ -625,22 +649,22 @@ pub async fn remove(treasury: &Treasury, jobs: &Jobs, watch_id: u64) -> Result<(
         .delete()
         .exec(&mut db)
         .await?;
-    tracing::info!(watch = watch.id, remote_id = %watch.remote_id, "watch removed");
+    tracing::info!(watch = watch.id, key = %watch.source_key, "watch removed");
     watch.delete().exec(&mut db).await?;
     Ok(())
 }
 
-/// The video ids excluded from a watch.
-async fn excluded_videos(db: &mut Db, watch_id: u64) -> Result<HashSet<String>, toasty::Error> {
+/// The songs excluded from a watch, by stored key.
+async fn excluded_keys(db: &mut Db, watch_id: u64) -> Result<HashSet<String>, toasty::Error> {
     Ok(WatchExclusion::filter_by_watch_id(watch_id)
         .exec(db)
         .await?
         .into_iter()
-        .map(|exclusion| exclusion.ytm_video_id)
+        .map(|exclusion| exclusion.source_key)
         .collect())
 }
 
-/// Whether the user excluded a video from a watch.
+/// Whether the user excluded a song from a watch.
 ///
 /// # Errors
 ///
@@ -648,9 +672,11 @@ async fn excluded_videos(db: &mut Db, watch_id: u64) -> Result<HashSet<String>, 
 pub async fn is_excluded(
     db: &mut Db,
     watch_id: u64,
-    video_id: &str,
+    key: &SourceKey,
 ) -> Result<bool, toasty::Error> {
-    Ok(excluded_videos(db, watch_id).await?.contains(video_id))
+    Ok(excluded_keys(db, watch_id)
+        .await?
+        .contains(&key.as_stored()))
 }
 
 /// The songs excluded from a watch, the latest first.
@@ -678,9 +704,10 @@ pub async fn exclude(
     treasury: &Treasury,
     jobs: &Jobs,
     watch_id: u64,
-    video_id: &str,
+    key: &SourceKey,
 ) -> Result<bool, toasty::Error> {
     let mut db = treasury.db();
+    let stored = key.as_stored();
     let Some(watch) = Watch::filter_by_id(watch_id).first().exec(&mut db).await? else {
         return Ok(false);
     };
@@ -704,11 +731,11 @@ pub async fn exclude(
     entries.sort_by_key(|entry| entry.position);
     let entry = entries
         .iter()
-        .position(|entry| entry.ytm_video_id.as_deref() == Some(video_id))
+        .position(|entry| entry.source_key.as_deref() == Some(stored.as_str()))
         .map(|index| entries.remove(index));
-    let track = videos::track_of_video(&mut db, watch.user_id, video_id).await?;
+    let track = keyed::track_of_key(&mut db, watch.user_id, key).await?;
 
-    if !is_excluded(&mut db, watch_id, video_id).await? {
+    if !is_excluded(&mut db, watch_id, key).await? {
         let (title, artist) = match (&entry, &track) {
             (Some(entry), _) if entry.title.is_some() => {
                 (entry.title.clone(), entry.artist.clone())
@@ -718,7 +745,7 @@ pub async fn exclude(
         };
         toasty::create!(WatchExclusion {
             watch_id,
-            ytm_video_id: video_id,
+            source_key: &stored,
             title,
             artist,
             excluded_at: now(),
@@ -752,17 +779,17 @@ pub async fn exclude(
                 reason: ReleaseReason::Excluded,
                 source_name: Some(&watch.name),
             },
-            |track| track.ytm_video_id.as_deref() != Some(video_id),
+            |track| track.source_key.as_deref() != Some(stored.as_str()),
         )
         .await?;
     jobs.forget(watch.user_id, |job| {
         queue::wanted(job).and_then(Wanted::watch_id) == Some(watch_id)
             && job.kind == JobKind::DownloadTrack
             && serde_json::from_str::<TrackJob>(&job.payload)
-                .is_ok_and(|payload| payload.video_id == video_id)
+                .is_ok_and(|payload| payload.key == *key)
     })
     .await?;
-    tracing::info!(watch = watch_id, video_id, "song excluded from a watch");
+    tracing::info!(watch = watch_id, %key, "song excluded from a watch");
     Ok(true)
 }
 
@@ -776,14 +803,15 @@ pub async fn include(
     treasury: &Treasury,
     jobs: &Jobs,
     watch_id: u64,
-    video_id: &str,
+    key: &SourceKey,
 ) -> Result<(), toasty::Error> {
     let mut db = treasury.db();
+    let stored = key.as_stored();
     for exclusion in WatchExclusion::filter_by_watch_id(watch_id)
         .exec(&mut db)
         .await?
     {
-        if exclusion.ytm_video_id == video_id {
+        if exclusion.source_key == stored {
             exclusion.delete().exec(&mut db).await?;
         }
     }

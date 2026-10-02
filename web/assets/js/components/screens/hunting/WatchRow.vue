@@ -3,6 +3,7 @@
     <M3Card class="flex items-center gap-4 flex-wrap p-4" variant="outlined">
       <div :style="watch.image ? { backgroundImage: `url(${watch.image})` } : {}" class="art">
         <M3Icon v-if="!watch.image" :name="kindIcon" fill />
+        <PlatformBadge :platform="watch.platform" />
       </div>
 
       <div class="flex-1 min-w-[220px] flex flex-col gap-1">
@@ -32,7 +33,7 @@
           Playlist
         </M3Button>
         <a :href="watch.link" rel="noopener" target="_blank">
-          <M3IconButton icon="open_in_new" label="Open on YouTube Music" />
+          <M3IconButton :label="`Open on ${platform}`" icon="open_in_new" />
         </a>
         <M3Button :disabled="busy" variant="tonal" @click.prevent="emit('sync')">Sync now</M3Button>
         <M3Button class="remove" variant="text" @click.prevent="emit('remove')">Remove</M3Button>
@@ -46,11 +47,13 @@ import { computed } from 'vue'
 import type { Watch } from '@/services/huntingService'
 import { pluralize, timeAgo } from '@/utils/formatters'
 import { useRouter } from '@/composables/useRouter'
+import { platformName } from '@/config/platforms'
 
 import M3Button from '@/components/m3/M3Button.vue'
 import M3Card from '@/components/m3/M3Card.vue'
 import M3Icon from '@/components/m3/M3Icon.vue'
 import M3IconButton from '@/components/m3/M3IconButton.vue'
+import PlatformBadge from '@/components/ui/PlatformBadge.vue'
 
 const props = defineProps<{ watch: Watch }>()
 const emit = defineEmits<{ (e: 'sync'): void; (e: 'remove'): void }>()
@@ -65,6 +68,8 @@ const kindIcon = computed(
   () => ({ playlist: 'queue_music', liked_music: 'favorite', artist: 'artist' })[props.watch.kind],
 )
 
+const platform = computed(() => platformName(props.watch.platform))
+
 const busy = computed(() => ['syncing', 'queued'].includes(props.watch.status.state))
 
 const statusLabel = computed(() => {
@@ -74,7 +79,7 @@ const statusLabel = computed(() => {
     case 'queued':
       return 'Sync queued'
     case 'waiting':
-      return 'Waiting for you to sign in to YouTube Music'
+      return `Waiting for you to sign in to ${platform.value}`
     case 'failed':
       return 'Last sync failed'
     case 'never_synced':
@@ -87,6 +92,7 @@ const statusLabel = computed(() => {
 
 <style scoped>
 .art {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;

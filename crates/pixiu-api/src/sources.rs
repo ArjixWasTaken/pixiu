@@ -1,6 +1,7 @@
-//! The YouTube Music account: the session's health and history, and the
+//! The account with a platform: the session's health and history, and the
 //! login browser, a real browser on the server whose screen streams to the
-//! player over a WebSocket while the user signs in.
+//! player over a WebSocket while the user signs in. YouTube Music is the
+//! only platform with logins so far; another would name its own here.
 
 use std::sync::Arc;
 
@@ -14,11 +15,9 @@ use axum::{
     response::Response,
 };
 use pixiu_browser::{BrowserError, Field, Frame, Input, LoginDesk, Viewer, cookie_header};
-use pixiu_db::SessionState;
-use pixiu_jobs::{
-    Health, Warden,
-    adapters::{COOKIE_DOMAIN, LOGIN_URL, is_logged_in},
-};
+use pixiu_db::{Platform, SessionState};
+use pixiu_hunt::LoginSpec;
+use pixiu_jobs::{Health, Warden, adapters::is_logged_in};
 use serde_json::{Value as JsonValue, json};
 use tokio::sync::broadcast::error::RecvError;
 
@@ -34,14 +33,27 @@ pub(crate) fn state_name(state: Option<SessionState>) -> &'static str {
     }
 }
 
+/// The platform whose account these endpoints manage.
+pub(crate) const PLATFORM: Platform = Platform::YouTubeMusic;
+
 /// `owner`'s session health; nothing when they never connected one.
 pub(crate) fn health_of(state: &ApiState, owner: u64) -> Health {
-    state.wardens.health(owner)
+    state.wardens.health(owner, PLATFORM)
 }
 
 /// The signed-in user's warden.
 async fn warden(state: &ApiState, session: &Session) -> ApiResult<Arc<Warden>> {
-    Ok(state.wardens.get(session.owner()).await?)
+    Ok(state.wardens.get(session.owner(), PLATFORM).await?)
+}
+
+/// How the platform's login works.
+fn login(state: &ApiState) -> ApiResult<LoginSpec> {
+    state
+        .hunter
+        .platforms()
+        .get(PLATFORM)?
+        .login()
+        .ok_or_else(|| ApiError::not_found("login"))
 }
 
 /// The signed-in user's login browser.
@@ -114,13 +126,14 @@ pub(crate) async fn disconnect(
     Ok(StatusCode::NO_CONTENT)
 }
 
-/// `POST /api/sources/login`: starts the login browser on Google's sign-in.
+/// `POST /api/sources/login`: starts the login browser on the platform's
+/// sign-in.
 pub(crate) async fn open_login(
     State(state): State<ApiState>,
     session: Session,
 ) -> ApiResult<StatusCode> {
     desk(&state, &session)
-        .open(LOGIN_URL)
+        .open(login(&state)?.start_url)
         .await
         .map_err(|error| match error {
             BrowserError::Busy => ApiError::new(
@@ -153,9 +166,14 @@ pub(crate) async fn login_status(
     State(state): State<ApiState>,
     session: Session,
 ) -> ApiResult<Json<JsonValue>> {
+    let login = login(&state)?;
     let desk = desk(&state, &session);
     let open = desk.is_open().await;
-    let logged_in = open && is_logged_in(&desk.cookies(COOKIE_DOMAIN).await.unwrap_or_default());
+    let logged_in = open
+        && is_logged_in(
+            &login,
+            &desk.cookies(login.cookie_domain).await.unwrap_or_default(),
+        );
     Ok(Json(
         json!({ "open": open, "logged_in": logged_in, "host": desk.host().await }),
     ))
@@ -166,9 +184,10 @@ pub(crate) async fn finish_login(
     State(state): State<ApiState>,
     session: Session,
 ) -> ApiResult<Json<JsonValue>> {
+    let login = login(&state)?;
     let desk = desk(&state, &session);
-    let cookies = desk.cookies(COOKIE_DOMAIN).await.unwrap_or_default();
-    if !is_logged_in(&cookies) {
+    let cookies = desk.cookies(login.cookie_domain).await.unwrap_or_default();
+    if !is_logged_in(&login, &cookies) {
         return Err(ApiError::unprocessable(
             "The login browser is not signed in yet.",
         ));
@@ -183,7 +202,8 @@ pub(crate) async fn finish_login(
             Ok(Json(describe(&health)))
         }
         Err(reason) => Err(ApiError::unprocessable(format!(
-            "YouTube Music did not accept the login: {reason}"
+            "{} did not accept the login: {reason}",
+            PLATFORM.name()
         ))),
     }
 }

@@ -91,7 +91,8 @@ where
     })))
 }
 
-/// `GET /api/albums`.
+/// `GET /api/albums`: albums, not singles (the player shows those as
+/// songs).
 pub(crate) async fn albums(
     State(state): State<ApiState>,
     session: Session,
@@ -115,7 +116,7 @@ pub(crate) async fn albums(
          JOIN artists ON artists.id = albums.artist_id \
          LEFT JOIN annotations an ON an.item = 'al-' || albums.id \
          AND an.user_id = albums.user_id \
-         WHERE albums.user_id = ?1",
+         WHERE albums.user_id = ?1 AND NOT albums.single",
     );
     if query.favorites_only {
         sql.push(" AND an.starred_at IS NOT NULL");

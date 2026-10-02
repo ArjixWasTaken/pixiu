@@ -216,7 +216,7 @@ const editPlaylist = () => {
 }
 
 const removeSelected = async () => {
-  // Mirrors of watched playlists change on YouTube Music only.
+  // Mirrors of watched playlists change on their platform only.
   if (playlist.value?.permissions.edit) {
     await removeFromPlaylist(playlist.value, selectedPlayables.value)
   }
@@ -229,8 +229,8 @@ const fetchMirror = () => playlist.value && huntingStore.fetchPlaylistWatch(play
 
 const includeAgain = async (song: ExcludedSong) => {
   try {
-    await huntingStore.include(mirror.value!.watch.id, song.video_id)
-    toastSuccess(`“${song.title ?? song.video_id}” is back on the watch. A sync is on its way.`)
+    await huntingStore.include(mirror.value!.watch.id, song.key)
+    toastSuccess(`${song.title ? `“${song.title}”` : 'The song'} is back on the watch. A sync is on its way.`)
   } catch (error: unknown) {
     useErrorHandler().handleHttpError(error)
   }
