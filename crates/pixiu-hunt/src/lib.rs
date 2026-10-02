@@ -14,7 +14,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use pixiu_db::{AudioFile, Track, toasty};
+use pixiu_db::{AudioFile, SourceKey, Track, toasty};
 use pixiu_treasury::{Claim, Cover, IngestError, Provenance, Treasury, tags};
 
 pub use model::{
@@ -96,7 +96,8 @@ pub struct DownloadRequest {
     pub owner: u64,
     /// The job downloading it, which names its staging directory.
     pub job_id: u64,
-    pub video_id: String,
+    /// The song on its platform.
+    pub key: SourceKey,
     pub claim: Claim,
     /// Session cookies, for the `yt-dlp` fallback.
     pub cookies: Option<String>,
@@ -108,10 +109,10 @@ pub struct Hunter {
     treasury: Treasury,
     staging: PathBuf,
     http: reqwest::Client,
-    albums: Mutex<HashMap<String, (Instant, RemoteAlbum)>>,
-    /// Videos being downloaded: a second download of the same video waits,
+    albums: Mutex<HashMap<SourceKey, (Instant, RemoteAlbum)>>,
+    /// Songs being downloaded: a second download of the same song waits,
     /// then finds its file stored.
-    videos: Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
+    songs: Mutex<HashMap<SourceKey, Arc<tokio::sync::Mutex<()>>>>,
 }
 
 impl Hunter {
@@ -133,7 +134,7 @@ impl Hunter {
                 .read_timeout(Duration::from_secs(60))
                 .build()?,
             albums: Mutex::default(),
-            videos: Mutex::default(),
+            songs: Mutex::default(),
         })
     }
 
@@ -160,16 +161,16 @@ impl Hunter {
     /// # Errors
     ///
     /// Fails when the platform cannot be reached.
-    pub async fn album(&self, browse_id: &str) -> Result<RemoteAlbum, HuntError> {
-        if let Some((fetched, album)) = self.albums.lock().unwrap().get(browse_id)
+    pub async fn album(&self, key: &SourceKey) -> Result<RemoteAlbum, HuntError> {
+        if let Some((fetched, album)) = self.albums.lock().unwrap().get(key)
             && fetched.elapsed() < ALBUM_CACHE_TTL
         {
             return Ok(album.clone());
         }
-        let album = self.ytm.public().album(browse_id).await?;
+        let album = self.ytm.public().album(key.id()).await?;
         let mut cache = self.albums.lock().unwrap();
         cache.retain(|_, (fetched, _)| fetched.elapsed() < ALBUM_CACHE_TTL);
-        cache.insert(browse_id.to_owned(), (Instant::now(), album.clone()));
+        cache.insert(key.clone(), (Instant::now(), album.clone()));
         Ok(album)
     }
 
@@ -187,48 +188,45 @@ impl Hunter {
         request: &DownloadRequest,
         progress: &(dyn Fn(u8) + Send + Sync),
     ) -> Result<Track, HuntError> {
-        let video_id = request.video_id.as_str();
-        let video = Arc::clone(
-            self.videos
+        let song = Arc::clone(
+            self.songs
                 .lock()
                 .unwrap()
-                .entry(video_id.to_owned())
+                .entry(request.key.clone())
                 .or_default(),
         );
         let result = {
-            let _one_at_a_time = video.lock().await;
-            self.download_video(request, progress).await
+            let _one_at_a_time = song.lock().await;
+            self.download_song(request, progress).await
         };
         // Forget the lock once nobody else waits on it.
-        let mut videos = self.videos.lock().unwrap();
-        if Arc::strong_count(&video) == 2 {
-            videos.remove(video_id);
+        let mut songs = self.songs.lock().unwrap();
+        if Arc::strong_count(&song) == 2 {
+            songs.remove(&request.key);
         }
         result
     }
 
-    async fn download_video(
+    async fn download_song(
         &self,
         request: &DownloadRequest,
         progress: &(dyn Fn(u8) + Send + Sync),
     ) -> Result<Track, HuntError> {
-        let video_id = request.video_id.as_str();
+        let key = &request.key;
         let mut db = self.treasury.db();
-        if let Some(existing) =
-            pixiu_db::videos::track_of_video(&mut db, request.owner, video_id).await?
-        {
+        if let Some(existing) = pixiu_db::keyed::track_of_key(&mut db, request.owner, key).await? {
             return Err(HuntError::AlreadyHoarded {
                 track_id: existing.id,
             });
         }
 
         progress(1);
-        let track = self.ytm.public().track(video_id).await?;
+        let track = self.ytm.public().track(key.id()).await?;
         let album = match &track.album {
             Some(reference) => match self.album(&reference.id).await {
                 Ok(album) => Some(album),
                 Err(error) => {
-                    tracing::warn!(%error, video_id, "album metadata unavailable");
+                    tracing::warn!(%error, %key, "album metadata unavailable");
                     None
                 }
             },
@@ -236,7 +234,7 @@ impl Hunter {
         };
         progress(5);
 
-        let stored = AudioFile::filter_by_ytm_video_id(Some(video_id.to_owned()))
+        let stored = AudioFile::filter_by_source_key(Some(key.as_stored()))
             .first()
             .exec(&mut db)
             .await?;
@@ -270,7 +268,7 @@ impl Hunter {
         album: Option<&RemoteAlbum>,
         file: AudioFile,
     ) -> Result<Track, HuntError> {
-        let described = describe(&request.video_id, track, album);
+        let described = describe(&request.key, track, album);
         let path = self.treasury.resolve(&file.path);
         let mut info = tokio::task::spawn_blocking(move || tags::read(&path))
             .await?
@@ -297,7 +295,7 @@ impl Hunter {
                 IngestError::Duplicate { track_id } => HuntError::AlreadyHoarded { track_id },
                 other => HuntError::Ingest(other),
             })?;
-        tracing::info!(video_id = %request.video_id, file = file_id, "reused a stored file");
+        tracing::info!(key = %request.key, file = file_id, "reused a stored file");
         Ok(stored)
     }
 
@@ -309,7 +307,6 @@ impl Hunter {
         album: Option<&RemoteAlbum>,
         progress: &(dyn Fn(u8) + Send + Sync),
     ) -> Result<Track, HuntError> {
-        let video_id = request.video_id.as_str();
         let downloaded = self.fetch_audio(request, staging, progress).await?;
         progress(85);
 
@@ -318,7 +315,8 @@ impl Hunter {
             .extension()
             .is_some_and(|extension| extension == "webm");
         let audio = if is_webm {
-            let output = staging.join(format!("{video_id}.opus"));
+            // Each job has its own staging directory.
+            let output = staging.join("audio.opus");
             let (input, target) = (downloaded.clone(), output.clone());
             tokio::task::spawn_blocking(move || pixiu_media::remux(&input, &target)).await??;
             output
@@ -327,7 +325,7 @@ impl Hunter {
         };
         progress(90);
 
-        let described = describe(video_id, track, album);
+        let described = describe(&request.key, track, album);
         let cover = match described.cover_url {
             Some(url) => self.fetch_cover(url).await,
             None => None,
@@ -383,10 +381,10 @@ impl Hunter {
         request: &DownloadRequest,
         staging: &Path,
     ) -> Result<PathBuf, HuntError> {
-        let video_id = request.video_id.as_str();
+        let key = &request.key;
         let mut attempt = 0;
         loop {
-            let result = download::yt_dlp(video_id, staging, request.cookies.as_deref()).await;
+            let result = download::yt_dlp(key.id(), staging, request.cookies.as_deref()).await;
             match result {
                 Err(HuntError::YtDlp(reason))
                     if attempt < YT_DLP_RETRIES
@@ -394,7 +392,7 @@ impl Hunter {
                             || reason.contains("HTTP Error 5")) =>
                 {
                     attempt += 1;
-                    tracing::info!(video_id, %reason, attempt, "yt-dlp was refused; trying again");
+                    tracing::info!(%key, %reason, attempt, "yt-dlp was refused; trying again");
                     tokio::time::sleep(Duration::from_secs(5 * u64::from(attempt))).await;
                 }
                 result => return result,
@@ -408,7 +406,7 @@ impl Hunter {
         staging: &Path,
         progress: &(dyn Fn(u8) + Send + Sync),
     ) -> Result<PathBuf, HuntError> {
-        let video_id = request.video_id.as_str();
+        let key = &request.key;
         let report = |done: u64, total: Option<u64>| {
             if let Some(total) = total.filter(|total| *total > 0) {
                 let share = done.saturating_mul(75) / total;
@@ -419,8 +417,8 @@ impl Hunter {
         let direct = async {
             // The owner's login, when they have one, lets streams that need
             // one through.
-            let source = self.ytm.client(request.owner).audio(video_id).await?;
-            let path = staging.join(format!("{video_id}.{}", source.extension));
+            let source = self.ytm.client(request.owner).audio(key.id()).await?;
+            let path = staging.join(format!("audio.{}", source.extension));
             download::fetch(&self.http, &source, &path, &report).await?;
             Ok::<_, HuntError>(path)
         }
@@ -429,7 +427,7 @@ impl Hunter {
         match direct {
             Ok(path) => Ok(path),
             Err(error) => {
-                tracing::warn!(%error, video_id, "direct download failed; trying yt-dlp");
+                tracing::warn!(%error, %key, "direct download failed; trying yt-dlp");
                 let path = self.yt_dlp(request, staging).await?;
                 progress(80);
                 Ok(path)
@@ -483,7 +481,7 @@ struct Described<'a> {
 }
 
 fn describe<'a>(
-    video_id: &str,
+    key: &SourceKey,
     track: &'a RemoteTrack,
     album: Option<&'a RemoteAlbum>,
 ) -> Described<'a> {
@@ -515,12 +513,12 @@ fn describe<'a>(
         album_artist,
         track_number,
         year: album.and_then(|album| album.year),
-        source_url: format!("https://music.youtube.com/watch?v={video_id}"),
+        source_url: format!("https://music.youtube.com/watch?v={}", key.id()),
         cover_url: album
             .and_then(|album| album.cover_url.as_deref())
             .or(track.cover_url.as_deref()),
-        provenance: Provenance::youtube_music(
-            video_id,
+        provenance: Provenance::download(
+            key.clone(),
             album
                 .map(|album| album.id.clone())
                 .or_else(|| track.album.as_ref().map(|album| album.id.clone())),

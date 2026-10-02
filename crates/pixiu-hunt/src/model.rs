@@ -1,25 +1,27 @@
 //! Platform-neutral descriptions of remote music, so the rest of píxiū does
 //! not depend on any platform client's types.
 
+use pixiu_db::SourceKey;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AlbumRef {
-    pub id: String,
+    pub id: SourceKey,
     pub title: String,
 }
 
 /// A track on a platform.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RemoteTrack {
-    /// The platform's id (a YouTube video id).
-    pub id: String,
+    /// The song on the platform (a YouTube Music video).
+    pub id: SourceKey,
     pub title: String,
     /// Artist names, primary first.
     pub artists: Vec<String>,
-    /// The primary artist's channel (`UC…`), when the platform names one.
+    /// The primary artist on the platform (a YouTube Music channel), when it
+    /// names one.
     #[serde(default)]
-    pub artist_id: Option<String>,
+    pub artist_id: Option<SourceKey>,
     pub album: Option<AlbumRef>,
     pub duration_secs: Option<u32>,
     pub track_number: Option<u16>,
@@ -47,13 +49,14 @@ pub enum AlbumKind {
 /// An album on a platform.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RemoteAlbum {
-    /// The platform's id (a YouTube Music browse id).
-    pub id: String,
+    /// The album on the platform (a YouTube Music browse id).
+    pub id: SourceKey,
     pub title: String,
     pub artists: Vec<String>,
-    /// The primary artist's channel (`UC…`), when the platform names one.
+    /// The primary artist on the platform (a YouTube Music channel), when it
+    /// names one.
     #[serde(default)]
-    pub artist_id: Option<String>,
+    pub artist_id: Option<SourceKey>,
     pub year: Option<u16>,
     pub kind: AlbumKind,
     pub cover_url: Option<String>,
@@ -65,7 +68,7 @@ pub struct RemoteAlbum {
 /// An artist on a platform.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RemoteArtist {
-    pub id: String,
+    pub id: SourceKey,
     pub name: String,
     pub image_url: Option<String>,
 }
@@ -73,7 +76,7 @@ pub struct RemoteArtist {
 /// A playlist on a platform, with all its tracks in order.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RemotePlaylist {
-    pub id: String,
+    pub id: SourceKey,
     pub name: String,
     #[serde(default)]
     pub image_url: Option<String>,
@@ -83,8 +86,8 @@ pub struct RemotePlaylist {
 /// An artist and their releases, newest first.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Discography {
-    /// The artist's channel id.
-    pub id: String,
+    /// The artist on the platform (a YouTube Music channel).
+    pub id: SourceKey,
     pub name: String,
     #[serde(default)]
     pub image_url: Option<String>,
@@ -171,7 +174,7 @@ mod tests {
     #[test]
     fn credits_join_artists() {
         let track = RemoteTrack {
-            id: "x".to_owned(),
+            id: SourceKey::youtube_music("x"),
             title: "t".to_owned(),
             artists: vec!["A".to_owned(), "B".to_owned()],
             artist_id: None,

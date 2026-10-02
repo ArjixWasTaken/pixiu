@@ -53,12 +53,12 @@ async fn downloads_a_track_into_the_treasure() {
     .unwrap();
 
     let found = hunter.ytmusic().search(QUERY).await.unwrap();
-    let video_id = found.tracks.first().expect("a track").id.clone();
+    let key = found.tracks.first().expect("a track").id.clone();
 
     let request = DownloadRequest {
         owner: 1,
         job_id: 1,
-        video_id: video_id.clone(),
+        key: key.clone(),
         claim: Claim::offering(),
         cookies: None,
     };
@@ -68,7 +68,7 @@ async fn downloads_a_track_into_the_treasure() {
         .unwrap();
     println!("{track:#?}");
 
-    assert_eq!(track.ytm_video_id.as_deref(), Some(video_id.as_str()));
+    assert_eq!(track.source_key, Some(key.as_stored()));
     let path = treasury.resolve(&track.path);
     assert!(path.is_file());
     let info = tags::read(&path).unwrap();
@@ -114,7 +114,7 @@ async fn reads_playlists_and_discographies() {
 
     // An album's playlist: The August Album (Kevin MacLeod, CC BY).
     let artist = ytm.search("Kevin MacLeod").await.unwrap().artists.remove(0);
-    let discography = ytm.discography(&artist.id).await.unwrap();
+    let discography = ytm.discography(artist.id.id()).await.unwrap();
     println!("{} releases", discography.albums.len());
     assert_eq!(discography.name, "Kevin MacLeod");
     assert!(discography.albums.len() > 10);
@@ -130,7 +130,7 @@ async fn reads_playlists_and_discographies() {
         .iter()
         .find(|album| album.title == "The August Album")
         .expect("The August Album");
-    let listed = ytm.album(&album.id).await.unwrap();
+    let listed = ytm.album(album.id.id()).await.unwrap();
     assert_eq!(listed.tracks.len(), 4);
 
     // Watching this public playlist needs no login; liked music does.

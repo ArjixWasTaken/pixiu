@@ -7,7 +7,7 @@ use axum::{
     extract::{Query, State},
     http::StatusCode,
 };
-use pixiu_db::Library;
+use pixiu_db::{Library, SourceKey};
 use pixiu_hunt::{AlbumKind, RemoteAlbum, RemoteTrack, SearchResults, image_url_at};
 use pixiu_jobs::NewJob;
 use pixiu_subsonic::ids;
@@ -34,7 +34,7 @@ enum Standing {
 
 #[derive(Serialize)]
 pub(crate) struct TrackResult {
-    id: String,
+    id: SourceKey,
     title: String,
     artist: String,
     album: Option<String>,
@@ -48,7 +48,7 @@ pub(crate) struct TrackResult {
 
 #[derive(Serialize)]
 pub(crate) struct AlbumResult {
-    id: String,
+    id: SourceKey,
     title: String,
     artist: String,
     year: Option<u16>,
@@ -75,32 +75,38 @@ fn kind_label(kind: AlbumKind) -> &'static str {
     }
 }
 
-/// The results the library holds: video ids and browse ids, with the album
-/// holding each (as a Subsonic id).
+/// The results the library holds, by key, with the album holding each (as
+/// a Subsonic id).
 async fn hoarded(
     lib: &Library,
     results: &SearchResults,
-) -> ApiResult<(HashMap<String, String>, HashMap<String, String>)> {
-    let videos: Vec<String> = results
+) -> ApiResult<(HashMap<SourceKey, String>, HashMap<SourceKey, String>)> {
+    let songs: Vec<SourceKey> = results
         .tracks
         .iter()
         .map(|track| track.id.clone())
         .collect();
-    let browses: Vec<String> = results
+    let albums: Vec<SourceKey> = results
         .albums
         .iter()
         .map(|album| album.id.clone())
         .collect();
-    let held = lib.tracks_of_videos(&videos).await?;
+    let held = lib.tracks_of_keys(&songs).await?;
     let tracks = held
-        .videos()
-        .filter_map(|video| Some((video.to_owned(), ids::album(held.track(video)?.album_id))))
+        .keys()
+        .filter_map(|key| {
+            let album = ids::album(held.track(&key)?.album_id);
+            Some((key, album))
+        })
         .collect();
     let albums = lib
-        .albums_of_browse_ids(&browses)
+        .albums_of_keys(&albums)
         .await?
         .into_iter()
-        .filter_map(|album| Some((album.ytm_browse_id?, ids::album(album.id))))
+        .filter_map(|album| {
+            let key = SourceKey::from_stored(album.source_key.as_deref())?;
+            Some((key, ids::album(album.id)))
+        })
         .collect();
     Ok((tracks, albums))
 }
@@ -171,13 +177,16 @@ pub(crate) async fn search(
     }))
 }
 
-/// Platform ids are short and plain; anything else is not one.
-fn valid_id(id: &str) -> bool {
-    !id.is_empty()
-        && id.len() <= 64
-        && id
+/// A key from a search result. Platform ids are short and plain; anything
+/// else is not one.
+fn valid_key(id: &str) -> Option<SourceKey> {
+    let key: SourceKey = id.parse().ok()?;
+    let plain = key.id().len() <= 64
+        && key
+            .id()
             .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-');
+    plain.then_some(key)
 }
 
 #[derive(Deserialize)]
@@ -193,12 +202,14 @@ pub(crate) async fn grab_track(
     session: Session,
     Json(grab): Json<Grab>,
 ) -> ApiResult<StatusCode> {
-    if !valid_id(&grab.id) {
-        return Err(ApiError::unprocessable("That is not a YouTube Music song."));
-    }
+    let Some(key) = valid_key(&grab.id) else {
+        return Err(ApiError::unprocessable(
+            "That is not a song píxiū can download.",
+        ));
+    };
     state
         .jobs
-        .enqueue(session.owner(), NewJob::track(&grab.id, &grab.title, None))
+        .enqueue(session.owner(), NewJob::track(&key, &grab.title, None))
         .await?;
     Ok(StatusCode::ACCEPTED)
 }
@@ -209,14 +220,14 @@ pub(crate) async fn grab_album(
     session: Session,
     Json(grab): Json<Grab>,
 ) -> ApiResult<StatusCode> {
-    if !valid_id(&grab.id) {
+    let Some(key) = valid_key(&grab.id) else {
         return Err(ApiError::unprocessable(
-            "That is not a YouTube Music album.",
+            "That is not an album píxiū can download.",
         ));
-    }
+    };
     state
         .jobs
-        .enqueue(session.owner(), NewJob::album(&grab.id, &grab.title))
+        .enqueue(session.owner(), NewJob::album(&key, &grab.title))
         .await?;
     Ok(StatusCode::ACCEPTED)
 }

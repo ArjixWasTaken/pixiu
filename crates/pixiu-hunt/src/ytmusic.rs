@@ -18,6 +18,8 @@ use rustypipe::{
     param::StreamFilter,
 };
 
+use pixiu_db::SourceKey;
+
 use crate::{
     HuntError,
     model::{
@@ -196,7 +198,7 @@ impl YtMusic {
         playlist.tracks.extend_all(&query).await?;
         Ok(RemotePlaylist {
             image_url: image(&playlist.thumbnail),
-            id: playlist.id,
+            id: SourceKey::youtube_music(playlist.id),
             name: playlist.name,
             tracks: playlist.tracks.items.into_iter().map(track).collect(),
         })
@@ -212,7 +214,7 @@ impl YtMusic {
         let artist = self.rp.query().music_artist(channel_id, true).await?;
         Ok(Discography {
             image_url: image(&artist.header_image),
-            id: artist.id,
+            id: SourceKey::youtube_music(artist.id),
             name: artist.name,
             albums: artist.albums.into_iter().map(album_item).collect(),
         })
@@ -373,9 +375,9 @@ fn image(thumbnails: &[Thumbnail]) -> Option<String> {
 fn track(item: TrackItem) -> RemoteTrack {
     RemoteTrack {
         artists: artist_names(&item.artists),
-        artist_id: item.artist_id,
+        artist_id: item.artist_id.map(SourceKey::youtube_music),
         album: item.album.map(|album| AlbumRef {
-            id: album.id,
+            id: SourceKey::youtube_music(album.id),
             title: album.name,
         }),
         duration_secs: item.duration,
@@ -383,7 +385,7 @@ fn track(item: TrackItem) -> RemoteTrack {
         cover_url: image(&item.cover),
         is_video: item.track_type == TrackType::Video,
         title: item.name,
-        id: item.id,
+        id: SourceKey::youtube_music(item.id),
     }
 }
 
@@ -399,22 +401,23 @@ fn album_kind(kind: AlbumType) -> AlbumKind {
 fn album_item(item: AlbumItem) -> RemoteAlbum {
     RemoteAlbum {
         artists: artist_names(&item.artists),
-        artist_id: item.artist_id,
+        artist_id: item.artist_id.map(SourceKey::youtube_music),
         year: item.year,
         kind: album_kind(item.album_type),
         cover_url: image(&item.cover),
         tracks: Vec::new(),
         title: item.name,
-        id: item.id,
+        id: SourceKey::youtube_music(item.id),
     }
 }
 
 fn album(album: MusicAlbum) -> RemoteAlbum {
     let cover_url = image(&album.cover);
     let artists = artist_names(&album.artists);
-    let artist_id = album.artist_id.clone();
+    let artist_id = album.artist_id.clone().map(SourceKey::youtube_music);
+    let id = SourceKey::youtube_music(album.id);
     let reference = AlbumRef {
-        id: album.id.clone(),
+        id: id.clone(),
         title: album.name.clone(),
     };
     let tracks = album
@@ -435,7 +438,7 @@ fn album(album: MusicAlbum) -> RemoteAlbum {
         })
         .collect();
     RemoteAlbum {
-        id: album.id,
+        id,
         title: album.name,
         artists,
         artist_id,
@@ -450,6 +453,6 @@ fn artist_item(item: ArtistItem) -> RemoteArtist {
     RemoteArtist {
         image_url: image(&item.avatar),
         name: item.name,
-        id: item.id,
+        id: SourceKey::youtube_music(item.id),
     }
 }

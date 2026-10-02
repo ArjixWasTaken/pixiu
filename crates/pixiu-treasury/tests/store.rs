@@ -87,7 +87,7 @@ impl Hoard {
             size: 1,
             suffix: "flac",
             content_type: "audio/flac",
-            ytm_video_id: Some(format!("vid-{title}")),
+            source_key: Some(format!("youtube_music:vid-{title}")),
             origin: TrackOrigin::Download,
             added_at: now(),
         })
@@ -279,7 +279,10 @@ async fn legacy_files_are_adopted_once() {
     let files = AudioFile::all().exec(&mut db).await.unwrap();
     assert_eq!(files.len(), 1);
     assert_eq!(files[0].sha256, content);
-    assert_eq!(files[0].ytm_video_id.as_deref(), Some("vid-First"));
+    assert_eq!(
+        files[0].source_key.as_deref(),
+        Some("youtube_music:vid-First")
+    );
     for track in [&first_track, &same_track] {
         let track = Track::get_by_id(&mut db, &track.id).await.unwrap();
         assert_eq!((track.file_id, &track.path), (files[0].id, &files[0].path));

@@ -136,7 +136,7 @@ impl ApiKey {
 #[allow(clippy::duplicated_attributes)]
 #[derive(Debug, toasty::Model)]
 #[index(user_id, name_key)]
-#[index(user_id, ytm_channel_id)]
+#[index(user_id, source_key)]
 pub struct Artist {
     #[key]
     #[auto]
@@ -152,9 +152,10 @@ pub struct Artist {
 
     pub mbid: Option<String>,
 
-    /// The artist's YouTube Music channel (`UC…`), when a download or a
-    /// watch has named it. Lets the user watch the artist.
-    pub ytm_channel_id: Option<String>,
+    /// The artist on a platform (a YouTube Music channel), when a download
+    /// or a watch has named it: a [`crate::SourceKey`]. Lets the user watch
+    /// the artist.
+    pub source_key: Option<String>,
 
     /// A short biography, from Wikipedia.
     pub bio: Option<String>,
@@ -179,7 +180,7 @@ pub struct Artist {
 }
 
 #[derive(Debug, toasty::Model)]
-#[index(user_id, ytm_browse_id)]
+#[index(user_id, source_key)]
 pub struct Album {
     #[key]
     #[auto]
@@ -219,9 +220,9 @@ pub struct Album {
 
     pub enriched_at: Option<Timestamp>,
 
-    /// The album's YouTube Music browse id, when it was downloaded from
-    /// there.
-    pub ytm_browse_id: Option<String>,
+    /// The album on the platform it was downloaded from (a YouTube Music
+    /// browse id): a [`crate::SourceKey`].
+    pub source_key: Option<String>,
 
     /// The cover image, relative to the treasure directory
     /// (`.store/images/…`). Albums with the same picture share the file.
@@ -254,7 +255,7 @@ pub enum TrackOrigin {
 }
 
 #[derive(Debug, toasty::Model)]
-#[index(user_id, ytm_video_id)]
+#[index(user_id, source_key)]
 pub struct Track {
     #[key]
     #[auto]
@@ -321,8 +322,9 @@ pub struct Track {
 
     pub isrc: Option<String>,
 
-    /// The YouTube Music video id the track was downloaded from.
-    pub ytm_video_id: Option<String>,
+    /// The song on the platform it was downloaded from (a YouTube Music
+    /// video): a [`crate::SourceKey`].
+    pub source_key: Option<String>,
 
     pub origin: TrackOrigin,
 
@@ -376,10 +378,10 @@ pub struct AudioFile {
 
     pub bit_depth: Option<u8>,
 
-    /// The YouTube Music video the file was downloaded from, so the video
-    /// is not downloaded again.
+    /// The song on the platform the file was downloaded from (a
+    /// [`crate::SourceKey`]), so it is not downloaded again.
     #[index]
-    pub ytm_video_id: Option<String>,
+    pub source_key: Option<String>,
 
     pub created_at: Timestamp,
 }
@@ -716,7 +718,7 @@ pub struct Job {
     pub finished_at: Option<Timestamp>,
 }
 
-/// What a watch follows on YouTube Music.
+/// What a watch follows on a platform.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, toasty::Embed)]
 pub enum WatchKind {
     /// A playlist, mirrored as a Subsonic playlist.
@@ -728,11 +730,11 @@ pub enum WatchKind {
     Artist,
 }
 
-/// Something on YouTube Music that píxiū keeps up with. Tracks it brings
+/// Something on a platform that píxiū keeps up with. Tracks it brings
 /// in are claimed by it; when they leave it, they are kept, and become
 /// orphans unless something else claims them.
 #[derive(Debug, toasty::Model)]
-#[unique(user_id, remote_id)]
+#[unique(user_id, source_key)]
 pub struct Watch {
     #[key]
     #[auto]
@@ -742,8 +744,9 @@ pub struct Watch {
 
     pub kind: WatchKind,
 
-    /// The playlist or channel id; `LM` for liked music.
-    pub remote_id: String,
+    /// What it follows on the platform (a [`crate::SourceKey`]): a playlist
+    /// or a channel; `youtube_music:LM` for liked music.
+    pub source_key: String,
 
     /// The name on the platform, filled in by the first sync.
     pub name: String,
@@ -758,7 +761,7 @@ pub struct Watch {
     /// Artists: skip the releases that were out when the watch was added.
     pub only_new: bool,
 
-    /// Artists: releases already handled, by browse id.
+    /// Artists: releases already handled, by key.
     pub seen: Vec<String>,
 
     pub interval_secs: u64,
@@ -849,8 +852,9 @@ pub struct PlaylistEntry {
     #[index]
     pub track_id: Option<u64>,
 
-    /// The YouTube Music video, in mirrors. It shows once it is downloaded.
-    pub ytm_video_id: Option<String>,
+    /// The song on the platform, in mirrors (a [`crate::SourceKey`]). It
+    /// shows once it is downloaded.
+    pub source_key: Option<String>,
 
     /// Mirrors: the song's title on the platform, to name it before it is
     /// downloaded.
@@ -916,12 +920,12 @@ pub struct Setting {
     pub value: String,
 }
 
-/// Another YouTube Music video of a track the library holds: YouTube
-/// Music lists some songs under several videos, and a download of one of
-/// them turned out to be a track the library had. The library holds that
-/// video too, so watches and searches do not fetch it again.
+/// Another key of a track the library holds: YouTube Music lists some
+/// songs under several videos, and a download of one of them turned out to
+/// be a track the library had. The library holds that video too, so watches
+/// and searches do not fetch it again.
 #[derive(Debug, toasty::Model)]
-#[unique(user_id, ytm_video_id)]
+#[unique(user_id, source_key)]
 pub struct TrackAlias {
     #[key]
     #[auto]
@@ -932,7 +936,8 @@ pub struct TrackAlias {
     #[index]
     pub track_id: u64,
 
-    pub ytm_video_id: String,
+    /// A [`crate::SourceKey`].
+    pub source_key: String,
 }
 
 /// A song the admin excluded from a watched playlist: the watch neither
@@ -946,8 +951,8 @@ pub struct WatchExclusion {
     #[index]
     pub watch_id: u64,
 
-    /// The YouTube Music video.
-    pub ytm_video_id: String,
+    /// The song on the platform: a [`crate::SourceKey`].
+    pub source_key: String,
 
     /// The song as the playlist named it, to list it after it is excluded.
     pub title: Option<String>,

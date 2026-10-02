@@ -372,7 +372,7 @@ impl Treasury {
                     sample_rate: track.sample_rate,
                     channels: track.channels,
                     bit_depth: track.bit_depth,
-                    ytm_video_id: track.ytm_video_id.clone(),
+                    source_key: track.source_key.clone(),
                     created_at: now(),
                 })
                 .exec(&mut tx)

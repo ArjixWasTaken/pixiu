@@ -7,7 +7,7 @@ use std::{
     time::Duration,
 };
 
-use pixiu_db::{ClaimKind, Db, Job, JobKind, JobState, now, toasty};
+use pixiu_db::{ClaimKind, Db, Job, JobKind, JobState, SourceKey, now, toasty};
 use pixiu_treasury::Claim;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{Notify, Semaphore, broadcast};
@@ -63,8 +63,11 @@ impl Wanted {
 /// A track to download.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TrackJob {
-    pub video_id: String,
-    /// What the download was requested for, e.g. an album's id.
+    /// The song to download. Jobs queued before keys name a YouTube Music
+    /// `video_id`, which reads as a key.
+    #[serde(alias = "video_id")]
+    pub key: SourceKey,
+    /// What the download was requested for: an album's key, as stored.
     pub reference: Option<String>,
     #[serde(default)]
     pub wanted: Wanted,
@@ -73,7 +76,9 @@ pub struct TrackJob {
 /// An album whose tracks to queue.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AlbumJob {
-    pub browse_id: String,
+    /// The album to grab; a YouTube Music `browse_id` in older jobs.
+    #[serde(alias = "browse_id")]
+    pub key: SourceKey,
     #[serde(default)]
     pub wanted: Wanted,
 }
@@ -157,23 +162,23 @@ impl Family {
     }
 }
 
-/// What unfinished jobs already fetch, by YouTube Music id.
+/// What unfinished jobs already fetch, by key.
 #[derive(Debug, Default)]
 pub struct Pending {
-    /// Tracks to download, by video id.
-    pub tracks: HashSet<String>,
-    /// Albums to grab, by browse id.
-    pub albums: HashSet<String>,
+    /// Tracks to download.
+    pub tracks: HashSet<SourceKey>,
+    /// Albums to grab.
+    pub albums: HashSet<SourceKey>,
     /// Albums whose grab has become track downloads that are still under
-    /// way, by browse id.
-    pub album_tracks: HashSet<String>,
+    /// way.
+    pub album_tracks: HashSet<SourceKey>,
 }
 
 impl Pending {
     /// Whether the album is being grabbed, in either stage.
     #[must_use]
-    pub fn has_album(&self, browse_id: &str) -> bool {
-        self.albums.contains(browse_id) || self.album_tracks.contains(browse_id)
+    pub fn has_album(&self, key: &SourceKey) -> bool {
+        self.albums.contains(key) || self.album_tracks.contains(key)
     }
 }
 
@@ -188,9 +193,9 @@ pub async fn pending(db: &mut Db, owner: u64) -> Result<Pending, toasty::Error> 
         match job.kind {
             JobKind::DownloadTrack => {
                 if let Ok(payload) = serde_json::from_str::<TrackJob>(&job.payload) {
-                    pending.tracks.insert(payload.video_id);
+                    pending.tracks.insert(payload.key);
                     if job.parent_id.is_some()
-                        && let Some(album) = payload.reference
+                        && let Some(Ok(album)) = payload.reference.map(|album| album.parse())
                     {
                         pending.album_tracks.insert(album);
                     }
@@ -198,7 +203,7 @@ pub async fn pending(db: &mut Db, owner: u64) -> Result<Pending, toasty::Error> 
             }
             JobKind::GrabAlbum => {
                 if let Ok(payload) = serde_json::from_str::<AlbumJob>(&job.payload) {
-                    pending.albums.insert(payload.browse_id);
+                    pending.albums.insert(payload.key);
                 }
             }
             JobKind::SyncWatch | JobKind::Enrich | JobKind::Refile => {}
@@ -253,19 +258,19 @@ impl NewJob {
 
     /// The user grabs a track.
     #[must_use]
-    pub fn track(video_id: &str, title: &str, reference: Option<String>) -> Self {
-        Self::wanted_track(video_id, title, reference, Wanted::Grab)
+    pub fn track(key: &SourceKey, title: &str, reference: Option<String>) -> Self {
+        Self::wanted_track(key, title, reference, Wanted::Grab)
     }
 
     #[must_use]
     pub fn wanted_track(
-        video_id: &str,
+        key: &SourceKey,
         title: &str,
         reference: Option<String>,
         wanted: Wanted,
     ) -> Self {
         let payload = TrackJob {
-            video_id: video_id.to_owned(),
+            key: key.clone(),
             reference,
             wanted,
         };
@@ -274,14 +279,14 @@ impl NewJob {
 
     /// The user grabs an album.
     #[must_use]
-    pub fn album(browse_id: &str, title: &str) -> Self {
-        Self::wanted_album(browse_id, title, Wanted::Grab)
+    pub fn album(key: &SourceKey, title: &str) -> Self {
+        Self::wanted_album(key, title, Wanted::Grab)
     }
 
     #[must_use]
-    pub fn wanted_album(browse_id: &str, title: &str, wanted: Wanted) -> Self {
+    pub fn wanted_album(key: &SourceKey, title: &str, wanted: Wanted) -> Self {
         let payload = AlbumJob {
-            browse_id: browse_id.to_owned(),
+            key: key.clone(),
             wanted,
         };
         Self::new(JobKind::GrabAlbum, &payload, title)

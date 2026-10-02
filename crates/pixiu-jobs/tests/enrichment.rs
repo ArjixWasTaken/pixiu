@@ -88,7 +88,7 @@ struct YouTubeLyrics;
 impl PlatformLyrics for YouTubeLyrics {
     fn lyrics<'a>(
         &'a self,
-        _video_id: &'a str,
+        _key: &'a pixiu_db::SourceKey,
     ) -> pixiu_jobs::warden::BoxFuture<'a, Option<(String, String)>> {
         Box::pin(async { Some(("Sung words".to_owned(), "Source: Somebody".to_owned())) })
     }
@@ -391,9 +391,9 @@ async fn instrumentals_are_known_as_such() {
     let mut hoard = hoard().await;
     // As if downloaded from YouTube Music, which has lyrics for everything.
     for mut track in tracks(&mut hoard.db, hoard.album_id).await {
-        let video = format!("video-{}", track.id);
+        let key = format!("youtube_music:video-{}", track.id);
         toasty::update!(track {
-            ytm_video_id: Some(video)
+            source_key: Some(key)
         })
         .exec(&mut hoard.db)
         .await

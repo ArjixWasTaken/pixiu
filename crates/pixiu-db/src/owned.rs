@@ -150,14 +150,17 @@ impl Library {
             .await
     }
 
-    /// The owner's tracks of any of `videos` (YouTube Music video ids):
-    /// downloaded from them, or found to be them.
+    /// The owner's tracks of any of `keys`: downloaded from them, or found
+    /// to be them.
     ///
     /// # Errors
     ///
     /// Fails on database errors.
-    pub async fn tracks_of_videos(&self, videos: &[String]) -> toasty::Result<crate::videos::Held> {
-        crate::videos::tracks_of_videos(&mut self.db.clone(), self.owner, videos).await
+    pub async fn tracks_of_keys(
+        &self,
+        keys: &[crate::SourceKey],
+    ) -> toasty::Result<crate::keyed::Held> {
+        crate::keyed::tracks_of_keys(&mut self.db.clone(), self.owner, keys).await
     }
 
     /// The owner's tracks by any of `artists`.
@@ -198,21 +201,21 @@ impl Library {
         .await
     }
 
-    /// The owner's albums downloaded as any of `browse_ids` (YouTube Music
-    /// albums).
+    /// The owner's albums downloaded as any of `keys`.
     ///
     /// # Errors
     ///
     /// Fails on database errors.
-    pub async fn albums_of_browse_ids(&self, browse_ids: &[String]) -> toasty::Result<Vec<Album>> {
-        if browse_ids.is_empty() {
+    pub async fn albums_of_keys(&self, keys: &[crate::SourceKey]) -> toasty::Result<Vec<Album>> {
+        if keys.is_empty() {
             return Ok(Vec::new());
         }
+        let stored: Vec<String> = keys.iter().map(crate::SourceKey::as_stored).collect();
         Album::filter(
             Album::fields()
                 .user_id()
                 .eq(self.owner)
-                .and(Album::fields().ytm_browse_id().in_list(browse_ids.to_vec())),
+                .and(Album::fields().source_key().in_list(stored)),
         )
         .exec(&mut self.db.clone())
         .await

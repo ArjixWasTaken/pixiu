@@ -6,7 +6,8 @@
 use std::collections::{HashMap, HashSet};
 
 use pixiu_db::{
-    Album, ClaimKind, Db, Library, Playlist, PlaylistEntry, ReleaseReason, Track, User, now, toasty,
+    Album, ClaimKind, Db, Library, Playlist, PlaylistEntry, ReleaseReason, SourceKey, Track, User,
+    now, toasty,
 };
 use pixiu_treasury::{Claim, Release};
 
@@ -72,21 +73,22 @@ async fn listing(lib: &Library, playlist: &Playlist) -> Result<Listing, toasty::
     for track in catalog::tracks_in_order(lib, &track_ids).await? {
         tracks.insert(track.id, track);
     }
-    let video_ids: Vec<String> = entries
+    // Mirrors name their songs by key: those downloaded are listed.
+    let keys: Vec<SourceKey> = entries
         .iter()
-        .filter_map(|entry| entry.ytm_video_id.clone())
+        .filter_map(|entry| SourceKey::from_stored(entry.source_key.as_deref()))
         .collect();
-    let held = lib.tracks_of_videos(&video_ids).await?;
-    let by_video: HashMap<String, u64> = held
-        .videos()
-        .filter_map(|video_id| Some((video_id.to_owned(), held.track(video_id)?.id)))
+    let held = lib.tracks_of_keys(&keys).await?;
+    let by_key: HashMap<String, u64> = held
+        .keys()
+        .filter_map(|key| Some((key.as_stored(), held.track(&key)?.id)))
         .collect();
     tracks.extend(held.into_tracks());
     let order = entries
         .iter()
-        .filter_map(|entry| match (&entry.track_id, &entry.ytm_video_id) {
+        .filter_map(|entry| match (&entry.track_id, &entry.source_key) {
             (Some(id), _) => tracks.contains_key(id).then_some(*id),
-            (None, Some(video_id)) => by_video.get(video_id).copied(),
+            (None, Some(key)) => by_key.get(key).copied(),
             (None, None) => None,
         })
         .collect();

@@ -1034,7 +1034,7 @@ async fn playlists_are_made_changed_and_mirrored() {
     let mut track = Track::all().exec(&mut db).await.unwrap().remove(0);
     let track_id = track.id;
     toasty::update!(track {
-        ytm_video_id: Some("vid-here".to_owned())
+        source_key: Some("youtube_music:vid-here".to_owned())
     })
     .exec(&mut db)
     .await
@@ -1054,7 +1054,7 @@ async fn playlists_are_made_changed_and_mirrored() {
         toasty::create!(PlaylistEntry {
             playlist_id: mirror.id,
             position: position as u32,
-            ytm_video_id: Some(video.to_owned()),
+            source_key: Some(format!("youtube_music:{video}")),
         })
         .exec(&mut db)
         .await

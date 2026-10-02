@@ -8,7 +8,9 @@
 use std::time::Duration;
 
 use jiff::SignedDuration;
-use pixiu_db::{Album, Artist, Db, Enrichment, Lyrics, LyricsSource, Setting, Track, now, toasty};
+use pixiu_db::{
+    Album, Artist, Db, Enrichment, Lyrics, LyricsSource, Setting, SourceKey, Track, now, toasty,
+};
 use pixiu_enrich::{
     Candidate, EnrichError, LocalAlbum, LocalTrack, LyricsQuery, Pairing, Release, Sources,
     looks_synced,
@@ -30,15 +32,15 @@ const RECHECK_AFTER: Duration = Duration::from_secs(30 * 24 * 60 * 60);
 
 /// Lyrics a streaming platform has for its tracks.
 pub trait PlatformLyrics: Send + Sync {
-    /// Plain lyrics of a YouTube video, with their credit line.
-    fn lyrics<'a>(&'a self, video_id: &'a str) -> BoxFuture<'a, Option<(String, String)>>;
+    /// Plain lyrics of a song on a platform, with their credit line.
+    fn lyrics<'a>(&'a self, key: &'a SourceKey) -> BoxFuture<'a, Option<(String, String)>>;
 }
 
 /// No platform lyrics: for albums nobody downloaded, and for tests.
 pub struct NoPlatformLyrics;
 
 impl PlatformLyrics for NoPlatformLyrics {
-    fn lyrics<'a>(&'a self, _video_id: &'a str) -> BoxFuture<'a, Option<(String, String)>> {
+    fn lyrics<'a>(&'a self, _key: &'a SourceKey) -> BoxFuture<'a, Option<(String, String)>> {
         Box::pin(async { None })
     }
 }
@@ -520,8 +522,8 @@ async fn lyrics_for(
         Err(error) => tracing::warn!(%error, track = track.id, "cannot ask LRCLIB for lyrics"),
     }
 
-    if let Some(video_id) = &track.ytm_video_id
-        && let Some((body, _credit)) = platform.lyrics(video_id).await
+    if let Some(key) = SourceKey::from_stored(track.source_key.as_deref())
+        && let Some((body, _credit)) = platform.lyrics(&key).await
     {
         return (LyricsSource::YouTubeMusic, None, Some(body));
     }

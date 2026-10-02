@@ -4,8 +4,8 @@ use std::{
 };
 
 use pixiu_db::{
-    Album, Artist, AudioFile, ClaimKind, Db, OfferingStatus, ReleaseReason, ReleasedClaim, Track,
-    TrackAlias, TrackClaim, videos,
+    Album, Artist, AudioFile, ClaimKind, Db, OfferingStatus, ReleaseReason, ReleasedClaim,
+    SourceKey, Track, TrackAlias, TrackClaim, keyed,
 };
 use pixiu_treasury::{
     Claim, IngestError, OfferingError, Offerings, Provenance, Release, Treasury, tags,
@@ -412,10 +412,10 @@ async fn discarding_a_batch_removes_everything() {
 async fn downloads_dedupe_by_platform_ids() {
     let hoard = Hoard::new().await;
     let youtube = |video: &str| {
-        Provenance::youtube_music(
-            video,
-            Some("MPREb_album".to_owned()),
-            Some("UCartist".to_owned()),
+        Provenance::download(
+            SourceKey::youtube_music(video),
+            Some(SourceKey::youtube_music("MPREb_album")),
+            Some(SourceKey::youtube_music("UCartist")),
         )
     };
 
@@ -434,7 +434,7 @@ async fn downloads_dedupe_by_platform_ids() {
         )
         .await
         .unwrap();
-    assert_eq!(first.ytm_video_id.as_deref(), Some("video-1"));
+    assert_eq!(first.source_key.as_deref(), Some("youtube_music:video-1"));
 
     // The same video again is a duplicate, whatever its tags say.
     let staged = hoard.stage("02-second-wind.mp3");
@@ -475,10 +475,13 @@ async fn downloads_dedupe_by_platform_ids() {
 
     let mut db = hoard.db.clone();
     let album = Album::get_by_id(&mut db, &first.album_id).await.unwrap();
-    assert_eq!(album.ytm_browse_id.as_deref(), Some("MPREb_album"));
+    assert_eq!(
+        album.source_key.as_deref(),
+        Some("youtube_music:MPREb_album")
+    );
     // The album artist learned its channel.
     let artist = Artist::get_by_id(&mut db, &album.artist_id).await.unwrap();
-    assert_eq!(artist.ytm_channel_id.as_deref(), Some("UCartist"));
+    assert_eq!(artist.source_key.as_deref(), Some("youtube_music:UCartist"));
 
     // A later download by the same channel finds the artist even under
     // another name.
@@ -493,7 +496,11 @@ async fn downloads_dedupe_by_platform_ids() {
             &staged,
             &info,
             None,
-            Provenance::youtube_music("video-3", None, Some("UCartist".to_owned())),
+            Provenance::download(
+                SourceKey::youtube_music("video-3"),
+                None,
+                Some(SourceKey::youtube_music("UCartist")),
+            ),
             Claim::offering(),
         )
         .await
@@ -506,7 +513,8 @@ async fn downloads_dedupe_by_platform_ids() {
 async fn another_video_of_a_track_is_noted_as_it() {
     let hoard = Hoard::new().await;
     let mut db = hoard.db.clone();
-    let youtube = |video: &str| Provenance::youtube_music(video, None, None);
+    let youtube = |video: &str| Provenance::download(SourceKey::youtube_music(video), None, None);
+    let key = SourceKey::youtube_music;
 
     let staged = hoard.stage("02-second-wind.mp3");
     let info = tags::read(&staged).unwrap();
@@ -523,7 +531,7 @@ async fn another_video_of_a_track_is_noted_as_it() {
         .await
         .unwrap();
     assert!(
-        videos::track_of_video(&mut db, OWNER, "video-2")
+        keyed::track_of_key(&mut db, OWNER, &key("video-2"))
             .await
             .unwrap()
             .is_none()
@@ -547,28 +555,24 @@ async fn another_video_of_a_track_is_noted_as_it() {
     assert!(matches!(error, IngestError::Duplicate { track_id } if track_id == first.id));
 
     // The library holds that video now.
-    let noted = videos::track_of_video(&mut db, OWNER, "video-2")
+    let noted = keyed::track_of_key(&mut db, OWNER, &key("video-2"))
         .await
         .unwrap()
         .unwrap();
     assert_eq!(noted.id, first.id);
-    let held = videos::tracks_of_videos(
+    let held = keyed::tracks_of_keys(
         &mut db,
         OWNER,
-        &[
-            "video-1".to_owned(),
-            "video-2".to_owned(),
-            "video-3".to_owned(),
-        ],
+        &[key("video-1"), key("video-2"), key("video-3")],
     )
     .await
     .unwrap();
-    assert_eq!(held.track("video-1").unwrap().id, first.id);
-    assert_eq!(held.track("video-2").unwrap().id, first.id);
-    assert!(!held.contains("video-3"));
+    assert_eq!(held.track(&key("video-1")).unwrap().id, first.id);
+    assert_eq!(held.track(&key("video-2")).unwrap().id, first.id);
+    assert!(!held.contains(&key("video-3")));
     // Only for its owner.
     assert!(
-        videos::track_of_video(&mut db, OWNER + 1, "video-2")
+        keyed::track_of_key(&mut db, OWNER + 1, &key("video-2"))
             .await
             .unwrap()
             .is_none()

@@ -229,8 +229,8 @@ const fetchMirror = () => playlist.value && huntingStore.fetchPlaylistWatch(play
 
 const includeAgain = async (song: ExcludedSong) => {
   try {
-    await huntingStore.include(mirror.value!.watch.id, song.video_id)
-    toastSuccess(`“${song.title ?? song.video_id}” is back on the watch. A sync is on its way.`)
+    await huntingStore.include(mirror.value!.watch.id, song.key)
+    toastSuccess(`${song.title ? `“${song.title}”` : 'The song'} is back on the watch. A sync is on its way.`)
   } catch (error: unknown) {
     useErrorHandler().handleHttpError(error)
   }

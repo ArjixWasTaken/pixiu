@@ -38,8 +38,8 @@
     <M3List v-if="shown === 'coming'" class="py-0!">
       <M3ListItem
         v-for="song in mirror.coming"
-        :key="song.video_id"
-        :headline="song.title ?? song.video_id"
+        :key="song.key"
+        :headline="song.title ?? 'Unknown song'"
         :supporting="[song.artist, standing(song.job)].filter(Boolean).join(' · ')"
       />
       <li class="px-4 pt-2 m3-body-medium list-none">
@@ -50,8 +50,8 @@
     <M3List v-if="shown === 'excluded'" class="py-0!">
       <M3ListItem
         v-for="song in mirror.excluded"
-        :key="song.video_id"
-        :headline="song.title ?? song.video_id"
+        :key="song.key"
+        :headline="song.title ?? 'Unknown song'"
         :supporting="[song.artist, timeAgo(song.excluded_at)].filter(Boolean).join(' · ')"
       >
         <template #trailing>

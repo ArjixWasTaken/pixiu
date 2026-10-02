@@ -13,16 +13,16 @@ const mirror: PlaylistWatch = {
     last_synced_at: null,
   },
   coming: [
-    { video_id: 'a', title: 'Unsynced', artist: 'Somebody', job: null },
-    { video_id: 'b', title: 'Queued', artist: 'Somebody', job: { state: 'queued', error: null } },
-    { video_id: 'c', title: 'Running', artist: 'Somebody', job: { state: 'running', error: null } },
+    { key: 'youtube_music:a', title: 'Unsynced', artist: 'Somebody', job: null },
+    { key: 'youtube_music:b', title: 'Queued', artist: 'Somebody', job: { state: 'queued', error: null } },
+    { key: 'youtube_music:c', title: 'Running', artist: 'Somebody', job: { state: 'running', error: null } },
     {
-      video_id: 'd',
+      key: 'youtube_music:d',
       title: 'Broken',
       artist: 'Somebody',
       job: { state: 'failed', error: 'This video is unavailable' },
     },
-    { video_id: 'e', title: 'Landed', artist: 'Somebody', job: { state: 'done', error: null } },
+    { key: 'youtube_music:e', title: 'Landed', artist: 'Somebody', job: { state: 'done', error: null } },
   ],
   excluded: [],
 }

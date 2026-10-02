@@ -56,7 +56,8 @@ export interface Watch {
 }
 
 export interface ExcludedSong {
-  video_id: string
+  /** The song on its platform, like `youtube_music:dQw4w9WgXcQ`. */
+  key: string
   title: string | null
   artist: string | null
   excluded_at: string
@@ -65,7 +66,7 @@ export interface ExcludedSong {
 export interface PlaylistWatch {
   watch: { id: number; kind: WatchKind; name: string; link: string; last_synced_at: string | null }
   coming: Array<{
-    video_id: string
+    key: string
     title: string | null
     artist: string | null
     /** Its download, when there is one. */
@@ -201,8 +202,7 @@ export const huntingService = {
   removeWatch: (id: number) => http.delete(`watches/${id}`),
   syncWatch: (id: number) => http.post(`watches/${id}/sync`),
   exclude: (watchId: number, song: string) => http.post(`watches/${watchId}/exclusions`, { song }),
-  include: (watchId: number, videoId: string) =>
-    http.delete(`watches/${watchId}/exclusions/${encodeURIComponent(videoId)}`),
+  include: (watchId: number, key: string) => http.delete(`watches/${watchId}/exclusions/${encodeURIComponent(key)}`),
   playlistWatch: (playlistId: string) => http.get<PlaylistWatch | null>(`playlists/${playlistId}/watch`),
 
   jobs: () => http.silently.get<HuntJob[]>('jobs'),

@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use pixiu_browser::{Cookie, LoginDesks, cookie_header};
 use pixiu_core::alerts::AlertSink;
-use pixiu_db::{Album, Job, JobKind, JobState, ReleaseReason, SessionState, Watch};
+use pixiu_db::{Album, Job, JobKind, JobState, ReleaseReason, SessionState, SourceKey, Watch};
 use pixiu_enrich::Sources;
 use pixiu_hunt::{
     Discography, DownloadRequest, HuntError, Hunter, RemotePlaylist, SessionCheck, YtMusic,
@@ -147,12 +147,12 @@ pub struct HuntExecutor {
 pub struct HunterLyrics(pub Arc<Hunter>);
 
 impl PlatformLyrics for HunterLyrics {
-    fn lyrics<'a>(&'a self, video_id: &'a str) -> BoxFuture<'a, Option<(String, String)>> {
+    fn lyrics<'a>(&'a self, key: &'a SourceKey) -> BoxFuture<'a, Option<(String, String)>> {
         Box::pin(async move {
-            match self.0.ytmusic().lyrics(video_id).await {
+            match self.0.ytmusic().lyrics(key.id()).await {
                 Ok(lyrics) => lyrics,
                 Err(error) => {
-                    tracing::debug!(%error, video_id, "no lyrics from YouTube Music");
+                    tracing::debug!(%error, %key, "no lyrics from YouTube Music");
                     None
                 }
             }
@@ -190,14 +190,14 @@ impl HuntExecutor {
         let request = DownloadRequest {
             owner,
             job_id: job.id,
-            video_id: payload.video_id.clone(),
+            key: payload.key.clone(),
             claim: claim.clone(),
             cookies: self.wardens.cookies(owner).await,
         };
         let treasury = self.hunter.treasury();
         // Excluded from its playlist while this was queued or running.
         let excluded = async || match payload.wanted.watch_id() {
-            Some(watch_id) => watch::is_excluded(&mut treasury.db(), watch_id, &payload.video_id)
+            Some(watch_id) => watch::is_excluded(&mut treasury.db(), watch_id, &payload.key)
                 .await
                 .unwrap_or(false),
             None => false,
@@ -268,20 +268,20 @@ impl HuntExecutor {
             Ok(payload) => payload,
             Err(error) => return Outcome::Failed(format!("invalid job: {error}")),
         };
-        let album = match self.hunter.album(&payload.browse_id).await {
+        let album = match self.hunter.album(&payload.key).await {
             Ok(album) => album,
             Err(error) => return Outcome::Failed(error.to_string()),
         };
         let mut jobs = Vec::new();
         let treasury = self.hunter.treasury();
         let mut db = treasury.db();
-        let claim = payload.wanted.claim(Some(album.id.clone()));
+        let claim = payload.wanted.claim(Some(album.id.as_stored()));
         for track in &album.tracks {
-            let hoarded =
-                match pixiu_db::videos::track_of_video(&mut db, job.user_id, &track.id).await {
-                    Ok(hoarded) => hoarded,
-                    Err(error) => return Outcome::Failed(error.to_string()),
-                };
+            let hoarded = match pixiu_db::keyed::track_of_key(&mut db, job.user_id, &track.id).await
+            {
+                Ok(hoarded) => hoarded,
+                Err(error) => return Outcome::Failed(error.to_string()),
+            };
             match hoarded {
                 // Already here: whoever wants the album keeps it too.
                 Some(hoarded) => {
@@ -292,7 +292,7 @@ impl HuntExecutor {
                 None => jobs.push(NewJob::wanted_track(
                     &track.id,
                     &format!("{} — {}", track.artist_credit(), track.title),
-                    Some(album.id.clone()),
+                    Some(album.id.as_stored()),
                     payload.wanted,
                 )),
             }
@@ -362,7 +362,7 @@ impl HuntExecutor {
         let Ok(Some(album)) = Album::filter_by_id(album_id).first().exec(&mut db).await else {
             return false;
         };
-        let Some(browse_id) = album.ytm_browse_id else {
+        let Some(key) = SourceKey::from_stored(album.source_key.as_deref()) else {
             return false;
         };
         queue::unfinished(&mut db, owner).await.is_ok_and(|jobs| {
@@ -370,7 +370,7 @@ impl HuntExecutor {
                 matches!(job.state, JobState::Queued | JobState::Running)
                     && job.kind == JobKind::DownloadTrack
                     && serde_json::from_str::<TrackJob>(&job.payload).is_ok_and(|payload| {
-                        payload.reference.as_deref() == Some(browse_id.as_str())
+                        SourceKey::from_stored(payload.reference.as_deref()).as_ref() == Some(&key)
                     })
             })
         })
@@ -429,12 +429,15 @@ fn catalog_error(error: &HuntError) -> CatalogError {
 }
 
 impl Catalog for YtMusicCatalog {
-    fn playlist<'a>(&'a self, id: &'a str) -> BoxFuture<'a, Result<RemotePlaylist, CatalogError>> {
+    fn playlist<'a>(
+        &'a self,
+        key: &'a SourceKey,
+    ) -> BoxFuture<'a, Result<RemotePlaylist, CatalogError>> {
         Box::pin(async move {
             self.hunter
                 .clients()
                 .client(self.owner)
-                .playlist(id)
+                .playlist(key.id())
                 .await
                 .map_err(|error| catalog_error(&error))
         })
@@ -442,12 +445,12 @@ impl Catalog for YtMusicCatalog {
 
     fn discography<'a>(
         &'a self,
-        channel_id: &'a str,
+        key: &'a SourceKey,
     ) -> BoxFuture<'a, Result<Discography, CatalogError>> {
         Box::pin(async move {
             self.hunter
                 .ytmusic()
-                .discography(channel_id)
+                .discography(key.id())
                 .await
                 .map_err(|error| catalog_error(&error))
         })
